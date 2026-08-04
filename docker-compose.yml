@@ -1,0 +1,46 @@
+# Producao (adaptado do qrcode, sem MySQL — a BD e SQLite local).
+#
+# Persistencia: o SQLite de producao vive DENTRO do bind-mount storage/
+# (DB_DATABASE=/app/storage/database/database.sqlite no .env do servidor).
+# Trocar a imagem nunca toca na BD; os backups diarios (db:backup) caem em
+# storage/backups no host. NUNCA meter a BD dentro da imagem.
+#
+# Redis: filas + cache + sessions. noeviction e appendonly de proposito —
+# a fila partilha a instancia e nao pode perder jobs por pressao de memoria
+# (nunca correr FLUSHALL; o deploy usa `artisan cache:clear`).
+
+services:
+    app:
+        image: 12studio:latest
+        build: .
+        restart: unless-stopped
+        volumes:
+            - ./.env:/app/.env:ro
+            - ./storage:/app/storage
+            - ./public:/app/public
+        depends_on:
+            - redis
+        networks:
+            - internal
+            - Projects
+            - nginx_proxy_manager_default
+
+    redis:
+        image: redis:7-alpine
+        command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy noeviction
+        restart: unless-stopped
+        volumes:
+            - redis-data:/data
+        networks:
+            - internal
+
+networks:
+    internal:
+    # Redes partilhadas da maquina (Jenkins + Nginx Proxy Manager).
+    Projects:
+        external: true
+    nginx_proxy_manager_default:
+        external: true
+
+volumes:
+    redis-data:
