@@ -5,6 +5,12 @@
 # Trocar a imagem nunca toca na BD; os backups diarios (db:backup) caem em
 # storage/backups no host. NUNCA meter a BD dentro da imagem.
 #
+# Os caminhos dos mounts sao ABSOLUTOS de proposito (convencao do qrcode). O
+# compose corre a partir do workspace do Jenkins, por isso `./storage` poria a
+# BD de producao dentro de um workspace de CI — que e apagavel e onde cada
+# build faz `git checkout -f`. O estado vive fora, em APP_DIR (o mesmo do
+# Jenkinsfile); mudar um caminho aqui obriga a mudar o outro.
+#
 # Redis: filas + cache + sessions. noeviction e appendonly de proposito —
 # a fila partilha a instancia e nao pode perder jobs por pressao de memoria
 # (nunca correr FLUSHALL; o deploy usa `artisan cache:clear`).
@@ -15,9 +21,9 @@ services:
         build: .
         restart: unless-stopped
         volumes:
-            - ./.env:/app/.env:ro
-            - ./storage:/app/storage
-            - ./public:/app/public
+            - /home/cinhos/projects/12studio/app/12studio/.env:/app/.env:ro
+            - /home/cinhos/projects/12studio/app/12studio/storage:/app/storage
+            - /home/cinhos/projects/12studio/app/12studio/public:/app/public
         depends_on:
             - redis
         networks:
