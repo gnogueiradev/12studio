@@ -68,8 +68,16 @@ pipeline {
         stage('Build') {
             steps {
                 sh '''
-                    # .env real do servidor entra no build context do compose.
-                    cp ${APP_DIR}/.env .env
+                    # O .env de producao vive em APP_DIR, fora do workspace, e
+                    # e a primeira coisa de que o deploy precisa. Se ainda nao
+                    # existir, nasce do .env.example — ver docker/bootstrap-env.sh.
+                    #
+                    # Corre dentro da imagem de teste (ja construida, tem PHP e
+                    # openssl) com APP_DIR montado: o agente do Jenkins e um
+                    # container, e o compose resolve os mounts no HOST. Escrever
+                    # o caminho a partir daqui punha o ficheiro do lado errado.
+                    docker run --rm -v ${APP_DIR}:/appdir ${IMAGE_NAME}-test \
+                        sh /app/docker/bootstrap-env.sh /app/.env.example /appdir/.env
 
                     # Tag de rollback: a imagem atual passa a :previous ANTES
                     # do build — um deploy mau reverte com um re-tag.
