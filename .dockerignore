@@ -1,0 +1,24 @@
+# O stage `build` do Dockerfile faz `COPY . .`, e o stage Build do Jenkinsfile
+# copia o .env real do servidor para o workspace. Sem esta exclusao os segredos
+# de producao (APP_KEY, SEED_ADMIN_PASSWORD, SMTP) ficam gravados na layer do
+# COPY — o `rm -f .env` do Dockerfile so limpa o filesystem final, nao a layer.
+# Em runtime o .env chega por bind mount (docker-compose.yml), nunca pela imagem.
+.env
+.env.backup
+.env.production
+
+# Instalados dentro da imagem pelos stages `dependencies`/`build`; vir do host
+# so arrisca sobrepor o que foi instalado para a plataforma certa.
+node_modules
+vendor
+
+# Estado de runtime — vive no bind mount, e o entrypoint cria o que falta.
+storage/database
+storage/backups
+storage/logs
+public/build
+public/hot
+public/storage
+
+.git
+.github
