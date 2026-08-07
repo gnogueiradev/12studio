@@ -7,6 +7,7 @@ use App\Http\Requests\Product\StoreProductRequest;
 use App\Http\Requests\Product\UpdateProductRequest;
 use App\Models\Category;
 use App\Models\Product;
+use App\Models\Variant;
 use App\Services\ProductService;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
@@ -22,6 +23,7 @@ class ProductController extends Controller
     {
         $products = Product::query()
             ->with('category')
+            ->withCount('variants')
             ->orderByDesc('created_at')
             ->get()
             ->map(fn (Product $product): array => [
@@ -32,6 +34,7 @@ class ProductController extends Controller
                 'featured' => $product->featured,
                 'fulfillmentMode' => $product->fulfillment_mode,
                 'category' => $product->category?->name,
+                'variantsCount' => $product->variants_count,
             ]);
 
         return Inertia::render('admin/produtos/index', [
@@ -51,8 +54,9 @@ class ProductController extends Controller
     {
         $this->productService->store($request->validated());
 
-        return to_route('admin.produtos.index')
-            ->with('success', 'Produto criado.');
+        $this->toast('Produto criado.');
+
+        return to_route('admin.produtos.index');
     }
 
     public function edit(Product $product): Response
@@ -73,6 +77,7 @@ class ProductController extends Controller
                 'maxOpenProductionQty' => $product->max_open_production_qty,
             ],
             'categories' => $this->categoryOptions(),
+            'variants' => $this->variantRows($product),
         ]);
     }
 
@@ -80,8 +85,9 @@ class ProductController extends Controller
     {
         $this->productService->update($product, $request->validated());
 
-        return to_route('admin.produtos.index')
-            ->with('success', 'Produto atualizado.');
+        $this->toast('Produto atualizado.');
+
+        return to_route('admin.produtos.index');
     }
 
     /**
@@ -91,8 +97,36 @@ class ProductController extends Controller
     {
         $this->productService->archive($product);
 
-        return to_route('admin.produtos.index')
-            ->with('success', 'Produto arquivado.');
+        $this->toast('Produto arquivado.');
+
+        return to_route('admin.produtos.index');
+    }
+
+    /**
+     * Variantes do produto para a seccao "Variantes" da pagina de edicao.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function variantRows(Product $product): array
+    {
+        return $product->variants()
+            ->orderByDesc('is_default')
+            ->orderBy('sku')
+            ->get()
+            ->map(fn (Variant $variant): array => [
+                'id' => $variant->id,
+                'sku' => $variant->sku,
+                'sizeLabel' => $variant->size_label,
+                'priceCents' => $variant->price_cents,
+                'compareAtCents' => $variant->compare_at_cents,
+                'stock' => $variant->stock,
+                'reservedStock' => $variant->reserved_stock,
+                'availableStock' => $variant->available_stock,
+                'lowStock' => $variant->isLowStock(),
+                'isDefault' => $variant->is_default,
+                'active' => $variant->active,
+            ])
+            ->all();
     }
 
     /**

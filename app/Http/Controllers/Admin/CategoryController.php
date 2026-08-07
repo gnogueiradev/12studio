@@ -47,8 +47,9 @@ class CategoryController extends Controller
     {
         $this->categoryService->store($request->validated());
 
-        return to_route('admin.categorias.index')
-            ->with('success', 'Categoria criada.');
+        $this->toast('Categoria criada.');
+
+        return to_route('admin.categorias.index');
     }
 
     public function edit(Category $category): Response
@@ -69,8 +70,9 @@ class CategoryController extends Controller
     {
         $this->categoryService->update($category, $request->validated());
 
-        return to_route('admin.categorias.index')
-            ->with('success', 'Categoria atualizada.');
+        $this->toast('Categoria atualizada.');
+
+        return to_route('admin.categorias.index');
     }
 
     /**
@@ -80,7 +82,8 @@ class CategoryController extends Controller
     {
         $this->categoryService->archive($category);
 
-        return to_route('admin.categorias.index')
-            ->with('success', 'Categoria arquivada.');
+        $this->toast('Categoria arquivada.');
+
+        return to_route('admin.categorias.index');
     }
 }

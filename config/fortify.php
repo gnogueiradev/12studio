@@ -101,7 +101,10 @@ return [
     |
     */
 
-    'middleware' => ['web'],
+    // 'login-gate' esconde TODAS as rotas de auth (login, forgot-password,
+    // 2FA, passkeys) atras do URL secreto em /acesso/<segredo>. Ver
+    // config/access.php e App\Http\Middleware\EnsureLoginGate.
+    'middleware' => ['web', 'login-gate'],
 
     /*
     |--------------------------------------------------------------------------

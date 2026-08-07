@@ -1,5 +1,13 @@
 import { Link } from '@inertiajs/react';
-import { LayoutGrid, Package, Store, Tags } from 'lucide-react';
+import {
+    Factory,
+    LayoutGrid,
+    Package,
+    ShoppingCart,
+    Store,
+    Tags,
+    Users,
+} from 'lucide-react';
 import AppLogo from '@/components/app-logo';
 import { NavFooter } from '@/components/nav-footer';
 import { NavMain } from '@/components/nav-main';
@@ -15,8 +23,8 @@ import {
 } from '@/components/ui/sidebar';
 import type { NavItem } from '@/types';
 
-// Navegacao do backoffice. Cresce com as fases: materiais & cores e
-// variantes (Fase 2), encomendas e producao (Fases 3-4), KPIs (Fase 5).
+// Navegacao do backoffice. Cresce com as fases: materiais & cores (Fase 2),
+// carrinho e checkout Stripe (Fase 3), KPIs (Fase 5).
 const mainNavItems: NavItem[] = [
     {
         title: 'Backoffice',
@@ -24,14 +32,29 @@ const mainNavItems: NavItem[] = [
         icon: LayoutGrid,
     },
     {
-        title: 'Categorias',
-        href: '/admin/categorias',
-        icon: Tags,
+        title: 'Encomendas',
+        href: '/admin/encomendas',
+        icon: ShoppingCart,
+    },
+    {
+        title: 'Produção',
+        href: '/admin/producao',
+        icon: Factory,
+    },
+    {
+        title: 'Clientes',
+        href: '/admin/clientes',
+        icon: Users,
     },
     {
         title: 'Produtos',
         href: '/admin/produtos',
         icon: Package,
+    },
+    {
+        title: 'Categorias',
+        href: '/admin/categorias',
+        icon: Tags,
     },
 ];
 

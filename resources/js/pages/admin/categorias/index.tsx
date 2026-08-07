@@ -1,4 +1,9 @@
 import { Head, Link, router } from '@inertiajs/react';
+import { useState } from 'react';
+import { AdminTable } from '@/components/admin/admin-table';
+import type { Column } from '@/components/admin/admin-table';
+import { ConfirmDialog } from '@/components/admin/confirm-dialog';
+import { PageHeader } from '@/components/admin/page-header';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { create, destroy, edit, index } from '@/routes/admin/categorias';
@@ -9,108 +14,97 @@ type Props = {
 };
 
 export default function CategoriesIndex({ categories }: Props) {
-    const archive = (category: CategoryRow) => {
-        if (confirm(`Arquivar a categoria "${category.name}"?`)) {
-            router.delete(destroy(category.id).url);
-        }
-    };
+    const [archiving, setArchiving] = useState<CategoryRow | null>(null);
+
+    const columns: Column<CategoryRow>[] = [
+        {
+            key: 'name',
+            header: 'Nome',
+            cell: (category) => (
+                <span className="font-medium">{category.name}</span>
+            ),
+        },
+        {
+            key: 'slug',
+            header: 'Slug',
+            className: 'text-muted-foreground',
+            cell: (category) => category.slug,
+        },
+        {
+            key: 'products',
+            header: 'Produtos',
+            cell: (category) => category.productsCount,
+        },
+        {
+            key: 'status',
+            header: 'Estado',
+            cell: (category) => (
+                <Badge variant={category.active ? 'default' : 'secondary'}>
+                    {category.active ? 'Visível' : 'Arquivada'}
+                </Badge>
+            ),
+        },
+        {
+            key: 'actions',
+            header: '',
+            className: 'text-right',
+            cell: (category) => (
+                <div className="flex justify-end gap-2">
+                    <Button variant="outline" size="sm" asChild>
+                        <Link href={edit(category.id)}>Editar</Link>
+                    </Button>
+                    {category.active && (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setArchiving(category)}
+                        >
+                            Arquivar
+                        </Button>
+                    )}
+                </div>
+            ),
+        },
+    ];
 
     return (
         <>
             <Head title="Categorias" />
             <div className="flex h-full flex-1 flex-col gap-4 p-4">
-                <div className="flex items-center justify-between">
-                    <h1 className="text-xl font-semibold">Categorias</h1>
+                <PageHeader title="Categorias">
                     <Button asChild>
                         <Link href={create()}>Nova categoria</Link>
                     </Button>
-                </div>
+                </PageHeader>
 
-                {categories.length === 0 ? (
-                    <p className="rounded-xl border border-dashed border-border p-12 text-center text-sm text-muted-foreground">
-                        Ainda não há categorias — cria a primeira.
-                    </p>
-                ) : (
-                    <div className="overflow-x-auto rounded-xl border border-border/60">
-                        <table className="w-full text-sm">
-                            <thead>
-                                <tr className="border-b border-border/60 text-left text-muted-foreground">
-                                    <th className="px-4 py-3 font-medium">
-                                        Nome
-                                    </th>
-                                    <th className="px-4 py-3 font-medium">
-                                        Slug
-                                    </th>
-                                    <th className="px-4 py-3 font-medium">
-                                        Produtos
-                                    </th>
-                                    <th className="px-4 py-3 font-medium">
-                                        Estado
-                                    </th>
-                                    <th className="px-4 py-3" />
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {categories.map((category) => (
-                                    <tr
-                                        key={category.id}
-                                        className="border-b border-border/40 last:border-0"
-                                    >
-                                        <td className="px-4 py-3 font-medium">
-                                            {category.name}
-                                        </td>
-                                        <td className="px-4 py-3 text-muted-foreground">
-                                            {category.slug}
-                                        </td>
-                                        <td className="px-4 py-3">
-                                            {category.productsCount}
-                                        </td>
-                                        <td className="px-4 py-3">
-                                            <Badge
-                                                variant={
-                                                    category.active
-                                                        ? 'default'
-                                                        : 'secondary'
-                                                }
-                                            >
-                                                {category.active
-                                                    ? 'Visível'
-                                                    : 'Arquivada'}
-                                            </Badge>
-                                        </td>
-                                        <td className="px-4 py-3 text-right">
-                                            <div className="flex justify-end gap-2">
-                                                <Button
-                                                    variant="outline"
-                                                    size="sm"
-                                                    asChild
-                                                >
-                                                    <Link
-                                                        href={edit(category.id)}
-                                                    >
-                                                        Editar
-                                                    </Link>
-                                                </Button>
-                                                {category.active && (
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="sm"
-                                                        onClick={() =>
-                                                            archive(category)
-                                                        }
-                                                    >
-                                                        Arquivar
-                                                    </Button>
-                                                )}
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
-                    </div>
-                )}
+                <AdminTable
+                    columns={columns}
+                    rows={categories}
+                    rowKey={(category) => category.id}
+                    empty="Ainda não há categorias — cria a primeira."
+                />
             </div>
+
+            <ConfirmDialog
+                open={archiving !== null}
+                onOpenChange={(open) => !open && setArchiving(null)}
+                title="Arquivar categoria"
+                description={
+                    <>
+                        A categoria <strong>{archiving?.name}</strong> deixa de
+                        aparecer na loja. Os produtos associados mantêm-se.
+                    </>
+                }
+                confirmLabel="Arquivar"
+                destructive
+                onConfirm={() => {
+                    if (archiving) {
+                        router.delete(destroy(archiving.id).url, {
+                            onFinish: () => setArchiving(null),
+                        });
+                    }
+                }}
+            />
         </>
     );
 }

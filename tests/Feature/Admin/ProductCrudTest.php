@@ -133,6 +133,9 @@ class ProductCrudTest extends TestCase
 
     public function test_homepage_shows_only_active_products(): void
     {
+        // A montra so aparece com a loja aberta; fechada, '/' e a landing.
+        config(['access.store_open' => true]);
+
         Product::query()->create([
             'name' => 'Ativo', 'slug' => 'ativo',
             'status' => 'active', 'fulfillment_mode' => 'in_stock',

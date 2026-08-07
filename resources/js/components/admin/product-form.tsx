@@ -11,6 +11,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
+import { Textarea } from '@/components/ui/textarea';
 import type { CategoryOption, ProductFormData } from '@/types/catalog';
 import { FULFILLMENT_MODES, PRODUCT_STATUSES } from '@/types/catalog';
 
@@ -92,14 +93,13 @@ export default function ProductForm({
 
             <div className="grid gap-2">
                 <Label htmlFor="description">Descrição</Label>
-                <textarea
+                <Textarea
                     id="description"
                     value={data.description}
                     onChange={(event) =>
                         setData('description', event.target.value)
                     }
                     rows={6}
-                    className="rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
                 />
                 <InputError message={errors.description} />
             </div>

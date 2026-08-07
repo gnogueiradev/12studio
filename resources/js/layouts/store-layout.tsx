@@ -28,12 +28,9 @@ export default function StoreLayout({
                         >
                             Início
                         </Link>
-                        <Link
-                            href="/login"
-                            className="text-muted-foreground transition-colors hover:text-foreground"
-                        >
-                            Entrar
-                        </Link>
+                        {/* Sem link "Entrar": o /login esta escondido atras do
+                            URL secreto (config/access.php). O link de conta de
+                            cliente volta na Fase 5. */}
                     </nav>
                 </div>
             </header>

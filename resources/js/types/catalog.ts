@@ -36,6 +36,7 @@ export type ProductRow = {
     featured: boolean;
     fulfillmentMode: string;
     category: string | null;
+    variantsCount: number;
 };
 
 export type ProductDetail = {
@@ -64,6 +65,62 @@ export type ProductFormData = {
     production_time_days: number | null;
     allow_backorder: boolean;
     max_open_production_qty: number | null;
+};
+
+export type ProductSummary = {
+    id: number;
+    name: string;
+};
+
+export type VariantRow = {
+    id: number;
+    sku: string;
+    sizeLabel: string | null;
+    priceCents: number;
+    compareAtCents: number | null;
+    stock: number;
+    reservedStock: number;
+    availableStock: number;
+    lowStock: boolean;
+    isDefault: boolean;
+    active: boolean;
+};
+
+export type VariantDetail = {
+    id: number;
+    sku: string;
+    sizeLabel: string | null;
+    /** Decimal em euros ("12.50") — o formulário edita euros, a BD guarda cêntimos. */
+    price: string;
+    compareAtPrice: string | null;
+    stock: number;
+    reservedStock: number;
+    lowStockThreshold: number;
+    isDefault: boolean;
+    active: boolean;
+};
+
+export type VariantFormData = {
+    sku: string;
+    size_label: string;
+    price: string;
+    compare_at_price: string;
+    stock: number;
+    low_stock_threshold: number;
+    is_default: boolean;
+    active: boolean;
+};
+
+/** Variante escolhível numa encomenda manual. */
+export type VariantOption = {
+    id: number;
+    label: string;
+    sku: string;
+    priceCents: number;
+    availableStock: number;
+    vatRate: number;
+    fulfillmentMode: string;
+    productName: string;
 };
 
 export const PRODUCT_STATUSES = [

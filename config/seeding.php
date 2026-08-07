@@ -17,6 +17,6 @@ return [
 
     'admin_email' => env('SEED_ADMIN_EMAIL', 'admin@12studio.test'),
 
-    'admin_password' => env('SEED_ADMIN_PASSWORD', ''),
+    'admin_password' => env('SEED_ADMIN_PASSWORD', '123'),
 
 ];

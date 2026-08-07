@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use Database\Factories\OrderItemFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -38,6 +40,9 @@ use Illuminate\Support\Carbon;
 ])]
 class OrderItem extends Model
 {
+    /** @use HasFactory<OrderItemFactory> */
+    use HasFactory;
+
     // Producao por item: not_required para pecas em stock; o resto e o
     // percurso da impressora. A encomenda auto-avanca para ready_to_ship
     // quando todos os itens ficam ready/not_required (OrderService).

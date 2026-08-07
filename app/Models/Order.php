@@ -2,8 +2,10 @@
 
 namespace App\Models;
 
+use Database\Factories\OrderFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -63,6 +65,9 @@ use Illuminate\Support\Carbon;
 #[Hidden(['guest_access_token'])]
 class Order extends Model
 {
+    /** @use HasFactory<OrderFactory> */
+    use HasFactory;
+
     // Pipeline de fulfilment. O indicador FINANCEIRO e payment_status;
     // as invariantes entre os dois vivem no OrderService (Fase 4) e sao a
     // UNICA via de transicao — nunca validar so na interface.

@@ -10,9 +10,16 @@ class HomeController extends Controller
 {
     /**
      * Homepage da montra: produtos ativos, destacados primeiro.
+     *
+     * Com a loja fechada (config/access.php) nem chega a haver query — '/'
+     * devolve a landing "em breve" e mais nada.
      */
     public function __invoke(): Response
     {
+        if (! config('access.store_open')) {
+            return Inertia::render('coming-soon');
+        }
+
         $products = Product::query()
             ->where('status', 'active')
             ->with(['primaryImage', 'defaultVariant', 'category'])

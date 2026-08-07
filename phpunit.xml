@@ -26,6 +26,11 @@
         <env name="DB_CONNECTION" value="sqlite"/>
         <env name="DB_DATABASE" value=":memory:"/>
         <env name="DB_URL" value=""/>
+        <!-- Cadeado do login e loja fechados a um estado conhecido: sem isto,
+             o .env de quem corre os testes decidia se as rotas de auth
+             existem. Quem precisa do cadeado liga-o com config() no teste. -->
+        <env name="LOGIN_GATE_SECRET" value=""/>
+        <env name="STORE_OPEN" value="false"/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>

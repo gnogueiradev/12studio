@@ -218,6 +218,18 @@ Jenkinsfile · Dockerfile · docker-compose.yml   (adaptados do qrcode, IMAGE_NA
 
 Vendável no fim da **Fase 3**; lançável no fim da **Fase 5**.
 
+### Desvio: operação antecipada (encomendas, clientes, produção)
+
+Por decisão do dono, o backoffice passou a ser o centro de todos os canais **antes** da Fase 2 e da Fase 3, para poder registar já as vendas de Vinted/Instagram. Foi antecipado da **Fase 4** e trazido da **Fase 5**:
+
+- **Variantes mínimas** (Fase 2 parcial) — CRUD de SKU, tamanho, preço e stock dentro da página do produto. **Sem materiais, cores, fotos, custos nem dimensões**: esses continuam a ser Fase 2, e `variants.color_id` fica a null até lá.
+- **`StockService`** — updates condicionais (`WHERE stock - reserved_stock >= ?`) e `stock_movements` completos. **Reservas (`reserved_stock`, `stock_reservations`) e o sweep do scheduler continuam a ser Fase 3** — dependem do Multibanco.
+- **Encomendas** — `OrderService` completo (numeração via `order_sequences` com `UPDATE … RETURNING`, criação manual, transições forward-only, invariantes `payment_status` × `status`, auto-avanço), lista com filtros, detalhe com timeline dos dois históricos, quadro de produção por item.
+- **Clientes no backoffice** (Fase 5 parcial) — CRUD de `users` (`is_admin = false`) + a morada única. O cliente criado aqui recebe uma password aleatória e **não faz login**; o registo público e a área `/conta` continuam a ser Fase 5.
+- **Mailables** — `OrderConfirmationMail` (opcional na criação manual) e `OrderShippedMail` (na transição `→ shipped`). Faltam os de Multibanco pendente e o alerta ao admin, que dependem da Fase 3.
+
+O que **não** foi antecipado e continua exatamente como planeado: carrinho, checkout, Stripe, webhook, reservas, sweep, capacidade de produção, montra pública de produtos, custos e margens.
+
 ---
 
 ## Verificação
