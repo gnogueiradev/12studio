@@ -120,23 +120,49 @@ pipeline {
 
         stage('Health Check') {
             steps {
-                sh '''
-                    ok=0
-                    for i in $(seq 1 12); do
-                        if curl -fsS http://localhost/up > /dev/null 2>&1; then
-                            ok=1
-                            break
-                        fi
-                        sleep 5
-                    done
+                timeout(time: 3, unit: 'MINUTES') {
+                    sh '''
+                        # O /up e batido DE DENTRO do container. O agente do
+                        # Jenkins e ele proprio um container e o servico app nao
+                        # publica portas (vive atras do Nginx Proxy Manager), por
+                        # isso um `curl http://localhost/up` daqui batia no
+                        # proprio Jenkins — o gate respondia por uma maquina que
+                        # nada tem a ver com o deploy. E o mesmo /up que a
+                        # imagem ja usa no seu HEALTHCHECK (ver Dockerfile).
+                        ok=0
+                        for i in $(seq 1 24); do
+                            if docker compose exec -T app curl -fsS -o /dev/null http://localhost/up; then
+                                ok=1
+                                break
+                            fi
+                            sleep 5
+                        done
 
-                    if [ "$ok" -ne 1 ]; then
-                        echo "Health check falhou — rollback para :previous."
-                        docker tag ${IMAGE_NAME}:previous ${IMAGE_NAME}:latest
-                        docker compose up -d --remove-orphans
+                        if [ "$ok" -eq 1 ]; then
+                            echo "Health check OK — /up responde dentro do container."
+                            exit 0
+                        fi
+
+                        echo "Health check falhou. Estado e logs do container:"
+                        docker compose ps app || true
+                        docker compose logs --tail 50 app || true
+
+                        # A tag :previous so passa a existir no segundo deploy.
+                        # Sem esta guarda o `docker tag` falha, o shell morre no
+                        # -e e o rollback fica a meio: imagem por trocar e
+                        # container velho no ar, sem ninguem dizer porque.
+                        if docker image inspect ${IMAGE_NAME}:previous > /dev/null 2>&1; then
+                            echo "Rollback para ${IMAGE_NAME}:previous."
+                            docker tag ${IMAGE_NAME}:previous ${IMAGE_NAME}:latest
+                            docker compose up -d --remove-orphans
+                        else
+                            echo "Nao existe ${IMAGE_NAME}:previous (primeiro deploy) — nao ha para onde reverter."
+                            echo "O container fica como esta, para poderes investigar."
+                        fi
+
                         exit 1
-                    fi
-                '''
+                    '''
+                }
             }
         }
     }
