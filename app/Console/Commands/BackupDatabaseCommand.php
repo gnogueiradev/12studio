@@ -39,6 +39,19 @@ class BackupDatabaseCommand extends Command
             return self::SUCCESS;
         }
 
+        // Primeiro deploy numa maquina nova: o bind mount storage/ chega vazio
+        // e o .sqlite so nasce no `migrate --force`, que faz touch() ao
+        // ficheiro em falta. Este comando corre ANTES do migrate de proposito
+        // (o backup e o ponto de restauro pre-migracao), por isso tem de sair
+        // limpo quando ainda nao ha BD — nao ha nada para salvaguardar. Sem
+        // esta guarda o SQLiteConnector recusa a ligacao, e o `&&` do deploy
+        // parte antes de a BD chegar a existir.
+        if (! is_file($database) && ! is_file(base_path($database))) {
+            $this->warn("Ficheiro da BD ainda nao existe ({$database}) — nada para fazer.");
+
+            return self::SUCCESS;
+        }
+
         $directory = storage_path('backups');
 
         if (! is_dir($directory)) {
