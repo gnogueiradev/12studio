@@ -5,15 +5,20 @@
 @source '../views';
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 /*
- * A pasta docs/ e versionada e o Tailwind varre-a como qualquer outra pasta do
- * projeto. Os documentos de planeamento da paleta de cores citam nomes de
- * classes (bg-zinc-900, text-neutral-500, etc.) como texto, para descrever a
- * sua remocao — nao como uso real na aplicacao. Sem esta exclusao, o
- * compilador trata essas citacoes como classes usadas e gera as regras que os
- * documentos pedem para eliminar, inviabilizando qualquer verificacao futura
- * do CSS compilado.
+ * As pastas docs/ e tests/ sao versionadas e o Tailwind varre-as como
+ * qualquer outra pasta do projeto. Tanto os documentos de planeamento da
+ * paleta de cores como os doc-comments do proprio teste-guarda
+ * (tests/Unit/DesignTokensTest.php) citam nomes de classes Tailwind em prosa
+ * (bg-zinc-900, text-neutral-500, bg-neutral-200, etc.) como exemplos do que
+ * a paleta quer eliminar — nao como uso real na aplicacao. Sem esta exclusao,
+ * o compilador trata essas citacoes como classes usadas e gera as proprias
+ * regras que a documentacao e os testes pedem para eliminar, inviabilizando
+ * qualquer verificacao futura do CSS compilado. tests/ so tem PHP de teste e
+ * nunca renderiza interface, por isso nao ha nada la que o Tailwind deva
+ * compilar.
  */
 @source not '../../docs';
+@source not '../../tests';
 
 @custom-variant dark (&:is(.dark *));
 
