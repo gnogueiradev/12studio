@@ -239,7 +239,10 @@ class DesignTokensTest extends TestCase
             'info-soft-foreground',
         ];
 
-        $pattern = '/^@theme\s*\{(.*?)^\}/ms';
+        // `[^{]*` e nao `\s*`: o bloco e `@theme inline` (ver o comentario em
+        // app.css), e um `\s*` deixava de o encontrar em silencio — o
+        // foreach abaixo passava sem verificar nada.
+        $pattern = '/^@theme[^{]*\{(.*?)^\}/ms';
         preg_match($pattern, $this->css(), $block);
 
         foreach ($utilities as $utility) {
