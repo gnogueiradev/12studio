@@ -240,6 +240,36 @@ class DesignTokensTest extends TestCase
         $this->assertStringNotContainsString('hover:bg-secondary/80', $button);
     }
 
+    /**
+     * O <style> inline do Blade pinta o fundo antes de o CSS do Vite carregar.
+     * Se continuar em oklch(1 0 0)/oklch(0.145 0 0) do starter kit, uma
+     * cache fria mostra um flash branco antes de saltar para o bege da marca.
+     */
+    public function test_the_anti_flash_style_matches_the_palette(): void
+    {
+        $blade = file_get_contents($this->projectPath('resources/views/app.blade.php'));
+
+        $this->assertStringNotContainsString(
+            'oklch(',
+            $blade,
+            'O <style> inline do Blade ainda pinta o fundo em oklch: com cache fria a pagina abre com um flash branco antes de saltar para o bege.'
+        );
+        $this->assertStringContainsString('background-color: #FAF8F5;', $blade);
+        $this->assertStringContainsString('background-color: #211E1C;', $blade);
+    }
+
+    /**
+     * A barra de progresso do Inertia ainda vinha no cinzento-azulado do
+     * starter kit (#4B5563), que nao pertence a paleta da marca.
+     */
+    public function test_the_progress_bar_uses_the_brand_colour(): void
+    {
+        $app = file_get_contents($this->projectPath('resources/js/app.tsx'));
+
+        $this->assertStringNotContainsString('#4B5563', $app, 'A barra de progresso do Inertia ainda esta no cinzento-azulado do starter kit.');
+        $this->assertStringContainsString("color: '#332F2B'", $app);
+    }
+
     protected function assertContrast(string $selector, string $foreground, string $background, float $minimum): void
     {
         $tokens = $this->tokensIn($selector);

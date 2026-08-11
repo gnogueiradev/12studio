@@ -40,7 +40,9 @@ createInertiaApp({
         );
     },
     progress: {
-        color: '#4B5563',
+        // Cor da marca (--foreground / --primary claro) em vez do
+        // cinzento-azulado do starter kit.
+        color: '#332F2B',
     },
 });
 
