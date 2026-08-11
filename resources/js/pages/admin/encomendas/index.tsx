@@ -70,7 +70,7 @@ export default function OrdersIndex({ orders, filters }: Props) {
                     </Link>
                     {order.stockIssue && (
                         <AlertTriangle
-                            className="size-4 text-amber-600"
+                            className="size-4 text-warning"
                             aria-label="Problema de stock"
                         />
                     )}

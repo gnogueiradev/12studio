@@ -116,7 +116,7 @@ export default function OrdersShow({ order }: Props) {
                 </PageHeader>
 
                 {order.stockIssue && (
-                    <div className="flex items-center gap-2 rounded-xl border border-amber-500/50 bg-amber-50 p-4 text-sm text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+                    <div className="flex items-center gap-2 rounded-xl border border-warning/50 bg-warning-soft p-4 text-sm text-warning-soft-foreground">
                         <AlertTriangle className="size-4 shrink-0" />O cliente
                         pagou mas o stock não pôde ser descontado. Resolver
                         manualmente antes de expedir.
@@ -159,7 +159,7 @@ export default function OrdersShow({ order }: Props) {
                                                 </div>
 
                                                 {item.priceOverrideReason && (
-                                                    <div className="text-xs text-amber-700 dark:text-amber-400">
+                                                    <div className="text-xs text-warning">
                                                         Preço alterado (catálogo{' '}
                                                         {formatCents(
                                                             item.catalogUnitPriceCents ??

@@ -296,6 +296,11 @@ class DesignTokensTest extends TestCase
         $this->assertNoColourClasses(self::BRAND_FAMILIES);
     }
 
+    public function test_no_tailwind_state_colours_remain_in_the_frontend(): void
+    {
+        $this->assertNoColourClasses(self::STATE_FAMILIES);
+    }
+
     protected function assertNoColourClasses(string $families): void
     {
         $pattern = '/\b(?:'.self::COLOUR_PREFIXES.')-(?:'.$families.')(?:-\d{2,3})?\b/';

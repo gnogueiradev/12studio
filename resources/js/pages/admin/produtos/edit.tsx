@@ -87,7 +87,7 @@ export default function ProductsEdit({ product, categories, variants }: Props) {
             key: 'stock',
             header: 'Stock',
             cell: (variant) => (
-                <span className={variant.lowStock ? 'text-amber-600' : ''}>
+                <span className={variant.lowStock ? 'text-warning' : ''}>
                     {variant.availableStock}
                     {variant.reservedStock > 0 && (
                         <span className="text-muted-foreground">
