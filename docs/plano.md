@@ -61,9 +61,11 @@ Cêntimos inteiros; IDs auto-increment (`$table->id()`, convenção qrcode); `ti
 - **materials** — name ("PLA", "PETG", "TPU"), price_per_kg_cents, active, sort_order
 - **colors** — material_id FK, name, hex_color, image?, price_per_kg_cents? (override), is_active. Cor pertence a um material → impossível vender combinações inexistentes; montra mostra swatches reais agrupados por material
 - **categories** — flat; slug ASCII
-- **products** — slug, name, description (markdown), category_id, status (`draft`/`active`/`archived`), featured, vat_rate (default 23), **fulfillment_mode** (`in_stock` | `made_to_order` | `custom`), **production_time_days?**, **allow_backorder**, **max_open_production_qty?** (capacidade — limite *soft*, ver riscos), **personalization_fields json?** (`[{key,label,type:'text'|'number',required,maxLength}]`), **personalization_surcharge_cents?** (fixo; regras avançadas ficam para depois), seo_title?, seo_description?
+- **tags** + **product_tag** — segundo eixo de organização ao lado das categorias (um produto tem UMA categoria e várias tags). Excepção consciente à eliminação lógica: uma tag sem produtos apaga-se mesmo — nenhuma encomenda a referencia
+- **products** — slug (**editável**; vazio gera-se do nome), name, description (**HTML** sanitizado com HTMLPurifier, perfil `product` — o editor TipTap do backoffice escreve-o), category_id, status (`draft`/`active`/`archived`), featured, vat_rate (default 23), **fulfillment_mode** (`in_stock` | `made_to_order` | `custom`), **production_time_days?**, **allow_backorder**, **max_open_production_qty?** (capacidade — limite *soft*, ver riscos), **personalization_fields json?** (`[{key,label,type:'text'|'number',required,maxLength}]`), **personalization_surcharge_cents?** (fixo; regras avançadas ficam para depois), seo_title?, seo_description?
   - Montra: `in_stock` → "Envio em 1–2 dias úteis"; `made_to_order` → "Produzido por encomenda — envio em X–Y dias úteis"
-- **variants** — product_id, sku único, color_id?, size_label?, price_cents (IVA incl.), compare_at_cents?, **stock**, **reserved_stock**, low_stock_threshold, is_default, active
+- **variants** — product_id, sku único, color_id?, size_label?, price_cents (IVA incl.), compare_at_cents?, **wholesale_price_cents?** (revenda — só backoffice, aplicável numa encomenda manual), **stock**, **reserved_stock**, low_stock_threshold, is_default, active
+  - O formulário fala **preço normal + preço promocional**; a BD guarda `price_cents` = preço EFETIVO e `compare_at_cents` = preço riscado, invertidos em promoção. A tradução vive só no `VariantService::normalizePrices()` (escrita) e em `Variant::normalPriceCents()`/`salePriceCents()` (leitura) — tudo a jusante (carrinho, order_items, Stripe) continua a ler `price_cents` como o valor cobrado
   - **Custos:** filament_weight_grams?, printing_time_minutes?, **labor_minutes?**, packaging_cost_cents?, energy_cost_cents? (manual ou auto), **failure_rate_percent?**
   - **Envio/dimensões:** product_weight_grams?, package_weight_grams?, length_mm?, width_mm?, height_mm? (v1 só armazena/mostra; portes por peso e transportadoras ficam para depois)
   - `availableStock = stock - reserved_stock` (accessor, nunca persistido)
@@ -227,6 +229,14 @@ Por decisão do dono, o backoffice passou a ser o centro de todos os canais **an
 - **Encomendas** — `OrderService` completo (numeração via `order_sequences` com `UPDATE … RETURNING`, criação manual, transições forward-only, invariantes `payment_status` × `status`, auto-avanço), lista com filtros, detalhe com timeline dos dois históricos, quadro de produção por item.
 - **Clientes no backoffice** (Fase 5 parcial) — CRUD de `users` (`is_admin = false`) + a morada única. O cliente criado aqui recebe uma password aleatória e **não faz login**; o registo público e a área `/conta` continuam a ser Fase 5.
 - **Mailables** — `OrderConfirmationMail` (opcional na criação manual) e `OrderShippedMail` (na transição `→ shipped`). Faltam os de Multibanco pendente e o alerta ao admin, que dependem da Fase 3.
+
+Numa segunda ronda, ainda antes da Fase 2 propriamente dita, foi antecipado o resto do que o produto precisa para ser vendável:
+
+- **Materiais & cores** (Fase 2 parcial) — CRUD completo com swatches e preço/kg (override por cor), e o seletor de cor na variante. `variants.color_id` deixou de ficar a null. **Sem gerador de combinações cor × tamanho e sem galeria por cor** — continuam a ser Fase 2.
+- **Fotografias** (Fase 2 parcial) — `ImageService` (upload no disco `public`, `setPrimary` transacional contra o índice único parcial, reordenar, apagar) e a galeria na página de edição do produto. **Sem redimensionamento nem miniaturas**: os originais (até 5 MB) são servidos como estão — tem de mudar antes da montra pública.
+- **Gramagem** — `variants.filament_weight_grams` no formulário. Os restantes campos de custo (tempo de impressão, mão de obra, embalagem, taxa de falha) continuam a ser Fase 2, com o `CostService`.
+- **Tags, slug editável e descrição formatada** — ver o schema acima.
+- **Definições em runtime** — `SettingService` + `/admin/definicoes`, por agora só a moeda. É onde entram `energy_cost_per_kwh_cents`, `printer_wattage` e `labor_cost_per_hour_cents` na Fase 2. O serviço tolera a tabela `settings` não existir (é lido em todos os pedidos pelo `HandleInertiaRequests`) e cai no `config/shop.php`.
 
 O que **não** foi antecipado e continua exatamente como planeado: carrinho, checkout, Stripe, webhook, reservas, sweep, capacidade de produção, montra pública de produtos, custos e margens.
 

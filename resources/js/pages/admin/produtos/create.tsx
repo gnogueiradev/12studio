@@ -6,14 +6,21 @@ import type { CategoryOption, ProductFormData } from '@/types/catalog';
 type Props = {
     categories: CategoryOption[];
     defaultVatRate: number;
+    tagSuggestions: string[];
 };
 
-export default function ProductsCreate({ categories, defaultVatRate }: Props) {
+export default function ProductsCreate({
+    categories,
+    defaultVatRate,
+    tagSuggestions,
+}: Props) {
     const { data, setData, post, processing, errors } =
         useForm<ProductFormData>({
             name: '',
+            slug: '',
             category_id: null,
             description: '',
+            tags: [],
             status: 'draft',
             featured: false,
             vat_rate: defaultVatRate,
@@ -34,8 +41,8 @@ export default function ProductsCreate({ categories, defaultVatRate }: Props) {
             <div className="flex h-full flex-1 flex-col gap-4 p-4">
                 <h1 className="text-xl font-semibold">Novo produto</h1>
                 <p className="text-sm text-muted-foreground">
-                    Dados base do produto. Variantes, cores, custos e fotos
-                    chegam na Fase 2.
+                    Guarda o produto para lhe poderes juntar fotografias e
+                    variantes — ambas precisam que ele já exista.
                 </p>
                 <ProductForm
                     data={data}
@@ -45,6 +52,7 @@ export default function ProductsCreate({ categories, defaultVatRate }: Props) {
                     onSubmit={submit}
                     submitLabel="Criar produto"
                     categories={categories}
+                    tagSuggestions={tagSuggestions}
                 />
             </div>
         </>

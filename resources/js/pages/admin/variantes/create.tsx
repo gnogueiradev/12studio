@@ -3,20 +3,32 @@ import { PageHeader } from '@/components/admin/page-header';
 import VariantForm from '@/components/admin/variant-form';
 import { index } from '@/routes/admin/produtos';
 import { store } from '@/routes/admin/produtos/variantes';
-import type { ProductSummary, VariantFormData } from '@/types/catalog';
+import type {
+    ColorGroup,
+    ProductSummary,
+    VariantFormData,
+} from '@/types/catalog';
 
 type Props = {
     product: ProductSummary;
     suggestedSku: string;
+    colorGroups: ColorGroup[];
 };
 
-export default function VariantsCreate({ product, suggestedSku }: Props) {
+export default function VariantsCreate({
+    product,
+    suggestedSku,
+    colorGroups,
+}: Props) {
     const { data, setData, post, processing, errors } =
         useForm<VariantFormData>({
             sku: suggestedSku,
+            color_id: null,
             size_label: '',
-            price: '',
-            compare_at_price: '',
+            normal_price: '',
+            sale_price: '',
+            wholesale_price: '',
+            filament_weight_grams: null,
             stock: 0,
             low_stock_threshold: 3,
             is_default: false,
@@ -43,6 +55,7 @@ export default function VariantsCreate({ product, suggestedSku }: Props) {
                     processing={processing}
                     onSubmit={submit}
                     submitLabel="Criar variante"
+                    colorGroups={colorGroups}
                 />
             </div>
         </>

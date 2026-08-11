@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use Database\Factories\MaterialFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
@@ -19,6 +21,9 @@ use Illuminate\Support\Carbon;
 #[Fillable(['name', 'price_per_kg_cents', 'active', 'sort_order'])]
 class Material extends Model
 {
+    /** @use HasFactory<MaterialFactory> */
+    use HasFactory;
+
     /**
      * Get the attributes that should be cast.
      *

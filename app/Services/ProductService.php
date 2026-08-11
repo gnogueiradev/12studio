@@ -3,7 +3,10 @@
 namespace App\Services;
 
 use App\Models\Product;
+use App\Models\Tag;
 use App\Support\Slug;
+use Illuminate\Support\Facades\DB;
+use Mews\Purifier\Facades\Purifier;
 
 class ProductService
 {
@@ -12,9 +15,21 @@ class ProductService
      */
     public function store(array $data): Product
     {
-        $data['slug'] = Slug::unique(Product::class, (string) $data['name']);
+        return DB::transaction(function () use ($data): Product {
+            $tags = $this->pullTags($data);
+            $data = $this->sanitizeDescription($data);
 
-        return Product::query()->create($data);
+            $data['slug'] = Slug::unique(
+                Product::class,
+                $this->slugSource($data, (string) $data['name']),
+            );
+
+            $product = Product::query()->create($data);
+
+            $this->syncTags($product, $tags ?? []);
+
+            return $product;
+        });
     }
 
     /**
@@ -22,13 +37,27 @@ class ProductService
      */
     public function update(Product $product, array $data): Product
     {
-        if (isset($data['name']) && $data['name'] !== $product->name) {
-            $data['slug'] = Slug::unique(Product::class, (string) $data['name'], $product->id);
-        }
+        return DB::transaction(function () use ($product, $data): Product {
+            $tags = $this->pullTags($data);
+            $data = $this->sanitizeDescription($data);
 
-        $product->update($data);
+            $slug = $this->slugSource($data, (string) ($data['name'] ?? $product->name));
 
-        return $product;
+            // Um slug escrito a mao e um URL que ja pode estar partilhado —
+            // so se regenera quando muda mesmo. Mudar o nome do produto nao
+            // lhe mexe.
+            if ($slug !== $product->slug) {
+                $data['slug'] = Slug::unique(Product::class, $slug, $product->id);
+            }
+
+            $product->update($data);
+
+            if ($tags !== null) {
+                $this->syncTags($product, $tags);
+            }
+
+            return $product;
+        });
     }
 
     /**
@@ -39,5 +68,90 @@ class ProductService
     public function archive(Product $product): void
     {
         $product->update(['status' => 'archived']);
+    }
+
+    /**
+     * Etiquetas por nome -> ids no pivot, criando as que ainda nao existem.
+     * A chave e o slug: "Natal", "natal" e "NATAL" sao a mesma etiqueta.
+     *
+     * @param  array<int, string>  $names
+     */
+    public function syncTags(Product $product, array $names): void
+    {
+        $ids = collect($names)
+            ->map(fn (string $name): string => trim($name))
+            ->filter()
+            // Desambigua ANTES de ir a BD: "Natal" e "natal" dariam o mesmo
+            // slug e o firstOrCreate devolveria a mesma linha duas vezes.
+            ->keyBy(fn (string $name): string => str($name)->slug()->value())
+            ->reject(fn (string $name, string $slug): bool => $slug === '')
+            ->map(fn (string $name, string $slug): int => Tag::query()->firstOrCreate(
+                ['slug' => $slug],
+                ['name' => $name],
+            )->id)
+            ->values()
+            ->all();
+
+        $product->tags()->sync($ids);
+    }
+
+    /**
+     * A descricao e HTML vindo do editor e vai acabar renderizada com
+     * dangerouslySetInnerHTML na montra. Passa pela lista branca do perfil
+     * `product` (config/purifier.php) ANTES de tocar na base de dados — o que
+     * fica guardado ja e seguro, e nao ha nenhum ponto de leitura por onde
+     * possa escapar sem limpeza.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>
+     */
+    private function sanitizeDescription(array $data): array
+    {
+        if (! array_key_exists('description', $data)) {
+            return $data;
+        }
+
+        $html = trim((string) ($data['description'] ?? ''));
+
+        // O TipTap devolve "<p></p>" para um editor vazio — isso e nada.
+        $clean = $html === '' ? '' : trim(Purifier::clean($html, 'product'));
+
+        $data['description'] = in_array($clean, ['', '<p></p>'], true) ? null : $clean;
+
+        return $data;
+    }
+
+    /**
+     * Slug vazio (ou ausente) = "gera a partir do nome" — o comportamento por
+     * omissao. O admin so escreve um quando quer um URL especifico.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function slugSource(array $data, string $name): string
+    {
+        $slug = trim((string) ($data['slug'] ?? ''));
+
+        return $slug === '' ? $name : $slug;
+    }
+
+    /**
+     * Tira as tags do payload — nao sao uma coluna de `products`, so podem
+     * ser gravadas depois de o produto existir. Null distingue "nao vieram no
+     * pedido" (nao mexer) de "vieram vazias" (limpar todas).
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<int, string>|null
+     */
+    private function pullTags(array &$data): ?array
+    {
+        if (! array_key_exists('tags', $data)) {
+            return null;
+        }
+
+        /** @var array<int, string> $tags */
+        $tags = $data['tags'] ?? [];
+        unset($data['tags']);
+
+        return $tags;
     }
 }

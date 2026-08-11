@@ -1,7 +1,54 @@
-const formatter = new Intl.NumberFormat('pt-PT', {
+import { getInitialPageFromDOM, router } from '@inertiajs/core';
+import type { Page } from '@inertiajs/core';
+
+/** O `id` por omissão do createInertiaApp — o app.tsx não lhe mexe. */
+const INERTIA_APP_ID = 'app';
+
+const DEFAULT_CURRENCY = 'EUR';
+
+let currency = DEFAULT_CURRENCY;
+let formatter = new Intl.NumberFormat('pt-PT', {
     style: 'currency',
-    currency: 'EUR',
+    currency,
 });
+
+function setCurrency(code: unknown): void {
+    if (typeof code !== 'string' || code === '' || code === currency) {
+        return;
+    }
+
+    currency = code;
+    formatter = new Intl.NumberFormat('pt-PT', {
+        style: 'currency',
+        currency: code,
+    });
+}
+
+/**
+ * A moeda vem das definições (tabela `settings`), partilhada em todas as
+ * páginas pelo HandleInertiaRequests.
+ *
+ * Fica em estado de módulo e não num contexto de React para o formatCents
+ * manter a assinatura de sempre — as dezenas de chamadas existentes não
+ * precisam de saber que isto mudou. Chamado no arranque da app, ao lado do
+ * initializeTheme.
+ *
+ * A leitura inicial vem do DOM porque tem de estar feita antes da primeira
+ * pintura; o evento `navigate` trata das visitas seguintes (a moeda pode
+ * mudar a meio da sessão, na página de definições).
+ */
+export function initializeCurrency(): void {
+    // Devolve null sem o <script data-page> (testes, render isolado); nesse
+    // caso fica o valor por omissão — uma moeda não justifica rebentar o
+    // arranque da aplicação.
+    const initial = getInitialPageFromDOM<Page>(INERTIA_APP_ID);
+
+    setCurrency(initial?.props.currency);
+
+    router.on('navigate', (event) =>
+        setCurrency(event.detail.page.props.currency),
+    );
+}
 
 /** Cêntimos inteiros → "12,50 €". Nunca guardamos floats. */
 export function formatCents(cents: number): string {

@@ -6,6 +6,7 @@ import AppLayout from '@/layouts/app-layout';
 import AuthLayout from '@/layouts/auth-layout';
 import SettingsLayout from '@/layouts/settings/layout';
 import StoreLayout from '@/layouts/store-layout';
+import { initializeCurrency } from '@/lib/money';
 
 const appName = import.meta.env.VITE_APP_NAME || '12studio';
 
@@ -48,3 +49,6 @@ createInertiaApp({
 
 // This will set light / dark mode on load...
 initializeTheme();
+
+// Moeda das definições → formatador do lib/money, antes da primeira pintura.
+initializeCurrency();

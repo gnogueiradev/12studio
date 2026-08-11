@@ -2,10 +2,13 @@
 
 namespace Tests\Feature\Admin;
 
+use App\Models\Color;
+use App\Models\Material;
 use App\Models\Product;
 use App\Models\User;
 use App\Models\Variant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
 
 class VariantCrudTest extends TestCase
@@ -32,8 +35,9 @@ class VariantCrudTest extends TestCase
         return [
             'sku' => 'VASO-PLA-20',
             'size_label' => '20 cm',
-            'price' => '24.90',
-            'compare_at_price' => null,
+            'normal_price' => '24.90',
+            'sale_price' => null,
+            'wholesale_price' => null,
             'stock' => 5,
             'low_stock_threshold' => 3,
             'is_default' => false,
@@ -46,15 +50,93 @@ class VariantCrudTest extends TestCase
         $this->actingAs($this->admin)
             ->post(route('admin.produtos.variantes.store', $this->product), [
                 ...$this->validPayload(),
-                'price' => '24,90',
+                'normal_price' => '24,90',
             ])
             ->assertRedirect(route('admin.produtos.edit', $this->product));
 
         $this->assertDatabaseHas('variants', [
             'sku' => 'VASO-PLA-20',
             'price_cents' => 2490,
+            'compare_at_cents' => null,
             'stock' => 5,
         ]);
+    }
+
+    /**
+     * O admin escreve "normal" e "promocional"; a BD guarda o preco EFETIVO
+     * em `price_cents` e o riscado em `compare_at_cents` — invertidos face ao
+     * formulario. Este teste prende essa traducao nos dois sentidos.
+     */
+    public function test_promotional_price_becomes_the_effective_price(): void
+    {
+        $this->actingAs($this->admin)
+            ->post(route('admin.produtos.variantes.store', $this->product), [
+                ...$this->validPayload(),
+                'normal_price' => '24,90',
+                'sale_price' => '19,90',
+            ]);
+
+        $variant = Variant::query()->firstOrFail();
+
+        $this->assertSame(1990, $variant->price_cents);
+        $this->assertSame(2490, $variant->compare_at_cents);
+
+        // E de volta ao formulario, sem o admin ver a troca.
+        $this->assertSame(2490, $variant->normalPriceCents());
+        $this->assertSame(1990, $variant->salePriceCents());
+        $this->assertTrue($variant->isOnSale());
+    }
+
+    public function test_removing_the_promotion_restores_the_normal_price(): void
+    {
+        $variant = Variant::factory()->create([
+            'product_id' => $this->product->id,
+            'price_cents' => 1990,
+            'compare_at_cents' => 2490,
+        ]);
+
+        $this->actingAs($this->admin)
+            ->patch(route('admin.variantes.update', $variant), [
+                ...$this->validPayload(),
+                'sku' => $variant->sku,
+                'normal_price' => '24.90',
+                'sale_price' => '',
+            ]);
+
+        $variant->refresh();
+
+        $this->assertSame(2490, $variant->price_cents);
+        $this->assertNull($variant->compare_at_cents);
+        $this->assertFalse($variant->isOnSale());
+    }
+
+    public function test_weight_and_wholesale_price_are_stored(): void
+    {
+        $this->actingAs($this->admin)
+            ->post(route('admin.produtos.variantes.store', $this->product), [
+                ...$this->validPayload(),
+                'wholesale_price' => '12,00',
+                'filament_weight_grams' => 45,
+            ]);
+
+        $this->assertDatabaseHas('variants', [
+            'sku' => 'VASO-PLA-20',
+            'wholesale_price_cents' => 1200,
+            'filament_weight_grams' => 45,
+        ]);
+    }
+
+    public function test_a_variant_can_be_given_a_colour(): void
+    {
+        $color = Color::factory()->create();
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.produtos.variantes.store', $this->product), [
+                ...$this->validPayload(),
+                'color_id' => $color->id,
+            ]);
+
+        $this->assertSame($color->id, Variant::query()->firstOrFail()->color_id);
     }
 
     public function test_initial_stock_is_recorded_as_a_movement(): void
@@ -124,15 +206,71 @@ class VariantCrudTest extends TestCase
             ->assertSessionHasErrors('sku');
     }
 
-    public function test_compare_at_price_must_be_above_the_price(): void
+    public function test_promotional_price_must_be_below_the_normal_price(): void
     {
         $this->actingAs($this->admin)
             ->post(route('admin.produtos.variantes.store', $this->product), [
                 ...$this->validPayload(),
-                'price' => '24.90',
-                'compare_at_price' => '19.90',
+                'normal_price' => '19.90',
+                'sale_price' => '24.90',
             ])
-            ->assertSessionHasErrors('compare_at_price');
+            ->assertSessionHasErrors('sale_price');
+
+        $this->assertDatabaseCount('variants', 0);
+    }
+
+    public function test_wholesale_price_cannot_exceed_the_selling_price(): void
+    {
+        // Compara contra o promocional quando existe, nao contra o normal:
+        // e o promocional que o cliente final paga.
+        $this->actingAs($this->admin)
+            ->post(route('admin.produtos.variantes.store', $this->product), [
+                ...$this->validPayload(),
+                'normal_price' => '24.90',
+                'sale_price' => '19.90',
+                'wholesale_price' => '22.00',
+            ])
+            ->assertSessionHasErrors('wholesale_price');
+    }
+
+    /**
+     * O seletor de cor mostra as cores ativas agrupadas por material.
+     */
+    public function test_the_create_page_groups_colours_by_material(): void
+    {
+        $pla = Material::factory()->create(['name' => 'PLA']);
+        Color::factory()->count(2)->create(['material_id' => $pla->id]);
+        Color::factory()->archived()->create(['material_id' => $pla->id]);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.produtos.variantes.create', $this->product))
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->has('colorGroups', 1)
+                ->where('colorGroups.0.material', 'PLA')
+                ->has('colorGroups.0.colors', 2));
+    }
+
+    /**
+     * Editar uma variante cuja cor foi entretanto arquivada tem de continuar
+     * a mostra-la — senao o seletor abria vazio e uma gravacao inocente
+     * perdia a cor.
+     */
+    public function test_editing_keeps_an_archived_colour_in_the_options(): void
+    {
+        $color = Color::factory()->archived()->create();
+        $variant = Variant::factory()->create([
+            'product_id' => $this->product->id,
+            'color_id' => $color->id,
+        ]);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.variantes.edit', $variant))
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->has('colorGroups', 1)
+                ->where('colorGroups.0.colors.0.id', $color->id)
+                ->where('variant.colorId', $color->id));
     }
 
     public function test_destroy_archives_instead_of_deleting(): void

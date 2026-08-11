@@ -7,6 +7,8 @@ use App\Http\Requests\Product\StoreProductRequest;
 use App\Http\Requests\Product\UpdateProductRequest;
 use App\Models\Category;
 use App\Models\Product;
+use App\Models\ProductImage;
+use App\Models\Tag;
 use App\Models\Variant;
 use App\Services\ProductService;
 use Illuminate\Http\RedirectResponse;
@@ -47,6 +49,7 @@ class ProductController extends Controller
         return Inertia::render('admin/produtos/create', [
             'categories' => $this->categoryOptions(),
             'defaultVatRate' => (int) config('shop.default_vat_rate', 23),
+            'tagSuggestions' => $this->tagSuggestions(),
         ]);
     }
 
@@ -61,6 +64,8 @@ class ProductController extends Controller
 
     public function edit(Product $product): Response
     {
+        $product->load(['tags', 'images']);
+
         return Inertia::render('admin/produtos/edit', [
             'product' => [
                 'id' => $product->id,
@@ -68,6 +73,7 @@ class ProductController extends Controller
                 'slug' => $product->slug,
                 'categoryId' => $product->category_id,
                 'description' => $product->description,
+                'tags' => $product->tags->pluck('name')->all(),
                 'status' => $product->status,
                 'featured' => $product->featured,
                 'vatRate' => $product->vat_rate,
@@ -77,6 +83,8 @@ class ProductController extends Controller
                 'maxOpenProductionQty' => $product->max_open_production_qty,
             ],
             'categories' => $this->categoryOptions(),
+            'tagSuggestions' => $this->tagSuggestions(),
+            'images' => $this->imageRows($product),
             'variants' => $this->variantRows($product),
         ]);
     }
@@ -110,6 +118,7 @@ class ProductController extends Controller
     private function variantRows(Product $product): array
     {
         return $product->variants()
+            ->with('color.material')
             ->orderByDesc('is_default')
             ->orderBy('sku')
             ->get()
@@ -117,8 +126,16 @@ class ProductController extends Controller
                 'id' => $variant->id,
                 'sku' => $variant->sku,
                 'sizeLabel' => $variant->size_label,
+                'color' => $variant->color === null ? null : [
+                    'id' => $variant->color->id,
+                    'name' => $variant->color->name,
+                    'hex' => $variant->color->hex_color,
+                    'material' => $variant->color->material->name,
+                ],
                 'priceCents' => $variant->price_cents,
                 'compareAtCents' => $variant->compare_at_cents,
+                'wholesalePriceCents' => $variant->wholesale_price_cents,
+                'filamentWeightGrams' => $variant->filament_weight_grams,
                 'stock' => $variant->stock,
                 'reservedStock' => $variant->reserved_stock,
                 'availableStock' => $variant->available_stock,
@@ -127,6 +144,36 @@ class ProductController extends Controller
                 'active' => $variant->active,
             ])
             ->all();
+    }
+
+    /**
+     * Galeria do produto para a seccao "Fotografias" da pagina de edicao.
+     * A relacao `images` ja vem ordenada por sort_order.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private function imageRows(Product $product): array
+    {
+        return $product->images
+            ->map(fn (ProductImage $image): array => [
+                'id' => $image->id,
+                'url' => $image->url,
+                'alt' => $image->alt,
+                'isPrimary' => $image->is_primary,
+            ])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Todas as etiquetas ja usadas, para o campo sugerir em vez de deixar o
+     * admin criar "natal" e "Natal" sem dar por isso.
+     *
+     * @return array<int, string>
+     */
+    private function tagSuggestions(): array
+    {
+        return Tag::query()->orderBy('name')->pluck('name')->all();
     }
 
     /**

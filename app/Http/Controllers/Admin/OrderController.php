@@ -200,14 +200,19 @@ class OrderController extends Controller
         return Variant::query()
             ->where('active', true)
             ->whereHas('product', fn ($query) => $query->where('status', '!=', 'archived'))
-            ->with('product')
+            ->with(['product', 'color'])
             ->orderBy('sku')
             ->get()
             ->map(fn (Variant $variant): array => [
                 'id' => $variant->id,
-                'label' => trim($variant->product->name.' '.($variant->size_label ?? '')),
+                'label' => trim(implode(' ', array_filter([
+                    $variant->product->name,
+                    $variant->color?->name,
+                    $variant->size_label,
+                ]))),
                 'sku' => $variant->sku,
                 'priceCents' => $variant->price_cents,
+                'wholesalePriceCents' => $variant->wholesale_price_cents,
                 'availableStock' => $variant->available_stock,
                 'vatRate' => $variant->product->vat_rate,
                 'fulfillmentMode' => $variant->product->fulfillment_mode,

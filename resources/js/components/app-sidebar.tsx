@@ -1,8 +1,11 @@
 import { Link } from '@inertiajs/react';
 import {
+    Boxes,
     Factory,
     LayoutGrid,
     Package,
+    Palette,
+    Settings,
     ShoppingCart,
     Store,
     Tags,
@@ -23,8 +26,8 @@ import {
 } from '@/components/ui/sidebar';
 import type { NavItem } from '@/types';
 
-// Navegacao do backoffice. Cresce com as fases: materiais & cores (Fase 2),
-// carrinho e checkout Stripe (Fase 3), KPIs (Fase 5).
+// Navegacao do backoffice. Cresce com as fases: carrinho e checkout Stripe
+// (Fase 3), KPIs (Fase 5).
 const mainNavItems: NavItem[] = [
     {
         title: 'Backoffice',
@@ -55,6 +58,21 @@ const mainNavItems: NavItem[] = [
         title: 'Categorias',
         href: '/admin/categorias',
         icon: Tags,
+    },
+    {
+        title: 'Materiais',
+        href: '/admin/materiais',
+        icon: Boxes,
+    },
+    {
+        title: 'Cores',
+        href: '/admin/cores',
+        icon: Palette,
+    },
+    {
+        title: 'Definições',
+        href: '/admin/definicoes',
+        icon: Settings,
     },
 ];
 

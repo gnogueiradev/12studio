@@ -15,6 +15,10 @@ use Illuminate\Support\Carbon;
 #[Fillable(['key', 'value'])]
 class Setting extends Model
 {
+    // Convencao qrcode: const arrays em vez de PHP enums. Mudar a moeda muda
+    // o simbolo e a formatacao — nao converte valores nenhuns.
+    public const CURRENCIES = ['EUR', 'GBP', 'USD', 'BRL'];
+
     public $incrementing = false;
 
     protected $primaryKey = 'key';

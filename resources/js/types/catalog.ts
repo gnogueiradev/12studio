@@ -28,6 +28,85 @@ export type CategoryOption = {
     name: string;
 };
 
+export type MaterialRow = {
+    id: number;
+    name: string;
+    pricePerKgCents: number;
+    active: boolean;
+    sortOrder: number;
+    colorsCount: number;
+};
+
+export type MaterialDetail = {
+    id: number;
+    name: string;
+    /** Decimal em euros ("21.90") — o formulário edita euros. */
+    pricePerKg: string;
+    active: boolean;
+    sortOrder: number;
+};
+
+export type MaterialFormData = {
+    name: string;
+    price_per_kg: string;
+    active: boolean;
+    sort_order: number;
+};
+
+export type MaterialOption = {
+    id: number;
+    name: string;
+    /** Preço/kg do material, para mostrar o que a cor herda se não fizer override. */
+    pricePerKgCents: number;
+};
+
+export type ColorRow = {
+    id: number;
+    name: string;
+    hexColor: string;
+    material: string;
+    materialId: number;
+    /** Preço/kg em vigor: o override da cor, ou o herdado do material. */
+    effectivePricePerKgCents: number;
+    hasOwnPrice: boolean;
+    isActive: boolean;
+    sortOrder: number;
+    variantsCount: number;
+};
+
+export type ColorDetail = {
+    id: number;
+    materialId: number;
+    name: string;
+    hexColor: string;
+    /** Vazio quando a cor herda o preço do material. */
+    pricePerKg: string | null;
+    isActive: boolean;
+    sortOrder: number;
+};
+
+export type ColorFormData = {
+    material_id: number | null;
+    name: string;
+    hex_color: string;
+    price_per_kg: string;
+    is_active: boolean;
+    sort_order: number;
+};
+
+export type ColorSummary = {
+    id: number;
+    name: string;
+    hex: string;
+    material: string;
+};
+
+/** Cores agrupadas por material, para o seletor da variante. */
+export type ColorGroup = {
+    material: string;
+    colors: { id: number; name: string; hex: string }[];
+};
+
 export type ProductRow = {
     id: number;
     name: string;
@@ -44,7 +123,9 @@ export type ProductDetail = {
     name: string;
     slug: string;
     categoryId: number | null;
+    /** HTML sanitizado no servidor — o editor lê e escreve neste formato. */
     description: string | null;
+    tags: string[];
     status: string;
     featured: boolean;
     vatRate: number;
@@ -56,8 +137,11 @@ export type ProductDetail = {
 
 export type ProductFormData = {
     name: string;
+    /** Vazio = gerado a partir do nome pelo ProductService. */
+    slug: string;
     category_id: number | null;
     description: string;
+    tags: string[];
     status: string;
     featured: boolean;
     vat_rate: number;
@@ -65,6 +149,13 @@ export type ProductFormData = {
     production_time_days: number | null;
     allow_backorder: boolean;
     max_open_production_qty: number | null;
+};
+
+export type ProductImageRow = {
+    id: number;
+    url: string;
+    alt: string | null;
+    isPrimary: boolean;
 };
 
 export type ProductSummary = {
@@ -76,8 +167,13 @@ export type VariantRow = {
     id: number;
     sku: string;
     sizeLabel: string | null;
+    color: ColorSummary | null;
+    /** Preço efetivo — o que o cliente paga. Já é o promocional quando há promoção. */
     priceCents: number;
+    /** Preço riscado. Só existe quando a variante está em promoção. */
     compareAtCents: number | null;
+    wholesalePriceCents: number | null;
+    filamentWeightGrams: number | null;
     stock: number;
     reservedStock: number;
     availableStock: number;
@@ -89,10 +185,13 @@ export type VariantRow = {
 export type VariantDetail = {
     id: number;
     sku: string;
+    colorId: number | null;
     sizeLabel: string | null;
-    /** Decimal em euros ("12.50") — o formulário edita euros, a BD guarda cêntimos. */
-    price: string;
-    compareAtPrice: string | null;
+    /** Decimais em euros ("12.50") — o formulário edita euros, a BD guarda cêntimos. */
+    normalPrice: string;
+    salePrice: string | null;
+    wholesalePrice: string | null;
+    filamentWeightGrams: number | null;
     stock: number;
     reservedStock: number;
     lowStockThreshold: number;
@@ -102,9 +201,12 @@ export type VariantDetail = {
 
 export type VariantFormData = {
     sku: string;
+    color_id: number | null;
     size_label: string;
-    price: string;
-    compare_at_price: string;
+    normal_price: string;
+    sale_price: string;
+    wholesale_price: string;
+    filament_weight_grams: number | null;
     stock: number;
     low_stock_threshold: number;
     is_default: boolean;
@@ -117,6 +219,7 @@ export type VariantOption = {
     label: string;
     sku: string;
     priceCents: number;
+    wholesalePriceCents: number | null;
     availableStock: number;
     vatRate: number;
     fulfillmentMode: string;
