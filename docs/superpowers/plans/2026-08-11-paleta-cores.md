@@ -13,7 +13,7 @@
 ## Global Constraints
 
 - **Só cor.** Tipografia, espaçamentos, raios de canto e layout ficam intactos. Se um passo parece exigir mexer em estrutura, é sinal de que se percebeu mal o passo.
-- **Hex maiúsculo de 6 dígitos** em `resources/css/app.css`. Nada de `oklch`, nada de `#abc`, nada de `rgb()`. O teste-guarda compara com `strtoupper`.
+- **Hex de 6 dígitos** em `resources/css/app.css`. Nada de `oklch`, nada de `#abc`, nada de `rgb()`. A caixa é indiferente e não se discute: o Prettier normaliza hex de CSS para minúsculas e não tem opção para o desligar, e o repositório corre `format:check` no CI. O teste-guarda resolve isto comparando com `strtoupper`, e é por isso que os valores esperados no teste podem ficar em maiúsculas mesmo com o ficheiro em minúsculas.
 - **Nenhuma classe de cor da paleta do Tailwind** em `resources/js/` — nem `neutral`, `zinc`, `gray`, `slate`, `stone`, `sky`, `red`, `green`, `amber`, `emerald`, nem `white`/`black`. Exceção única: o `bg-white` do QR code em `resources/js/components/two-factor-setup-modal.tsx:80`, que precisa de branco puro para os leitores de QR funcionarem.
 - **Contrastes mínimos:** 4.5:1 para texto normal, 3:1 para indicadores de foco. Os valores do spec já estão medidos e passam; qualquer alteração a um token tem de manter o teste verde.
 - **Comentários em português**, a explicar o *porquê* e não o *quê*, como no resto do repositório.
