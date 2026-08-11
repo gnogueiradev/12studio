@@ -141,7 +141,7 @@
        aguentar nao so o fundo da pagina mas a superficie clara mais escura
        em que o anel pode assentar (--secondary-hover / --sidebar-accent
        #DDD6CD): #A68C67 dava 3.02:1 sobre o fundo mas so 2.22:1 ali. Este
-       tom mais escuro da 4.15:1 sobre o fundo, 4.42:1 sobre branco, 3.74:1
+       tom mais escuro da 4.15:1 sobre o fundo, 4.40:1 sobre branco, 3.74:1
        sobre --muted e 3.05:1 sobre #DDD6CD — passa nas quatro. */
     --ring: #8b7556;
 

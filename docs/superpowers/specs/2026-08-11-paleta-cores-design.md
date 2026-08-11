@@ -33,14 +33,26 @@ espalhadas por 25 ficheiros, listadas na secção "Cores fixas".
 
 ## Desvios face à paleta original
 
-Três valores foram ajustados por contraste. Cada ajuste está medido na secção
-"Verificação de contraste".
+Sete valores foram ajustados por contraste. Os três primeiros vêm da primeira ronda de
+medições; os quatro últimos só apareceram na revisão final. Cada ajuste está medido na
+secção "Verificação de contraste".
 
 | Original | Ajustado | Motivo |
 |---|---|---|
 | `--button-primary-hover: #A99582` | `#7F7061` | `#FAF8F5` sobre `#A99582` dá 2.71:1; falha AA (mín. 4.5:1). O taupe escurecido mantém o gesto de aclarar no hover e passa a 4.51:1. |
 | Aviso âmbar `#9A6B1F` | `#97691E` | Estava a 4.41:1, imediatamente abaixo do mínimo. |
 | Anel de foco dourado `#C6A77B` | `#A68C67` (só no claro) | `#C6A77B` sobre `#FAF8F5` dá 2.15:1, abaixo dos 3:1 exigidos a um indicador de foco. O `--gold` decorativo mantém-se `#C6A77B`. No modo escuro o dourado original dá 7.27:1 e fica inalterado. |
+| `--muted-foreground` (desvio novo) `#756D65` | `#6A6259` | O cliente deu `#756D65` como "Texto secundário" e a spec original adoptou-o sem ajuste. Sobre `--background` (`#FAF8F5`) dá 4.79:1 e passa, mas o texto de apoio também assenta em `--muted` (`#F1ECE5`) — avatares, abas de aparência — onde cai para 4.32:1 e falha. O valor novo dá 5.10:1 sobre `--muted`, 5.65:1 sobre `--background` e 5.99:1 sobre `--card`. |
+| `--ring` `#A68C67` | `#8B7556` | O `#A68C67` (linha acima) só tinha sido medido contra o fundo da página (3.02:1). Sobre `--muted`/`--secondary`/`--sidebar` (`#F1ECE5`) dava 2.72:1, e sobre `--sidebar-accent` (`#DDD6CD`) 2.22:1 — abaixo dos 3:1 da SC 1.4.11. O valor novo dá 4.15:1 sobre o fundo, 4.40:1 sobre `--card`, 3.74:1 sobre `--muted` e 3.05:1 sobre `--sidebar-accent`. |
+| `--sidebar-ring` `#A68C67` | `#8B7556` | Mesma razão que `--ring`, do qual esta variável é a cópia usada na barra lateral. |
+| `--destructive` (`.dark`) `#D4705E` | `#DC7B69` | Sobre `--card` (`#2A2624`) dava 4.48:1, e o `input-error` renderiza dentro de cartões e diálogos, não só sobre o fundo. O valor novo dá 5.05:1 sobre o cartão e 5.59:1 sobre o fundo. |
+
+As quatro últimas linhas existem porque a primeira ronda mediu cada cor só contra o
+fundo da página, não contra todas as superfícies onde essa cor pode assentar: texto de
+apoio também aparece sobre `--muted`, anéis de foco também aparecem sobre
+`--secondary`/`--sidebar`/`--sidebar-accent`, e cores de erro também aparecem sobre
+`--card`. A revisão final testou essas superfícies e foi aí que surgiram as quatro
+falhas — é a lição a levar deste trabalho, mais do que os números em si.
 
 `#A99582` continua a existir como `--brand-taupe`, para usos decorativos e onde leva
 texto escuro por cima (`#332F2B` sobre `#A99582` dá 4.62:1, passa).
@@ -66,14 +78,14 @@ texto escuro por cima (`#332F2B` sobre `#A99582` dá 4.62:1, passa).
     --secondary-hover: #DDD6CD;
 
     --muted: #F1ECE5;
-    --muted-foreground: #756D65;
+    --muted-foreground: #6A6259;
 
     --accent: #F1ECE5;
     --accent-foreground: #332F2B;
 
     --border: #DDD6CD;
     --input: #DDD6CD;
-    --ring: #A68C67;
+    --ring: #8B7556;
 
     --gold: #C6A77B;
     --brand-taupe: #A99582;
@@ -111,7 +123,7 @@ texto escuro por cima (`#332F2B` sobre `#A99582` dá 4.62:1, passa).
     --sidebar-accent: #DDD6CD;
     --sidebar-accent-foreground: #332F2B;
     --sidebar-border: #DDD6CD;
-    --sidebar-ring: #A68C67;
+    --sidebar-ring: #8B7556;
 
     --radius: 0.625rem;
 }
@@ -162,7 +174,7 @@ paleta, para que os cartões possam ser `#2A2624` e se lerem como elevação.
     --gold: #C6A77B;
     --brand-taupe: #A99582;
 
-    --destructive: #D4705E;
+    --destructive: #DC7B69;
     --destructive-foreground: #211E1C;
     --destructive-soft: #3A2320;
     --destructive-soft-foreground: #E6A99C;
@@ -284,22 +296,28 @@ define. Passam a `hover:bg-primary-hover` e `hover:bg-secondary-hover`.
 
 ## Verificação de contraste
 
-33 pares medidos, todos a passar. Alvos: 4.5:1 para texto normal (WCAG AA), 3:1 para
+37 pares medidos, todos a passar. Alvos: 4.5:1 para texto normal (WCAG AA), 3:1 para
 indicadores de foco. As bordas (`#DDD6CD` sobre `#FAF8F5`, `#413B36` sobre `#211E1C`)
 não constam: são divisórias decorativas, não portadoras de informação, e a WCAG não
 lhes impõe mínimo. O sublinhado dourado dos links também não: o texto do link é
 `#332F2B` a 12.52:1, e o sublinhado é pista secundária, não o único sinal de que
 aquilo é um link.
 
-**Modo claro** — texto principal 12.52:1 · texto de apoio 4.79:1 · apoio sobre cartão
-5.08:1 · botão primário 12.52:1 · botão primário em hover 4.51:1 · botão secundário
-11.29:1 · botão secundário em hover 9.21:1 · anel de foco 3.02:1 · erro 5.95:1 ·
-sucesso 5.63:1 · aviso 4.55:1 · badges 7.91 / 7.37 / 6.56:1
+Os quatro pares novos, medidos na revisão final, cobrem os dois temas: no claro,
+`--muted-foreground` sobre `--muted` e `--ring`/`--sidebar-ring` sobre
+`--muted`/`--sidebar`; no escuro, `--destructive` sobre `--card`.
+
+**Modo claro** — texto principal 12.52:1 · texto de apoio 5.65:1 · apoio sobre cartão
+5.99:1 · apoio sobre `--muted` 5.10:1 · botão primário 12.52:1 · botão primário em
+hover 4.51:1 · botão secundário 11.29:1 · botão secundário em hover 9.21:1 · anel de
+foco 4.15:1 · anel de foco sobre `--muted` 3.74:1 · anel de foco da barra lateral
+sobre `--sidebar` 3.74:1 · erro 5.95:1 · sucesso 5.63:1 · aviso 4.55:1 ·
+badges 7.91 / 7.37 / 6.56:1
 
 **Modo escuro** — texto principal 15.63:1 · texto de apoio 5.77:1 · apoio sobre cartão
 5.22:1 · botão primário 12.52:1 · botão primário em hover 9.21:1 · botão secundário
-12.52:1 · botão secundário em hover 10.41:1 · anel de foco 7.27:1 · erro 4.96:1 ·
-sucesso 6.73:1 · aviso 7.62:1 · badges 7.30 / 7.30 / 7.96:1
+12.52:1 · botão secundário em hover 10.41:1 · anel de foco 7.27:1 · erro 5.59:1 ·
+erro sobre `--card` 5.05:1 · sucesso 6.73:1 · aviso 7.62:1 · badges 7.30 / 7.30 / 7.96:1
 
 **Info** (ambos os modos) — sólido 7.46:1 no claro e 8.57:1 no escuro · badge 8.34:1 no
 claro e 8.00:1 no escuro

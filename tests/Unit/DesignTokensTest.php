@@ -400,7 +400,7 @@ class DesignTokensTest extends TestCase
         $this->assertSame(
             [],
             $offenders,
-            "Cores fixas da paleta do Tailwind em resources/js — use os tokens da marca:\n".implode("\n", $offenders)
+            "Cores fixas da paleta do Tailwind em resources/js e resources/views — use os tokens da marca:\n".implode("\n", $offenders)
         );
     }
 
