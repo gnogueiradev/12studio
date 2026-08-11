@@ -84,6 +84,16 @@ pipeline {
                     docker tag ${IMAGE_NAME}:latest ${IMAGE_NAME}:previous || true
 
                     docker compose build
+
+                    # Smoke da config do nginx ANTES do swap. O entrypoint da
+                    # imagem corre o provisioning (go-replace nos templates)
+                    # seja qual for o comando, e so depois faz exec — por isso
+                    # este `nginx -t` valida exatamente a config com que o
+                    # container vai arrancar. Sem esta linha, um erro de config
+                    # so aparece no health check, com o container antigo ja
+                    # trocado e a fila de deploy a reverter (aconteceu: uma
+                    # diretiva duplicada matava o nginx em loop de reinicio).
+                    docker run --rm ${IMAGE_NAME}:latest nginx -t
                 '''
             }
         }
