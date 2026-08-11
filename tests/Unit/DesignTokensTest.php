@@ -115,6 +115,86 @@ class DesignTokensTest extends TestCase
         $this->assertContrast(':root', $foreground, $background, $minimum);
     }
 
+    public function test_dark_theme_uses_the_derived_warm_palette(): void
+    {
+        $expected = [
+            'background' => '#211E1C',
+            'foreground' => '#FAF8F5',
+            'card' => '#2A2624',
+            'card-foreground' => '#FAF8F5',
+            'popover' => '#2A2624',
+            'popover-foreground' => '#FAF8F5',
+            'primary' => '#FAF8F5',
+            'primary-foreground' => '#332F2B',
+            'primary-hover' => '#DDD6CD',
+            'secondary' => '#332F2B',
+            'secondary-foreground' => '#FAF8F5',
+            'secondary-hover' => '#413B36',
+            'muted' => '#332F2B',
+            'muted-foreground' => '#A99582',
+            'accent' => '#332F2B',
+            'accent-foreground' => '#FAF8F5',
+            'border' => '#413B36',
+            'input' => '#413B36',
+            'ring' => '#C6A77B',
+            'gold' => '#C6A77B',
+            'brand-taupe' => '#A99582',
+            'destructive' => '#D4705E',
+            'destructive-foreground' => '#211E1C',
+            'destructive-soft' => '#3A2320',
+            'destructive-soft-foreground' => '#E6A99C',
+            'success' => '#8FAE7F',
+            'success-foreground' => '#211E1C',
+            'success-soft' => '#26301F',
+            'success-soft-foreground' => '#A9C599',
+            'warning' => '#D9A84E',
+            'warning-foreground' => '#211E1C',
+            'warning-soft' => '#38290F',
+            'warning-soft-foreground' => '#E3BE73',
+            'info' => '#9FC0C9',
+            'info-foreground' => '#211E1C',
+            'info-soft' => '#1F2E33',
+            'info-soft-foreground' => '#A9C9D2',
+            'sidebar' => '#2A2624',
+            'sidebar-foreground' => '#FAF8F5',
+            'sidebar-primary' => '#FAF8F5',
+            'sidebar-primary-foreground' => '#332F2B',
+            'sidebar-accent' => '#413B36',
+            'sidebar-accent-foreground' => '#FAF8F5',
+            'sidebar-border' => '#413B36',
+            'sidebar-ring' => '#C6A77B',
+        ];
+
+        $tokens = $this->tokensIn('.dark');
+
+        foreach ($expected as $name => $value) {
+            $this->assertArrayHasKey($name, $tokens, "Falta o token --{$name} no bloco .dark de app.css.");
+            $this->assertSame($value, $tokens[$name], "O token --{$name} do modo escuro devia ser {$value}.");
+        }
+    }
+
+    /**
+     * Reutiliza o provider da Tarefa 1. Um tema escuro nao e o claro
+     * invertido — a percecao de luminosidade nao e simetrica, e ha tokens que
+     * trocam de papel (o --muted-foreground e taupe no escuro, porque o
+     * cinzento-quente da paleta afundava-se a 2.0:1 contra o fundo) — mas a
+     * fasquia de contraste e a mesma, e por isso a lista de pares tambem.
+     */
+    #[DataProvider('contrastPairs')]
+    public function test_dark_theme_meets_wcag(string $foreground, string $background, float $minimum): void
+    {
+        $this->assertContrast('.dark', $foreground, $background, $minimum);
+    }
+
+    public function test_no_oklch_survives_in_the_stylesheet(): void
+    {
+        $this->assertStringNotContainsString(
+            'oklch(',
+            $this->css(),
+            'app.css ainda tem cores em oklch: a paleta da marca e definida em hex.'
+        );
+    }
+
     protected function assertContrast(string $selector, string $foreground, string $background, float $minimum): void
     {
         $tokens = $this->tokensIn($selector);

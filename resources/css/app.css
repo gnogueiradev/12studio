@@ -137,38 +137,75 @@
 }
 
 .dark {
-    --background: oklch(0.145 0 0);
-    --foreground: oklch(0.985 0 0);
-    --card: oklch(0.145 0 0);
-    --card-foreground: oklch(0.985 0 0);
-    --popover: oklch(0.145 0 0);
-    --popover-foreground: oklch(0.985 0 0);
-    --primary: oklch(0.985 0 0);
-    --primary-foreground: oklch(0.205 0 0);
-    --secondary: oklch(0.269 0 0);
-    --secondary-foreground: oklch(0.985 0 0);
-    --muted: oklch(0.269 0 0);
-    --muted-foreground: oklch(0.708 0 0);
-    --accent: oklch(0.269 0 0);
-    --accent-foreground: oklch(0.985 0 0);
-    --destructive: oklch(0.396 0.141 25.723);
-    --destructive-foreground: oklch(0.637 0.237 25.331);
-    --border: oklch(0.269 0 0);
-    --input: oklch(0.269 0 0);
-    --ring: oklch(0.439 0 0);
-    --chart-1: oklch(0.488 0.243 264.376);
-    --chart-2: oklch(0.696 0.17 162.48);
-    --chart-3: oklch(0.769 0.188 70.08);
-    --chart-4: oklch(0.627 0.265 303.9);
-    --chart-5: oklch(0.645 0.246 16.439);
-    --sidebar: oklch(0.205 0 0);
-    --sidebar-foreground: oklch(0.985 0 0);
-    --sidebar-primary: oklch(0.985 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.269 0 0);
-    --sidebar-accent-foreground: oklch(0.985 0 0);
-    --sidebar-border: oklch(0.269 0 0);
-    --sidebar-ring: oklch(0.439 0 0);
+    /* Mais escuro que o #332F2B da paleta de proposito: assim os cartoes
+       podem ser #2A2624 e ler-se como elevacao em vez de se fundirem com o
+       fundo. */
+    --background: #211E1C;
+    --foreground: #FAF8F5;
+
+    --card: #2A2624;
+    --card-foreground: #FAF8F5;
+    --popover: #2A2624;
+    --popover-foreground: #FAF8F5;
+
+    --primary: #FAF8F5;
+    --primary-foreground: #332F2B;
+    --primary-hover: #DDD6CD;
+
+    --secondary: #332F2B;
+    --secondary-foreground: #FAF8F5;
+    --secondary-hover: #413B36;
+
+    --muted: #332F2B;
+    /* Taupe e nao o #756D65 do modo claro: contra este fundo o cinzento-quente
+       da 2.0:1 e o texto de apoio ficava ilegivel. O taupe da 5.77:1. */
+    --muted-foreground: #A99582;
+
+    --accent: #332F2B;
+    --accent-foreground: #FAF8F5;
+
+    --border: #413B36;
+    --input: #413B36;
+    /* Aqui o dourado da marca ja da 7.27:1 e nao precisa de ser escurecido. */
+    --ring: #C6A77B;
+
+    --gold: #C6A77B;
+    --brand-taupe: #A99582;
+
+    --destructive: #D4705E;
+    --destructive-foreground: #211E1C;
+    --destructive-soft: #3A2320;
+    --destructive-soft-foreground: #E6A99C;
+
+    --success: #8FAE7F;
+    --success-foreground: #211E1C;
+    --success-soft: #26301F;
+    --success-soft-foreground: #A9C599;
+
+    --warning: #D9A84E;
+    --warning-foreground: #211E1C;
+    --warning-soft: #38290F;
+    --warning-soft-foreground: #E3BE73;
+
+    --info: #9FC0C9;
+    --info-foreground: #211E1C;
+    --info-soft: #1F2E33;
+    --info-soft-foreground: #A9C9D2;
+
+    --chart-1: #C6A77B;
+    --chart-2: #A99582;
+    --chart-3: #8C8179;
+    --chart-4: #DDD6CD;
+    --chart-5: #6E6259;
+
+    --sidebar: #2A2624;
+    --sidebar-foreground: #FAF8F5;
+    --sidebar-primary: #FAF8F5;
+    --sidebar-primary-foreground: #332F2B;
+    --sidebar-accent: #413B36;
+    --sidebar-accent-foreground: #FAF8F5;
+    --sidebar-border: #413B36;
+    --sidebar-ring: #C6A77B;
 }
 
 @layer base {
