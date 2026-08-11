@@ -270,6 +270,88 @@ class DesignTokensTest extends TestCase
         $this->assertStringContainsString("color: '#332F2B'", $app);
     }
 
+    /**
+     * O QR code do 2FA precisa de branco puro: os leitores dependem do
+     * contraste maximo e um fundo bege reduz a taxa de leitura. E a unica
+     * excecao permitida, e por isso vive aqui e nao num comentario perdido.
+     */
+    private const COLOUR_EXCEPTIONS = [
+        'resources/js/components/two-factor-setup-modal.tsx' => ['bg-white'],
+    ];
+
+    /**
+     * As familias sao duas listas porque a limpeza foi feita em duas fases: os
+     * cinzentos de marca primeiro, as cores de estado depois. Ficam separadas
+     * para o proximo que quiser perceber porque e que um `bg-emerald-100` e
+     * tratado de forma diferente de um `bg-neutral-100`.
+     */
+    private const BRAND_FAMILIES = 'neutral|zinc|gray|slate|stone|white|black';
+
+    private const STATE_FAMILIES = 'red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose';
+
+    private const COLOUR_PREFIXES = 'bg|text|border|from|to|via|ring|fill|stroke|divide|outline|shadow|decoration|accent|caret|placeholder';
+
+    public function test_no_neutral_brand_colours_remain_in_the_frontend(): void
+    {
+        $this->assertNoColourClasses(self::BRAND_FAMILIES);
+    }
+
+    protected function assertNoColourClasses(string $families): void
+    {
+        $pattern = '/\b(?:'.self::COLOUR_PREFIXES.')-(?:'.$families.')(?:-\d{2,3})?\b/';
+
+        $offenders = [];
+
+        foreach ($this->tsxFiles() as $relative => $absolute) {
+            preg_match_all($pattern, file_get_contents($absolute), $matches);
+
+            $allowed = self::COLOUR_EXCEPTIONS[$relative] ?? [];
+            $found = array_diff(array_unique($matches[0]), $allowed);
+
+            if ($found !== []) {
+                $offenders[] = $relative.': '.implode(', ', $found);
+            }
+        }
+
+        $this->assertSame(
+            [],
+            $offenders,
+            "Cores fixas da paleta do Tailwind em resources/js — use os tokens da marca:\n".implode("\n", $offenders)
+        );
+    }
+
+    /**
+     * @return array<string, string> caminho relativo => caminho absoluto
+     */
+    protected function tsxFiles(): array
+    {
+        $root = $this->projectPath('resources/js');
+
+        $iterator = new \RecursiveIteratorIterator(
+            new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS)
+        );
+
+        $files = [];
+
+        foreach ($iterator as $file) {
+            if ($file->getExtension() !== 'tsx' && $file->getExtension() !== 'ts') {
+                continue;
+            }
+
+            $relative = str_replace(
+                [$this->projectPath(''), DIRECTORY_SEPARATOR],
+                ['', '/'],
+                $file->getPathname()
+            );
+
+            $files[ltrim($relative, '/')] = $file->getPathname();
+        }
+
+        ksort($files);
+
+        return $files;
+    }
+
     protected function assertContrast(string $selector, string $foreground, string $background, float $minimum): void
     {
         $tokens = $this->tokensIn($selector);
