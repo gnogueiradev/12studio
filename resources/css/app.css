@@ -62,39 +62,78 @@
 }
 
 :root {
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
-    --destructive: oklch(0.577 0.245 27.325);
-    --destructive-foreground: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.87 0 0);
-    --chart-1: oklch(0.646 0.222 41.116);
-    --chart-2: oklch(0.6 0.118 184.704);
-    --chart-3: oklch(0.398 0.07 227.392);
-    --chart-4: oklch(0.828 0.189 84.429);
-    --chart-5: oklch(0.769 0.188 70.08);
+    --background: #FAF8F5;
+    --foreground: #332F2B;
+
+    --card: #FFFFFF;
+    --card-foreground: #332F2B;
+    --popover: #FFFFFF;
+    --popover-foreground: #332F2B;
+
+    --primary: #332F2B;
+    --primary-foreground: #FAF8F5;
+    /* A paleta da marca pedia #A99582 aqui, mas #FAF8F5 por cima desse taupe
+       da 2.71:1 e falha o minimo WCAG de 4.5:1. Este tom escurecido mantem o
+       gesto de aclarar no hover e passa a 4.51:1. */
+    --primary-hover: #7F7061;
+
+    --secondary: #F1ECE5;
+    --secondary-foreground: #332F2B;
+    --secondary-hover: #DDD6CD;
+
+    --muted: #F1ECE5;
+    --muted-foreground: #756D65;
+
+    /* No shadcn, --accent e o fundo subtil de hover de menus, nao uma cor de
+       destaque. O dourado da marca vive em --gold. */
+    --accent: #F1ECE5;
+    --accent-foreground: #332F2B;
+
+    --border: #DDD6CD;
+    --input: #DDD6CD;
+    /* Dourado escurecido: o #C6A77B da marca da 2.15:1 contra o fundo e nao
+       chega aos 3:1 que um indicador de foco precisa. */
+    --ring: #A68C67;
+
+    --gold: #C6A77B;
+    --brand-taupe: #A99582;
+
+    --destructive: #A63D2E;
+    --destructive-foreground: #FAF8F5;
+    --destructive-soft: #F7E7E2;
+    --destructive-soft-foreground: #7A2C21;
+
+    --success: #4F6B45;
+    --success-foreground: #FAF8F5;
+    --success-soft: #E8EEE3;
+    --success-soft-foreground: #3B5133;
+
+    --warning: #97691E;
+    --warning-foreground: #FAF8F5;
+    --warning-soft: #F6EBD6;
+    --warning-soft-foreground: #6E4C15;
+
+    --info: #3B5560;
+    --info-foreground: #FAF8F5;
+    --info-soft: #E3EBED;
+    --info-soft-foreground: #2F454E;
+
+    --chart-1: #C6A77B;
+    --chart-2: #A99582;
+    --chart-3: #756D65;
+    --chart-4: #332F2B;
+    --chart-5: #8C7A66;
+
+    --sidebar: #F1ECE5;
+    --sidebar-foreground: #332F2B;
+    --sidebar-primary: #332F2B;
+    --sidebar-primary-foreground: #FAF8F5;
+    --sidebar-accent: #DDD6CD;
+    --sidebar-accent-foreground: #332F2B;
+    --sidebar-border: #DDD6CD;
+    --sidebar-ring: #A68C67;
+
     --radius: 0.625rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.87 0 0);
 }
 
 .dark {
