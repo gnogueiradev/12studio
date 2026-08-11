@@ -130,14 +130,16 @@ class DesignTokensTest extends TestCase
     }
 
     /**
-     * Pares (token do texto, token do fundo, racio minimo) do modo claro.
+     * Pares (token do texto, token do fundo, racio minimo).
      *
      * Referem-se a tokens e nao a hexes: assim o teste le os valores reais do
-     * CSS e falha se alguem mexer numa cor sem refazer as contas.
+     * CSS e falha se alguem mexer numa cor sem refazer as contas. Os dois
+     * temas partilham a lista de proposito — o modo escuro e sujeito a
+     * exatamente a mesma fasquia que o claro.
      *
      * @return array<string, array{string, string, float}>
      */
-    public static function lightContrastPairs(): array
+    public static function contrastPairs(): array
     {
         return [
             'texto sobre o fundo' => ['foreground', 'background', 4.5],
@@ -160,7 +162,7 @@ class DesignTokensTest extends TestCase
         ];
     }
 
-    #[DataProvider('lightContrastPairs')]
+    #[DataProvider('contrastPairs')]
     public function test_light_theme_meets_wcag(string $foreground, string $background, float $minimum): void
     {
         $this->assertContrast(':root', $foreground, $background, $minimum);
@@ -438,19 +440,13 @@ Acrescentar a `DesignTokensTest`, logo a seguir a `test_light_theme_meets_wcag`:
     }
 
     /**
-     * Os mesmos pares do modo claro. Um tema escuro nao e o claro invertido:
-     * a percecao de luminosidade nao e simetrica, e ha tokens que trocam de
-     * papel (o --muted-foreground e taupe no escuro, porque o cinzento-quente
-     * da paleta afundava-se a 2.0:1 contra o fundo).
-     *
-     * @return array<string, array{string, string, float}>
+     * Reutiliza o provider da Tarefa 1. Um tema escuro nao e o claro
+     * invertido — a percecao de luminosidade nao e simetrica, e ha tokens que
+     * trocam de papel (o --muted-foreground e taupe no escuro, porque o
+     * cinzento-quente da paleta afundava-se a 2.0:1 contra o fundo) — mas a
+     * fasquia de contraste e a mesma, e por isso a lista de pares tambem.
      */
-    public static function darkContrastPairs(): array
-    {
-        return self::lightContrastPairs();
-    }
-
-    #[DataProvider('darkContrastPairs')]
+    #[DataProvider('contrastPairs')]
     public function test_dark_theme_meets_wcag(string $foreground, string $background, float $minimum): void
     {
         $this->assertContrast('.dark', $foreground, $background, $minimum);
@@ -1186,7 +1182,7 @@ Tirar screenshot de cada uma das quatro páginas, nos dois modos, e mostrá-las.
 - [ ] **Step 7: Commit final, se houve reformatação**
 
 ```bash
-git add -u
+git add resources/
 git commit -m "Reformatacao do Prettier depois da troca de paleta"
 ```
 
