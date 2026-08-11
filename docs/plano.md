@@ -49,7 +49,7 @@ O dono é um maker em Portugal que imprime peças 3D e quer vendê-las numa loja
 | Config | `config/shop.php` (+ subsistemas) — **`env()` só dentro de `config/`** | Regra imposta pelo teste-guarda `ConfigCacheSafetyTest` (replicar do qrcode) — o deploy corre `artisan optimize` |
 | Enums | `public const STATUSES = [...]` nos models (não PHP enums) | Convenção do qrcode |
 | Estilo | Pint preset laravel; ESLint flat + prettier (tabWidth 4, singleQuote, plugin tailwind); `tsc --noEmit` | Scripts composer `test`/`lint`/`ci:check` copiados |
-| Deploy | **Jenkinsfile 6 stages** + Dockerfile multi-stage `webdevops/php-nginx:8.4` + docker-compose (app + redis) + supervisor confs | Copiar/adaptar do qrcode: tag `:previous` para rollback, health-gate `/up`, assets construídos antes do swap |
+| Deploy | **Jenkinsfile 6 stages** + Dockerfile multi-stage `webdevops/php-nginx:8.4` + docker-compose (só o `app`; o Redis é a instância partilhada da rede `Projects`) + supervisor confs | Copiar/adaptar do qrcode: tag `:previous` para rollback, health-gate `/up`, assets construídos antes do swap |
 
 ---
 

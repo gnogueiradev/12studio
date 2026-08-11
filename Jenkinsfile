@@ -13,6 +13,17 @@ pipeline {
         IMAGE_NAME = '12studio'
         COMPOSE_FILE = 'docker-compose.yml'
         APP_DIR = '/home/cinhos/projects/12studio/app/12studio'
+        // Redis PARTILHADO da rede `Projects` — o container chama-se mesmo
+        // `redis` e o DNS do Docker resolve-o a partir do app. O 12studio nao
+        // corre instancia propria (ver docker-compose.yml).
+        REDIS_HOST = 'redis'
+        // A instancia corre com --requirepass. A password NAO pode viver aqui:
+        // este ficheiro esta no git. Vem de uma credencial "Secret text" do
+        // Jenkins com este ID — que TEM de existir, senao nenhum build arranca.
+        // Usar credentials() em vez de uma string tem um segundo efeito que
+        // interessa: o Jenkins mascara o valor na consola, e sem isso o `sh`
+        // imprimia a password no log a cada build.
+        REDIS_PASSWORD = credentials('12studio-redis-password')
     }
 
     stages {
@@ -78,7 +89,9 @@ pipeline {
                     # openssl) com APP_DIR montado: o agente do Jenkins e um
                     # container, e o compose resolve os mounts no HOST. Escrever
                     # o caminho a partir daqui punha o ficheiro do lado errado.
-                    docker run --rm -v ${APP_DIR}:/appdir ${IMAGE_NAME}-test \
+                    docker run --rm -v ${APP_DIR}:/appdir \
+                        -e REDIS_HOST="${REDIS_HOST}" -e REDIS_PASSWORD="${REDIS_PASSWORD}" \
+                        ${IMAGE_NAME}-test \
                         sh /app/docker/bootstrap-env.sh /app/.env.example /appdir/.env
 
                     # Tag de rollback: a imagem atual passa a :previous ANTES
@@ -184,7 +197,28 @@ pipeline {
 
     post {
         always {
-            sh 'docker image prune -f'
+            sh '''
+                # A imagem de testes traz PHP, node, vendor/ e node_modules —
+                # e reconstruida a cada build e ficava para tras COM TAG. O
+                # `image prune` sozinho nunca lhe tocava (so apaga imagens
+                # orfas, sem tag nenhuma), por isso a cada rebuild sobrava mais
+                # uma copia das camadas antigas sem ninguem a apagar.
+                docker image rm -f ${IMAGE_NAME}-test || true
+
+                # Camadas orfas, incluindo a :latest destronada por este build.
+                docker image prune -f
+
+                # A cache do BuildKit e o que mais cresce numa maquina de CI e o
+                # `image prune` NAO lhe toca. Uma semana chega para os builds
+                # seguintes continuarem rapidos sem a deixar crescer sem fim.
+                docker builder prune -f --filter until=168h
+
+                # NUNCA por aqui `system prune -a` nem `--volumes`: a maquina e
+                # partilhada. O `-a` levava a imagem :previous — que e o unico
+                # rollback que ha — e as imagens dos outros projetos; o
+                # `--volumes` levava os dados do Redis partilhado e o resto.
+                docker system df
+            '''
         }
     }
 }

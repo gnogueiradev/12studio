@@ -11,9 +11,22 @@
 # build faz `git checkout -f`. O estado vive fora, em APP_DIR (o mesmo do
 # Jenkinsfile); mudar um caminho aqui obriga a mudar o outro.
 #
-# Redis: filas + cache + sessions. noeviction e appendonly de proposito —
-# a fila partilha a instancia e nao pode perder jobs por pressao de memoria
-# (nunca correr FLUSHALL; o deploy usa `artisan cache:clear`).
+# Redis: EXTERNO, nao nasce daqui. O 12studio usa a instancia partilhada que ja
+# existe na rede `Projects` (container `redis`), em vez de correr uma segunda na
+# mesma maquina. Nao voltar a por um servico `redis` neste ficheiro.
+#
+# So o CACHE la vai. Sessions e filas ficam em SQLite — ver o porque, com
+# detalhe, no docker/bootstrap-env.sh. Em duas linhas: essa instancia corre
+# `--maxmemory-policy allkeys-lru` sem `--appendonly`, portanto despeja chaves
+# ao encher e perde tudo num restart. Cache aguenta isso por definicao; uma fila
+# nao — os jobs desapareciam sem erro em lado nenhum.
+#
+# Colisao de chaves com os outros projetos nao e problema: o config/database.php
+# poe o prefixo `12studio-database-` em TODAS as connections (bloco `options`).
+#
+# A instancia tem `--requirepass`, logo o .env do servidor precisa de
+# REDIS_PASSWORD — sem ela e NOAUTH em cada pedido.
+# (Nunca correr FLUSHALL; o deploy usa `artisan cache:clear`.)
 
 services:
     app:
@@ -31,29 +44,15 @@ services:
         volumes:
             - /home/cinhos/projects/12studio/app/12studio/.env:/app/.env:ro
             - /home/cinhos/projects/12studio/app/12studio/storage:/app/storage
-        depends_on:
-            - redis
         networks:
-            - internal
             - Projects
             - nginx_proxy_manager_default
 
-    redis:
-        image: redis:7-alpine
-        command: redis-server --appendonly yes --maxmemory 256mb --maxmemory-policy noeviction
-        restart: unless-stopped
-        volumes:
-            - redis-data:/data
-        networks:
-            - internal
-
 networks:
-    internal:
-    # Redes partilhadas da maquina (Jenkins + Nginx Proxy Manager).
+    # Redes partilhadas da maquina (Jenkins + Nginx Proxy Manager). A `Projects`
+    # e tambem por onde o app chega ao Redis externo. Nao ha rede `internal`:
+    # existia so para isolar o redis proprio, que deixou de existir.
     Projects:
         external: true
     nginx_proxy_manager_default:
         external: true
-
-volumes:
-    redis-data:
