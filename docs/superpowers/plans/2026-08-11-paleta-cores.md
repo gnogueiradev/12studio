@@ -820,7 +820,7 @@ git commit -m "Tira o flash branco do arranque e poe a barra de progresso na cor
 
 **Interfaces:**
 - Consumes: as utilidades produzidas na Tarefa 3.
-- Produces: o método `tsxFiles(): array<string>` e a constante `BANNED_COLOUR_CLASSES`, que a Tarefa 6 reutiliza.
+- Produces: o método `tsxFiles(): array<string, string>`, o método `assertNoColourClasses(string $families): void`, e as constantes `COLOUR_EXCEPTIONS`, `COLOUR_PREFIXES`, `BRAND_FAMILIES` e `STATE_FAMILIES`. A Tarefa 6 chama `assertNoColourClasses(self::STATE_FAMILIES)` e não define nada de novo.
 
 - [ ] **Step 1: Escrever o teste a falhar**
 
