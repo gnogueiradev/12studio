@@ -21,9 +21,12 @@ EXAMPLE="${1:?falta o caminho do .env.example}"
 TARGET="${2:?falta o caminho do .env a criar}"
 DIR=$(dirname "$TARGET")
 
-# Os bind mounts do compose apontam para estes diretorios; se nao existirem, o
-# Docker cria-os a si proprio como root em cima do que a imagem traz.
-mkdir -p "$DIR/storage" "$DIR/public"
+# O bind mount do compose aponta para este diretorio; se nao existir, o Docker
+# cria-o a si proprio como root em cima do que a imagem traz.
+#
+# So o storage/: criar aqui um public/ era o que alimentava o mount que tapava
+# o document root (o Docker aceitava-o vazio e o site respondia 404 a tudo).
+mkdir -p "$DIR/storage"
 
 if [ -f "$TARGET" ]; then
     echo "[env] $TARGET ja existe — nao foi tocado."

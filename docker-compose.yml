@@ -20,10 +20,17 @@ services:
         image: 12studio:latest
         build: .
         restart: unless-stopped
+        # NUNCA montar o public/ (nem o /app) daqui: e o WEB_DOCUMENT_ROOT, e
+        # um bind mount tapa — nao funde — o que a imagem traz. O public/ do
+        # host chega vazio (bootstrap-env.sh) e escondia o index.php: o
+        # `try_files ... /index.php` do nginx e um redirect interno, o pedido
+        # ia ao FastCGI na mesma e o php-fpm respondia 404 a TUDO. Os assets
+        # ja vem compilados na imagem (stage `build` -> npm run build:ssr) e
+        # os uploads vivem em storage/, servidos pelo symlink public/storage.
+        # Guardado por tests/Unit/PublicDocumentRootTest.php.
         volumes:
             - /home/cinhos/projects/12studio/app/12studio/.env:/app/.env:ro
             - /home/cinhos/projects/12studio/app/12studio/storage:/app/storage
-            - /home/cinhos/projects/12studio/app/12studio/public:/app/public
         depends_on:
             - redis
         networks:
