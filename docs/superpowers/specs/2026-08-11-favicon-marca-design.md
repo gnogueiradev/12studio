@@ -103,9 +103,20 @@ encolheria ao ganhar camadas.
 O componente usa o recorte justo da mesma geometria: uma tela de ícone é quadrada e precisa
 da margem, um logótipo em CSS não — assim enche a largura que lhe derem.
 
-Os rasters são gerados a partir do vetor, rasterizados em Edge headless (dois fundos,
-branco e preto, para resolver o alfa: `a = 1 - (Cbranco - Cpreto)`) e montados com Pillow.
-O `.ico` é escrito à mão com PNG embutido: cabeçalho de 6 bytes, 16 bytes por entrada.
+Os rasters são gerados a partir do vetor por **`tools/build-icons.py`**:
+
+```
+python tools/build-icons.py
+```
+
+Rasteriza em Edge ou Chrome headless — dois fundos, branco e preto, para resolver o alfa
+(`a = 255 - (Cbranco - Cpreto)`), o que evita depender de flags de fundo transparente — e
+monta com Pillow. O `.ico` é escrito à mão com PNG embutido: cabeçalho de 6 bytes, 16 bytes
+por entrada. Requer Pillow e Edge ou Chrome; `ICON_BROWSER` aponta para outro binário.
+
+O script é a fonte dos três ficheiros em `public/`, mas **não** de `app-logo-icon.tsx` —
+os paths estão duplicados no componente e nada os mantém em sincronia. Ao mexer na
+geometria, mudar os dois.
 
 ## Verificação
 
