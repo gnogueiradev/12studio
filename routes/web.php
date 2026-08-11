@@ -55,9 +55,42 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
             ->parameters(['categorias' => 'category'])
             ->except(['show']);
 
+        // Materiais e cores em recursos irmaos: uma cor pertence a um
+        // material, mas a paleta gere-se toda de uma vez — aninhar as cores
+        // dentro do material daria URLs mais longos sem ganho nenhum.
+        Route::resource('materiais', Admin\MaterialController::class)
+            ->parameters(['materiais' => 'material'])
+            ->except(['show']);
+
+        Route::resource('cores', Admin\ColorController::class)
+            ->parameters(['cores' => 'color'])
+            ->except(['show']);
+
+        // Definicoes editaveis em runtime (tabela `settings`). URIs proprios
+        // por acao — o Wayfinder duplica chaves quando dois verbos partilham
+        // o mesmo URI fora de um Route::resource.
+        Route::get('definicoes', [Admin\SettingController::class, 'index'])
+            ->name('definicoes.index');
+        Route::patch('definicoes/guardar', [Admin\SettingController::class, 'update'])
+            ->name('definicoes.update');
+
         Route::resource('produtos', Admin\ProductController::class)
             ->parameters(['produtos' => 'product'])
             ->except(['show']);
+
+        // Fotografias: shallow como as variantes, mas com URIs proprios por
+        // acao — o Wayfinder duplica chaves quando dois verbos partilham o
+        // mesmo URI fora de um Route::resource.
+        Route::post('produtos/{product}/imagens', [Admin\ProductImageController::class, 'store'])
+            ->name('produtos.imagens.store');
+        Route::patch('produtos/{product}/imagens/ordem', [Admin\ProductImageController::class, 'reorder'])
+            ->name('produtos.imagens.ordem');
+        Route::patch('imagens/{image}/principal', [Admin\ProductImageController::class, 'setPrimary'])
+            ->name('imagens.principal');
+        Route::patch('imagens/{image}', [Admin\ProductImageController::class, 'update'])
+            ->name('imagens.update');
+        Route::delete('imagens/{image}', [Admin\ProductImageController::class, 'destroy'])
+            ->name('imagens.destroy');
 
         // Shallow: criar dentro do produto, editar/apagar por /admin/variantes/{variant}.
         // A listagem e a seccao "Variantes" da pagina de edicao do produto.

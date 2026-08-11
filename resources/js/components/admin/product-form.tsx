@@ -1,3 +1,5 @@
+import { RichTextEditor } from '@/components/admin/rich-text-editor';
+import { TagInput } from '@/components/admin/tag-input';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -11,7 +13,6 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
-import { Textarea } from '@/components/ui/textarea';
 import type { CategoryOption, ProductFormData } from '@/types/catalog';
 import { FULFILLMENT_MODES, PRODUCT_STATUSES } from '@/types/catalog';
 
@@ -26,9 +27,19 @@ type Props = {
     onSubmit: (event: React.FormEvent) => void;
     submitLabel: string;
     categories: CategoryOption[];
+    tagSuggestions: string[];
 };
 
 const NO_CATEGORY = 'none';
+
+/** Espelha o Str::slug do servidor o suficiente para servir de pré-visualização. */
+const slugify = (value: string) =>
+    value
+        .normalize('NFD')
+        .replace(/[̀-ͯ]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
 
 export default function ProductForm({
     data,
@@ -38,8 +49,10 @@ export default function ProductForm({
     onSubmit,
     submitLabel,
     categories,
+    tagSuggestions,
 }: Props) {
     const showProductionFields = data.fulfillment_mode !== 'in_stock';
+    const slugPreview = slugify(data.name) || 'nome-do-produto';
 
     return (
         <form onSubmit={onSubmit} className="flex max-w-xl flex-col gap-6">
@@ -54,6 +67,31 @@ export default function ProductForm({
                     maxLength={120}
                 />
                 <InputError message={errors.name} />
+            </div>
+
+            <div className="grid gap-2">
+                <Label htmlFor="slug">Endereço na loja</Label>
+                <div className="flex items-center gap-1">
+                    <span className="text-sm text-muted-foreground">
+                        /produtos/
+                    </span>
+                    <Input
+                        id="slug"
+                        value={data.slug}
+                        onChange={(event) =>
+                            setData('slug', event.target.value)
+                        }
+                        maxLength={140}
+                        placeholder={slugPreview}
+                        className="font-mono"
+                    />
+                </div>
+                <p className="text-xs text-muted-foreground">
+                    Deixa vazio para gerar a partir do nome. Se lhe mexeres
+                    depois de o produto estar online, os links antigos deixam de
+                    funcionar.
+                </p>
+                <InputError message={errors.slug} />
             </div>
 
             <div className="grid gap-2">
@@ -93,15 +131,27 @@ export default function ProductForm({
 
             <div className="grid gap-2">
                 <Label htmlFor="description">Descrição</Label>
-                <Textarea
+                <RichTextEditor
                     id="description"
                     value={data.description}
-                    onChange={(event) =>
-                        setData('description', event.target.value)
-                    }
-                    rows={6}
+                    onChange={(html) => setData('description', html)}
                 />
                 <InputError message={errors.description} />
+            </div>
+
+            <div className="grid gap-2">
+                <Label htmlFor="tags">Etiquetas</Label>
+                <TagInput
+                    id="tags"
+                    value={data.tags}
+                    onChange={(tags) => setData('tags', tags)}
+                    suggestions={tagSuggestions}
+                />
+                <p className="text-xs text-muted-foreground">
+                    Segundo eixo de organização, ao lado da categoria: "natal",
+                    "presente", "minimalista".
+                </p>
+                <InputError message={errors.tags} />
             </div>
 
             <div className="grid grid-cols-2 gap-4">

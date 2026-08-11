@@ -2,11 +2,16 @@
 
 namespace App\Http\Middleware;
 
+use App\Services\SettingService;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
 
 class HandleInertiaRequests extends Middleware
 {
+    public function __construct(
+        private SettingService $settings,
+    ) {}
+
     /**
      * The root template that's loaded on the first page visit.
      *
@@ -42,6 +47,9 @@ class HandleInertiaRequests extends Middleware
                 'user' => $request->user(),
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
+            // Moeda em vigor: o resources/js/lib/money.ts formata por ela em
+            // vez do EUR fixo que tinha antes.
+            'currency' => $this->settings->currency(),
         ];
     }
 }

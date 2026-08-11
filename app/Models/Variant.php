@@ -19,6 +19,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $size_label
  * @property int $price_cents
  * @property int|null $compare_at_cents
+ * @property int|null $wholesale_price_cents
  * @property int $stock
  * @property int $reserved_stock
  * @property int $low_stock_threshold
@@ -43,7 +44,8 @@ use Illuminate\Support\Carbon;
  */
 #[Fillable([
     'product_id', 'sku', 'color_id', 'size_label', 'price_cents',
-    'compare_at_cents', 'stock', 'reserved_stock', 'low_stock_threshold',
+    'compare_at_cents', 'wholesale_price_cents', 'stock', 'reserved_stock',
+    'low_stock_threshold',
     'is_default', 'active', 'filament_weight_grams', 'printing_time_minutes',
     'labor_minutes', 'packaging_cost_cents', 'energy_cost_cents',
     'failure_rate_percent', 'product_weight_grams', 'package_weight_grams',
@@ -64,11 +66,14 @@ class Variant extends Model
         return [
             'price_cents' => 'integer',
             'compare_at_cents' => 'integer',
+            'wholesale_price_cents' => 'integer',
             'stock' => 'integer',
             'reserved_stock' => 'integer',
             'low_stock_threshold' => 'integer',
             'is_default' => 'boolean',
             'active' => 'boolean',
+            'color_id' => 'integer',
+            'filament_weight_grams' => 'integer',
         ];
     }
 
@@ -104,5 +109,30 @@ class Variant extends Model
     public function isLowStock(): bool
     {
         return $this->available_stock <= $this->low_stock_threshold;
+    }
+
+    /**
+     * A BD guarda `price_cents` = preco EFETIVO (o que o cliente paga, do
+     * qual dependem carrinho, order_items e Stripe) e `compare_at_cents` =
+     * preco riscado. O admin pensa ao contrario — "preco normal" e "preco
+     * promocional" — por isso o formulario le por estes dois metodos, e a
+     * traducao vive so aqui e no VariantService.
+     *
+     * Metodos e nao acessores, como Color::effectivePricePerKgCents(): sao
+     * derivados, nao atributos, e nao tem de aparecer no toArray().
+     */
+    public function normalPriceCents(): int
+    {
+        return $this->compare_at_cents ?? $this->price_cents;
+    }
+
+    public function salePriceCents(): ?int
+    {
+        return $this->compare_at_cents === null ? null : $this->price_cents;
+    }
+
+    public function isOnSale(): bool
+    {
+        return $this->compare_at_cents !== null;
     }
 }

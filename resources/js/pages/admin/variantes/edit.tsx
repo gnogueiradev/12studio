@@ -4,6 +4,7 @@ import VariantForm from '@/components/admin/variant-form';
 import { index } from '@/routes/admin/produtos';
 import { update } from '@/routes/admin/variantes';
 import type {
+    ColorGroup,
     ProductSummary,
     VariantDetail,
     VariantFormData,
@@ -12,15 +13,19 @@ import type {
 type Props = {
     product: ProductSummary;
     variant: VariantDetail;
+    colorGroups: ColorGroup[];
 };
 
-export default function VariantsEdit({ product, variant }: Props) {
+export default function VariantsEdit({ product, variant, colorGroups }: Props) {
     const { data, setData, patch, processing, errors } =
         useForm<VariantFormData>({
             sku: variant.sku,
+            color_id: variant.colorId,
             size_label: variant.sizeLabel ?? '',
-            price: variant.price,
-            compare_at_price: variant.compareAtPrice ?? '',
+            normal_price: variant.normalPrice,
+            sale_price: variant.salePrice ?? '',
+            wholesale_price: variant.wholesalePrice ?? '',
+            filament_weight_grams: variant.filamentWeightGrams,
             stock: variant.stock,
             low_stock_threshold: variant.lowStockThreshold,
             is_default: variant.isDefault,
@@ -44,6 +49,7 @@ export default function VariantsEdit({ product, variant }: Props) {
                     processing={processing}
                     onSubmit={submit}
                     submitLabel="Guardar alterações"
+                    colorGroups={colorGroups}
                     reservedStock={variant.reservedStock}
                 />
             </div>

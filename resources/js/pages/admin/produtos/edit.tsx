@@ -2,8 +2,10 @@ import { Head, Link, router, useForm } from '@inertiajs/react';
 import { useState } from 'react';
 import { AdminTable } from '@/components/admin/admin-table';
 import type { Column } from '@/components/admin/admin-table';
+import { ColorSwatch } from '@/components/admin/color-swatch';
 import { ConfirmDialog } from '@/components/admin/confirm-dialog';
 import ProductForm from '@/components/admin/product-form';
+import { ProductImages } from '@/components/admin/product-images';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { formatCents } from '@/lib/money';
@@ -17,23 +19,34 @@ import type {
     CategoryOption,
     ProductDetail,
     ProductFormData,
+    ProductImageRow,
     VariantRow,
 } from '@/types/catalog';
 
 type Props = {
     product: ProductDetail;
     categories: CategoryOption[];
+    tagSuggestions: string[];
+    images: ProductImageRow[];
     variants: VariantRow[];
 };
 
-export default function ProductsEdit({ product, categories, variants }: Props) {
+export default function ProductsEdit({
+    product,
+    categories,
+    tagSuggestions,
+    images,
+    variants,
+}: Props) {
     const [archiving, setArchiving] = useState<VariantRow | null>(null);
 
     const { data, setData, patch, processing, errors } =
         useForm<ProductFormData>({
             name: product.name,
+            slug: product.slug,
             category_id: product.categoryId,
             description: product.description ?? '',
+            tags: product.tags,
             status: product.status,
             featured: product.featured,
             vat_rate: product.vatRate,
@@ -64,10 +77,21 @@ export default function ProductsEdit({ product, categories, variants }: Props) {
             ),
         },
         {
-            key: 'size',
-            header: 'Tamanho',
+            key: 'variação',
+            header: 'Cor / tamanho',
             className: 'text-muted-foreground',
-            cell: (variant) => variant.sizeLabel ?? '—',
+            cell: (variant) => (
+                <span className="flex items-center gap-2">
+                    {variant.color && (
+                        <>
+                            <ColorSwatch hex={variant.color.hex} />
+                            <span>{variant.color.name}</span>
+                        </>
+                    )}
+                    {variant.sizeLabel && <span>{variant.sizeLabel}</span>}
+                    {!variant.color && !variant.sizeLabel && '—'}
+                </span>
+            ),
         },
         {
             key: 'price',
@@ -78,6 +102,11 @@ export default function ProductsEdit({ product, categories, variants }: Props) {
                     {variant.compareAtCents !== null && (
                         <span className="ml-2 text-muted-foreground line-through">
                             {formatCents(variant.compareAtCents)}
+                        </span>
+                    )}
+                    {variant.wholesalePriceCents !== null && (
+                        <span className="block text-xs text-muted-foreground">
+                            revenda {formatCents(variant.wholesalePriceCents)}
                         </span>
                     )}
                 </>
@@ -151,7 +180,21 @@ export default function ProductsEdit({ product, categories, variants }: Props) {
                         onSubmit={submit}
                         submitLabel="Guardar alterações"
                         categories={categories}
+                        tagSuggestions={tagSuggestions}
                     />
+                </div>
+
+                <div className="flex flex-col gap-4 border-t border-border/60 pt-8">
+                    <div>
+                        <h2 className="text-lg font-semibold">Fotografias</h2>
+                        <p className="text-sm text-muted-foreground">
+                            A principal é a que aparece nas listagens, no
+                            carrinho e nos emails. As restantes formam a galeria
+                            da página do produto.
+                        </p>
+                    </div>
+
+                    <ProductImages productId={product.id} images={images} />
                 </div>
 
                 <div className="flex flex-col gap-4 border-t border-border/60 pt-8">

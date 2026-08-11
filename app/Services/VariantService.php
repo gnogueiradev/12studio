@@ -94,28 +94,45 @@ class VariantService
     }
 
     /**
-     * Euros do formulario -> centimos inteiros. O `price` cru nunca chega ao
-     * model: nao existe como coluna.
+     * Euros do formulario -> centimos inteiros. Os campos crus nunca chegam
+     * ao model: nao existem como colunas.
+     *
+     * O formulario fala a lingua do admin (preco normal + preco promocional);
+     * a BD guarda `price_cents` = preco EFETIVO e `compare_at_cents` = preco
+     * riscado. Com promocao os dois trocam de lugar — e esta a unica funcao
+     * onde essa traducao acontece na escrita (na leitura sao os acessores
+     * Variant::normal_price_cents / sale_price_cents).
      *
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
     private function normalizePrices(array $data): array
     {
-        if (array_key_exists('price', $data)) {
-            $data['price_cents'] = Money::fromDecimal((string) $data['price']);
-            unset($data['price']);
+        if (array_key_exists('normal_price', $data)) {
+            $normal = Money::fromDecimal((string) $data['normal_price']);
+            $sale = $this->optionalCents($data['sale_price'] ?? null);
+
+            $data['price_cents'] = $sale ?? $normal;
+            $data['compare_at_cents'] = $sale === null ? null : $normal;
         }
 
-        if (array_key_exists('compare_at_price', $data)) {
-            $compareAt = $data['compare_at_price'];
-            $data['compare_at_cents'] = ($compareAt === null || $compareAt === '')
-                ? null
-                : Money::fromDecimal((string) $compareAt);
-            unset($data['compare_at_price']);
+        if (array_key_exists('wholesale_price', $data)) {
+            $data['wholesale_price_cents'] = $this->optionalCents($data['wholesale_price']);
         }
+
+        unset($data['normal_price'], $data['sale_price'], $data['wholesale_price']);
 
         return $data;
+    }
+
+    /**
+     * Campo de preco opcional: vazio e null significam "nao tem", nao "zero".
+     */
+    private function optionalCents(mixed $value): ?int
+    {
+        return ($value === null || $value === '')
+            ? null
+            : Money::fromDecimal((string) $value);
     }
 
     private function unsetOtherDefaults(Variant $variant): void

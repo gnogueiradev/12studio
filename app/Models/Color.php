@@ -2,7 +2,9 @@
 
 namespace App\Models;
 
+use Database\Factories\ColorFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -24,6 +26,9 @@ use Illuminate\Support\Carbon;
 #[Fillable(['material_id', 'name', 'hex_color', 'image', 'price_per_kg_cents', 'is_active', 'sort_order'])]
 class Color extends Model
 {
+    /** @use HasFactory<ColorFactory> */
+    use HasFactory;
+
     /**
      * Get the attributes that should be cast.
      *

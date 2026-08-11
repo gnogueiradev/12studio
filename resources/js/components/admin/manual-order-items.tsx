@@ -232,6 +232,32 @@ export function ManualOrderItems({
                                     }
                                     required
                                 />
+                                {variant?.wholesalePriceCents != null && (
+                                    <button
+                                        type="button"
+                                        className="w-fit text-xs text-muted-foreground underline underline-offset-2 hover:text-foreground"
+                                        onClick={() =>
+                                            patch(index, {
+                                                unit_price: centsToInput(
+                                                    variant.wholesalePriceCents,
+                                                ),
+                                                // O preço fica diferente do
+                                                // catálogo, e o motivo é
+                                                // obrigatório nesse caso —
+                                                // preenchê-lo aqui poupa
+                                                // escrever sempre o mesmo.
+                                                price_override_reason:
+                                                    'Preço de revenda',
+                                            })
+                                        }
+                                    >
+                                        Usar preço de revenda (
+                                        {formatCents(
+                                            variant.wholesalePriceCents,
+                                        )}
+                                        )
+                                    </button>
+                                )}
                                 <InputError
                                     message={
                                         errors[`items.${index}.unit_price`]

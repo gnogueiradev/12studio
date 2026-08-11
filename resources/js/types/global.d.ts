@@ -13,6 +13,8 @@ declare module '@inertiajs/core' {
             name: string;
             auth: Auth;
             sidebarOpen: boolean;
+            /** Código ISO vindo das definições (EUR por omissão). */
+            currency: string;
             [key: string]: unknown;
         };
     }

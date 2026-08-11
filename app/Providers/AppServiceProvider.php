@@ -2,6 +2,7 @@
 
 namespace App\Providers;
 
+use App\Services\SettingService;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
@@ -15,7 +16,10 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // `scoped` e nao `singleton`: a cache de definicoes do SettingService
+        // e por pedido. Num worker de filas, cada job arranca com a tabela
+        // relida em vez de arrastar valores de horas antes.
+        $this->app->scoped(SettingService::class);
     }
 
     /**

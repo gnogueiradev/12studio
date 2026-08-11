@@ -271,3 +271,57 @@
         @apply bg-background text-foreground;
     }
 }
+
+/*
+ * Descrições de produto: HTML sanitizado (perfil `product` do HTMLPurifier)
+ * escrito no editor do backoffice e renderizado na montra. São só sete
+ * elementos — chegar aqui pela tipografia do Tailwind traria uma escala
+ * inteira para os estilizar. As cores saem dos tokens, nunca de hex fixos,
+ * para o texto acompanhar o modo claro/escuro.
+ */
+@layer components {
+    .rich-text {
+        @apply text-foreground;
+    }
+
+    .rich-text > * + * {
+        @apply mt-4;
+    }
+
+    .rich-text p {
+        @apply leading-relaxed;
+    }
+
+    .rich-text h2 {
+        @apply text-lg font-semibold;
+    }
+
+    .rich-text h3 {
+        @apply text-base font-semibold;
+    }
+
+    .rich-text ul {
+        @apply list-disc space-y-1 pl-5;
+    }
+
+    .rich-text ol {
+        @apply list-decimal space-y-1 pl-5;
+    }
+
+    .rich-text blockquote {
+        @apply border-l-2 border-border pl-4 text-muted-foreground italic;
+    }
+
+    .rich-text a {
+        @apply underline underline-offset-2 hover:text-primary-hover;
+    }
+
+    .rich-text strong {
+        @apply font-semibold;
+    }
+
+    /* Placeholder do editor vazio: o TipTap deixa um <p> sem conteúdo. */
+    .rich-text p.is-editor-empty:first-child::before {
+        @apply pointer-events-none float-left h-0 text-muted-foreground content-[attr(data-placeholder)];
+    }
+}
