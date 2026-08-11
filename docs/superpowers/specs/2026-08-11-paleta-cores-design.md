@@ -93,6 +93,11 @@ texto escuro por cima (`#332F2B` sobre `#A99582` dá 4.62:1, passa).
     --warning-soft: #F6EBD6;
     --warning-soft-foreground: #6E4C15;
 
+    --info: #3B5560;
+    --info-foreground: #FAF8F5;
+    --info-soft: #E3EBED;
+    --info-soft-foreground: #2F454E;
+
     --chart-1: #C6A77B;
     --chart-2: #A99582;
     --chart-3: #756D65;
@@ -172,6 +177,11 @@ paleta, para que os cartões possam ser `#2A2624` e se lerem como elevação.
     --warning-soft: #38290F;
     --warning-soft-foreground: #E3BE73;
 
+    --info: #9FC0C9;
+    --info-foreground: #211E1C;
+    --info-soft: #1F2E33;
+    --info-soft-foreground: #A9C9D2;
+
     --chart-1: #C6A77B;
     --chart-2: #A99582;
     --chart-3: #8C8179;
@@ -211,6 +221,10 @@ Necessárias para o Tailwind gerar as utilidades correspondentes aos tokens novo
 --color-warning-soft-foreground: var(--warning-soft-foreground);
 --color-destructive-soft: var(--destructive-soft);
 --color-destructive-soft-foreground: var(--destructive-soft-foreground);
+--color-info: var(--info);
+--color-info-foreground: var(--info-foreground);
+--color-info-soft: var(--info-soft);
+--color-info-soft-foreground: var(--info-soft-foreground);
 ```
 
 ## Cores fixas a converter
@@ -238,6 +252,9 @@ Necessárias para o Tailwind gerar as utilidades correspondentes aos tokens novo
 | `resources/js/components/nav-footer.tsx` | 30 | `neutral-*` → `muted-foreground` / `hover:text-foreground` |
 | `resources/js/components/user-info.tsx` | 18 | `bg-neutral-200 text-black` → `bg-muted text-foreground` |
 | `resources/js/pages/dashboard.tsx` | 12, 15, 18, 22 | `stroke-neutral-900/20` → `stroke-border` |
+| `resources/js/components/text-link.tsx` | 15 | `decoration-neutral-300 dark:decoration-neutral-500` → `decoration-gold`. É aqui que o dourado entra como sublinhado, conforme a decisão 2. |
+| `resources/js/pages/settings/profile.tsx` | 96 | mesmo padrão de sublinhado que `text-link.tsx` |
+| `resources/js/pages/auth/two-factor-challenge.tsx` | 119 | mesmo padrão de sublinhado que `text-link.tsx` |
 | `resources/js/components/two-factor-setup-modal.tsx` | 80 | `bg-white` mantém-se: é o fundo do QR code, precisa de branco puro para leitura |
 | `resources/js/components/ui/dialog.tsx` | 39 | `bg-black/80` → `bg-primary/70`, véu quente |
 | `resources/js/components/ui/sheet.tsx` | 37 | idem |
@@ -246,7 +263,7 @@ Necessárias para o Tailwind gerar as utilidades correspondentes aos tokens novo
 
 | Ficheiro | Linhas | O que muda |
 |---|---|---|
-| `resources/js/components/admin/status-badge.tsx` | 10, 12, 13 | `amber/emerald/red-*` → `warning-soft`, `success-soft`, `destructive-soft` |
+| `resources/js/components/admin/status-badge.tsx` | 8, 10, 12, 13 | `sky/amber/emerald/red-*` → `info-soft`, `warning-soft`, `success-soft`, `destructive-soft` |
 | `resources/js/components/input-error.tsx` | 12 | `text-red-600 dark:text-red-400` → `text-destructive` |
 | `resources/js/components/delete-user.tsx` | 29, 30 | `red-50/100/600/700` → `destructive-soft` e `destructive-soft-foreground` |
 | `resources/js/pages/auth/login.tsx` | 98 | `text-green-600` → `text-success` |
@@ -267,10 +284,12 @@ define. Passam a `hover:bg-primary-hover` e `hover:bg-secondary-hover`.
 
 ## Verificação de contraste
 
-29 pares medidos, todos a passar. Alvos: 4.5:1 para texto normal (WCAG AA), 3:1 para
+33 pares medidos, todos a passar. Alvos: 4.5:1 para texto normal (WCAG AA), 3:1 para
 indicadores de foco. As bordas (`#DDD6CD` sobre `#FAF8F5`, `#413B36` sobre `#211E1C`)
 não constam: são divisórias decorativas, não portadoras de informação, e a WCAG não
-lhes impõe mínimo.
+lhes impõe mínimo. O sublinhado dourado dos links também não: o texto do link é
+`#332F2B` a 12.52:1, e o sublinhado é pista secundária, não o único sinal de que
+aquilo é um link.
 
 **Modo claro** — texto principal 12.52:1 · texto de apoio 4.79:1 · apoio sobre cartão
 5.08:1 · botão primário 12.52:1 · botão primário em hover 4.51:1 · botão secundário
@@ -282,12 +301,18 @@ sucesso 5.63:1 · aviso 4.55:1 · badges 7.91 / 7.37 / 6.56:1
 12.52:1 · botão secundário em hover 10.41:1 · anel de foco 7.27:1 · erro 4.96:1 ·
 sucesso 6.73:1 · aviso 7.62:1 · badges 7.30 / 7.30 / 7.96:1
 
+**Info** (ambos os modos) — sólido 7.46:1 no claro e 8.57:1 no escuro · badge 8.34:1 no
+claro e 8.00:1 no escuro
+
 ## Critérios de aceitação
 
 1. `npm run build` e `npm run lint` passam.
-2. Nenhuma ocorrência de `neutral-`, `zinc-`, `gray-`, `slate-`, `stone-`, `bg-white`,
-   `text-white`, `text-black`, `red-`, `green-`, `amber-`, `emerald-` em
-   `resources/js/`, exceto o `bg-white` do QR code em `two-factor-setup-modal.tsx`.
+2. Nenhuma classe de cor da paleta do Tailwind em `resources/js/`, verificada pelo
+   regex do teste `DesignTokensTest`, que cobre os prefixos `bg`, `text`, `border`,
+   `from`, `to`, `via`, `ring`, `fill`, `stroke`, `divide`, `outline`, `shadow`,
+   `decoration`, `accent`, `caret` e `placeholder` contra as 22 famílias de cor do
+   Tailwind mais `white` e `black`. Exceção única e documentada: o `bg-white` do QR
+   code em `two-factor-setup-modal.tsx:80`.
 3. Nenhum valor `oklch` em `resources/css/app.css` nem em `app.blade.php`.
 4. Inspeção visual de home, coming-soon, login e um ecrã do backoffice, nos dois modos,
    com screenshots.
