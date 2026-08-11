@@ -4,6 +4,16 @@
 
 @source '../views';
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
+/*
+ * A pasta docs/ e versionada e o Tailwind varre-a como qualquer outra pasta do
+ * projeto. Os documentos de planeamento da paleta de cores citam nomes de
+ * classes (bg-zinc-900, text-neutral-500, etc.) como texto, para descrever a
+ * sua remocao — nao como uso real na aplicacao. Sem esta exclusao, o
+ * compilador trata essas citacoes como classes usadas e gera as regras que os
+ * documentos pedem para eliminar, inviabilizando qualquer verificacao futura
+ * do CSS compilado.
+ */
+@source not '../../docs';
 
 @custom-variant dark (&:is(.dark *));
 
