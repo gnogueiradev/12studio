@@ -1,8 +1,10 @@
 // Pipeline adaptado do projeto qrcode: testes por suite com budgets de tempo,
-// lint, build com tag :previous para rollback, deploy por ordenacao
-// (assets antes do swap) e health-gate com rollback automatico.
+// lint, build com tag :previous para rollback e health-gate com rollback
+// automatico.
 //
-// AJUSTAR APP_DIR ao caminho real do checkout de deploy no servidor.
+// APP_DIR e so o diretorio de ESTADO do servidor (.env + storage/), criado
+// pelo docker/bootstrap-env.sh — nao e um checkout do repo como no qrcode. O
+// codigo e os assets chegam sempre pela imagem; nada em APP_DIR e servido.
 
 pipeline {
     agent any
@@ -101,14 +103,17 @@ pipeline {
         stage('Deploy') {
             steps {
                 sh '''
-                    # 1. Assets para o public/ bind-mounted ANTES do swap — o
-                    #    container antigo continua a servir durante o build.
-                    docker compose run --rm --no-deps app sh -c 'npm ci && npm run build'
-
-                    # 2. Swap do container.
+                    # 1. Swap do container. Os assets NAO se constroem aqui:
+                    #    vem dentro da imagem (Dockerfile, npm run build:ssr),
+                    #    por isso codigo e assets trocam ao mesmo tempo e um
+                    #    rollback da imagem repoe os dois em conjunto. Construi-
+                    #    los para um public/ montado punha assets novos a servir
+                    #    por codigo antigo — e o vite esvazia o build/ antes de
+                    #    escrever, deixando o container em producao sem assets
+                    #    durante o build.
                     docker compose up -d --remove-orphans
 
-                    # 3. Dependencias de producao + BACKUP DA BD ANTES do
+                    # 2. Dependencias de producao + BACKUP DA BD ANTES do
                     #    migrate: o rollback repoe a imagem, nao as migracoes —
                     #    com SQLite, o backup pre-migracao e o ponto de restauro.
                     docker compose exec -T app sh -c '
@@ -122,8 +127,8 @@ pipeline {
                         php artisan queue:restart
                     '
 
-                    # 4. Ownership dos mounts partilhados.
-                    docker compose exec -T app chown -R application:application /app/public /app/bootstrap /app/storage
+                    # 3. Ownership dos mounts partilhados.
+                    docker compose exec -T app chown -R application:application /app/bootstrap /app/storage
                 '''
             }
         }

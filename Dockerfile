@@ -1,7 +1,7 @@
 # Multi-stage adaptado do projeto qrcode: base -> dependencies -> build ->
-# production. O deploy (Jenkinsfile) constroi os assets para o public/
-# bind-mounted ANTES de trocar o container — o container antigo continua a
-# servir durante o build (zero-downtime por ordenacao).
+# production. A imagem e auto-suficiente: traz o codigo, os assets do Vite e o
+# bundle de SSR. Em runtime so o .env e o storage/ vem do host — o public/
+# NUNCA se monta, sob pena de tapar o index.php (ver docker-compose.yml).
 
 FROM webdevops/php-nginx:8.4 AS base
 ENV WEB_DOCUMENT_ROOT=/app/public
