@@ -22,7 +22,17 @@
 
 @custom-variant dark (&:is(.dark *));
 
-@theme {
+/*
+ * `inline` e nao apenas `@theme`: sem ele o Tailwind emite
+ * `--color-background: var(--background)` dentro do :root, e a substituicao de
+ * uma custom property acontece onde ela e DECLARADA, nao onde e usada. O valor
+ * chegava aos descendentes ja resolvido no tom claro, e um `.dark` colocado
+ * num elemento no meio da pagina (a landing "em breve") sobrepunha o
+ * --background sem efeito nenhum nas classes. Com `inline`, o `bg-background`
+ * compila para `background-color: var(--background)` e resolve no elemento —
+ * o modo escuro passa a poder ser aninhado em vez de viver so no <html>.
+ */
+@theme inline {
     --font-sans:
         'Instrument Sans', ui-sans-serif, system-ui, sans-serif,
         'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol',
@@ -31,6 +41,45 @@
     --radius-lg: var(--radius);
     --radius-md: calc(var(--radius) - 2px);
     --radius-sm: calc(var(--radius) - 4px);
+
+    /*
+     * Landing "em breve" (resources/js/pages/coming-soon.tsx). A entrada dos
+     * blocos vem do tw-animate-css (animate-in / fade-in / slide-in-from-*),
+     * mas estes dois gestos nao existem la: a regua dourada que se desenha da
+     * esquerda para a direita e o ponto que respira ao lado de "Em preparacao".
+     *
+     * Ambas sao usadas sob `motion-safe:` — sem animacao o elemento fica no
+     * estado final (scaleX(1), opacidade cheia), por isso quem pede
+     * prefers-reduced-motion ve a pagina completa e imovel, sem regras extra.
+     */
+    /*
+     * O atraso de 0.3s vai dentro do atalho e nao numa classe `delay-*`: o
+     * atalho `animation` repoe animation-delay para 0s, e a ordem entre as duas
+     * utilities no CSS compilado nao esta garantida.
+     */
+    --animate-wipe: wipe 1.1s cubic-bezier(0.2, 0.7, 0.2, 1) 0.3s both;
+    --animate-breathe: breathe 3.4s ease-in-out infinite;
+
+    @keyframes wipe {
+        from {
+            transform: scaleX(0);
+        }
+        to {
+            transform: scaleX(1);
+        }
+    }
+
+    @keyframes breathe {
+        0%,
+        100% {
+            opacity: 0.35;
+            transform: scale(1);
+        }
+        50% {
+            opacity: 1;
+            transform: scale(1.35);
+        }
+    }
 
     --color-background: var(--background);
     --color-foreground: var(--foreground);

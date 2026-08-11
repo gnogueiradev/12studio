@@ -3,10 +3,18 @@
 use App\Http\Controllers\Admin;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\LoginGateController;
+use App\Http\Controllers\NotifyController;
 use Illuminate\Support\Facades\Route;
 
 // ── Montra publica ──────────────────────────────────────────────────────────
 Route::get('/', HomeController::class)->name('home');
+
+// Emails deixados na landing "em breve". Throttle porque e o unico POST que um
+// visitante sem sessao alcanca — 6/min chega para quem corrige um erro de
+// escrita e nao chega para encher a tabela.
+Route::post('avisar', NotifyController::class)
+    ->middleware('throttle:6,1')
+    ->name('notify');
 
 // ── Cadeado do login: visitar /acesso/<segredo> grava o cookie que torna as
 //    rotas do Fortify visiveis neste browser. Sem middleware — tem de ser
