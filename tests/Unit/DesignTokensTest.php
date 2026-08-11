@@ -34,12 +34,12 @@ class DesignTokensTest extends TestCase
             'secondary-foreground' => '#332F2B',
             'secondary-hover' => '#DDD6CD',
             'muted' => '#F1ECE5',
-            'muted-foreground' => '#756D65',
+            'muted-foreground' => '#6A6259',
             'accent' => '#F1ECE5',
             'accent-foreground' => '#332F2B',
             'border' => '#DDD6CD',
             'input' => '#DDD6CD',
-            'ring' => '#A68C67',
+            'ring' => '#8B7556',
             'gold' => '#C6A77B',
             'brand-taupe' => '#A99582',
             'destructive' => '#A63D2E',
@@ -65,7 +65,7 @@ class DesignTokensTest extends TestCase
             'sidebar-accent' => '#DDD6CD',
             'sidebar-accent-foreground' => '#332F2B',
             'sidebar-border' => '#DDD6CD',
-            'sidebar-ring' => '#A68C67',
+            'sidebar-ring' => '#8B7556',
         ];
 
         $tokens = $this->tokensIn(':root');
@@ -106,6 +106,10 @@ class DesignTokensTest extends TestCase
             'badge de sucesso' => ['success-soft-foreground', 'success-soft', 4.5],
             'badge de aviso' => ['warning-soft-foreground', 'warning-soft', 4.5],
             'badge de info' => ['info-soft-foreground', 'info-soft', 4.5],
+            'texto de apoio sobre o muted' => ['muted-foreground', 'muted', 4.5],
+            'anel de foco sobre o muted' => ['ring', 'muted', 3.0],
+            'anel da sidebar sobre a sidebar' => ['sidebar-ring', 'sidebar', 3.0],
+            'erro sobre o cartao' => ['destructive', 'card', 4.5],
         ];
     }
 
@@ -139,7 +143,7 @@ class DesignTokensTest extends TestCase
             'ring' => '#C6A77B',
             'gold' => '#C6A77B',
             'brand-taupe' => '#A99582',
-            'destructive' => '#D4705E',
+            'destructive' => '#DC7B69',
             'destructive-foreground' => '#211E1C',
             'destructive-soft' => '#3A2320',
             'destructive-soft-foreground' => '#E6A99C',
@@ -184,6 +188,23 @@ class DesignTokensTest extends TestCase
     public function test_dark_theme_meets_wcag(string $foreground, string $background, float $minimum): void
     {
         $this->assertContrast('.dark', $foreground, $background, $minimum);
+    }
+
+    /**
+     * O tokensIn() le so o primeiro bloco de cada selector. Se alguem
+     * acrescentar um segundo :root mais abaixo — para uma folha de impressao,
+     * para um @media de contraste elevado — o browser aplica-o e o teste nem o
+     * ve. Este guarda existe para essa duplicacao nao passar em silencio.
+     */
+    public function test_each_theme_block_is_declared_once(): void
+    {
+        foreach ([':root', '.dark'] as $selector) {
+            $this->assertSame(
+                1,
+                preg_match_all('/^'.preg_quote($selector, '/').'\s*\{/m', $this->css()),
+                "O selector {$selector} aparece mais do que uma vez em app.css: o teste-guarda so le o primeiro bloco."
+            );
+        }
     }
 
     public function test_no_oklch_survives_in_the_stylesheet(): void
@@ -280,6 +301,32 @@ class DesignTokensTest extends TestCase
     ];
 
     /**
+     * A excepcao acima isenta o ficheiro inteiro dessa classe: o array_diff
+     * em assertNoColourClasses() remove todas as ocorrencias, nao so a que
+     * motivou a excepcao. Hoje ha exactamente uma; se aparecer uma segunda
+     * num sitio novo do mesmo ficheiro, entra de borla. Este teste garante
+     * que a excepcao continua a cobrir exactamente uma ocorrencia — e se o
+     * QR code sair do ficheiro, o teste avisa que a excepcao pode ser
+     * removida em vez de ficar la para sempre.
+     */
+    public function test_the_colour_exceptions_still_cover_exactly_one_occurrence(): void
+    {
+        foreach (self::COLOUR_EXCEPTIONS as $relative => $classes) {
+            $contents = file_get_contents($this->projectPath($relative));
+
+            foreach ($classes as $class) {
+                $count = substr_count($contents, $class);
+
+                $this->assertSame(
+                    1,
+                    $count,
+                    "A excepcao para {$class} em {$relative} esperava exactamente 1 ocorrencia, encontrou {$count}."
+                );
+            }
+        }
+    }
+
+    /**
      * As familias sao duas listas porque a limpeza foi feita em duas fases: os
      * cinzentos de marca primeiro, as cores de estado depois. Ficam separadas
      * para o proximo que quiser perceber porque e que um `bg-emerald-100` e
@@ -289,7 +336,14 @@ class DesignTokensTest extends TestCase
 
     private const STATE_FAMILIES = 'red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose';
 
-    private const COLOUR_PREFIXES = 'bg|text|border|from|to|via|ring|fill|stroke|divide|outline|shadow|decoration|accent|caret|placeholder';
+    /**
+     * `border-` sozinho nao apanha as variantes por lado (border-t-,
+     * border-b-, border-l-, border-r-, border-x-, border-y-, border-s-,
+     * border-e-) nem o `ring-offset-` e o `inset-ring-` do Tailwind v4. O
+     * projecto ja usa bordas por lado (resources/js/pages/admin/encomendas/show.tsx),
+     * por isso sem isto uma cor solta nesse padrao passava em silencio.
+     */
+    private const COLOUR_PREFIXES = 'bg|text|border(?:-[trblxyse])?|from|to|via|(?:inset-)?ring(?:-offset)?|fill|stroke|divide|outline|shadow|decoration|accent|caret|placeholder';
 
     public function test_no_neutral_brand_colours_remain_in_the_frontend(): void
     {
@@ -301,13 +355,38 @@ class DesignTokensTest extends TestCase
         $this->assertNoColourClasses(self::STATE_FAMILIES);
     }
 
+    /**
+     * Um bg-[#4B5563] contorna o guarda das familias do Tailwind e reintroduz
+     * uma cor solta com o mesmo custo de um copy-paste. O app.tsx tem hex de
+     * proposito (a barra de progresso do Inertia, coberta por teste proprio),
+     * mas dentro de classes nao ha razao nenhuma para um hex literal.
+     */
+    public function test_no_arbitrary_colour_values_in_classes(): void
+    {
+        $offenders = [];
+
+        foreach ($this->frontendFiles() as $relative => $absolute) {
+            preg_match_all('/\b[a-z-]+-\[#[0-9A-Fa-f]{3,8}\]/', file_get_contents($absolute), $matches);
+
+            if ($matches[0] !== []) {
+                $offenders[] = $relative.': '.implode(', ', array_unique($matches[0]));
+            }
+        }
+
+        $this->assertSame(
+            [],
+            $offenders,
+            "Cores arbitrarias em classes — use os tokens da marca:\n".implode("\n", $offenders)
+        );
+    }
+
     protected function assertNoColourClasses(string $families): void
     {
         $pattern = '/\b(?:'.self::COLOUR_PREFIXES.')-(?:'.$families.')(?:-\d{2,3})?\b/';
 
         $offenders = [];
 
-        foreach ($this->tsxFiles() as $relative => $absolute) {
+        foreach ($this->frontendFiles() as $relative => $absolute) {
             preg_match_all($pattern, file_get_contents($absolute), $matches);
 
             $allowed = self::COLOUR_EXCEPTIONS[$relative] ?? [];
@@ -326,30 +405,44 @@ class DesignTokensTest extends TestCase
     }
 
     /**
+     * O app.css declara `@source '../views'`, ou seja o Tailwind compila
+     * classes escritas em Blade tambem. Varrer so resources/js deixava um
+     * `bg-zinc-900` em app.blade.php passar sem ninguem ver. Por isso este
+     * varrimento cobre os dois: resources/js (.ts/.tsx) e resources/views
+     * (.php). O caminho relativo continua calculado a partir da raiz do
+     * projecto — nao da pasta de cada alvo — para que a chave de
+     * COLOUR_EXCEPTIONS ('resources/js/components/...') continue a bater
+     * certo.
+     *
      * @return array<string, string> caminho relativo => caminho absoluto
      */
-    protected function tsxFiles(): array
+    protected function frontendFiles(): array
     {
-        $root = $this->projectPath('resources/js');
-
-        $iterator = new \RecursiveIteratorIterator(
-            new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS)
-        );
+        $targets = [
+            $this->projectPath('resources/js') => ['tsx', 'ts'],
+            $this->projectPath('resources/views') => ['php'],
+        ];
 
         $files = [];
 
-        foreach ($iterator as $file) {
-            if ($file->getExtension() !== 'tsx' && $file->getExtension() !== 'ts') {
-                continue;
-            }
-
-            $relative = str_replace(
-                [$this->projectPath(''), DIRECTORY_SEPARATOR],
-                ['', '/'],
-                $file->getPathname()
+        foreach ($targets as $root => $extensions) {
+            $iterator = new \RecursiveIteratorIterator(
+                new \RecursiveDirectoryIterator($root, \FilesystemIterator::SKIP_DOTS)
             );
 
-            $files[ltrim($relative, '/')] = $file->getPathname();
+            foreach ($iterator as $file) {
+                if (! in_array($file->getExtension(), $extensions, true)) {
+                    continue;
+                }
+
+                $relative = str_replace(
+                    [$this->projectPath(''), DIRECTORY_SEPARATOR],
+                    ['', '/'],
+                    $file->getPathname()
+                );
+
+                $files[ltrim($relative, '/')] = $file->getPathname();
+            }
         }
 
         ksort($files);
@@ -366,9 +459,13 @@ class DesignTokensTest extends TestCase
 
         $ratio = $this->contrast($tokens[$foreground], $tokens[$background]);
 
+        // Compara o racio nao arredondado: round($ratio, 2) deixava passar
+        // 4.495:1 como se fosse 4.5, e com margens finas como o
+        // --primary-hover a 4.5098 isso e tolerancia a mais. O arredondado
+        // so serve para a mensagem de erro.
         $this->assertGreaterThanOrEqual(
             $minimum,
-            round($ratio, 2),
+            $ratio,
             sprintf(
                 '--%s (%s) sobre --%s (%s) da %.2f:1, abaixo do minimo de %.1f:1.',
                 $foreground,

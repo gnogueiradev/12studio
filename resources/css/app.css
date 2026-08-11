@@ -122,7 +122,12 @@
     --secondary-hover: #ddd6cd;
 
     --muted: #f1ece5;
-    --muted-foreground: #756d65;
+    /* Quarto desvio a paleta de origem: o #756D65 da marca so passa AA
+       (4.5:1) contra o fundo principal #FAF8F5 (4.79:1). Mas o texto de
+       apoio tambem assenta em superficies --muted (#F1ECE5), onde o
+       #756D65 cai para 4.32:1 e falha. Este tom mais escuro da 5.10:1
+       sobre --muted, 5.65:1 sobre o fundo e 5.99:1 sobre branco. */
+    --muted-foreground: #6a6259;
 
     /* No shadcn, --accent e o fundo subtil de hover de menus, nao uma cor de
        destaque. O dourado da marca vive em --gold. */
@@ -132,8 +137,13 @@
     --border: #ddd6cd;
     --input: #ddd6cd;
     /* Dourado escurecido: o #C6A77B da marca da 2.15:1 contra o fundo e nao
-       chega aos 3:1 que um indicador de foco precisa. */
-    --ring: #a68c67;
+       chega aos 3:1 que um indicador de foco precisa. O valor tem de
+       aguentar nao so o fundo da pagina mas a superficie clara mais escura
+       em que o anel pode assentar (--secondary-hover / --sidebar-accent
+       #DDD6CD): #A68C67 dava 3.02:1 sobre o fundo mas so 2.22:1 ali. Este
+       tom mais escuro da 4.15:1 sobre o fundo, 4.42:1 sobre branco, 3.74:1
+       sobre --muted e 3.05:1 sobre #DDD6CD — passa nas quatro. */
+    --ring: #8b7556;
 
     --gold: #c6a77b;
     --brand-taupe: #a99582;
@@ -171,7 +181,7 @@
     --sidebar-accent: #ddd6cd;
     --sidebar-accent-foreground: #332f2b;
     --sidebar-border: #ddd6cd;
-    --sidebar-ring: #a68c67;
+    --sidebar-ring: #8b7556;
 
     --radius: 0.625rem;
 }
@@ -212,7 +222,11 @@
     --gold: #c6a77b;
     --brand-taupe: #a99582;
 
-    --destructive: #d4705e;
+    /* #D4705E sobre --card (#2A2624) dava 4.48:1 e falhava AA por 0.02. Este
+       tom mais quente da 5.05:1 sobre o cartao, 5.59:1 sobre o fundo, e o
+       texto --destructive-foreground (#211E1C) por cima continua a dar
+       5.59:1. */
+    --destructive: #dc7b69;
     --destructive-foreground: #211e1c;
     --destructive-soft: #3a2320;
     --destructive-soft-foreground: #e6a99c;
