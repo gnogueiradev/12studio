@@ -45,6 +45,31 @@
     --color-input: var(--input);
     --color-ring: var(--ring);
 
+    --color-primary-hover: var(--primary-hover);
+    --color-secondary-hover: var(--secondary-hover);
+
+    /* Cores da marca sem slot proprio no shadcn. */
+    --color-gold: var(--gold);
+    --color-brand-taupe: var(--brand-taupe);
+
+    --color-destructive-soft: var(--destructive-soft);
+    --color-destructive-soft-foreground: var(--destructive-soft-foreground);
+
+    --color-success: var(--success);
+    --color-success-foreground: var(--success-foreground);
+    --color-success-soft: var(--success-soft);
+    --color-success-soft-foreground: var(--success-soft-foreground);
+
+    --color-warning: var(--warning);
+    --color-warning-foreground: var(--warning-foreground);
+    --color-warning-soft: var(--warning-soft);
+    --color-warning-soft-foreground: var(--warning-soft-foreground);
+
+    --color-info: var(--info);
+    --color-info-foreground: var(--info-foreground);
+    --color-info-soft: var(--info-soft);
+    --color-info-soft-foreground: var(--info-soft-foreground);
+
     --color-chart-1: var(--chart-1);
     --color-chart-2: var(--chart-2);
     --color-chart-3: var(--chart-3);
@@ -62,76 +87,76 @@
 }
 
 :root {
-    --background: #FAF8F5;
-    --foreground: #332F2B;
+    --background: #faf8f5;
+    --foreground: #332f2b;
 
-    --card: #FFFFFF;
-    --card-foreground: #332F2B;
-    --popover: #FFFFFF;
-    --popover-foreground: #332F2B;
+    --card: #ffffff;
+    --card-foreground: #332f2b;
+    --popover: #ffffff;
+    --popover-foreground: #332f2b;
 
-    --primary: #332F2B;
-    --primary-foreground: #FAF8F5;
+    --primary: #332f2b;
+    --primary-foreground: #faf8f5;
     /* A paleta da marca pedia #A99582 aqui, mas #FAF8F5 por cima desse taupe
        da 2.71:1 e falha o minimo WCAG de 4.5:1. Este tom escurecido mantem o
        gesto de aclarar no hover e passa a 4.51:1. */
-    --primary-hover: #7F7061;
+    --primary-hover: #7f7061;
 
-    --secondary: #F1ECE5;
-    --secondary-foreground: #332F2B;
-    --secondary-hover: #DDD6CD;
+    --secondary: #f1ece5;
+    --secondary-foreground: #332f2b;
+    --secondary-hover: #ddd6cd;
 
-    --muted: #F1ECE5;
-    --muted-foreground: #756D65;
+    --muted: #f1ece5;
+    --muted-foreground: #756d65;
 
     /* No shadcn, --accent e o fundo subtil de hover de menus, nao uma cor de
        destaque. O dourado da marca vive em --gold. */
-    --accent: #F1ECE5;
-    --accent-foreground: #332F2B;
+    --accent: #f1ece5;
+    --accent-foreground: #332f2b;
 
-    --border: #DDD6CD;
-    --input: #DDD6CD;
+    --border: #ddd6cd;
+    --input: #ddd6cd;
     /* Dourado escurecido: o #C6A77B da marca da 2.15:1 contra o fundo e nao
        chega aos 3:1 que um indicador de foco precisa. */
-    --ring: #A68C67;
+    --ring: #a68c67;
 
-    --gold: #C6A77B;
-    --brand-taupe: #A99582;
+    --gold: #c6a77b;
+    --brand-taupe: #a99582;
 
-    --destructive: #A63D2E;
-    --destructive-foreground: #FAF8F5;
-    --destructive-soft: #F7E7E2;
-    --destructive-soft-foreground: #7A2C21;
+    --destructive: #a63d2e;
+    --destructive-foreground: #faf8f5;
+    --destructive-soft: #f7e7e2;
+    --destructive-soft-foreground: #7a2c21;
 
-    --success: #4F6B45;
-    --success-foreground: #FAF8F5;
-    --success-soft: #E8EEE3;
-    --success-soft-foreground: #3B5133;
+    --success: #4f6b45;
+    --success-foreground: #faf8f5;
+    --success-soft: #e8eee3;
+    --success-soft-foreground: #3b5133;
 
-    --warning: #97691E;
-    --warning-foreground: #FAF8F5;
-    --warning-soft: #F6EBD6;
-    --warning-soft-foreground: #6E4C15;
+    --warning: #97691e;
+    --warning-foreground: #faf8f5;
+    --warning-soft: #f6ebd6;
+    --warning-soft-foreground: #6e4c15;
 
-    --info: #3B5560;
-    --info-foreground: #FAF8F5;
-    --info-soft: #E3EBED;
-    --info-soft-foreground: #2F454E;
+    --info: #3b5560;
+    --info-foreground: #faf8f5;
+    --info-soft: #e3ebed;
+    --info-soft-foreground: #2f454e;
 
-    --chart-1: #C6A77B;
-    --chart-2: #A99582;
-    --chart-3: #756D65;
-    --chart-4: #332F2B;
-    --chart-5: #8C7A66;
+    --chart-1: #c6a77b;
+    --chart-2: #a99582;
+    --chart-3: #756d65;
+    --chart-4: #332f2b;
+    --chart-5: #8c7a66;
 
-    --sidebar: #F1ECE5;
-    --sidebar-foreground: #332F2B;
-    --sidebar-primary: #332F2B;
-    --sidebar-primary-foreground: #FAF8F5;
-    --sidebar-accent: #DDD6CD;
-    --sidebar-accent-foreground: #332F2B;
-    --sidebar-border: #DDD6CD;
-    --sidebar-ring: #A68C67;
+    --sidebar: #f1ece5;
+    --sidebar-foreground: #332f2b;
+    --sidebar-primary: #332f2b;
+    --sidebar-primary-foreground: #faf8f5;
+    --sidebar-accent: #ddd6cd;
+    --sidebar-accent-foreground: #332f2b;
+    --sidebar-border: #ddd6cd;
+    --sidebar-ring: #a68c67;
 
     --radius: 0.625rem;
 }
@@ -140,72 +165,72 @@
     /* Mais escuro que o #332F2B da paleta de proposito: assim os cartoes
        podem ser #2A2624 e ler-se como elevacao em vez de se fundirem com o
        fundo. */
-    --background: #211E1C;
-    --foreground: #FAF8F5;
+    --background: #211e1c;
+    --foreground: #faf8f5;
 
-    --card: #2A2624;
-    --card-foreground: #FAF8F5;
-    --popover: #2A2624;
-    --popover-foreground: #FAF8F5;
+    --card: #2a2624;
+    --card-foreground: #faf8f5;
+    --popover: #2a2624;
+    --popover-foreground: #faf8f5;
 
-    --primary: #FAF8F5;
-    --primary-foreground: #332F2B;
-    --primary-hover: #DDD6CD;
+    --primary: #faf8f5;
+    --primary-foreground: #332f2b;
+    --primary-hover: #ddd6cd;
 
-    --secondary: #332F2B;
-    --secondary-foreground: #FAF8F5;
-    --secondary-hover: #413B36;
+    --secondary: #332f2b;
+    --secondary-foreground: #faf8f5;
+    --secondary-hover: #413b36;
 
-    --muted: #332F2B;
+    --muted: #332f2b;
     /* Taupe e nao o #756D65 do modo claro: contra este fundo o cinzento-quente
        da 2.0:1 e o texto de apoio ficava ilegivel. O taupe da 5.77:1. */
-    --muted-foreground: #A99582;
+    --muted-foreground: #a99582;
 
-    --accent: #332F2B;
-    --accent-foreground: #FAF8F5;
+    --accent: #332f2b;
+    --accent-foreground: #faf8f5;
 
-    --border: #413B36;
-    --input: #413B36;
+    --border: #413b36;
+    --input: #413b36;
     /* Aqui o dourado da marca ja da 7.27:1 e nao precisa de ser escurecido. */
-    --ring: #C6A77B;
+    --ring: #c6a77b;
 
-    --gold: #C6A77B;
-    --brand-taupe: #A99582;
+    --gold: #c6a77b;
+    --brand-taupe: #a99582;
 
-    --destructive: #D4705E;
-    --destructive-foreground: #211E1C;
-    --destructive-soft: #3A2320;
-    --destructive-soft-foreground: #E6A99C;
+    --destructive: #d4705e;
+    --destructive-foreground: #211e1c;
+    --destructive-soft: #3a2320;
+    --destructive-soft-foreground: #e6a99c;
 
-    --success: #8FAE7F;
-    --success-foreground: #211E1C;
-    --success-soft: #26301F;
-    --success-soft-foreground: #A9C599;
+    --success: #8fae7f;
+    --success-foreground: #211e1c;
+    --success-soft: #26301f;
+    --success-soft-foreground: #a9c599;
 
-    --warning: #D9A84E;
-    --warning-foreground: #211E1C;
-    --warning-soft: #38290F;
-    --warning-soft-foreground: #E3BE73;
+    --warning: #d9a84e;
+    --warning-foreground: #211e1c;
+    --warning-soft: #38290f;
+    --warning-soft-foreground: #e3be73;
 
-    --info: #9FC0C9;
-    --info-foreground: #211E1C;
-    --info-soft: #1F2E33;
-    --info-soft-foreground: #A9C9D2;
+    --info: #9fc0c9;
+    --info-foreground: #211e1c;
+    --info-soft: #1f2e33;
+    --info-soft-foreground: #a9c9d2;
 
-    --chart-1: #C6A77B;
-    --chart-2: #A99582;
-    --chart-3: #8C8179;
-    --chart-4: #DDD6CD;
-    --chart-5: #6E6259;
+    --chart-1: #c6a77b;
+    --chart-2: #a99582;
+    --chart-3: #8c8179;
+    --chart-4: #ddd6cd;
+    --chart-5: #6e6259;
 
-    --sidebar: #2A2624;
-    --sidebar-foreground: #FAF8F5;
-    --sidebar-primary: #FAF8F5;
-    --sidebar-primary-foreground: #332F2B;
-    --sidebar-accent: #413B36;
-    --sidebar-accent-foreground: #FAF8F5;
-    --sidebar-border: #413B36;
-    --sidebar-ring: #C6A77B;
+    --sidebar: #2a2624;
+    --sidebar-foreground: #faf8f5;
+    --sidebar-primary: #faf8f5;
+    --sidebar-primary-foreground: #332f2b;
+    --sidebar-accent: #413b36;
+    --sidebar-accent-foreground: #faf8f5;
+    --sidebar-border: #413b36;
+    --sidebar-ring: #c6a77b;
 }
 
 @layer base {

@@ -195,6 +195,51 @@ class DesignTokensTest extends TestCase
         );
     }
 
+    public function test_theme_block_exposes_the_new_tokens(): void
+    {
+        $utilities = [
+            'primary-hover',
+            'secondary-hover',
+            'gold',
+            'brand-taupe',
+            'destructive-soft',
+            'destructive-soft-foreground',
+            'success',
+            'success-foreground',
+            'success-soft',
+            'success-soft-foreground',
+            'warning',
+            'warning-foreground',
+            'warning-soft',
+            'warning-soft-foreground',
+            'info',
+            'info-foreground',
+            'info-soft',
+            'info-soft-foreground',
+        ];
+
+        $pattern = '/^@theme\s*\{(.*?)^\}/ms';
+        preg_match($pattern, $this->css(), $block);
+
+        foreach ($utilities as $utility) {
+            $this->assertStringContainsString(
+                "--color-{$utility}: var(--{$utility});",
+                $block[1] ?? '',
+                "O bloco @theme nao expoe --color-{$utility}: sem isto o Tailwind ignora a classe em silencio."
+            );
+        }
+    }
+
+    public function test_buttons_use_the_palette_hover_colours(): void
+    {
+        $button = file_get_contents($this->projectPath('resources/js/components/ui/button.tsx'));
+
+        $this->assertStringContainsString('hover:bg-primary-hover', $button);
+        $this->assertStringContainsString('hover:bg-secondary-hover', $button);
+        $this->assertStringNotContainsString('hover:bg-primary/90', $button);
+        $this->assertStringNotContainsString('hover:bg-secondary/80', $button);
+    }
+
     protected function assertContrast(string $selector, string $foreground, string $background, float $minimum): void
     {
         $tokens = $this->tokensIn($selector);
