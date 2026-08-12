@@ -18,13 +18,13 @@ use Illuminate\Support\Carbon;
  * @property string $postal_code
  * @property string $city
  * @property string $country
- * @property string|null $phone
- * @property string|null $nif
  * @property bool $is_default
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['user_id', 'name', 'line1', 'line2', 'postal_code', 'city', 'country', 'phone', 'nif', 'is_default'])]
+// Telefone e NIF vivem em `users`: sao da pessoa, nao da morada de envio, e um
+// cliente pode ter NIF sem ter morada nenhuma.
+#[Fillable(['user_id', 'name', 'line1', 'line2', 'postal_code', 'city', 'country', 'is_default'])]
 class Address extends Model
 {
     /** @use HasFactory<AddressFactory> */

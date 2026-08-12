@@ -13,7 +13,7 @@ use App\Models\OrderDraft;
 use App\Services\OrderService;
 use App\Support\ManualOrderOptions;
 use App\Support\OrderPresenter;
-use Carbon\CarbonInterface;
+use App\Support\ShortDate;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
@@ -79,7 +79,7 @@ class OrderController extends Controller
                 'itemsSummary' => $order->items->first()?->product_name,
                 'itemsQty' => (int) $order->items->sum('qty'),
                 'createdAt' => $order->created_at?->format('Y-m-d H:i'),
-                'createdAtShort' => $this->shortDate($order->created_at),
+                'createdAtShort' => ShortDate::of($order->created_at),
             ]);
 
         return Inertia::render('admin/encomendas/index', [
@@ -186,25 +186,5 @@ class OrderController extends Controller
         $this->toast('Encomenda atualizada.');
 
         return back();
-    }
-
-    /** Abreviaturas PT dos meses, indexadas por numero do mes. */
-    private const MONTHS = [
-        1 => 'jan', 2 => 'fev', 3 => 'mar', 4 => 'abr', 5 => 'mai', 6 => 'jun',
-        7 => 'jul', 8 => 'ago', 9 => 'set', 10 => 'out', 11 => 'nov', 12 => 'dez',
-    ];
-
-    /**
-     * "09 ago" para a coluna Data da listagem. O mapa e explicito e nao um
-     * translatedFormat() porque o config('app.locale') tem 'en' por omissao e
-     * o ambiente de testes nao garante 'pt' — a data da listagem nao pode
-     * mudar de idioma consoante o .env. A data completa continua a viajar em
-     * `createdAt` e aparece no title da celula.
-     */
-    private function shortDate(?CarbonInterface $at): ?string
-    {
-        return $at === null
-            ? null
-            : $at->format('d').' '.self::MONTHS[(int) $at->format('n')];
     }
 }

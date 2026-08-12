@@ -62,6 +62,13 @@ export const TONES: Record<string, Tone> = {
     printing: 'info',
     quality_check: 'info',
     ready: 'success',
+    /*
+     * users.customer_type — aqui o tom nao e urgencia, e so distincao: a
+     * esmagadora maioria dos clientes e particular e nao precisa de destaque
+     * nenhum; a empresa precisa, porque muda a faturacao.
+     */
+    particular: 'neutral',
+    empresa: 'info',
 };
 
 /**

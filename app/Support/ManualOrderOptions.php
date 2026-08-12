@@ -46,9 +46,12 @@ class ManualOrderOptions
                 return [
                     'id' => $customer->id,
                     'name' => $customer->name,
+                    // Pode vir vazio: no backoffice cria-se um cliente so com
+                    // o nome. A encomenda continua a exigir email — quem o
+                    // escreve, quando falta, e o admin no formulario.
                     'email' => $customer->email,
-                    'phone' => $address?->phone,
-                    'nif' => $address?->nif,
+                    'phone' => $customer->phone,
+                    'nif' => $customer->nif,
                     'address' => $address === null ? null : [
                         'line1' => $address->line1,
                         'line2' => $address->line2,

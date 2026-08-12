@@ -117,7 +117,9 @@ export default function OrdersCreate({
                 ...current,
                 user_id: customer.id,
                 customer_name: customer.name,
-                email: customer.email,
+                // Um cliente criado só com o nome não tem email; a encomenda
+                // continua a precisar de um, e é o admin que o escreve aqui.
+                email: customer.email ?? '',
                 phone: customer.phone ?? '',
                 nif: customer.nif ?? '',
                 line1: customer.address?.line1 ?? '',
@@ -277,7 +279,7 @@ export default function OrdersCreate({
                                                 value={String(customer.id)}
                                             >
                                                 {customer.name} ·{' '}
-                                                {customer.email}
+                                                {customer.email ?? 'sem email'}
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
