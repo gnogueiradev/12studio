@@ -1,7 +1,7 @@
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 
-type Tone = 'neutral' | 'info' | 'warning' | 'success' | 'danger';
+export type Tone = 'neutral' | 'info' | 'warning' | 'success' | 'danger';
 
 const TONE_CLASSES: Record<Tone, string> = {
     neutral: 'bg-muted text-muted-foreground border-transparent',
@@ -15,8 +15,13 @@ const TONE_CLASSES: Record<Tone, string> = {
  * Tom por valor de estado. As três famílias vivem juntas de propósito:
  * numa encomenda vê-se sempre o estado de fulfilment ao lado do estado de
  * pagamento, e os dois nunca se podem confundir à vista.
+ *
+ * Exportado porque o painel do backoffice pinta as barras da distribuição por
+ * estado com os mesmos tons — mas com preenchimentos sólidos, não com os pares
+ * `*-soft` do badge. O mapa é a única fonte de "que tom tem este estado"; cada
+ * sítio decide como o desenha.
  */
-const TONES: Record<string, Tone> = {
+export const TONES: Record<string, Tone> = {
     // orders.status
     pending_payment: 'warning',
     paid: 'info',

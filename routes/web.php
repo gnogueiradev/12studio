@@ -30,7 +30,7 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
     //    Form Requests re-verificam isAdmin() — middleware sozinho nao e
     //    seguranca. URIs em PT, controllers em EN (padrao do plano). ─────────
     Route::middleware('admin')->prefix('admin')->name('admin.')->group(function (): void {
-        Route::inertia('/', 'admin/dashboard')->name('dashboard');
+        Route::get('/', Admin\DashboardController::class)->name('dashboard');
 
         // Encomendas: sem `edit`/`destroy` — uma encomenda nunca se apaga,
         // cancela-se. `show` existe (ao contrario de produtos) porque o
