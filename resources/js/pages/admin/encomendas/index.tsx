@@ -1,11 +1,15 @@
 import { Head, Link, router } from '@inertiajs/react';
-import { AlertTriangle } from 'lucide-react';
-import { useState } from 'react';
+import { AlertTriangle, Search } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { AdminTable } from '@/components/admin/admin-table';
 import type { Column } from '@/components/admin/admin-table';
 import { PageHeader } from '@/components/admin/page-header';
 import { Pagination } from '@/components/admin/pagination';
-import { StatusBadge } from '@/components/admin/status-badge';
+import {
+    paymentTone,
+    StatusBadge,
+    StatusText,
+} from '@/components/admin/status-badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -17,9 +21,11 @@ import {
 } from '@/components/ui/select';
 import { formatCents } from '@/lib/money';
 import { label } from '@/lib/options';
+import { cn } from '@/lib/utils';
 import { create, index, show } from '@/routes/admin/encomendas';
 import type { OrderRow } from '@/types/order';
 import {
+    ORDER_STATUS_CHIPS,
     ORDER_STATUSES,
     PAYMENT_STATUSES,
     SALES_CHANNELS,
@@ -36,45 +42,96 @@ type Filters = {
 type Props = {
     orders: Paginated<OrderRow>;
     filters: Filters;
+    /** Contagem por estado, já sem o filtro de estado aplicado. */
+    statusCounts: Record<string, number>;
 };
 
 // O Radix Select não aceita value="" — sentinela para "sem filtro".
 const ALL = 'all';
 
-export default function OrdersIndex({ orders, filters }: Props) {
+/** Tempo de silêncio antes de a pesquisa ir ao servidor. */
+const SEARCH_DEBOUNCE_MS = 350;
+
+/** Filtros vazios saem da query string em vez de irem como `?status=`. */
+function visit(filters: Filters) {
+    router.get(
+        index().url,
+        Object.fromEntries(
+            Object.entries(filters).filter(([, value]) => value !== ''),
+        ),
+        { preserveState: true, replace: true },
+    );
+}
+
+export default function OrdersIndex({ orders, filters, statusCounts }: Props) {
     const [search, setSearch] = useState(filters.search);
 
-    const applyFilters = (changes: Partial<Filters>) => {
-        const next = { ...filters, search, ...changes };
+    const applyFilters = (changes: Partial<Filters>) =>
+        visit({ ...filters, search, ...changes });
 
-        router.get(
-            index().url,
-            Object.fromEntries(
-                Object.entries(next).filter(([, value]) => value !== ''),
-            ),
-            { preserveState: true, replace: true },
+    /*
+     * Pesquisa ao vivo, como no design. A guarda `search === filters.search`
+     * trava o pedido na montagem e, sobretudo, depois de cada resposta — sem
+     * ela a página que volta do servidor voltava a disparar a pesquisa que a
+     * produziu, em ciclo.
+     */
+    useEffect(() => {
+        if (search === filters.search) {
+            return;
+        }
+
+        const timer = setTimeout(
+            () => visit({ ...filters, search }),
+            SEARCH_DEBOUNCE_MS,
         );
-    };
+
+        return () => clearTimeout(timer);
+    }, [search, filters]);
+
+    /*
+     * Os estados finais (entregue, cancelado, reembolsado) só entram na fila de
+     * chips quando têm encomendas — ou quando são o filtro ativo, senão o
+     * utilizador ficava com um filtro ligado e sem chip para o desligar.
+     */
+    const chips = ORDER_STATUSES.filter(
+        (status) =>
+            (ORDER_STATUS_CHIPS as readonly string[]).includes(status.value) ||
+            (statusCounts[status.value] ?? 0) > 0 ||
+            filters.status === status.value,
+    );
+
+    const totalOrders = Object.values(statusCounts).reduce(
+        (sum, count) => sum + count,
+        0,
+    );
 
     const columns: Column<OrderRow>[] = [
         {
             key: 'number',
-            header: 'Nº',
+            header: 'Encomenda',
             cell: (order) => (
-                <div className="flex items-center gap-2">
-                    <Link
-                        href={show(order.id)}
-                        className="font-medium hover:underline"
-                    >
-                        {order.orderNumber}
-                    </Link>
-                    {order.stockIssue && (
-                        <AlertTriangle
-                            className="size-4 text-warning"
-                            aria-label="Problema de stock"
-                        />
+                <>
+                    <div className="flex items-center gap-2">
+                        <Link
+                            href={show(order.id)}
+                            className="font-medium tabular-nums hover:underline"
+                        >
+                            {order.orderNumber}
+                        </Link>
+                        {order.stockIssue && (
+                            <AlertTriangle
+                                className="size-4 text-warning"
+                                aria-label="Problema de stock"
+                            />
+                        )}
+                    </div>
+                    {order.itemsSummary !== null && (
+                        <div className="mt-0.5 text-xs text-muted-foreground">
+                            {order.itemsSummary}
+                            {order.itemsQty > 1 && ` · ${order.itemsQty} un.`}
+                        </div>
                     )}
-                </div>
+                </>
             ),
         },
         {
@@ -96,6 +153,16 @@ export default function OrdersIndex({ orders, filters }: Props) {
             cell: (order) => label(SALES_CHANNELS, order.salesChannel),
         },
         {
+            key: 'payment',
+            header: 'Pagamento',
+            cell: (order) => (
+                <StatusText
+                    tone={paymentTone(order.paymentStatus)}
+                    label={label(PAYMENT_STATUSES, order.paymentStatus)}
+                />
+            ),
+        },
+        {
             key: 'status',
             header: 'Estado',
             cell: (order) => (
@@ -106,84 +173,48 @@ export default function OrdersIndex({ orders, filters }: Props) {
             ),
         },
         {
-            key: 'payment',
-            header: 'Pagamento',
+            key: 'date',
+            header: 'Data',
+            className: 'text-muted-foreground tabular-nums',
             cell: (order) => (
-                <StatusBadge
-                    value={order.paymentStatus}
-                    label={label(PAYMENT_STATUSES, order.paymentStatus)}
-                />
+                <span title={order.createdAt ?? undefined}>
+                    {order.createdAtShort ?? '—'}
+                </span>
             ),
         },
         {
             key: 'total',
             header: 'Total',
-            className: 'text-right',
+            className: 'text-right tabular-nums',
             cell: (order) => formatCents(order.totalCents),
-        },
-        {
-            key: 'date',
-            header: 'Data',
-            className: 'text-muted-foreground',
-            cell: (order) => order.createdAt ?? '—',
         },
     ];
 
     return (
         <>
             <Head title="Encomendas" />
-            <div className="flex h-full flex-1 flex-col gap-4 p-4">
+            <div className="flex h-full w-full max-w-[1400px] flex-1 flex-col gap-4 p-6 pb-10">
                 <PageHeader
                     title="Encomendas"
                     description="Loja online, Vinted, Instagram e vendas presenciais no mesmo sítio."
                 >
-                    <Button asChild>
+                    <Button asChild className="rounded-full">
                         <Link href={create()}>Nova encomenda</Link>
                     </Button>
                 </PageHeader>
 
                 <div className="flex flex-wrap items-center gap-2">
-                    <form
-                        onSubmit={(event) => {
-                            event.preventDefault();
-                            applyFilters({});
-                        }}
-                        className="flex gap-2"
-                    >
+                    <div className="relative min-w-60 flex-1 sm:max-w-85">
+                        <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
                         <Input
+                            type="search"
                             value={search}
                             onChange={(event) => setSearch(event.target.value)}
                             placeholder="Nº, nome ou email"
-                            className="w-56"
+                            aria-label="Procurar encomendas"
+                            className="pl-9"
                         />
-                        <Button type="submit" variant="outline">
-                            Procurar
-                        </Button>
-                    </form>
-
-                    <Select
-                        value={filters.status || ALL}
-                        onValueChange={(value) =>
-                            applyFilters({ status: value === ALL ? '' : value })
-                        }
-                    >
-                        <SelectTrigger className="w-48">
-                            <SelectValue placeholder="Estado" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value={ALL}>
-                                Todos os estados
-                            </SelectItem>
-                            {ORDER_STATUSES.map((status) => (
-                                <SelectItem
-                                    key={status.value}
-                                    value={status.value}
-                                >
-                                    {status.label}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                    </div>
 
                     <Select
                         value={filters.payment_status || ALL}
@@ -234,18 +265,72 @@ export default function OrdersIndex({ orders, filters }: Props) {
                             ))}
                         </SelectContent>
                     </Select>
+
+                    <span className="ml-auto text-xs text-muted-foreground">
+                        {orders.total}{' '}
+                        {orders.total === 1 ? 'encomenda' : 'encomendas'}
+                    </span>
+                </div>
+
+                <div className="flex flex-wrap gap-2 border-b border-border/60 pb-3.5">
+                    <StatusChip
+                        text="Todas"
+                        count={totalOrders}
+                        active={filters.status === ''}
+                        onClick={() => applyFilters({ status: '' })}
+                    />
+                    {chips.map((status) => (
+                        <StatusChip
+                            key={status.value}
+                            text={status.label}
+                            count={statusCounts[status.value] ?? 0}
+                            active={filters.status === status.value}
+                            onClick={() =>
+                                applyFilters({ status: status.value })
+                            }
+                        />
+                    ))}
                 </div>
 
                 <AdminTable
                     columns={columns}
                     rows={orders.data}
                     rowKey={(order) => order.id}
+                    rowHref={(order) => show(order.id).url}
                     empty="Nenhuma encomenda com estes filtros."
                 />
 
                 <Pagination page={orders} noun="encomendas" />
             </div>
         </>
+    );
+}
+
+function StatusChip({
+    text,
+    count,
+    active,
+    onClick,
+}: {
+    text: string;
+    count: number;
+    active: boolean;
+    onClick: () => void;
+}) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            aria-pressed={active}
+            className={cn(
+                'rounded-full border border-border px-3.5 py-1.5 text-xs transition-colors',
+                active
+                    ? 'bg-secondary font-semibold text-foreground'
+                    : 'font-medium text-muted-foreground hover:bg-secondary/60',
+            )}
+        >
+            {text} <span className="text-muted-foreground">{count}</span>
+        </button>
     );
 }
 

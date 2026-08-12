@@ -25,6 +25,7 @@ import { producao } from '@/routes/admin/itens';
 import type { OrderDetail, OrderItemRow } from '@/types/order';
 import {
     ORDER_STATUSES,
+    nextProductionStatus,
     PAYMENT_METHODS,
     PAYMENT_STATUSES,
     PRODUCTION_STATUSES,
@@ -34,21 +35,6 @@ import {
 type Props = {
     order: OrderDetail;
 };
-
-/** Próximo estado de produção de um item, ou null se já está pronto. */
-function nextProductionStatus(current: string): string | null {
-    const pipeline = [
-        'awaiting_production',
-        'printing',
-        'quality_check',
-        'ready',
-    ];
-    const index = pipeline.indexOf(current);
-
-    return index === -1 || index === pipeline.length - 1
-        ? null
-        : pipeline[index + 1];
-}
 
 export default function OrdersShow({ order }: Props) {
     const isPaid = order.paymentStatus === 'paid';

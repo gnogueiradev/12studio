@@ -35,9 +35,18 @@ class OrderService
     /** Alcancaveis de qualquer estado nao-terminal; nao tem saida. */
     private const TERMINAL = ['cancelled', 'refunded'];
 
-    /** Percurso de producao de um item que exige impressao. */
+    /**
+     * Percurso de producao de um item que exige impressao. Ao contrario da
+     * PIPELINE da encomenda, este anda nos dois sentidos — uma peca que
+     * chumba no controlo de qualidade volta a impressora.
+     */
     private const PRODUCTION_PIPELINE = [
         'awaiting_production', 'printing', 'quality_check', 'ready',
+    ];
+
+    /** Uma encomenda que ja saiu (ou morreu) nao reabre a producao. */
+    private const PRODUCTION_LOCKED_ORDER_STATUSES = [
+        'shipped', 'delivered', 'cancelled', 'refunded',
     ];
 
     public function __construct(
@@ -280,7 +289,13 @@ class OrderService
 
     /**
      * Producao ao nivel do item. Quando o ultimo item fica pronto, a
-     * encomenda avanca sozinha para ready_to_ship.
+     * encomenda avanca sozinha para ready_to_ship — e quando um item recua,
+     * volta atras sozinha pelo mesmo motivo.
+     *
+     * Ao contrario do pipeline da encomenda, o de producao anda nos dois
+     * sentidos: uma peca que chumba no controlo de qualidade volta a
+     * impressora. `not_required` continua fora disto — nao e um degrau do
+     * percurso, e a marca de que a peca nunca passa pelo quadro.
      */
     public function setItemProductionStatus(
         OrderItem $item,
@@ -301,8 +316,17 @@ class OrderService
         $fromIndex = array_search($from, self::PRODUCTION_PIPELINE, true);
         $toIndex = array_search($to, self::PRODUCTION_PIPELINE, true);
 
-        if ($fromIndex === false || $toIndex === false || $toIndex <= $fromIndex) {
+        if ($fromIndex === false || $toIndex === false) {
             throw new RuntimeException("Transicao de producao invalida: {$from} -> {$to}.");
+        }
+
+        // Largar um cartao na coluna onde ja estava nao e erro nenhum.
+        if ($fromIndex === $toIndex) {
+            return $item;
+        }
+
+        if ($toIndex < $fromIndex) {
+            $this->assertProductionCanReopen($item->order);
         }
 
         DB::transaction(function () use ($item, $from, $to, $by, $note): void {
@@ -317,7 +341,13 @@ class OrderService
             ]);
         });
 
-        $this->autoAdvanceWhenAllReady($item->order->refresh(), $by);
+        $order = $item->order->refresh();
+
+        if ($toIndex > $fromIndex) {
+            $this->autoAdvanceWhenAllReady($order, $by);
+        } else {
+            $this->reopenProductionWhenNotReady($order, $by);
+        }
 
         return $item->refresh();
     }
@@ -374,6 +404,57 @@ class OrderService
         if (! $pending) {
             $this->transitionOrder($order, 'ready_to_ship', $by, 'Todos os itens prontos.');
         }
+    }
+
+    /**
+     * Um item so recua enquanto a encomenda ainda ca esta. Depois de
+     * expedida a producao ja nao e reversivel: a peca saiu pela porta.
+     */
+    private function assertProductionCanReopen(Order $order): void
+    {
+        if (in_array($order->status, self::PRODUCTION_LOCKED_ORDER_STATUSES, true)) {
+            throw new RuntimeException(
+                'Uma encomenda ja expedida ou fechada nao volta a producao.'
+            );
+        }
+    }
+
+    /**
+     * Simetrico do autoAdvanceWhenAllReady: se um item recuou e a encomenda
+     * ja se dava por pronta a enviar, tem de voltar a producao — senao
+     * ficava listada como pronta com uma peca por acabar.
+     *
+     * Nao passa pelo transitionOrder de proposito. Esse valida contra a
+     * PIPELINE com `$toIndex <= $fromIndex` e recusaria qualquer recuo; esta
+     * e a UNICA reversao sancionada no ficheiro e liga so estes dois estados
+     * exatos. `ready_to_ship` nao carimba data nenhuma, por isso nao ha
+     * timestamp a desfazer.
+     */
+    private function reopenProductionWhenNotReady(Order $order, ?User $by): void
+    {
+        if ($order->status !== 'ready_to_ship') {
+            return;
+        }
+
+        $pending = $order->items()
+            ->whereNotIn('production_status', ['not_required', 'ready'])
+            ->exists();
+
+        if (! $pending) {
+            return;
+        }
+
+        DB::transaction(function () use ($order, $by): void {
+            $order->update(['status' => 'in_production']);
+
+            $this->recordOrderHistory(
+                $order,
+                'ready_to_ship',
+                'in_production',
+                $by,
+                'Um item voltou a producao.',
+            );
+        });
     }
 
     /**

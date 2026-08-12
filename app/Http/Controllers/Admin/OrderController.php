@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Models\Variant;
 use App\Services\OrderService;
 use App\Support\OrderPresenter;
+use Carbon\CarbonInterface;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
@@ -35,15 +36,32 @@ class OrderController extends Controller
             'sales_channel' => (string) $request->query('sales_channel', ''),
         ];
 
-        $orders = Order::query()
-            ->withCount('items')
-            ->when($filters['status'] !== '', fn ($query) => $query->where('status', $filters['status']))
+        // Base com todos os filtros MENOS o estado. As chips de estado contam
+        // sobre esta: se a contagem respeitasse o proprio filtro de estado,
+        // todas as chips exceto a ativa mostrariam zero e deixariam de servir
+        // para navegar.
+        $scoped = fn () => Order::query()
             ->when($filters['payment_status'] !== '', fn ($query) => $query->where('payment_status', $filters['payment_status']))
             ->when($filters['sales_channel'] !== '', fn ($query) => $query->where('sales_channel', $filters['sales_channel']))
             ->when($filters['search'] !== '', fn ($query) => $query->where(fn ($inner) => $inner
                 ->where('order_number', 'like', "%{$filters['search']}%")
                 ->orWhere('customer_name', 'like', "%{$filters['search']}%")
-                ->orWhere('email', 'like', "%{$filters['search']}%")))
+                ->orWhere('email', 'like', "%{$filters['search']}%")));
+
+        $statusCounts = $scoped()
+            ->toBase()
+            ->selectRaw('status, count(*) as aggregate')
+            ->groupBy('status')
+            ->pluck('aggregate', 'status')
+            ->map(fn ($count): int => (int) $count)
+            ->all();
+
+        $orders = $scoped()
+            ->when($filters['status'] !== '', fn ($query) => $query->where('status', $filters['status']))
+            // Os artigos servem o resumo da linha ("Vaso ondulado · 2 un.").
+            // Substituem o withCount('items'): com a colecao carregada, tanto a
+            // contagem como a soma das quantidades saem da mesma leitura.
+            ->with(['items' => fn ($query) => $query->select('id', 'order_id', 'product_name', 'qty')->orderBy('id')])
             ->orderByDesc('created_at')
             ->paginate(20)
             ->withQueryString()
@@ -57,13 +75,17 @@ class OrderController extends Controller
                 'salesChannel' => $order->sales_channel,
                 'totalCents' => $order->total_cents,
                 'stockIssue' => $order->stock_issue,
-                'itemsCount' => $order->items_count,
+                'itemsCount' => $order->items->count(),
+                'itemsSummary' => $order->items->first()?->product_name,
+                'itemsQty' => (int) $order->items->sum('qty'),
                 'createdAt' => $order->created_at?->format('Y-m-d H:i'),
+                'createdAtShort' => $this->shortDate($order->created_at),
             ]);
 
         return Inertia::render('admin/encomendas/index', [
             'orders' => $orders,
             'filters' => $filters,
+            'statusCounts' => $statusCounts,
         ]);
     }
 
@@ -156,6 +178,26 @@ class OrderController extends Controller
         $this->toast('Encomenda atualizada.');
 
         return back();
+    }
+
+    /** Abreviaturas PT dos meses, indexadas por numero do mes. */
+    private const MONTHS = [
+        1 => 'jan', 2 => 'fev', 3 => 'mar', 4 => 'abr', 5 => 'mai', 6 => 'jun',
+        7 => 'jul', 8 => 'ago', 9 => 'set', 10 => 'out', 11 => 'nov', 12 => 'dez',
+    ];
+
+    /**
+     * "09 ago" para a coluna Data da listagem. O mapa e explicito e nao um
+     * translatedFormat() porque o config('app.locale') tem 'en' por omissao e
+     * o ambiente de testes nao garante 'pt' — a data da listagem nao pode
+     * mudar de idioma consoante o .env. A data completa continua a viajar em
+     * `createdAt` e aparece no title da celula.
+     */
+    private function shortDate(?CarbonInterface $at): ?string
+    {
+        return $at === null
+            ? null
+            : $at->format('d').' '.self::MONTHS[(int) $at->format('n')];
     }
 
     /**

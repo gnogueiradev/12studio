@@ -151,15 +151,51 @@ class OrderInvariantsTest extends TestCase
         $this->orders->setItemProductionStatus($item, 'printing', $this->admin);
     }
 
-    public function test_production_transitions_are_forward_only(): void
+    /**
+     * Ao contrario do pipeline da encomenda, o de producao anda para tras:
+     * uma peca que chumba no controlo de qualidade volta a impressora.
+     */
+    public function test_production_transitions_can_go_backwards(): void
     {
         $order = Order::factory()->create();
         $item = OrderItem::factory()->madeToOrder()->create(['order_id' => $order->id]);
 
         $this->orders->setItemProductionStatus($item, 'quality_check', $this->admin);
+        $this->orders->setItemProductionStatus($item->refresh(), 'printing', $this->admin);
+
+        $this->assertSame('printing', $item->refresh()->production_status);
+        $this->assertDatabaseHas('order_item_status_histories', [
+            'order_item_id' => $item->id,
+            'from_status' => 'quality_check',
+            'to_status' => 'printing',
+        ]);
+    }
+
+    public function test_a_shipped_order_never_reopens_production(): void
+    {
+        $order = Order::factory()->paid()->create(['status' => 'shipped']);
+        $item = OrderItem::factory()->madeToOrder()->create([
+            'order_id' => $order->id,
+            'production_status' => 'ready',
+        ]);
 
         $this->expectException(RuntimeException::class);
 
-        $this->orders->setItemProductionStatus($item->refresh(), 'printing', $this->admin);
+        $this->orders->setItemProductionStatus($item, 'printing', $this->admin);
+    }
+
+    /**
+     * Largar um cartao na coluna onde ja estava e um no-op, nao um erro —
+     * senao o drag & drop do quadro cuspia um toast a cada engano.
+     */
+    public function test_moving_an_item_to_its_own_status_does_nothing(): void
+    {
+        $order = Order::factory()->create();
+        $item = OrderItem::factory()->madeToOrder()->create(['order_id' => $order->id]);
+
+        $this->orders->setItemProductionStatus($item, 'awaiting_production', $this->admin);
+
+        $this->assertSame('awaiting_production', $item->refresh()->production_status);
+        $this->assertDatabaseCount('order_item_status_histories', 0);
     }
 }
