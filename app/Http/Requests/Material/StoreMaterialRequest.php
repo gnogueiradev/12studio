@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Material;
 
 use App\Models\Material;
+use App\Support\FilamentPalette;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -37,9 +38,18 @@ class StoreMaterialRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:60', Rule::unique('materials', 'name')->ignore($this->materialId())],
+            'family' => ['nullable', 'string', Rule::in(Material::FAMILIES)],
+            'supplier' => ['nullable', 'string', 'max:60'],
             'price_per_kg' => ['required', 'numeric', 'min:0', 'max:9999.99'],
+            'spools_in_stock' => ['integer', 'min:0', 'max:65535'],
+            'min_spools' => ['integer', 'min:0', 'max:65535'],
             'active' => ['boolean'],
             'sort_order' => ['integer', 'min:0', 'max:65535'],
+            // Presets da paleta, so no criar. O Rule::in fecha a porta a um
+            // nome inventado — o servico procura o hex por este nome e uma cor
+            // sem hex conhecido nao se grava.
+            'colors' => ['array'],
+            'colors.*' => ['string', Rule::in(FilamentPalette::names())],
         ];
     }
 
@@ -49,8 +59,13 @@ class StoreMaterialRequest extends FormRequest
     public function attributes(): array
     {
         return [
+            'family' => 'família',
+            'supplier' => 'fornecedor',
             'price_per_kg' => 'preço por kg',
+            'spools_in_stock' => 'bobines em stock',
+            'min_spools' => 'stock mínimo',
             'sort_order' => 'ordem',
+            'colors' => 'cores',
         ];
     }
 

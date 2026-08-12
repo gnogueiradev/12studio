@@ -1,48 +1,203 @@
-import { Head, Link, router } from '@inertiajs/react';
-import { useState } from 'react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
+import { useMemo, useState } from 'react';
 import { AdminTable } from '@/components/admin/admin-table';
 import type { Column } from '@/components/admin/admin-table';
+import { ColorSwatch } from '@/components/admin/color-swatch';
 import { ConfirmDialog } from '@/components/admin/confirm-dialog';
+import { FilterChip } from '@/components/admin/filter-chip';
+import { MaterialCreateDialog } from '@/components/admin/material-create-dialog';
 import { PageHeader } from '@/components/admin/page-header';
-import { Badge } from '@/components/ui/badge';
+import { StatCard } from '@/components/admin/stat-card';
+import { StatusBadge } from '@/components/admin/status-badge';
 import { Button } from '@/components/ui/button';
-import { formatCents } from '@/lib/money';
+import { Input } from '@/components/ui/input';
+import { formatCents, formatCostPerGram } from '@/lib/money';
+import { label } from '@/lib/options';
+import { cn } from '@/lib/utils';
 import { index as coresIndex } from '@/routes/admin/cores';
-import { create, destroy, edit, index } from '@/routes/admin/materiais';
-import type { MaterialRow } from '@/types/catalog';
+import { destroy, edit, index, restaurar } from '@/routes/admin/materiais';
+import type { MaterialRow, MaterialStats, PaletteColor } from '@/types/catalog';
+import { MATERIAL_STATES } from '@/types/catalog';
 
 type Props = {
     materials: MaterialRow[];
+    stats: MaterialStats;
+    palette: PaletteColor[];
+    families: string[];
 };
 
-export default function MaterialsIndex({ materials }: Props) {
+const ALL = 'all';
+
+/** Swatches mostrados por linha antes do "+N". */
+const SWATCH_LIMIT = 5;
+
+/**
+ * Chips como predicados, não como partição.
+ *
+ * Um material com pouco stock continua ativo — só tem um estado mais urgente
+ * para mostrar na pastilha. Por isso "Ativos" conta-o na mesma e "Stock baixo"
+ * é um subconjunto dele: quem clica em "Ativos" quer ver o que está em uso, não
+ * o que está em uso e por acaso tem bobines a mais.
+ */
+const MATCHERS: Record<string, (material: MaterialRow) => boolean> = {
+    [ALL]: () => true,
+    active: (material) => material.state !== 'archived',
+    low_stock: (material) => material.state === 'low_stock',
+    archived: (material) => material.state === 'archived',
+};
+
+/**
+ * "Ceramica" encontra "Cerâmica" — ninguém escreve acentos numa pesquisa.
+ * Mesmo par NFD + `\p{M}` do `slugify`, mas sem lhe mexer no resto: aqui os
+ * espaços e a pontuação têm de sobreviver para "PLA Silk" continuar a bater.
+ */
+function fold(value: string): string {
+    return value.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
+}
+
+export default function MaterialsIndex({
+    materials,
+    stats,
+    palette,
+    families,
+}: Props) {
+    /*
+     * Filtros no cliente, ao contrário dos produtos: esta listagem não pagina e
+     * são meia dúzia de linhas que a página já trouxe inteiras. Um pedido ao
+     * servidor por tecla carregada não descobria nada que o browser já não
+     * tivesse em mãos.
+     */
+    const [search, setSearch] = useState('');
+    const [state, setState] = useState<string>(ALL);
+    /*
+     * `?novo=1` pede o modal já aberto (o mesmo atalho que os produtos usam a
+     * partir do painel). Lido do `usePage().url` e não do `window.location`
+     * para o SSR não ir abaixo à procura de um `window` que lá não existe.
+     */
+    const { url } = usePage();
+    const [creating, setCreating] = useState(() => url.includes('novo=1'));
     const [archiving, setArchiving] = useState<MaterialRow | null>(null);
+
+    const visible = useMemo(() => {
+        const needle = fold(search.trim());
+
+        return materials.filter((material) => {
+            if (!MATCHERS[state](material)) {
+                return false;
+            }
+
+            return (
+                needle === '' ||
+                fold(material.name).includes(needle) ||
+                fold(material.supplier ?? '').includes(needle)
+            );
+        });
+    }, [materials, search, state]);
+
+    /*
+     * Contagens sobre a lista COMPLETA, nunca sobre a filtrada: senão todas as
+     * chips excepto a ativa mostravam zero e deixavam de servir para navegar.
+     * É a mesma regra que o servidor aplica nas listagens que paginam.
+     */
+    const counts = useMemo(
+        () =>
+            Object.fromEntries(
+                Object.entries(MATCHERS).map(([key, matches]) => [
+                    key,
+                    materials.filter(matches).length,
+                ]),
+            ),
+        [materials],
+    );
 
     const columns: Column<MaterialRow>[] = [
         {
             key: 'name',
             header: 'Material',
             cell: (material) => (
-                <span className="font-medium">{material.name}</span>
+                <div>
+                    <span className="font-medium">{material.name}</span>
+                    <span className="mt-0.5 block text-xs text-muted-foreground">
+                        {[material.family, material.supplier]
+                            .filter(Boolean)
+                            .join(' · ') || '—'}
+                    </span>
+                </div>
             ),
-        },
-        {
-            key: 'price',
-            header: 'Preço por kg',
-            cell: (material) => formatCents(material.pricePerKgCents),
         },
         {
             key: 'colors',
             header: 'Cores',
-            cell: (material) => material.colorsCount,
+            cell: (material) =>
+                material.colors.length === 0 ? (
+                    <span className="text-xs text-muted-foreground">
+                        Sem cores
+                    </span>
+                ) : (
+                    <span className="flex items-center gap-1.5">
+                        {material.colors.slice(0, SWATCH_LIMIT).map((color) => (
+                            <ColorSwatch
+                                key={color.name}
+                                hex={color.hex}
+                                className="size-3.5"
+                            />
+                        ))}
+                        {material.colors.length > SWATCH_LIMIT && (
+                            <span className="text-xs text-muted-foreground">
+                                +{material.colors.length - SWATCH_LIMIT}
+                            </span>
+                        )}
+                    </span>
+                ),
         },
         {
-            key: 'status',
+            key: 'price',
+            header: 'Preço / kg',
+            className: 'text-right tabular-nums',
+            cell: (material) => formatCents(material.pricePerKgCents),
+        },
+        {
+            key: 'cost',
+            header: 'Custo / g',
+            className: 'text-right tabular-nums text-muted-foreground',
+            cell: (material) => formatCostPerGram(material.pricePerKgCents),
+        },
+        {
+            key: 'stock',
+            header: 'Stock',
+            cell: (material) =>
+                material.state === 'archived' ? (
+                    <span className="text-muted-foreground">—</span>
+                ) : (
+                    <div>
+                        <span
+                            className={cn(
+                                'tabular-nums',
+                                material.state === 'low_stock' &&
+                                    'text-warning',
+                            )}
+                        >
+                            {material.spoolsInStock}{' '}
+                            {material.spoolsInStock === 1
+                                ? 'bobine'
+                                : 'bobines'}
+                        </span>
+                        <span className="mt-0.5 block text-xs text-muted-foreground tabular-nums">
+                            {material.minSpools > 0
+                                ? `mín. ${material.minSpools}`
+                                : 'sem mínimo'}
+                        </span>
+                    </div>
+                ),
+        },
+        {
+            key: 'state',
             header: 'Estado',
             cell: (material) => (
-                <Badge variant={material.active ? 'default' : 'secondary'}>
-                    {material.active ? 'Disponível' : 'Arquivado'}
-                </Badge>
+                <StatusBadge
+                    value={material.state}
+                    label={label(MATERIAL_STATES, material.state)}
+                />
             ),
         },
         {
@@ -54,13 +209,27 @@ export default function MaterialsIndex({ materials }: Props) {
                     <Button variant="outline" size="sm" asChild>
                         <Link href={edit(material.id)}>Editar</Link>
                     </Button>
-                    {material.active && (
+                    {material.active ? (
                         <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => setArchiving(material)}
                         >
                             Arquivar
+                        </Button>
+                    ) : (
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() =>
+                                router.patch(
+                                    restaurar(material.id).url,
+                                    {},
+                                    { preserveScroll: true },
+                                )
+                            }
+                        >
+                            Restaurar
                         </Button>
                     )}
                 </div>
@@ -79,18 +248,85 @@ export default function MaterialsIndex({ materials }: Props) {
                     <Button variant="outline" asChild>
                         <Link href={coresIndex()}>Cores</Link>
                     </Button>
-                    <Button asChild>
-                        <Link href={create()}>Novo material</Link>
+                    <Button onClick={() => setCreating(true)}>
+                        Novo material
                     </Button>
                 </PageHeader>
 
+                <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                    <StatCard
+                        label="Materiais ativos"
+                        value={String(stats.activeCount)}
+                    />
+                    <StatCard
+                        label="Bobines em stock"
+                        value={String(stats.spoolsTotal)}
+                    />
+                    <StatCard
+                        label="Custo médio por quilo"
+                        value={formatCents(stats.averagePricePerKgCents)}
+                    />
+                    <StatCard
+                        label="Abaixo do mínimo"
+                        value={String(stats.belowMinimumCount)}
+                        tone={
+                            stats.belowMinimumCount > 0 ? 'warning' : 'default'
+                        }
+                    />
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3">
+                    <Input
+                        value={search}
+                        onChange={(event) => setSearch(event.target.value)}
+                        placeholder="Nome ou fornecedor"
+                        className="max-w-xs"
+                        aria-label="Pesquisar materiais"
+                    />
+                    <div className="flex flex-wrap gap-2">
+                        <FilterChip
+                            text="Todos"
+                            count={counts[ALL]}
+                            active={state === ALL}
+                            onClick={() => setState(ALL)}
+                        />
+                        {MATERIAL_STATES.map((option) => (
+                            <FilterChip
+                                key={option.value}
+                                text={option.chipLabel}
+                                count={counts[option.value]}
+                                active={state === option.value}
+                                onClick={() => setState(option.value)}
+                            />
+                        ))}
+                    </div>
+                    <span className="ml-auto text-xs text-muted-foreground">
+                        {visible.length}{' '}
+                        {visible.length === 1 ? 'material' : 'materiais'}
+                    </span>
+                </div>
+
                 <AdminTable
                     columns={columns}
-                    rows={materials}
+                    rows={visible}
                     rowKey={(material) => material.id}
-                    empty="Ainda não há materiais — cria o primeiro (PLA, PETG…) para lhe poderes juntar cores."
+                    rowClassName={(material) =>
+                        material.active ? '' : 'opacity-60'
+                    }
+                    empty={
+                        materials.length === 0
+                            ? 'Ainda não há materiais — cria o primeiro (PLA, PETG…) para lhe poderes juntar cores.'
+                            : 'Nenhum material com estes filtros.'
+                    }
                 />
             </div>
+
+            <MaterialCreateDialog
+                open={creating}
+                onOpenChange={setCreating}
+                palette={palette}
+                families={families}
+            />
 
             <ConfirmDialog
                 open={archiving !== null}

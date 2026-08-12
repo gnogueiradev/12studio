@@ -17,7 +17,7 @@ import {
     index as ordersIndex,
     show as showOrder,
 } from '@/routes/admin/encomendas';
-import { create as createProduct } from '@/routes/admin/produtos';
+import { index as produtos } from '@/routes/admin/produtos';
 import type {
     DashboardAlert,
     DashboardKpis,
@@ -114,7 +114,14 @@ export default function AdminDashboard({
                         <Link href={createOrder()}>Nova encomenda</Link>
                     </Button>
                     <Button asChild>
-                        <Link href={createProduct()}>Novo produto</Link>
+                        {/*
+                         * O produto novo nasce no modal da listagem — o atalho
+                         * leva lá e pede-lhe para abrir, em vez de duplicar o
+                         * formulário numa página só para este botão.
+                         */}
+                        <Link href={produtos({ query: { novo: 1 } })}>
+                            Novo produto
+                        </Link>
                     </Button>
                 </PageHeader>
 

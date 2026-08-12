@@ -73,16 +73,28 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
             ->parameters(['clientes' => 'customer'])
             ->except(['show']);
 
+        // Sem `create`: a categoria nova nasce no modal da propria listagem,
+        // como nos produtos. O `edit` fica para a ordem e para arquivar.
         Route::resource('categorias', Admin\CategoryController::class)
             ->parameters(['categorias' => 'category'])
-            ->except(['show']);
+            ->except(['show', 'create']);
+
+        Route::patch('categorias/{category}/restaurar', [Admin\CategoryController::class, 'restore'])
+            ->name('categorias.restaurar');
 
         // Materiais e cores em recursos irmaos: uma cor pertence a um
         // material, mas a paleta gere-se toda de uma vez — aninhar as cores
         // dentro do material daria URLs mais longos sem ganho nenhum.
+        //
+        // Sem `create`: o material novo nasce no modal da propria listagem, que
+        // e onde se escolhem as cores iniciais. O `edit` fica para o preco, o
+        // stock e para arquivar.
         Route::resource('materiais', Admin\MaterialController::class)
             ->parameters(['materiais' => 'material'])
-            ->except(['show']);
+            ->except(['show', 'create']);
+
+        Route::patch('materiais/{material}/restaurar', [Admin\MaterialController::class, 'restore'])
+            ->name('materiais.restaurar');
 
         Route::resource('cores', Admin\ColorController::class)
             ->parameters(['cores' => 'color'])
@@ -96,9 +108,15 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         Route::patch('definicoes/guardar', [Admin\SettingController::class, 'update'])
             ->name('definicoes.update');
 
+        // Sem `create`: o produto novo nasce no modal da propria listagem, que
+        // e onde se escolhem as cores e os tamanhos que geram as variantes. O
+        // resto do formulario (etiquetas, IVA, SEO, destaque) vive no `edit`.
         Route::resource('produtos', Admin\ProductController::class)
             ->parameters(['produtos' => 'product'])
-            ->except(['show']);
+            ->except(['show', 'create']);
+
+        Route::patch('produtos/{product}/restaurar', [Admin\ProductController::class, 'restore'])
+            ->name('produtos.restaurar');
 
         // Fotografias: shallow como as variantes, mas com URIs proprios por
         // acao — o Wayfinder duplica chaves quando dois verbos partilham o

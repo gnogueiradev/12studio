@@ -28,7 +28,11 @@ class MaterialCrudTest extends TestCase
     {
         return [
             'name' => 'PLA',
+            'family' => 'PLA',
+            'supplier' => 'Prusament',
             'price_per_kg' => '21.90',
+            'spools_in_stock' => 9,
+            'min_spools' => 4,
             'active' => true,
             'sort_order' => 0,
         ];
@@ -89,14 +93,71 @@ class MaterialCrudTest extends TestCase
         $this->assertDatabaseHas('colors', ['id' => $color->id, 'is_active' => true]);
     }
 
-    public function test_the_index_lists_materials_with_their_colour_count(): void
+    public function test_restore_makes_an_archived_material_selectable_again(): void
     {
-        $material = Material::factory()->create();
-        Color::factory()->count(3)->create(['material_id' => $material->id]);
+        $material = Material::factory()->archived()->create();
 
         $this->actingAs($this->admin)
-            ->get(route('admin.materiais.index'))
-            ->assertOk();
+            ->patch(route('admin.materiais.restaurar', $material))
+            ->assertRedirect();
+
+        $this->assertTrue($material->refresh()->active);
+    }
+
+    /**
+     * As chips do modal sao presets: o material e as suas primeiras cores
+     * nascem juntos, senao ficava um material que nao gera variante nenhuma.
+     */
+    public function test_store_creates_the_selected_palette_colours(): void
+    {
+        $this->actingAs($this->admin)
+            ->post(route('admin.materiais.store'), [
+                ...$this->validPayload(),
+                'colors' => ['Preto', 'Dourado'],
+            ])
+            ->assertSessionHasNoErrors();
+
+        $material = Material::query()->where('name', 'PLA')->sole();
+
+        $this->assertSame(2, $material->colors()->count());
+        $this->assertDatabaseHas('colors', [
+            'material_id' => $material->id,
+            'name' => 'Preto',
+            'hex_color' => '#1A1715',
+            // Sem override: a cor herda o preco/kg que o modal acabou de pedir.
+            'price_per_kg_cents' => null,
+        ]);
+    }
+
+    public function test_store_rejects_a_colour_outside_the_palette(): void
+    {
+        $this->actingAs($this->admin)
+            ->post(route('admin.materiais.store'), [
+                ...$this->validPayload(),
+                'colors' => ['Cor-de-burro-quando-foge'],
+            ])
+            ->assertSessionHasErrors('colors.0');
+
+        $this->assertDatabaseMissing('materials', ['name' => 'PLA']);
+    }
+
+    /**
+     * A paleta e um atalho de criacao. Um material que ja existe tem cores
+     * proprias, com precos e imagens tratados em /admin/cores — gravar o
+     * formulario de edicao nao lhes pode mexer.
+     */
+    public function test_update_ignores_colours(): void
+    {
+        $material = Material::factory()->create(['name' => 'PLA']);
+
+        $this->actingAs($this->admin)
+            ->patch(route('admin.materiais.update', $material), [
+                ...$this->validPayload(),
+                'colors' => ['Preto', 'Branco'],
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame(0, $material->colors()->count());
     }
 
     public function test_non_admins_cannot_touch_materials(): void

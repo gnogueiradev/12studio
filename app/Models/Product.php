@@ -32,6 +32,10 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Category|null $category
+ *
+ * Agregados da listagem do backoffice. Nao sao colunas: so existem quando a
+ * consulta os pede com withSum(), e vem a null num produto sem variantes.
+ * @property-read int|null $ready_stock
  */
 #[Fillable([
     'category_id', 'name', 'slug', 'description', 'status', 'featured',

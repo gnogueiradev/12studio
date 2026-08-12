@@ -3,6 +3,7 @@
 namespace Tests\Feature\Admin;
 
 use App\Models\Category;
+use App\Models\Color;
 use App\Models\Product;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -55,8 +56,8 @@ class ProductCrudTest extends TestCase
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('admin/produtos/index')
-                ->has('products', 1)
-                ->where('products.0.name', 'Vaso Espiral'));
+                ->has('products.data', 1)
+                ->where('products.data.0.name', 'Vaso Espiral'));
     }
 
     public function test_store_creates_product_with_ascii_slug(): void
@@ -77,6 +78,164 @@ class ProductCrudTest extends TestCase
             'fulfillment_mode' => 'made_to_order',
             'max_open_production_qty' => 10,
         ]);
+    }
+
+    public function test_store_generates_a_variant_per_colour_and_size(): void
+    {
+        $colors = Color::factory()->count(3)->create();
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.produtos.store'), [
+                ...$this->validPayload(),
+                'name' => 'Vaso ondulado',
+                'variants' => [
+                    'color_ids' => $colors->modelKeys(),
+                    'sizes' => ['Pequeno', 'Grande'],
+                    'price' => '29.00',
+                    'filament_weight_grams' => 84,
+                    'printing_time_minutes' => 130,
+                ],
+            ])
+            ->assertRedirect(route('admin.produtos.index'));
+
+        $product = Product::query()->where('slug', 'vaso-ondulado')->sole();
+
+        // 3 cores x 2 tamanhos, com o molde (preco, gramagem, tempo) aplicado
+        // a todas — o que difere entre variantes edita-se depois, uma a uma.
+        $this->assertSame(6, $product->variants()->count());
+        $this->assertSame(6, $product->variants()->where([
+            'price_cents' => 2900,
+            'filament_weight_grams' => 84,
+            'printing_time_minutes' => 130,
+        ])->count());
+
+        // O stock entra sempre a zero: a primeira contagem tem de passar pelo
+        // StockService para ficar registada como movimento.
+        $this->assertSame(0, (int) $product->variants()->sum('stock'));
+    }
+
+    public function test_the_matrix_price_accepts_a_decimal_comma(): void
+    {
+        $color = Color::factory()->create();
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.produtos.store'), [
+                ...$this->validPayload(),
+                'name' => 'Vaso ondulado',
+                'variants' => [
+                    'color_ids' => [$color->id],
+                    'sizes' => [],
+                    // Colado de outro lado com virgula, como o admin escreve.
+                    'price' => '29,50',
+                ],
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('variants', ['price_cents' => 2950]);
+    }
+
+    public function test_store_numbers_the_generated_references_in_sequence(): void
+    {
+        $colors = Color::factory()->count(2)->create();
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.produtos.store'), [
+                ...$this->validPayload(),
+                'name' => 'Vaso ondulado',
+                'variants' => [
+                    'color_ids' => $colors->modelKeys(),
+                    'sizes' => [],
+                    'price' => '29.00',
+                ],
+            ]);
+
+        $product = Product::query()->where('slug', 'vaso-ondulado')->sole();
+
+        $this->assertSame(
+            ['VASO-ONDULADO-1', 'VASO-ONDULADO-2'],
+            $product->variants()->orderBy('id')->pluck('sku')->all(),
+        );
+
+        // Sem tamanhos ha uma variante por cor, e nenhuma leva rotulo.
+        $this->assertSame(0, $product->variants()->whereNotNull('size_label')->count());
+    }
+
+    public function test_the_first_generated_variant_is_the_default_one(): void
+    {
+        $colors = Color::factory()->count(3)->create();
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.produtos.store'), [
+                ...$this->validPayload(),
+                'name' => 'Vaso ondulado',
+                'variants' => [
+                    'color_ids' => $colors->modelKeys(),
+                    'sizes' => [],
+                    'price' => '29.00',
+                ],
+            ]);
+
+        $product = Product::query()->where('slug', 'vaso-ondulado')->sole();
+
+        // Uma e uma so: duas defaults tornavam indeterminado o preco da montra.
+        $this->assertSame(1, $product->variants()->where('is_default', true)->count());
+        $this->assertSame(
+            $product->variants()->orderBy('id')->value('id'),
+            $product->variants()->where('is_default', true)->value('id'),
+        );
+    }
+
+    public function test_store_without_a_matrix_creates_no_variants(): void
+    {
+        $this->actingAs($this->admin)
+            ->post(route('admin.produtos.store'), [
+                ...$this->validPayload(),
+                'name' => 'Vaso ondulado',
+                'status' => 'draft',
+            ])
+            ->assertSessionHasNoErrors();
+
+        // O rascunho guardado sem cores nenhumas — o preco so e exigido quando
+        // ha matriz para o gastar.
+        $this->assertSame(0, Product::query()->where('slug', 'vaso-ondulado')->sole()->variants()->count());
+    }
+
+    public function test_a_matrix_without_a_price_is_rejected(): void
+    {
+        $color = Color::factory()->create();
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.produtos.store'), [
+                ...$this->validPayload(),
+                'variants' => [
+                    'color_ids' => [$color->id],
+                    'sizes' => [],
+                    'price' => '',
+                ],
+            ])
+            ->assertSessionHasErrors('variants.price');
+
+        // Sem esta regra as variantes nasciam todas a zero euros e vendaveis.
+        $this->assertDatabaseCount('variants', 0);
+    }
+
+    public function test_update_ignores_a_matrix_smuggled_into_the_payload(): void
+    {
+        $product = Product::factory()->create();
+        $color = Color::factory()->create();
+
+        $this->actingAs($this->admin)->patch(route('admin.produtos.update', $product), [
+            ...$this->validPayload(),
+            'variants' => [
+                'color_ids' => [$color->id],
+                'sizes' => [],
+                'price' => '29.00',
+            ],
+        ]);
+
+        // A matriz so existe na criacao: senao cada correccao ao nome do
+        // produto criava variantes novas por baixo.
+        $this->assertSame(0, $product->variants()->count());
     }
 
     public function test_store_rejects_invalid_fulfillment_mode_and_status(): void
@@ -121,14 +280,53 @@ class ProductCrudTest extends TestCase
             'fulfillment_mode' => 'in_stock',
         ]);
 
+        // Volta para tras e nao para o indice: arquiva-se a partir da linha da
+        // listagem, e um redirect fixo perdia a pagina e os filtros activos.
         $this->actingAs($this->admin)
+            ->from(route('admin.produtos.index', ['status' => 'active']))
             ->delete(route('admin.produtos.destroy', $product))
-            ->assertRedirect(route('admin.produtos.index'));
+            ->assertRedirect(route('admin.produtos.index', ['status' => 'active']));
 
         $this->assertDatabaseHas('products', [
             'id' => $product->id,
             'status' => 'archived',
         ]);
+    }
+
+    public function test_restore_returns_an_archived_product_to_draft(): void
+    {
+        $product = Product::query()->create([
+            'name' => 'Vaso Espiral',
+            'slug' => 'vaso-espiral',
+            'status' => 'archived',
+            'fulfillment_mode' => 'in_stock',
+        ]);
+
+        $this->actingAs($this->admin)
+            ->from(route('admin.produtos.index'))
+            ->patch(route('admin.produtos.restaurar', $product))
+            ->assertRedirect(route('admin.produtos.index'));
+
+        // Rascunho e nao activo: restaurar corrige o arquivo, nao republica na
+        // montra sem ninguem ter pedido.
+        $this->assertDatabaseHas('products', [
+            'id' => $product->id,
+            'status' => 'draft',
+        ]);
+    }
+
+    public function test_non_admins_cannot_restore_a_product(): void
+    {
+        $product = Product::query()->create([
+            'name' => 'Vaso Espiral',
+            'slug' => 'vaso-espiral',
+            'status' => 'archived',
+            'fulfillment_mode' => 'in_stock',
+        ]);
+
+        $this->actingAs(User::factory()->create())
+            ->patch(route('admin.produtos.restaurar', $product))
+            ->assertForbidden();
     }
 
     public function test_homepage_shows_only_active_products(): void

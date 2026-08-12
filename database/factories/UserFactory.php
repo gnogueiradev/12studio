@@ -58,6 +58,29 @@ class UserFactory extends Factory
     }
 
     /**
+     * Cliente empresa: o NIF deixa de ser opcional a partir daqui.
+     */
+    public function company(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'customer_type' => 'empresa',
+            // NIF portugues comecado por 5: pessoa coletiva.
+            'nif' => fake()->numerify('5########'),
+        ]);
+    }
+
+    /**
+     * Cliente apanhado ao balcao: um nome e mais nada.
+     */
+    public function withoutEmail(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'email' => null,
+            'email_verified_at' => null,
+        ]);
+    }
+
+    /**
      * Indicate that the model has two-factor authentication configured.
      */
     public function withTwoFactor(): static

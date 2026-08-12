@@ -31,7 +31,8 @@ class CategoryCrudTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page
                 ->component('admin/categorias/index')
                 ->has('categories', 1)
-                ->where('categories.0.name', 'Decoração'));
+                ->where('categories.0.name', 'Decoração')
+                ->where('categories.0.status', 'visible'));
     }
 
     public function test_store_creates_category_with_ascii_slug(): void
@@ -40,7 +41,7 @@ class CategoryCrudTest extends TestCase
             ->post(route('admin.categorias.store'), [
                 'name' => 'Decoração de Natal',
                 'description' => 'Peças festivas',
-                'active' => true,
+                'status' => 'visible',
                 'sort_order' => 1,
             ])
             ->assertRedirect(route('admin.categorias.index'));
@@ -58,11 +59,57 @@ class CategoryCrudTest extends TestCase
 
         $this->actingAs($this->admin)->post(route('admin.categorias.store'), [
             'name' => 'Gadgets',
-            'active' => true,
+            'status' => 'visible',
             'sort_order' => 0,
         ]);
 
         $this->assertDatabaseHas('categories', ['slug' => 'gadgets-2']);
+    }
+
+    public function test_store_accepts_a_colour_from_the_palette(): void
+    {
+        $this->actingAs($this->admin)->post(route('admin.categorias.store'), [
+            'name' => 'Iluminação',
+            'status' => 'visible',
+            'color' => '#D9A84E',
+            'sort_order' => 0,
+        ]);
+
+        $this->assertDatabaseHas('categories', [
+            'slug' => 'iluminacao',
+            'color' => '#D9A84E',
+        ]);
+    }
+
+    /**
+     * A paleta e fechada: um hex qualquer entrava sem ninguem verificar se
+     * ainda se le no tema claro E no escuro.
+     */
+    public function test_store_rejects_a_colour_outside_the_palette(): void
+    {
+        $this->actingAs($this->admin)
+            ->from(route('admin.categorias.index'))
+            ->post(route('admin.categorias.store'), [
+                'name' => 'Fluorescente',
+                'status' => 'visible',
+                'color' => '#00FF00',
+                'sort_order' => 0,
+            ])
+            ->assertSessionHasErrors('color');
+
+        $this->assertDatabaseMissing('categories', ['name' => 'Fluorescente']);
+    }
+
+    public function test_store_rejects_an_unknown_status(): void
+    {
+        $this->actingAs($this->admin)
+            ->from(route('admin.categorias.index'))
+            ->post(route('admin.categorias.store'), [
+                'name' => 'Intermedia',
+                'status' => 'talvez',
+                'sort_order' => 0,
+            ])
+            ->assertSessionHasErrors('status');
     }
 
     public function test_update_changes_slug_only_when_name_changes(): void
@@ -72,7 +119,7 @@ class CategoryCrudTest extends TestCase
         $this->actingAs($this->admin)->patch(route('admin.categorias.update', $category), [
             'name' => 'Gadgets',
             'description' => 'Atualizada',
-            'active' => true,
+            'status' => 'hidden',
             'sort_order' => 3,
         ]);
 
@@ -80,12 +127,13 @@ class CategoryCrudTest extends TestCase
             'id' => $category->id,
             'slug' => 'gadgets',
             'description' => 'Atualizada',
+            'status' => 'hidden',
             'sort_order' => 3,
         ]);
 
         $this->actingAs($this->admin)->patch(route('admin.categorias.update', $category), [
             'name' => 'Utilidades',
-            'active' => true,
+            'status' => 'visible',
             'sort_order' => 3,
         ]);
 
@@ -100,22 +148,48 @@ class CategoryCrudTest extends TestCase
     {
         $category = Category::query()->create(['name' => 'Gadgets', 'slug' => 'gadgets']);
 
-        $this->actingAs($this->admin)
-            ->delete(route('admin.categorias.destroy', $category))
-            ->assertRedirect(route('admin.categorias.index'));
+        // Arquiva-se de dentro de uma vista filtrada, e o `back()` do
+        // controller tem de a devolver tal como estava.
+        $filtered = route('admin.categorias.index', ['status' => 'visible']);
 
-        // Regra global: nunca hard-delete — a linha continua la, inativa.
+        $this->actingAs($this->admin)
+            ->from($filtered)
+            ->delete(route('admin.categorias.destroy', $category))
+            ->assertRedirect($filtered);
+
+        // Regra global: nunca hard-delete — a linha continua la, arquivada.
         $this->assertDatabaseHas('categories', [
             'id' => $category->id,
-            'active' => false,
+            'status' => 'archived',
+        ]);
+    }
+
+    public function test_restore_brings_an_archived_category_back(): void
+    {
+        $category = Category::query()->create([
+            'name' => 'Natal 2025',
+            'slug' => 'natal-2025',
+            'status' => 'archived',
+        ]);
+
+        $filtered = route('admin.categorias.index', ['status' => 'archived']);
+
+        $this->actingAs($this->admin)
+            ->from($filtered)
+            ->patch(route('admin.categorias.restaurar', $category))
+            ->assertRedirect($filtered);
+
+        $this->assertDatabaseHas('categories', [
+            'id' => $category->id,
+            'status' => 'visible',
         ]);
     }
 
     public function test_validation_rejects_missing_name(): void
     {
         $this->actingAs($this->admin)
-            ->from(route('admin.categorias.create'))
-            ->post(route('admin.categorias.store'), ['name' => ''])
+            ->from(route('admin.categorias.index'))
+            ->post(route('admin.categorias.store'), ['name' => '', 'status' => 'visible'])
             ->assertSessionHasErrors('name');
     }
 
@@ -128,7 +202,7 @@ class CategoryCrudTest extends TestCase
             ->assertForbidden();
 
         $this->actingAs($user)
-            ->post(route('admin.categorias.store'), ['name' => 'Intrusa'])
+            ->post(route('admin.categorias.store'), ['name' => 'Intrusa', 'status' => 'visible'])
             ->assertForbidden();
 
         $this->assertDatabaseMissing('categories', ['name' => 'Intrusa']);

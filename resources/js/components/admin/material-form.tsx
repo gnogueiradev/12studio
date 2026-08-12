@@ -3,11 +3,19 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import type { MaterialFormData } from '@/types/catalog';
 
 type Props = {
     data: MaterialFormData;
+    families: string[];
     setData: <K extends keyof MaterialFormData>(
         key: K,
         value: MaterialFormData[K],
@@ -18,8 +26,12 @@ type Props = {
     submitLabel: string;
 };
 
+/** Radix não aceita value="" — o "sem família" precisa de um valor próprio. */
+const NO_FAMILY = 'none';
+
 export default function MaterialForm({
     data,
+    families,
     setData,
     errors,
     processing,
@@ -43,6 +55,48 @@ export default function MaterialForm({
             </div>
 
             <div className="grid gap-2">
+                <Label>Família</Label>
+                <Select
+                    value={data.family === '' ? NO_FAMILY : data.family}
+                    onValueChange={(value) =>
+                        setData('family', value === NO_FAMILY ? '' : value)
+                    }
+                >
+                    <SelectTrigger className="w-56">
+                        <SelectValue placeholder="Sem família" />
+                    </SelectTrigger>
+                    <SelectContent>
+                        <SelectItem value={NO_FAMILY}>Sem família</SelectItem>
+                        {families.map((family) => (
+                            <SelectItem key={family} value={family}>
+                                {family}
+                            </SelectItem>
+                        ))}
+                    </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                    O polímero base. O nome é comercial — "PLA Silk" e "PLA
+                    Mate" são ambos da família PLA.
+                </p>
+                <InputError message={errors.family} />
+            </div>
+
+            <div className="grid gap-2">
+                <Label htmlFor="supplier">Fornecedor</Label>
+                <Input
+                    id="supplier"
+                    value={data.supplier}
+                    onChange={(event) =>
+                        setData('supplier', event.target.value)
+                    }
+                    maxLength={60}
+                    placeholder="Prusament"
+                    className="w-56"
+                />
+                <InputError message={errors.supplier} />
+            </div>
+
+            <div className="grid gap-2">
                 <Label htmlFor="price_per_kg">Preço por kg (€)</Label>
                 <Input
                     id="price_per_kg"
@@ -62,6 +116,45 @@ export default function MaterialForm({
                     cara.
                 </p>
                 <InputError message={errors.price_per_kg} />
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+                <div className="grid gap-2">
+                    <Label htmlFor="spools_in_stock">Bobines em stock</Label>
+                    <Input
+                        id="spools_in_stock"
+                        type="number"
+                        min={0}
+                        value={data.spools_in_stock}
+                        onChange={(event) =>
+                            setData(
+                                'spools_in_stock',
+                                Number(event.target.value),
+                            )
+                        }
+                        className="tabular-nums"
+                    />
+                    <InputError message={errors.spools_in_stock} />
+                </div>
+
+                <div className="grid gap-2">
+                    <Label htmlFor="min_spools">Stock mínimo</Label>
+                    <Input
+                        id="min_spools"
+                        type="number"
+                        min={0}
+                        value={data.min_spools}
+                        onChange={(event) =>
+                            setData('min_spools', Number(event.target.value))
+                        }
+                        className="tabular-nums"
+                    />
+                    <p className="text-xs text-muted-foreground">
+                        Abaixo disto o material aparece como "stock baixo". Zero
+                        desliga o aviso.
+                    </p>
+                    <InputError message={errors.min_spools} />
+                </div>
             </div>
 
             <div className="grid gap-2">

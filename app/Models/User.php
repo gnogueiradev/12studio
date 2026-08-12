@@ -18,7 +18,7 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
 /**
  * @property int $id
  * @property string $name
- * @property string $email
+ * @property string|null $email
  * @property Carbon|null $email_verified_at
  * @property string $password
  * @property string|null $two_factor_secret
@@ -26,10 +26,14 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property Carbon|null $two_factor_confirmed_at
  * @property string|null $remember_token
  * @property bool $is_admin
+ * @property string $customer_type
+ * @property string|null $phone
+ * @property string|null $nif
+ * @property string|null $admin_note
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['name', 'email', 'password'])]
+#[Fillable(['name', 'email', 'password', 'customer_type', 'phone', 'nif', 'admin_note'])]
 #[Hidden(['password', 'two_factor_secret', 'two_factor_recovery_codes', 'remember_token'])]
 class User extends Authenticatable implements PasskeyUser
 {
@@ -74,5 +78,15 @@ class User extends Authenticatable implements PasskeyUser
         // ter o atributo carregado (default aplicado so na BD) — null nunca
         // pode passar por "e admin".
         return (bool) $this->is_admin;
+    }
+
+    /**
+     * Cliente empresa. O default da coluna e 'particular', mas um modelo
+     * acabado de criar pela factory pode nao ter o atributo carregado — por
+     * isso a pergunta e "e empresa?" e nunca "nao e particular?".
+     */
+    public function isCompany(): bool
+    {
+        return $this->customer_type === 'empresa';
     }
 }

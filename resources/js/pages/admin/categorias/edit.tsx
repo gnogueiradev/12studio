@@ -12,7 +12,8 @@ export default function CategoriesEdit({ category }: Props) {
         useForm<CategoryFormData>({
             name: category.name,
             description: category.description ?? '',
-            active: category.active,
+            status: category.status,
+            color: category.color,
             sort_order: category.sortOrder,
         });
 

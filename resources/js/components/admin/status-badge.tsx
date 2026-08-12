@@ -56,12 +56,43 @@ export const TONES: Record<string, Tone> = {
     pending: 'warning',
     partially_refunded: 'warning',
     failed: 'danger',
+    /*
+     * products.status — rascunho e arquivado ficam os dois em neutro de
+     * propósito: nenhum está à venda, e a diferença entre eles lê-se na
+     * linha (o arquivado vem esbatido e oferece "Restaurar" em vez de
+     * "Arquivar"), não numa segunda cor a competir com o verde do ativo.
+     */
+    draft: 'neutral',
+    active: 'success',
+    archived: 'neutral',
+    /*
+     * materials.state (derivado) — reaproveita `active` e `archived` acima, que
+     * ja querem dizer o mesmo. `low_stock` fica em warning pelo criterio do
+     * mapa das encomendas: e o unico estado de material que pede uma acao
+     * concreta a quem esta deste lado (encomendar bobines).
+     */
+    low_stock: 'warning',
+    /*
+     * categories.status — "oculta" fica em warning e nao em neutro porque e o
+     * unico dos tres que engana: a categoria esta viva, mas ninguem a encontra
+     * pelo menu. Arquivada partilha o neutro com o `archived` dos produtos, que
+     * e exatamente o mesmo fim de linha.
+     */
+    visible: 'success',
+    hidden: 'warning',
     // order_items.production_status
     not_required: 'neutral',
     awaiting_production: 'warning',
     printing: 'info',
     quality_check: 'info',
     ready: 'success',
+    /*
+     * users.customer_type — aqui o tom nao e urgencia, e so distincao: a
+     * esmagadora maioria dos clientes e particular e nao precisa de destaque
+     * nenhum; a empresa precisa, porque muda a faturacao.
+     */
+    particular: 'neutral',
+    empresa: 'info',
 };
 
 /**

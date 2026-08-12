@@ -25,8 +25,6 @@ class AddressFactory extends Factory
             'postal_code' => fake()->numerify('####-###'),
             'city' => fake()->city(),
             'country' => 'PT',
-            'phone' => fake()->numerify('9########'),
-            'nif' => fake()->numerify('#########'),
             'is_default' => true,
         ];
     }

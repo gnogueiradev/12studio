@@ -3,6 +3,7 @@ import { AlertTriangle, Search } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { AdminTable } from '@/components/admin/admin-table';
 import type { Column } from '@/components/admin/admin-table';
+import { FilterChip } from '@/components/admin/filter-chip';
 import { PageHeader } from '@/components/admin/page-header';
 import { Pagination } from '@/components/admin/pagination';
 import {
@@ -21,7 +22,6 @@ import {
 } from '@/components/ui/select';
 import { formatCents } from '@/lib/money';
 import { label } from '@/lib/options';
-import { cn } from '@/lib/utils';
 import { create, index, show } from '@/routes/admin/encomendas';
 import { index as drafts } from '@/routes/admin/encomendas/rascunhos';
 import type { OrderRow } from '@/types/order';
@@ -292,14 +292,14 @@ export default function OrdersIndex({
                 </div>
 
                 <div className="flex flex-wrap gap-2 border-b border-border/60 pb-3.5">
-                    <StatusChip
+                    <FilterChip
                         text="Todas"
                         count={totalOrders}
                         active={filters.status === ''}
                         onClick={() => applyFilters({ status: '' })}
                     />
                     {chips.map((status) => (
-                        <StatusChip
+                        <FilterChip
                             key={status.value}
                             text={status.label}
                             count={statusCounts[status.value] ?? 0}
@@ -322,34 +322,6 @@ export default function OrdersIndex({
                 <Pagination page={orders} noun="encomendas" />
             </div>
         </>
-    );
-}
-
-function StatusChip({
-    text,
-    count,
-    active,
-    onClick,
-}: {
-    text: string;
-    count: number;
-    active: boolean;
-    onClick: () => void;
-}) {
-    return (
-        <button
-            type="button"
-            onClick={onClick}
-            aria-pressed={active}
-            className={cn(
-                'rounded-full border border-border px-3.5 py-1.5 text-xs transition-colors',
-                active
-                    ? 'bg-secondary font-semibold text-foreground'
-                    : 'font-medium text-muted-foreground hover:bg-secondary/60',
-            )}
-        >
-            {text} <span className="text-muted-foreground">{count}</span>
-        </button>
     );
 }
 

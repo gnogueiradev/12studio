@@ -3,20 +3,11 @@ import CustomerForm from '@/components/admin/customer-form';
 import { PageHeader } from '@/components/admin/page-header';
 import { index, store } from '@/routes/admin/clientes';
 import type { CustomerFormData } from '@/types/customer';
+import { EMPTY_CUSTOMER_FORM } from '@/types/customer';
 
 export default function CustomersCreate() {
     const { data, setData, post, processing, errors } =
-        useForm<CustomerFormData>({
-            name: '',
-            email: '',
-            line1: '',
-            line2: '',
-            postal_code: '',
-            city: '',
-            country: 'PT',
-            phone: '',
-            nif: '',
-        });
+        useForm<CustomerFormData>({ ...EMPTY_CUSTOMER_FORM });
 
     const submit = (event: React.FormEvent) => {
         event.preventDefault();
@@ -26,7 +17,7 @@ export default function CustomersCreate() {
     return (
         <>
             <Head title="Novo cliente" />
-            <div className="flex h-full flex-1 flex-col gap-4 p-4">
+            <div className="flex h-full w-full max-w-[1400px] flex-1 flex-col gap-4 p-6 pb-10">
                 <PageHeader
                     title="Novo cliente"
                     description="O cliente não recebe email nem password — o registo serve para lhe associar encomendas. A partir da Fase 5 pode criar a sua password por recuperação."

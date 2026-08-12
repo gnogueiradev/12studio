@@ -2,7 +2,10 @@ export type CategoryRow = {
     id: number;
     name: string;
     slug: string;
-    active: boolean;
+    description: string | null;
+    status: string;
+    /** Hex da paleta fixa, ou null enquanto ninguém escolheu uma. */
+    color: string | null;
     sortOrder: number;
     productsCount: number;
 };
@@ -12,14 +15,16 @@ export type CategoryDetail = {
     name: string;
     slug: string;
     description: string | null;
-    active: boolean;
+    status: string;
+    color: string | null;
     sortOrder: number;
 };
 
 export type CategoryFormData = {
     name: string;
     description: string;
-    active: boolean;
+    status: string;
+    color: string | null;
     sort_order: number;
 };
 
@@ -28,29 +33,86 @@ export type CategoryOption = {
     name: string;
 };
 
+/**
+ * Estado derivado no servidor por `Material::state()`. Não é coluna: sai de
+ * `active` cruzado com as bobines em stock, e o TypeScript só o recebe feito
+ * para nunca haver duas regras de "isto está em falta".
+ */
+export type MaterialState = 'active' | 'low_stock' | 'archived';
+
+/** Swatch de uma cor do material na listagem. */
+export type MaterialColorChip = {
+    name: string;
+    hex: string;
+};
+
 export type MaterialRow = {
     id: number;
     name: string;
+    family: string | null;
+    supplier: string | null;
     pricePerKgCents: number;
+    spoolsInStock: number;
+    /** 0 = sem alerta de stock. */
+    minSpools: number;
     active: boolean;
     sortOrder: number;
-    colorsCount: number;
+    state: MaterialState;
+    /** Só as cores ativas, já ordenadas. O corte para "+N" é do componente. */
+    colors: MaterialColorChip[];
+};
+
+export type MaterialStats = {
+    activeCount: number;
+    spoolsTotal: number;
+    /** Média sobre os não arquivados; 0 quando ainda não há materiais. */
+    averagePricePerKgCents: number;
+    belowMinimumCount: number;
 };
 
 export type MaterialDetail = {
     id: number;
     name: string;
+    family: string | null;
+    supplier: string | null;
     /** Decimal em euros ("21.90") — o formulário edita euros. */
     pricePerKg: string;
+    spoolsInStock: number;
+    minSpools: number;
     active: boolean;
     sortOrder: number;
 };
 
 export type MaterialFormData = {
     name: string;
+    family: string;
+    supplier: string;
     price_per_kg: string;
+    spools_in_stock: number;
+    min_spools: number;
     active: boolean;
     sort_order: number;
+};
+
+/** Preset da paleta de filamento (App\Support\FilamentPalette). */
+export type PaletteColor = {
+    name: string;
+    hex: string;
+};
+
+/**
+ * Criar material no modal da listagem. Chaves em snake_case porque espelham as
+ * regras do StoreMaterialRequest; `colors` são nomes de presets da paleta, e é
+ * o servidor que lhes descobre o hex.
+ */
+export type MaterialQuickFormData = {
+    name: string;
+    family: string;
+    supplier: string;
+    /** Euros escritos à mão; o servidor converte para cêntimos. */
+    price_per_kg: string;
+    min_spools: number;
+    colors: string[];
 };
 
 export type MaterialOption = {
@@ -104,7 +166,13 @@ export type ColorSummary = {
 /** Cores agrupadas por material, para o seletor da variante. */
 export type ColorGroup = {
     material: string;
-    colors: { id: number; name: string; hex: string }[];
+    colors: {
+        id: number;
+        name: string;
+        hex: string;
+        /** Preço/kg em vigor, para a margem ao vivo do modal de novo produto. */
+        pricePerKgCents: number;
+    }[];
 };
 
 export type ProductRow = {
@@ -114,8 +182,44 @@ export type ProductRow = {
     status: string;
     featured: boolean;
     fulfillmentMode: string;
+    productionTimeDays: number | null;
     category: string | null;
+    imageUrl: string | null;
     variantsCount: number;
+    /*
+     * Referência, preço, gramagem e tempo são da VARIANTE, não do produto —
+     * a listagem mostra os da default, que é a mesma que a montra usa para
+     * anunciar o preço. Null enquanto o produto não tiver variantes.
+     */
+    sku: string | null;
+    priceCents: number | null;
+    filamentWeightGrams: number | null;
+    printingTimeMinutes: number | null;
+    /** Somado em todas as variantes: stock físico menos o reservado. */
+    readyStock: number;
+};
+
+/**
+ * O modal "Novo produto" da listagem: os campos do produto mais a matriz que
+ * gera as variantes de uma vez. O resto do formulário (etiquetas, IVA, SEO,
+ * destaque) vive na página de edição.
+ */
+export type ProductQuickFormData = {
+    name: string;
+    category_id: number | null;
+    description: string;
+    status: string;
+    fulfillment_mode: string;
+    production_time_days: number | null;
+    vat_rate: number;
+    variants: {
+        color_ids: number[];
+        sizes: string[];
+        /** Euros escritos à mão; o servidor converte para cêntimos. */
+        price: string;
+        filament_weight_grams: number | null;
+        printing_time_minutes: number | null;
+    };
 };
 
 export type ProductDetail = {
@@ -228,14 +332,55 @@ export type VariantOption = {
     productName: string;
 };
 
+/**
+ * O `chipLabel` é o mesmo estado no plural: a pastilha da linha fala de UM
+ * produto ("Rascunho") e a chip do filtro fala do conjunto ("Rascunhos 3").
+ * Vivem no mesmo sítio para não haver duas listas de estados a divergir.
+ */
 export const PRODUCT_STATUSES = [
-    { value: 'draft', label: 'Rascunho' },
-    { value: 'active', label: 'Ativo' },
-    { value: 'archived', label: 'Arquivado' },
+    { value: 'draft', label: 'Rascunho', chipLabel: 'Rascunhos' },
+    { value: 'active', label: 'Ativo', chipLabel: 'Ativos' },
+    { value: 'archived', label: 'Arquivado', chipLabel: 'Arquivados' },
+] as const;
+
+/**
+ * Mesma convenção do PRODUCT_STATUSES. "Stock baixo" não tem plural próprio —
+ * a chip e a pastilha dizem o mesmo, e inventar-lhe um ("Stocks baixos") só
+ * soava mal.
+ */
+export const MATERIAL_STATES = [
+    { value: 'active', label: 'Ativo', chipLabel: 'Ativos' },
+    { value: 'low_stock', label: 'Stock baixo', chipLabel: 'Stock baixo' },
+    { value: 'archived', label: 'Arquivado', chipLabel: 'Arquivados' },
 ] as const;
 
 export const FULFILLMENT_MODES = [
     { value: 'in_stock', label: 'Em stock (já impresso)' },
     { value: 'made_to_order', label: 'Por encomenda' },
     { value: 'custom', label: 'Personalizado' },
+] as const;
+
+/** Mesma convenção do PRODUCT_STATUSES: singular na pastilha, plural na chip. */
+export const CATEGORY_STATUSES = [
+    { value: 'visible', label: 'Visível', chipLabel: 'Visíveis' },
+    { value: 'hidden', label: 'Oculta', chipLabel: 'Ocultas' },
+    { value: 'archived', label: 'Arquivada', chipLabel: 'Arquivadas' },
+] as const;
+
+/**
+ * Paleta fixa das categorias — gémea de App\Support\CategoryColors.
+ *
+ * As duas listas existem porque cada lado precisa dela para uma coisa
+ * diferente (o PHP valida, o React desenha) e passá-la como prop em todas as
+ * páginas era carregar sete constantes em cada resposta. O `CategoryColorsTest`
+ * compara-as, para não se separarem em silêncio.
+ */
+export const CATEGORY_COLORS = [
+    { hex: '#C6A77B', name: 'Bege' },
+    { hex: '#B0684A', name: 'Terracota' },
+    { hex: '#D9A84E', name: 'Dourado' },
+    { hex: '#8FAE7F', name: 'Verde musgo' },
+    { hex: '#7C93A9', name: 'Azul pedra' },
+    { hex: '#A9829C', name: 'Malva' },
+    { hex: '#7C6B5C', name: 'Neutra' },
 ] as const;

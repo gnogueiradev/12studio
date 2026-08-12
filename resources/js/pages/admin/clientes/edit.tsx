@@ -39,14 +39,16 @@ export default function CustomersEdit({ customer, orders }: Props) {
     const { data, setData, patch, processing, errors } =
         useForm<CustomerFormData>({
             name: customer.name,
-            email: customer.email,
+            email: customer.email ?? '',
+            customer_type: customer.customerType,
+            phone: customer.phone ?? '',
+            nif: customer.nif ?? '',
+            admin_note: customer.adminNote ?? '',
             line1: customer.line1 ?? '',
             line2: customer.line2 ?? '',
             postal_code: customer.postalCode ?? '',
             city: customer.city ?? '',
             country: customer.country,
-            phone: customer.phone ?? '',
-            nif: customer.nif ?? '',
         });
 
     const submit = (event: React.FormEvent) => {
@@ -110,7 +112,7 @@ export default function CustomersEdit({ customer, orders }: Props) {
     return (
         <>
             <Head title={customer.name} />
-            <div className="flex h-full flex-1 flex-col gap-8 p-4">
+            <div className="flex h-full w-full max-w-[1400px] flex-1 flex-col gap-8 p-6 pb-10">
                 <div className="flex flex-col gap-4">
                     <PageHeader
                         title={customer.name}

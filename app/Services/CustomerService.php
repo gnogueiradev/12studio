@@ -8,10 +8,14 @@ use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 
 /**
- * Um cliente e um `User` com `is_admin = false` mais a sua morada unica.
- * Nao existe tabela `customers` — o plano quis clientes e admin na mesma
- * tabela para que, na Fase 5, o registo publico produza exatamente o mesmo
- * registo que o backoffice cria hoje.
+ * Um cliente e um `User` com `is_admin = false` e, quando ha, uma morada de
+ * envio. Nao existe tabela `customers` — o plano quis clientes e admin na
+ * mesma tabela para que, na Fase 5, o registo publico produza exatamente o
+ * mesmo registo que o backoffice cria hoje.
+ *
+ * A morada e opcional: no backoffice cria-se um cliente so com o nome. Telefone
+ * e NIF vivem em `users` precisamente por isso — sao da pessoa, e sem eles la
+ * um cliente sem morada nao teria onde guardar o NIF.
  */
 class CustomerService
 {
@@ -27,12 +31,11 @@ class CustomerService
     {
         return DB::transaction(function () use ($data): User {
             $customer = User::query()->create([
-                'name' => $data['name'],
-                'email' => $data['email'],
+                ...$this->customerAttributes($data),
                 'password' => Hash::make(Str::password(32)),
             ]);
 
-            $customer->addresses()->create($this->addressAttributes($data, $customer->name));
+            $this->syncAddress($customer, $data);
 
             return $customer;
         });
@@ -44,16 +47,9 @@ class CustomerService
     public function update(User $customer, array $data): User
     {
         return DB::transaction(function () use ($customer, $data): User {
-            $customer->update([
-                'name' => $data['name'],
-                'email' => $data['email'],
-            ]);
+            $customer->update($this->customerAttributes($data));
 
-            // 1 morada por cliente no V1: updateOrCreate em vez de create.
-            $customer->addresses()->updateOrCreate(
-                ['user_id' => $customer->getKey()],
-                $this->addressAttributes($data, $customer->name),
-            );
+            $this->syncAddress($customer, $data);
 
             return $customer->refresh();
         });
@@ -79,18 +75,51 @@ class CustomerService
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
-    private function addressAttributes(array $data, string $fallbackName): array
+    private function customerAttributes(array $data): array
     {
         return [
-            'name' => $fallbackName,
-            'line1' => $data['line1'],
-            'line2' => $data['line2'] ?? null,
-            'postal_code' => $data['postal_code'],
-            'city' => $data['city'],
-            'country' => $data['country'] ?? 'PT',
-            'phone' => $data['phone'] ?? null,
-            'nif' => $data['nif'] ?? null,
-            'is_default' => true,
+            'name' => $data['name'],
+            // String vazia vinda do formulario tem de virar null: a coluna e
+            // unica, e dois clientes sem email com '' colidiam.
+            'email' => $this->nullIfBlank($data['email'] ?? null),
+            'customer_type' => $data['customer_type'],
+            'phone' => $this->nullIfBlank($data['phone'] ?? null),
+            'nif' => $this->nullIfBlank($data['nif'] ?? null),
+            'admin_note' => $this->nullIfBlank($data['admin_note'] ?? null),
         ];
+    }
+
+    /**
+     * 1 morada por cliente no V1. Quando o admin esvazia a morada, a linha
+     * desaparece — um registo em `addresses` sem rua nao e uma morada, e a
+     * tabela nem sequer o aceita.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function syncAddress(User $customer, array $data): void
+    {
+        if ($this->nullIfBlank($data['line1'] ?? null) === null) {
+            $customer->addresses()->delete();
+
+            return;
+        }
+
+        $customer->addresses()->updateOrCreate(
+            ['user_id' => $customer->getKey()],
+            [
+                'name' => $customer->name,
+                'line1' => $data['line1'],
+                'line2' => $this->nullIfBlank($data['line2'] ?? null),
+                'postal_code' => $data['postal_code'],
+                'city' => $data['city'],
+                'country' => $this->nullIfBlank($data['country'] ?? null) ?? 'PT',
+                'is_default' => true,
+            ],
+        );
+    }
+
+    private function nullIfBlank(?string $value): ?string
+    {
+        return $value === null || trim($value) === '' ? null : trim($value);
     }
 }

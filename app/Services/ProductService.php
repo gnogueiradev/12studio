@@ -5,11 +5,16 @@ namespace App\Services;
 use App\Models\Product;
 use App\Models\Tag;
 use App\Support\Slug;
+use App\Support\VariantSku;
 use Illuminate\Support\Facades\DB;
 use Mews\Purifier\Facades\Purifier;
 
 class ProductService
 {
+    public function __construct(
+        private VariantService $variantService,
+    ) {}
+
     /**
      * @param  array<string, mixed>  $data
      */
@@ -17,6 +22,7 @@ class ProductService
     {
         return DB::transaction(function () use ($data): Product {
             $tags = $this->pullTags($data);
+            $variants = $this->pullVariantSeed($data);
             $data = $this->sanitizeDescription($data);
 
             $data['slug'] = Slug::unique(
@@ -27,6 +33,7 @@ class ProductService
             $product = Product::query()->create($data);
 
             $this->syncTags($product, $tags ?? []);
+            $this->generateVariants($product, $variants);
 
             return $product;
         });
@@ -68,6 +75,72 @@ class ProductService
     public function archive(Product $product): void
     {
         $product->update(['status' => 'archived']);
+    }
+
+    /**
+     * Desarquivar devolve o produto a rascunho, NAO a ativo: restaurar e uma
+     * correcao de arquivo, e pô-lo direto na montra seria republicar sem
+     * ninguem ter pedido. Quem o quiser vendavel outra vez publica-o no
+     * formulario, com os precos e o stock a vista.
+     */
+    public function restore(Product $product): void
+    {
+        $product->update(['status' => 'draft']);
+    }
+
+    /**
+     * Matriz do modal de novo produto: cada cor escolhida cruzada com cada
+     * tamanho da uma variante, todas com o mesmo preco e a mesma gramagem.
+     * Sao um molde — o que difere entre variantes (stock, promocao, revenda)
+     * edita-se depois, uma a uma.
+     *
+     * Sem tamanhos ha uma variante por cor. O `[null]` e o que faz o produto
+     * cartesiano degenerar nesse caso sem precisar de um segundo ramo.
+     *
+     * O stock entra sempre a zero: a primeira contagem tem de passar pelo
+     * StockService para ficar registada como movimento `initial`.
+     *
+     * @param  array<string, mixed>|null  $seed
+     */
+    private function generateVariants(Product $product, ?array $seed): void
+    {
+        if ($seed === null) {
+            return;
+        }
+
+        /** @var array<int, int> $colorIds */
+        $colorIds = $seed['color_ids'] ?? [];
+
+        if ($colorIds === []) {
+            return;
+        }
+
+        /** @var array<int, string> $sizes */
+        $sizes = $seed['sizes'] ?? [];
+        $sizes = $sizes === [] ? [null] : $sizes;
+
+        $combos = [];
+
+        foreach ($colorIds as $colorId) {
+            foreach ($sizes as $size) {
+                $combos[] = ['color_id' => $colorId, 'size_label' => $size];
+            }
+        }
+
+        // Todas as referencias de uma vez: geradas em ciclo, cada uma via as
+        // anteriores ja inseridas nesta transacao e a numeracao saltava.
+        $skus = VariantSku::series($product, count($combos));
+
+        foreach ($combos as $index => $combo) {
+            $this->variantService->store($product, [
+                ...$combo,
+                'sku' => $skus[$index],
+                'normal_price' => (string) $seed['price'],
+                'filament_weight_grams' => $seed['filament_weight_grams'] ?? null,
+                'printing_time_minutes' => $seed['printing_time_minutes'] ?? null,
+                'stock' => 0,
+            ]);
+        }
     }
 
     /**
@@ -153,5 +226,27 @@ class ProductService
         unset($data['tags']);
 
         return $tags;
+    }
+
+    /**
+     * Tira a matriz de variantes do payload, pela mesma razao das etiquetas:
+     * nao sao colunas de `products` e so podem ser gravadas depois de o
+     * produto existir. Null = nao veio no pedido (o formulario completo de
+     * edicao nunca a envia).
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<string, mixed>|null
+     */
+    private function pullVariantSeed(array &$data): ?array
+    {
+        if (! array_key_exists('variants', $data)) {
+            return null;
+        }
+
+        /** @var array<string, mixed>|null $seed */
+        $seed = $data['variants'];
+        unset($data['variants']);
+
+        return $seed;
     }
 }

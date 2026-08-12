@@ -11,7 +11,10 @@ use App\Models\ProductImage;
 use App\Models\Tag;
 use App\Models\Variant;
 use App\Services\ProductService;
+use App\Support\ColorGroups;
 use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -21,35 +24,76 @@ class ProductController extends Controller
         private ProductService $productService,
     ) {}
 
-    public function index(): Response
+    public function index(Request $request): Response
     {
-        $products = Product::query()
-            ->with('category')
+        $filters = [
+            'search' => trim((string) $request->query('search', '')),
+            'status' => (string) $request->query('status', ''),
+            'category_id' => (string) $request->query('category_id', ''),
+            'fulfillment_mode' => (string) $request->query('fulfillment_mode', ''),
+        ];
+
+        // Base com todos os filtros MENOS o estado, como nas encomendas e nos
+        // clientes: se as contagens respeitassem o proprio filtro de estado,
+        // todas as chips excepto a activa mostrariam zero e deixavam de servir
+        // para navegar.
+        $scoped = fn () => Product::query()
+            ->when($filters['category_id'] !== '', fn ($query) => $query->where('category_id', $filters['category_id']))
+            ->when($filters['fulfillment_mode'] !== '', fn ($query) => $query->where('fulfillment_mode', $filters['fulfillment_mode']))
+            // A referencia que o admin procura e o SKU da variante — o produto
+            // nao tem nenhuma. Procurar so pelo nome deixava de fora a via mais
+            // rapida de chegar a um produto: copiar a referencia de uma etiqueta.
+            ->when($filters['search'] !== '', fn ($query) => $query->where(fn ($inner) => $inner
+                ->where('name', 'like', "%{$filters['search']}%")
+                ->orWhereHas('variants', fn ($variant) => $variant->where('sku', 'like', "%{$filters['search']}%"))));
+
+        $statusCounts = $scoped()
+            ->toBase()
+            ->selectRaw('status, count(*) as aggregate')
+            ->groupBy('status')
+            ->pluck('aggregate', 'status')
+            ->map(fn ($count): int => (int) $count)
+            ->all();
+
+        $products = $scoped()
+            ->when($filters['status'] !== '', fn ($query) => $query->where('status', $filters['status']))
+            // A variante default e a que a montra usa para mostrar preco — e a
+            // mesma de quem serve a referencia, a gramagem e o tempo na linha.
+            ->with(['category', 'primaryImage', 'defaultVariant'])
             ->withCount('variants')
+            // Pronto a sair hoje, somado em todas as variantes. A subtracao vai
+            // dentro do SUM porque `available_stock` e um acessor calculado —
+            // nao existe como coluna para o agregado somar.
+            ->withSum('variants as ready_stock', DB::raw('stock - reserved_stock'))
             ->orderByDesc('created_at')
-            ->get()
-            ->map(fn (Product $product): array => [
+            ->paginate(20)
+            ->withQueryString()
+            ->through(fn (Product $product): array => [
                 'id' => $product->id,
                 'name' => $product->name,
                 'slug' => $product->slug,
                 'status' => $product->status,
                 'featured' => $product->featured,
                 'fulfillmentMode' => $product->fulfillment_mode,
+                'productionTimeDays' => $product->production_time_days,
                 'category' => $product->category?->name,
+                'imageUrl' => $product->primaryImage?->url,
                 'variantsCount' => $product->variants_count,
+                'sku' => $product->defaultVariant?->sku,
+                'priceCents' => $product->defaultVariant?->price_cents,
+                'filamentWeightGrams' => $product->defaultVariant?->filament_weight_grams,
+                'printingTimeMinutes' => $product->defaultVariant?->printing_time_minutes,
+                'readyStock' => (int) $product->ready_stock,
             ]);
 
         return Inertia::render('admin/produtos/index', [
             'products' => $products,
-        ]);
-    }
-
-    public function create(): Response
-    {
-        return Inertia::render('admin/produtos/create', [
+            'filters' => $filters,
+            'statusCounts' => $statusCounts,
+            // Listas do modal de novo produto, que vive nesta pagina.
             'categories' => $this->categoryOptions(),
+            'colorGroups' => ColorGroups::all(),
             'defaultVatRate' => (int) config('shop.default_vat_rate', 23),
-            'tagSuggestions' => $this->tagSuggestions(),
         ]);
     }
 
@@ -107,7 +151,19 @@ class ProductController extends Controller
 
         $this->toast('Produto arquivado.');
 
-        return to_route('admin.produtos.index');
+        return back();
+    }
+
+    /**
+     * Desarquivar: volta a rascunho, nao a montra. Ver ProductService::restore.
+     */
+    public function restore(Product $product): RedirectResponse
+    {
+        $this->productService->restore($product);
+
+        $this->toast('Produto restaurado como rascunho.');
+
+        return back();
     }
 
     /**
@@ -181,8 +237,11 @@ class ProductController extends Controller
      */
     private function categoryOptions(): array
     {
+        // Ocultas continuam a entrar: uma categoria oculta e uma categoria
+        // viva que so nao se anuncia no menu, e ha produtos que lhe pertencem.
+        // So a arquivada e que sai do seletor.
         return Category::query()
-            ->where('active', true)
+            ->where('status', '!=', 'archived')
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get(['id', 'name'])
