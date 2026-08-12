@@ -2,7 +2,10 @@ export type CategoryRow = {
     id: number;
     name: string;
     slug: string;
-    active: boolean;
+    description: string | null;
+    status: string;
+    /** Hex da paleta fixa, ou null enquanto ninguém escolheu uma. */
+    color: string | null;
     sortOrder: number;
     productsCount: number;
 };
@@ -12,14 +15,16 @@ export type CategoryDetail = {
     name: string;
     slug: string;
     description: string | null;
-    active: boolean;
+    status: string;
+    color: string | null;
     sortOrder: number;
 };
 
 export type CategoryFormData = {
     name: string;
     description: string;
-    active: boolean;
+    status: string;
+    color: string | null;
     sort_order: number;
 };
 
@@ -285,4 +290,29 @@ export const FULFILLMENT_MODES = [
     { value: 'in_stock', label: 'Em stock (já impresso)' },
     { value: 'made_to_order', label: 'Por encomenda' },
     { value: 'custom', label: 'Personalizado' },
+] as const;
+
+/** Mesma convenção do PRODUCT_STATUSES: singular na pastilha, plural na chip. */
+export const CATEGORY_STATUSES = [
+    { value: 'visible', label: 'Visível', chipLabel: 'Visíveis' },
+    { value: 'hidden', label: 'Oculta', chipLabel: 'Ocultas' },
+    { value: 'archived', label: 'Arquivada', chipLabel: 'Arquivadas' },
+] as const;
+
+/**
+ * Paleta fixa das categorias — gémea de App\Support\CategoryColors.
+ *
+ * As duas listas existem porque cada lado precisa dela para uma coisa
+ * diferente (o PHP valida, o React desenha) e passá-la como prop em todas as
+ * páginas era carregar sete constantes em cada resposta. O `CategoryColorsTest`
+ * compara-as, para não se separarem em silêncio.
+ */
+export const CATEGORY_COLORS = [
+    { hex: '#C6A77B', name: 'Bege' },
+    { hex: '#B0684A', name: 'Terracota' },
+    { hex: '#D9A84E', name: 'Dourado' },
+    { hex: '#8FAE7F', name: 'Verde musgo' },
+    { hex: '#7C93A9', name: 'Azul pedra' },
+    { hex: '#A9829C', name: 'Malva' },
+    { hex: '#7C6B5C', name: 'Neutra' },
 ] as const;

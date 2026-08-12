@@ -34,10 +34,21 @@ class CategoryService
 
     /**
      * Regra global de eliminacao: nunca hard-delete — arquivar. Uma categoria
-     * inativa desaparece da montra; os produtos ficam (category_id preservado).
+     * arquivada desaparece da montra; os produtos ficam (category_id preservado).
      */
     public function archive(Category $category): void
     {
-        $category->update(['active' => false]);
+        $category->update(['status' => 'archived']);
+    }
+
+    /**
+     * Volta sempre a `visible` e nao ao estado anterior: nao guardamos de onde
+     * a categoria veio, e adivinhar "oculta" para quem carregou em Restaurar
+     * dava uma categoria de volta que continuava sem aparecer na loja — o
+     * oposto do que o botao promete. Quem a quiser oculta muda no formulario.
+     */
+    public function restore(Category $category): void
+    {
+        $category->update(['status' => 'visible']);
     }
 }

@@ -65,6 +65,14 @@ export const TONES: Record<string, Tone> = {
     draft: 'neutral',
     active: 'success',
     archived: 'neutral',
+    /*
+     * categories.status — "oculta" fica em warning e nao em neutro porque e o
+     * unico dos tres que engana: a categoria esta viva, mas ninguem a encontra
+     * pelo menu. Arquivada partilha o neutro com o `archived` dos produtos, que
+     * e exatamente o mesmo fim de linha.
+     */
+    visible: 'success',
+    hidden: 'warning',
     // order_items.production_status
     not_required: 'neutral',
     awaiting_production: 'warning',

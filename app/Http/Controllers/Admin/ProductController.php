@@ -237,8 +237,11 @@ class ProductController extends Controller
      */
     private function categoryOptions(): array
     {
+        // Ocultas continuam a entrar: uma categoria oculta e uma categoria
+        // viva que so nao se anuncia no menu, e ha produtos que lhe pertencem.
+        // So a arquivada e que sai do seletor.
         return Category::query()
-            ->where('active', true)
+            ->where('status', '!=', 'archived')
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get(['id', 'name'])

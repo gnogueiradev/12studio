@@ -14,16 +14,26 @@ use Illuminate\Support\Carbon;
  * @property string $name
  * @property string $slug
  * @property string|null $description
- * @property bool $active
+ * @property string $status
+ * @property string|null $color
  * @property int $sort_order
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['name', 'slug', 'description', 'active', 'sort_order'])]
+#[Fillable(['name', 'slug', 'description', 'status', 'color', 'sort_order'])]
 class Category extends Model
 {
     /** @use HasFactory<CategoryFactory> */
     use HasFactory;
+
+    /**
+     * Visivel aparece no menu da loja; oculta so se alcanca por link directo;
+     * arquivada saiu de circulacao. Espelha o Product::STATUSES — a mesma
+     * ideia de "arquivar em vez de apagar", com um estado intermedio a mais.
+     *
+     * @var list<string>
+     */
+    public const STATUSES = ['visible', 'hidden', 'archived'];
 
     /**
      * Get the attributes that should be cast.
@@ -33,7 +43,6 @@ class Category extends Model
     protected function casts(): array
     {
         return [
-            'active' => 'boolean',
             'sort_order' => 'integer',
         ];
     }

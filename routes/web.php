@@ -73,9 +73,14 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
             ->parameters(['clientes' => 'customer'])
             ->except(['show']);
 
+        // Sem `create`: a categoria nova nasce no modal da propria listagem,
+        // como nos produtos. O `edit` fica para a ordem e para arquivar.
         Route::resource('categorias', Admin\CategoryController::class)
             ->parameters(['categorias' => 'category'])
-            ->except(['show']);
+            ->except(['show', 'create']);
+
+        Route::patch('categorias/{category}/restaurar', [Admin\CategoryController::class, 'restore'])
+            ->name('categorias.restaurar');
 
         // Materiais e cores em recursos irmaos: uma cor pertence a um
         // material, mas a paleta gere-se toda de uma vez — aninhar as cores

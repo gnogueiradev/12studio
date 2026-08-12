@@ -21,13 +21,19 @@ class CategoryFactory extends Factory
             'name' => ucfirst($name),
             'slug' => str($name)->slug()->value(),
             'description' => fake()->optional()->sentence(),
-            'active' => true,
+            'status' => 'visible',
+            'color' => null,
             'sort_order' => 0,
         ];
     }
 
-    public function inactive(): static
+    public function hidden(): static
     {
-        return $this->state(fn (array $attributes): array => ['active' => false]);
+        return $this->state(fn (array $attributes): array => ['status' => 'hidden']);
+    }
+
+    public function archived(): static
+    {
+        return $this->state(fn (array $attributes): array => ['status' => 'archived']);
     }
 }

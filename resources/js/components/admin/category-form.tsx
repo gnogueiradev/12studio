@@ -1,6 +1,9 @@
+import {
+    CategoryColorPicker,
+    CategoryStatusPicker,
+} from '@/components/admin/category-fields';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
@@ -56,6 +59,15 @@ export default function CategoryForm({
             </div>
 
             <div className="grid gap-2">
+                <Label>Cor da categoria</Label>
+                <CategoryColorPicker
+                    value={data.color}
+                    onChange={(hex) => setData('color', hex)}
+                />
+                <InputError message={errors.color} />
+            </div>
+
+            <div className="grid gap-2">
                 <Label htmlFor="sort_order">Ordem</Label>
                 <Input
                     id="sort_order"
@@ -70,15 +82,19 @@ export default function CategoryForm({
                 <InputError message={errors.sort_order} />
             </div>
 
-            <div className="flex items-center gap-3">
-                <Checkbox
-                    id="active"
-                    checked={data.active}
-                    onCheckedChange={(checked) =>
-                        setData('active', checked === true)
-                    }
+            <div className="grid gap-2">
+                <Label>Visibilidade</Label>
+                {/*
+                 * Aqui — ao contrário do modal de criação — "Arquivada" é uma
+                 * escolha: esta é a única página onde se desarquiva sem passar
+                 * pelo botão da listagem.
+                 */}
+                <CategoryStatusPicker
+                    value={data.status}
+                    onChange={(status) => setData('status', status)}
+                    includeArchived
                 />
-                <Label htmlFor="active">Visível na loja</Label>
+                <InputError message={errors.status} />
             </div>
 
             <div>
