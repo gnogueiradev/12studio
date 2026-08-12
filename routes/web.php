@@ -96,9 +96,15 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         Route::patch('definicoes/guardar', [Admin\SettingController::class, 'update'])
             ->name('definicoes.update');
 
+        // Sem `create`: o produto novo nasce no modal da propria listagem, que
+        // e onde se escolhem as cores e os tamanhos que geram as variantes. O
+        // resto do formulario (etiquetas, IVA, SEO, destaque) vive no `edit`.
         Route::resource('produtos', Admin\ProductController::class)
             ->parameters(['produtos' => 'product'])
-            ->except(['show']);
+            ->except(['show', 'create']);
+
+        Route::patch('produtos/{product}/restaurar', [Admin\ProductController::class, 'restore'])
+            ->name('produtos.restaurar');
 
         // Fotografias: shallow como as variantes, mas com URIs proprios por
         // acao — o Wayfinder duplica chaves quando dois verbos partilham o

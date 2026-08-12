@@ -56,6 +56,15 @@ export const TONES: Record<string, Tone> = {
     pending: 'warning',
     partially_refunded: 'warning',
     failed: 'danger',
+    /*
+     * products.status — rascunho e arquivado ficam os dois em neutro de
+     * propósito: nenhum está à venda, e a diferença entre eles lê-se na
+     * linha (o arquivado vem esbatido e oferece "Restaurar" em vez de
+     * "Arquivar"), não numa segunda cor a competir com o verde do ativo.
+     */
+    draft: 'neutral',
+    active: 'success',
+    archived: 'neutral',
     // order_items.production_status
     not_required: 'neutral',
     awaiting_production: 'warning',

@@ -23,6 +23,8 @@ type Props<T> = {
      * invisível para um leitor de ecrã e não se alcança com Tab.
      */
     rowHref?: (row: T) => string;
+    /** Classes por linha (ex.: esbater o que está arquivado). */
+    rowClassName?: (row: T) => string;
 };
 
 /**
@@ -36,6 +38,7 @@ export function AdminTable<T>({
     rowKey,
     empty,
     rowHref,
+    rowClassName,
 }: Props<T>) {
     if (rows.length === 0) {
         return (
@@ -85,6 +88,7 @@ export function AdminTable<T>({
                                 'border-b border-border/40 last:border-0',
                                 rowHref &&
                                     'cursor-pointer transition-colors hover:bg-secondary',
+                                rowClassName?.(row),
                             )}
                             onClick={handleRowClick?.(row)}
                         >

@@ -104,7 +104,13 @@ export type ColorSummary = {
 /** Cores agrupadas por material, para o seletor da variante. */
 export type ColorGroup = {
     material: string;
-    colors: { id: number; name: string; hex: string }[];
+    colors: {
+        id: number;
+        name: string;
+        hex: string;
+        /** Preço/kg em vigor, para a margem ao vivo do modal de novo produto. */
+        pricePerKgCents: number;
+    }[];
 };
 
 export type ProductRow = {
@@ -114,8 +120,44 @@ export type ProductRow = {
     status: string;
     featured: boolean;
     fulfillmentMode: string;
+    productionTimeDays: number | null;
     category: string | null;
+    imageUrl: string | null;
     variantsCount: number;
+    /*
+     * Referência, preço, gramagem e tempo são da VARIANTE, não do produto —
+     * a listagem mostra os da default, que é a mesma que a montra usa para
+     * anunciar o preço. Null enquanto o produto não tiver variantes.
+     */
+    sku: string | null;
+    priceCents: number | null;
+    filamentWeightGrams: number | null;
+    printingTimeMinutes: number | null;
+    /** Somado em todas as variantes: stock físico menos o reservado. */
+    readyStock: number;
+};
+
+/**
+ * O modal "Novo produto" da listagem: os campos do produto mais a matriz que
+ * gera as variantes de uma vez. O resto do formulário (etiquetas, IVA, SEO,
+ * destaque) vive na página de edição.
+ */
+export type ProductQuickFormData = {
+    name: string;
+    category_id: number | null;
+    description: string;
+    status: string;
+    fulfillment_mode: string;
+    production_time_days: number | null;
+    vat_rate: number;
+    variants: {
+        color_ids: number[];
+        sizes: string[];
+        /** Euros escritos à mão; o servidor converte para cêntimos. */
+        price: string;
+        filament_weight_grams: number | null;
+        printing_time_minutes: number | null;
+    };
 };
 
 export type ProductDetail = {
@@ -228,10 +270,15 @@ export type VariantOption = {
     productName: string;
 };
 
+/**
+ * O `chipLabel` é o mesmo estado no plural: a pastilha da linha fala de UM
+ * produto ("Rascunho") e a chip do filtro fala do conjunto ("Rascunhos 3").
+ * Vivem no mesmo sítio para não haver duas listas de estados a divergir.
+ */
 export const PRODUCT_STATUSES = [
-    { value: 'draft', label: 'Rascunho' },
-    { value: 'active', label: 'Ativo' },
-    { value: 'archived', label: 'Arquivado' },
+    { value: 'draft', label: 'Rascunho', chipLabel: 'Rascunhos' },
+    { value: 'active', label: 'Ativo', chipLabel: 'Ativos' },
+    { value: 'archived', label: 'Arquivado', chipLabel: 'Arquivados' },
 ] as const;
 
 export const FULFILLMENT_MODES = [
