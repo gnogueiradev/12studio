@@ -85,9 +85,16 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         // Materiais e cores em recursos irmaos: uma cor pertence a um
         // material, mas a paleta gere-se toda de uma vez — aninhar as cores
         // dentro do material daria URLs mais longos sem ganho nenhum.
+        //
+        // Sem `create`: o material novo nasce no modal da propria listagem, que
+        // e onde se escolhem as cores iniciais. O `edit` fica para o preco, o
+        // stock e para arquivar.
         Route::resource('materiais', Admin\MaterialController::class)
             ->parameters(['materiais' => 'material'])
-            ->except(['show']);
+            ->except(['show', 'create']);
+
+        Route::patch('materiais/{material}/restaurar', [Admin\MaterialController::class, 'restore'])
+            ->name('materiais.restaurar');
 
         Route::resource('cores', Admin\ColorController::class)
             ->parameters(['cores' => 'color'])

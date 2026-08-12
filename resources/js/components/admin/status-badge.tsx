@@ -66,6 +66,13 @@ export const TONES: Record<string, Tone> = {
     active: 'success',
     archived: 'neutral',
     /*
+     * materials.state (derivado) — reaproveita `active` e `archived` acima, que
+     * ja querem dizer o mesmo. `low_stock` fica em warning pelo criterio do
+     * mapa das encomendas: e o unico estado de material que pede uma acao
+     * concreta a quem esta deste lado (encomendar bobines).
+     */
+    low_stock: 'warning',
+    /*
      * categories.status — "oculta" fica em warning e nao em neutro porque e o
      * unico dos tres que engana: a categoria esta viva, mas ninguem a encontra
      * pelo menu. Arquivada partilha o neutro com o `archived` dos produtos, que

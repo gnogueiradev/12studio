@@ -2,7 +2,7 @@ import { Head, Link, useForm } from '@inertiajs/react';
 import ColorForm from '@/components/admin/color-form';
 import { Button } from '@/components/ui/button';
 import { index, store } from '@/routes/admin/cores';
-import { create as createMaterial } from '@/routes/admin/materiais';
+import { index as materiaisIndex } from '@/routes/admin/materiais';
 import type { ColorFormData, MaterialOption } from '@/types/catalog';
 
 type Props = {
@@ -36,8 +36,12 @@ export default function ColorsCreate({ materials }: Props) {
                             Uma cor tem de pertencer a um material, e ainda não
                             há nenhum disponível.
                         </p>
+                        {/* O material novo nasce no modal da listagem, e o
+                            `?novo=1` leva-o já aberto. */}
                         <Button asChild>
-                            <Link href={createMaterial()}>Criar material</Link>
+                            <Link href={materiaisIndex({ query: { novo: 1 } })}>
+                                Criar material
+                            </Link>
                         </Button>
                     </div>
                 ) : (

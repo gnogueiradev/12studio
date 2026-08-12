@@ -33,29 +33,86 @@ export type CategoryOption = {
     name: string;
 };
 
+/**
+ * Estado derivado no servidor por `Material::state()`. Não é coluna: sai de
+ * `active` cruzado com as bobines em stock, e o TypeScript só o recebe feito
+ * para nunca haver duas regras de "isto está em falta".
+ */
+export type MaterialState = 'active' | 'low_stock' | 'archived';
+
+/** Swatch de uma cor do material na listagem. */
+export type MaterialColorChip = {
+    name: string;
+    hex: string;
+};
+
 export type MaterialRow = {
     id: number;
     name: string;
+    family: string | null;
+    supplier: string | null;
     pricePerKgCents: number;
+    spoolsInStock: number;
+    /** 0 = sem alerta de stock. */
+    minSpools: number;
     active: boolean;
     sortOrder: number;
-    colorsCount: number;
+    state: MaterialState;
+    /** Só as cores ativas, já ordenadas. O corte para "+N" é do componente. */
+    colors: MaterialColorChip[];
+};
+
+export type MaterialStats = {
+    activeCount: number;
+    spoolsTotal: number;
+    /** Média sobre os não arquivados; 0 quando ainda não há materiais. */
+    averagePricePerKgCents: number;
+    belowMinimumCount: number;
 };
 
 export type MaterialDetail = {
     id: number;
     name: string;
+    family: string | null;
+    supplier: string | null;
     /** Decimal em euros ("21.90") — o formulário edita euros. */
     pricePerKg: string;
+    spoolsInStock: number;
+    minSpools: number;
     active: boolean;
     sortOrder: number;
 };
 
 export type MaterialFormData = {
     name: string;
+    family: string;
+    supplier: string;
     price_per_kg: string;
+    spools_in_stock: number;
+    min_spools: number;
     active: boolean;
     sort_order: number;
+};
+
+/** Preset da paleta de filamento (App\Support\FilamentPalette). */
+export type PaletteColor = {
+    name: string;
+    hex: string;
+};
+
+/**
+ * Criar material no modal da listagem. Chaves em snake_case porque espelham as
+ * regras do StoreMaterialRequest; `colors` são nomes de presets da paleta, e é
+ * o servidor que lhes descobre o hex.
+ */
+export type MaterialQuickFormData = {
+    name: string;
+    family: string;
+    supplier: string;
+    /** Euros escritos à mão; o servidor converte para cêntimos. */
+    price_per_kg: string;
+    min_spools: number;
+    colors: string[];
 };
 
 export type MaterialOption = {
@@ -283,6 +340,17 @@ export type VariantOption = {
 export const PRODUCT_STATUSES = [
     { value: 'draft', label: 'Rascunho', chipLabel: 'Rascunhos' },
     { value: 'active', label: 'Ativo', chipLabel: 'Ativos' },
+    { value: 'archived', label: 'Arquivado', chipLabel: 'Arquivados' },
+] as const;
+
+/**
+ * Mesma convenção do PRODUCT_STATUSES. "Stock baixo" não tem plural próprio —
+ * a chip e a pastilha dizem o mesmo, e inventar-lhe um ("Stocks baixos") só
+ * soava mal.
+ */
+export const MATERIAL_STATES = [
+    { value: 'active', label: 'Ativo', chipLabel: 'Ativos' },
+    { value: 'low_stock', label: 'Stock baixo', chipLabel: 'Stock baixo' },
     { value: 'archived', label: 'Arquivado', chipLabel: 'Arquivados' },
 ] as const;
 

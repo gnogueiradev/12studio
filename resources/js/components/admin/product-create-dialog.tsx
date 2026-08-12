@@ -1,5 +1,6 @@
 import { useForm } from '@inertiajs/react';
 import { useMemo, useState } from 'react';
+import { ToggleChip } from '@/components/admin/toggle-chip';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -56,32 +57,6 @@ const MODE_HINTS: Record<string, string> = {
     made_to_order: 'Entra na fila de impressão.',
     custom: 'Feito à medida — sem direito a devolução.',
 };
-
-function ToggleChip({
-    active,
-    onClick,
-    children,
-}: {
-    active: boolean;
-    onClick: () => void;
-    children: React.ReactNode;
-}) {
-    return (
-        <button
-            type="button"
-            onClick={onClick}
-            aria-pressed={active}
-            className={cn(
-                'flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-xs transition-colors',
-                active
-                    ? 'border-ring bg-secondary font-semibold text-foreground'
-                    : 'border-border font-medium text-muted-foreground hover:bg-secondary/60',
-            )}
-        >
-            {children}
-        </button>
-    );
-}
 
 /**
  * Criar um produto e as suas variantes de uma vez.

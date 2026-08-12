@@ -5,13 +5,18 @@ import type { MaterialDetail, MaterialFormData } from '@/types/catalog';
 
 type Props = {
     material: MaterialDetail;
+    families: string[];
 };
 
-export default function MaterialsEdit({ material }: Props) {
+export default function MaterialsEdit({ material, families }: Props) {
     const { data, setData, patch, processing, errors } =
         useForm<MaterialFormData>({
             name: material.name,
+            family: material.family ?? '',
+            supplier: material.supplier ?? '',
             price_per_kg: material.pricePerKg,
+            spools_in_stock: material.spoolsInStock,
+            min_spools: material.minSpools,
             active: material.active,
             sort_order: material.sortOrder,
         });
@@ -28,6 +33,7 @@ export default function MaterialsEdit({ material }: Props) {
                 <h1 className="text-xl font-semibold">{material.name}</h1>
                 <MaterialForm
                     data={data}
+                    families={families}
                     setData={setData}
                     errors={errors}
                     processing={processing}
