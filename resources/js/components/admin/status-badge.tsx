@@ -11,6 +11,15 @@ const TONE_CLASSES: Record<Tone, string> = {
     danger: 'bg-destructive-soft text-destructive-soft-foreground border-transparent',
 };
 
+/** Os mesmos tons sem pastilha, para texto solto numa célula. */
+const TONE_TEXT_CLASSES: Record<Tone, string> = {
+    neutral: 'text-muted-foreground',
+    info: 'text-info',
+    warning: 'text-warning',
+    success: 'text-success',
+    danger: 'text-destructive',
+};
+
 /**
  * Tom por valor de estado. As três famílias vivem juntas de propósito:
  * numa encomenda vê-se sempre o estado de fulfilment ao lado do estado de
@@ -22,12 +31,23 @@ const TONE_CLASSES: Record<Tone, string> = {
  * sítio decide como o desenha.
  */
 export const TONES: Record<string, Tone> = {
-    // orders.status
-    pending_payment: 'warning',
+    /*
+     * orders.status — o tom diz o que o estado pede a quem esta do lado de ca,
+     * nao o quao avancado esta o pipeline:
+     *   neutral  nada a fazer, espera-se outra pessoa (o cliente que pague, a
+     *            transportadora que entregue)
+     *   info     o dinheiro entrou, ha trabalho para agendar
+     *   warning  esta na bancada agora
+     *   success  feito deste lado
+     * Antes disto era info para tudo o que estivesse a meio, o que punha
+     * "pagamento confirmado", "em producao" e "pronto a enviar" com o mesmo
+     * aspeto — tres coisas com urgencias diferentes.
+     */
+    pending_payment: 'neutral',
     paid: 'info',
-    in_production: 'info',
-    ready_to_ship: 'info',
-    shipped: 'success',
+    in_production: 'warning',
+    ready_to_ship: 'success',
+    shipped: 'neutral',
     delivered: 'success',
     cancelled: 'danger',
     refunded: 'danger',
@@ -44,6 +64,17 @@ export const TONES: Record<string, Tone> = {
     ready: 'success',
 };
 
+/**
+ * Único ponto onde `orders.payment_status` diverge do mapa acima. Na coluna de
+ * pagamento, "Pago" é o fim da linha — o dinheiro entrou — e pinta-se de
+ * sucesso; o mesmo `paid` em `orders.status` ("Pagamento confirmado") é só a
+ * primeira etapa do pipeline e continua em info. Ver os dois tons lado a lado
+ * na mesma linha é o que distingue as duas colunas à vista.
+ */
+export function paymentTone(value: string): Tone {
+    return value === 'paid' ? 'success' : (TONES[value] ?? 'neutral');
+}
+
 type Props = {
     value: string;
     label: string;
@@ -54,9 +85,32 @@ export function StatusBadge({ value, label, className }: Props) {
     return (
         <Badge
             variant="outline"
-            className={cn(TONE_CLASSES[TONES[value] ?? 'neutral'], className)}
+            className={cn(
+                'rounded-full',
+                TONE_CLASSES[TONES[value] ?? 'neutral'],
+                className,
+            )}
         >
             {label}
         </Badge>
+    );
+}
+
+/**
+ * Estado em texto colorido, sem pastilha. Vive ao lado do `StatusBadge` numa
+ * listagem: a pastilha marca o estado da encomenda, o texto marca o do
+ * pagamento, e a diferença de forma chega para não os confundir.
+ */
+export function StatusText({
+    tone,
+    label,
+    className,
+}: {
+    tone: Tone;
+    label: string;
+    className?: string;
+}) {
+    return (
+        <span className={cn(TONE_TEXT_CLASSES[tone], className)}>{label}</span>
     );
 }

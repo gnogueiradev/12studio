@@ -1,6 +1,12 @@
+/*
+ * "Pagamento confirmado" e nao "Pago" de proposito: nas listagens o estado da
+ * encomenda aparece ao lado do estado de pagamento, onde "Pago" ja e a
+ * etiqueta de PAYMENT_STATUSES. Dois "Pago" na mesma linha, a dizerem coisas
+ * diferentes, era o que havia antes.
+ */
 export const ORDER_STATUSES = [
-    { value: 'pending_payment', label: 'Aguarda pagamento' },
-    { value: 'paid', label: 'Pago' },
+    { value: 'pending_payment', label: 'A aguardar pagamento' },
+    { value: 'paid', label: 'Pagamento confirmado' },
     { value: 'in_production', label: 'Em produção' },
     { value: 'ready_to_ship', label: 'Pronto a enviar' },
     { value: 'shipped', label: 'Enviado' },
@@ -42,6 +48,19 @@ export const PRODUCTION_STATUSES = [
     { value: 'ready', label: 'Pronto' },
 ] as const;
 
+/**
+ * Estados que têm sempre chip na listagem de encomendas, pela ordem do
+ * pipeline. Os restantes (entregue, cancelado, reembolsado) são finais e
+ * raros: só ganham chip quando têm encomendas ou quando estão selecionados.
+ */
+export const ORDER_STATUS_CHIPS = [
+    'pending_payment',
+    'paid',
+    'in_production',
+    'ready_to_ship',
+    'shipped',
+] as const;
+
 /** Colunas do quadro de produção, pela ordem do pipeline. */
 export const PRODUCTION_BOARD_COLUMNS = [
     'awaiting_production',
@@ -61,7 +80,13 @@ export type OrderRow = {
     totalCents: number;
     stockIssue: boolean;
     itemsCount: number;
+    /** Nome do primeiro artigo; null quando a encomenda não tem linhas. */
+    itemsSummary: string | null;
+    /** Soma das quantidades — o "2 un." do resumo. */
+    itemsQty: number;
     createdAt: string | null;
+    /** "09 ago", já formatado em PT pelo servidor. */
+    createdAtShort: string | null;
 };
 
 export type OrderItemRow = {
