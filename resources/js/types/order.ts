@@ -69,6 +69,35 @@ export const PRODUCTION_BOARD_COLUMNS = [
     'ready',
 ] as const;
 
+/**
+ * Vizinhos no pipeline. Vivem aqui — e não em cada página — porque a ordem
+ * das colunas já é `PRODUCTION_BOARD_COLUMNS`: escrevê-la outra vez à mão é
+ * um sítio a mais para ficar dessincronizada do `OrderService`.
+ *
+ * O `previous` existe porque a produção anda nos dois sentidos (uma peça que
+ * chumba no controlo de qualidade volta à impressora). Quem recusa o recuo é
+ * só o servidor, quando a encomenda já saiu.
+ */
+function step(current: string, by: 1 | -1): string | null {
+    const index = PRODUCTION_BOARD_COLUMNS.indexOf(
+        current as (typeof PRODUCTION_BOARD_COLUMNS)[number],
+    );
+
+    return index === -1 || PRODUCTION_BOARD_COLUMNS[index + by] === undefined
+        ? null
+        : PRODUCTION_BOARD_COLUMNS[index + by];
+}
+
+/** Próximo estado de produção de um item, ou null se já está pronto. */
+export function nextProductionStatus(current: string): string | null {
+    return step(current, 1);
+}
+
+/** Estado anterior, ou null se já está na primeira coluna. */
+export function previousProductionStatus(current: string): string | null {
+    return step(current, -1);
+}
+
 export type OrderRow = {
     id: number;
     orderNumber: string;
@@ -211,4 +240,13 @@ export type ProductionCard = {
     productionStatus: string;
     personalization: { label: string; value: string }[];
     orderedAt: string | null;
+    /** Estimativa da variante × quantidade; null quando não está preenchida. */
+    estimatedMinutes: number | null;
+    /** Hora `HH:MM` da última entrada em "A imprimir". */
+    startedPrintingAt: string | null;
+    /** Posição entre os artigos em produção da mesma encomenda, 1-based. */
+    positionInOrder: number;
+    totalInOrder: number;
+    /** Todos os artigos em produção da encomenda já estão prontos. */
+    orderReadyToShip: boolean;
 };

@@ -1,48 +1,65 @@
-import { Head, Link, router } from '@inertiajs/react';
+import { Head, router } from '@inertiajs/react';
+import { MoveHorizontal } from 'lucide-react';
 import { useState } from 'react';
 import { PageHeader } from '@/components/admin/page-header';
-import { Button } from '@/components/ui/button';
+import { ProductionCard } from '@/components/admin/production-card';
 import { label } from '@/lib/options';
-import { show } from '@/routes/admin/encomendas';
+import { cn } from '@/lib/utils';
 import { producao } from '@/routes/admin/itens';
-import type { ProductionCard } from '@/types/order';
+import type { ProductionCard as Card } from '@/types/order';
 import { PRODUCTION_BOARD_COLUMNS, PRODUCTION_STATUSES } from '@/types/order';
 
 type Props = {
-    items: ProductionCard[];
+    items: Card[];
 };
 
 /**
- * Avanço por botão, não drag & drop: a transição passa pelo OrderService
- * como qualquer outra, é acessível por teclado e não inventa estados.
+ * Ponto de cor por coluna. Não reaproveita o `TONES` do StatusBadge de
+ * propósito: lá `printing` e `quality_check` partilham o tom `info`, o que
+ * num quadro de quatro colunas lado a lado daria dois pontos iguais.
  */
-function nextStatus(current: string): string | null {
-    const index = PRODUCTION_BOARD_COLUMNS.indexOf(
-        current as (typeof PRODUCTION_BOARD_COLUMNS)[number],
-    );
-
-    return index === -1 || index === PRODUCTION_BOARD_COLUMNS.length - 1
-        ? null
-        : PRODUCTION_BOARD_COLUMNS[index + 1];
-}
+const COLUMN_DOT: Record<string, string> = {
+    awaiting_production: 'bg-brand-taupe',
+    printing: 'bg-warning',
+    quality_check: 'bg-info',
+    ready: 'bg-success',
+};
 
 export default function ProductionBoard({ items }: Props) {
-    const [advancing, setAdvancing] = useState<number | null>(null);
+    const [pendingId, setPendingId] = useState<number | null>(null);
+    const [dragging, setDragging] = useState<Card | null>(null);
+    const [overColumn, setOverColumn] = useState<string | null>(null);
 
-    const advance = (item: ProductionCard) => {
-        const next = nextStatus(item.productionStatus);
-
-        if (next === null) {
+    /**
+     * Um único caminho para as setas e para o drag & drop. Não há validação
+     * de recuo aqui: a regra vive no OrderService, e o erro volta pelo
+     * toast de flash como em todo o backoffice.
+     */
+    const move = (card: Card, to: string) => {
+        if (to === card.productionStatus) {
             return;
         }
 
-        setAdvancing(item.id);
+        setPendingId(card.id);
         router.patch(
-            producao(item.id).url,
-            { production_status: next },
-            { preserveScroll: true, onFinish: () => setAdvancing(null) },
+            producao(card.id).url,
+            { production_status: to },
+            { preserveScroll: true, onFinish: () => setPendingId(null) },
         );
     };
+
+    const drop = (column: string) => {
+        setOverColumn(null);
+
+        if (dragging) {
+            move(dragging, column);
+            setDragging(null);
+        }
+    };
+
+    const printing = items.filter(
+        (item) => item.productionStatus === 'printing',
+    );
 
     return (
         <>
@@ -51,119 +68,103 @@ export default function ProductionBoard({ items }: Props) {
                 <PageHeader
                     title="Produção"
                     description="Um cartão por artigo a imprimir. A encomenda avança para expedição sozinha quando o último ficar pronto."
-                />
+                >
+                    <span className="flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs text-muted-foreground">
+                        <span
+                            aria-hidden
+                            className={cn(
+                                'size-1.5 rounded-full',
+                                printing.length > 0
+                                    ? 'bg-success'
+                                    : 'bg-muted-foreground',
+                            )}
+                        />
+                        {printing.length === 0
+                            ? 'Impressora parada'
+                            : printing.length === 1
+                              ? `Impressora a trabalhar · ${printing[0].orderNumber}`
+                              : `Impressora a trabalhar · ${printing.length} artigos`}
+                    </span>
+                </PageHeader>
 
-                <div className="grid gap-4 lg:grid-cols-4">
+                <p className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <MoveHorizontal
+                        aria-hidden
+                        className="size-3.5 text-gold"
+                    />
+                    Arrasta um cartão para outra coluna, ou usa as setas do
+                    cartão. Um artigo pode voltar atrás enquanto a encomenda não
+                    seguir.
+                </p>
+
+                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                     {PRODUCTION_BOARD_COLUMNS.map((column) => {
                         const columnItems = items.filter(
                             (item) => item.productionStatus === column,
                         );
 
                         return (
-                            <div key={column} className="flex flex-col gap-3">
-                                <div className="flex items-center justify-between">
-                                    <h2 className="text-sm font-medium">
+                            <section
+                                key={column}
+                                aria-label={label(PRODUCTION_STATUSES, column)}
+                                className="flex flex-col gap-3 rounded-xl border bg-card p-3"
+                            >
+                                <div className="flex items-center justify-between gap-2 px-1">
+                                    <h2 className="flex items-center gap-2 text-sm font-medium">
+                                        <span
+                                            aria-hidden
+                                            className={cn(
+                                                'size-2 rounded-xs',
+                                                COLUMN_DOT[column],
+                                            )}
+                                        />
                                         {label(PRODUCTION_STATUSES, column)}
                                     </h2>
-                                    <span className="text-xs text-muted-foreground">
+                                    <span className="text-xs text-muted-foreground tabular-nums">
                                         {columnItems.length}
                                     </span>
                                 </div>
 
-                                <div className="flex min-h-24 flex-col gap-3 rounded-xl border border-dashed border-border/60 p-3">
+                                <div
+                                    onDragOver={(event) => {
+                                        // Sem preventDefault o browser recusa o drop.
+                                        event.preventDefault();
+                                        setOverColumn(column);
+                                    }}
+                                    onDragLeave={() =>
+                                        setOverColumn((current) =>
+                                            current === column ? null : current,
+                                        )
+                                    }
+                                    onDrop={() => drop(column)}
+                                    className={cn(
+                                        'flex min-h-32 flex-col gap-3 rounded-lg p-1 transition-colors',
+                                        overColumn === column &&
+                                            dragging !== null &&
+                                            'bg-accent ring-2 ring-gold',
+                                    )}
+                                >
                                     {columnItems.length === 0 ? (
-                                        <p className="text-center text-xs text-muted-foreground">
+                                        <p className="rounded-lg border border-dashed p-6 text-center text-xs text-muted-foreground">
                                             Nada aqui.
                                         </p>
                                     ) : (
-                                        columnItems.map((item) => {
-                                            const next = nextStatus(
-                                                item.productionStatus,
-                                            );
-
-                                            return (
-                                                <article
-                                                    key={item.id}
-                                                    className="flex flex-col gap-2 rounded-lg border border-border/60 bg-card p-3 text-sm"
-                                                >
-                                                    <div className="flex items-start justify-between gap-2">
-                                                        <span className="font-medium">
-                                                            {item.productName}
-                                                        </span>
-                                                        <span className="shrink-0 text-muted-foreground">
-                                                            ×{item.qty}
-                                                        </span>
-                                                    </div>
-
-                                                    {item.variantLabel && (
-                                                        <span className="text-xs text-muted-foreground">
-                                                            {item.variantLabel}
-                                                        </span>
-                                                    )}
-
-                                                    {item.personalization
-                                                        .length > 0 && (
-                                                        <dl className="flex flex-col gap-0.5 rounded-md bg-muted/60 p-2 text-xs">
-                                                            {item.personalization.map(
-                                                                (field) => (
-                                                                    <div
-                                                                        key={
-                                                                            field.label
-                                                                        }
-                                                                        className="flex gap-1"
-                                                                    >
-                                                                        <dt className="text-muted-foreground">
-                                                                            {
-                                                                                field.label
-                                                                            }
-                                                                            :
-                                                                        </dt>
-                                                                        <dd className="font-medium">
-                                                                            {
-                                                                                field.value
-                                                                            }
-                                                                        </dd>
-                                                                    </div>
-                                                                ),
-                                                            )}
-                                                        </dl>
-                                                    )}
-
-                                                    <Link
-                                                        href={show(
-                                                            item.orderId,
-                                                        )}
-                                                        className="text-xs text-muted-foreground hover:underline"
-                                                    >
-                                                        {item.orderNumber} ·{' '}
-                                                        {item.customerName}
-                                                    </Link>
-
-                                                    {next !== null && (
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            disabled={
-                                                                advancing ===
-                                                                item.id
-                                                            }
-                                                            onClick={() =>
-                                                                advance(item)
-                                                            }
-                                                        >
-                                                            →{' '}
-                                                            {label(
-                                                                PRODUCTION_STATUSES,
-                                                                next,
-                                                            )}
-                                                        </Button>
-                                                    )}
-                                                </article>
-                                            );
-                                        })
+                                        columnItems.map((item) => (
+                                            <ProductionCard
+                                                key={item.id}
+                                                card={item}
+                                                pending={pendingId === item.id}
+                                                onMove={move}
+                                                onDragStart={setDragging}
+                                                onDragEnd={() => {
+                                                    setDragging(null);
+                                                    setOverColumn(null);
+                                                }}
+                                            />
+                                        ))
                                     )}
                                 </div>
-                            </div>
+                            </section>
                         );
                     })}
                 </div>
