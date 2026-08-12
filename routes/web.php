@@ -32,6 +32,20 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
     Route::middleware('admin')->prefix('admin')->name('admin.')->group(function (): void {
         Route::get('/', Admin\DashboardController::class)->name('dashboard');
 
+        // Rascunhos de encomenda manual. ANTES do Route::resource abaixo: o
+        // `show` do recurso e `encomendas/{order}`, e um URI literal
+        // registado depois dele nunca chegaria a ser alcancado.
+        Route::get('encomendas/rascunhos', [Admin\OrderDraftController::class, 'index'])
+            ->name('encomendas.rascunhos.index');
+        Route::post('encomendas/rascunhos', [Admin\OrderDraftController::class, 'store'])
+            ->name('encomendas.rascunhos.store');
+        Route::get('encomendas/rascunhos/{draft}', [Admin\OrderDraftController::class, 'edit'])
+            ->name('encomendas.rascunhos.edit');
+        Route::put('encomendas/rascunhos/{draft}', [Admin\OrderDraftController::class, 'update'])
+            ->name('encomendas.rascunhos.update');
+        Route::delete('encomendas/rascunhos/{draft}', [Admin\OrderDraftController::class, 'destroy'])
+            ->name('encomendas.rascunhos.destroy');
+
         // Encomendas: sem `edit`/`destroy` — uma encomenda nunca se apaga,
         // cancela-se. `show` existe (ao contrario de produtos) porque o
         // detalhe e mesmo uma vista, nao um formulario.

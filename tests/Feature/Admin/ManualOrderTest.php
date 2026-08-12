@@ -58,6 +58,9 @@ class ManualOrderTest extends TestCase
             'country' => 'PT',
             'admin_note' => '',
             'send_confirmation' => false,
+            // O formulario manda sempre o campo; so vem preenchido quando a
+            // encomenda saiu de um rascunho (ver OrderDraftTest).
+            'draft_id' => null,
             'items' => $items ?? [[
                 'variant_id' => $this->variant->id,
                 'product_name' => '',

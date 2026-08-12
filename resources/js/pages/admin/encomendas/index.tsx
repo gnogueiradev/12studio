@@ -23,6 +23,7 @@ import { formatCents } from '@/lib/money';
 import { label } from '@/lib/options';
 import { cn } from '@/lib/utils';
 import { create, index, show } from '@/routes/admin/encomendas';
+import { index as drafts } from '@/routes/admin/encomendas/rascunhos';
 import type { OrderRow } from '@/types/order';
 import {
     ORDER_STATUS_CHIPS,
@@ -44,6 +45,8 @@ type Props = {
     filters: Filters;
     /** Contagem por estado, já sem o filtro de estado aplicado. */
     statusCounts: Record<string, number>;
+    /** Encomendas manuais guardadas a meio por este admin. */
+    draftsCount: number;
 };
 
 // O Radix Select não aceita value="" — sentinela para "sem filtro".
@@ -63,7 +66,12 @@ function visit(filters: Filters) {
     );
 }
 
-export default function OrdersIndex({ orders, filters, statusCounts }: Props) {
+export default function OrdersIndex({
+    orders,
+    filters,
+    statusCounts,
+    draftsCount,
+}: Props) {
     const [search, setSearch] = useState(filters.search);
 
     const applyFilters = (changes: Partial<Filters>) =>
@@ -198,6 +206,17 @@ export default function OrdersIndex({ orders, filters, statusCounts }: Props) {
                     title="Encomendas"
                     description="Loja online, Vinted, Instagram e vendas presenciais no mesmo sítio."
                 >
+                    {draftsCount > 0 && (
+                        <Button
+                            asChild
+                            variant="outline"
+                            className="rounded-full"
+                        >
+                            <Link href={drafts()}>
+                                Rascunhos · {draftsCount}
+                            </Link>
+                        </Button>
+                    )}
                     <Button asChild className="rounded-full">
                         <Link href={create()}>Nova encomenda</Link>
                     </Button>
