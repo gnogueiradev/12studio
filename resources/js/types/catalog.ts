@@ -217,6 +217,8 @@ export type VariantFormData = {
 export type VariantOption = {
     id: number;
     label: string;
+    /** Só a cor e o tamanho ("PETG Natural"), sem o nome do produto à frente. */
+    variantLabel: string;
     sku: string;
     priceCents: number;
     wholesalePriceCents: number | null;

@@ -70,6 +70,11 @@ class StoreManualOrderRequest extends FormRequest
             'admin_note' => ['nullable', 'string', 'max:2000'],
             'send_confirmation' => ['boolean'],
 
+            // Rascunho de onde esta encomenda saiu, para o controller o apagar
+            // depois de a criar. Sem Rule::exists: um rascunho ja apagado
+            // noutro separador nao e motivo para recusar a encomenda.
+            'draft_id' => ['nullable', 'integer'],
+
             'items' => ['required', 'array', 'min:1'],
             'items.*.variant_id' => ['nullable', 'integer', Rule::exists('variants', 'id')],
             'items.*.product_name' => ['nullable', 'string', 'max:120'],

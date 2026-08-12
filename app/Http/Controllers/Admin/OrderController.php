@@ -9,9 +9,9 @@ use App\Http\Requests\Order\UpdateOrderPaymentRequest;
 use App\Http\Requests\Order\UpdateOrderStatusRequest;
 use App\Mail\OrderConfirmationMail;
 use App\Models\Order;
-use App\Models\User;
-use App\Models\Variant;
+use App\Models\OrderDraft;
 use App\Services\OrderService;
+use App\Support\ManualOrderOptions;
 use App\Support\OrderPresenter;
 use Carbon\CarbonInterface;
 use Illuminate\Http\RedirectResponse;
@@ -86,16 +86,15 @@ class OrderController extends Controller
             'orders' => $orders,
             'filters' => $filters,
             'statusCounts' => $statusCounts,
+            'draftsCount' => OrderDraft::query()
+                ->where('created_by_user_id', $request->user()?->getKey())
+                ->count(),
         ]);
     }
 
     public function create(): Response
     {
-        return Inertia::render('admin/encomendas/create', [
-            'customers' => $this->customerOptions(),
-            'variants' => $this->variantOptions(),
-            'defaultVatRate' => (int) config('shop.default_vat_rate', 23),
-        ]);
+        return Inertia::render('admin/encomendas/create', ManualOrderOptions::props());
     }
 
     public function store(StoreManualOrderRequest $request): RedirectResponse
@@ -108,6 +107,15 @@ class OrderController extends Controller
             $this->toast($exception->getMessage(), 'error');
 
             return back()->withInput();
+        }
+
+        // O rascunho cumpriu o seu papel. Deixa-lo para tras era pô-lo a
+        // convidar a criar a mesma encomenda outra vez.
+        if (($data['draft_id'] ?? null) !== null) {
+            OrderDraft::query()
+                ->where('created_by_user_id', $request->user()?->getKey())
+                ->whereKey($data['draft_id'])
+                ->delete();
         }
 
         if ($request->boolean('send_confirmation')) {
@@ -198,68 +206,5 @@ class OrderController extends Controller
         return $at === null
             ? null
             : $at->format('d').' '.self::MONTHS[(int) $at->format('n')];
-    }
-
-    /**
-     * @return array<int, array<string, mixed>>
-     */
-    private function customerOptions(): array
-    {
-        return User::query()
-            ->where('is_admin', false)
-            ->with('addresses')
-            ->orderBy('name')
-            ->get()
-            ->map(function (User $customer): array {
-                $address = $customer->addresses->first();
-
-                return [
-                    'id' => $customer->id,
-                    'name' => $customer->name,
-                    'email' => $customer->email,
-                    'phone' => $address?->phone,
-                    'nif' => $address?->nif,
-                    'address' => $address === null ? null : [
-                        'line1' => $address->line1,
-                        'line2' => $address->line2,
-                        'postalCode' => $address->postal_code,
-                        'city' => $address->city,
-                        'country' => $address->country,
-                    ],
-                ];
-            })
-            ->all();
-    }
-
-    /**
-     * Variantes ativas de produtos nao arquivados — o que o admin pode pôr
-     * numa encomenda hoje.
-     *
-     * @return array<int, array<string, mixed>>
-     */
-    private function variantOptions(): array
-    {
-        return Variant::query()
-            ->where('active', true)
-            ->whereHas('product', fn ($query) => $query->where('status', '!=', 'archived'))
-            ->with(['product', 'color'])
-            ->orderBy('sku')
-            ->get()
-            ->map(fn (Variant $variant): array => [
-                'id' => $variant->id,
-                'label' => trim(implode(' ', array_filter([
-                    $variant->product->name,
-                    $variant->color?->name,
-                    $variant->size_label,
-                ]))),
-                'sku' => $variant->sku,
-                'priceCents' => $variant->price_cents,
-                'wholesalePriceCents' => $variant->wholesale_price_cents,
-                'availableStock' => $variant->available_stock,
-                'vatRate' => $variant->product->vat_rate,
-                'fulfillmentMode' => $variant->product->fulfillment_mode,
-                'productName' => $variant->product->name,
-            ])
-            ->all();
     }
 }

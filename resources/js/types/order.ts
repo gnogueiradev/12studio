@@ -226,6 +226,23 @@ export type ManualOrderFormData = {
     admin_note: string;
     send_confirmation: boolean;
     items: ManualOrderItem[];
+    /** Rascunho de onde o formulário foi retomado; o servidor apaga-o ao criar. */
+    draft_id: number | null;
+};
+
+/** Encomenda manual guardada a meio — é o formulário inteiro, tal e qual. */
+export type OrderDraft = {
+    id: number;
+    payload: ManualOrderFormData;
+};
+
+export type OrderDraftRow = {
+    id: number;
+    /** null enquanto o nome do cliente estiver por escrever. */
+    customerName: string | null;
+    itemsCount: number;
+    totalCents: number;
+    updatedAt: string | null;
 };
 
 /** Cartão do quadro de produção. */
