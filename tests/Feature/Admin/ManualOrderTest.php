@@ -74,13 +74,20 @@ class ManualOrderTest extends TestCase
 
     public function test_a_vinted_order_is_created_and_takes_stock(): void
     {
+        // Relogio parado: o numero leva o ano gravado no POST, e sem isto a
+        // assercao lia o ano outra vez — uma viragem de ano entre as duas
+        // leituras chumbava o teste.
+        $this->freezeTime();
+
+        $year = now()->year;
+
         $this->actingAs($this->admin)
             ->post(route('admin.encomendas.store'), $this->payload())
             ->assertRedirect();
 
         $order = Order::query()->firstOrFail();
 
-        $this->assertSame(now()->year.'-0001', $order->order_number);
+        $this->assertSame($year.'-0001', $order->order_number);
         $this->assertSame('vinted', $order->sales_channel);
         $this->assertSame($this->admin->id, $order->created_by_user_id);
         // 2 x 24,90 = 49,80 + 3,50 de portes.
