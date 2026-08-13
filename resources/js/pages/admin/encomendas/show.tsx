@@ -3,6 +3,7 @@ import { AlertTriangle } from 'lucide-react';
 import { useState } from 'react';
 import { PageHeader } from '@/components/admin/page-header';
 import { StatusBadge } from '@/components/admin/status-badge';
+import { TagInput } from '@/components/admin/tag-input';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -34,9 +35,10 @@ import {
 
 type Props = {
     order: OrderDetail;
+    tagSuggestions: string[];
 };
 
-export default function OrdersShow({ order }: Props) {
+export default function OrdersShow({ order, tagSuggestions }: Props) {
     const isPaid = order.paymentStatus === 'paid';
 
     const statusForm = useForm<{
@@ -60,6 +62,7 @@ export default function OrdersShow({ order }: Props) {
         tracking_number: order.trackingNumber ?? '',
         tracking_url: order.trackingUrl ?? '',
         shipping_method_name: order.shippingMethodName ?? '',
+        tags: order.tags,
     });
 
     const [advancing, setAdvancing] = useState<number | null>(null);
@@ -600,6 +603,26 @@ export default function OrdersShow({ order }: Props) {
                                             )
                                         }
                                         rows={3}
+                                    />
+                                </div>
+
+                                {/*
+                                 * Dentro deste form e não no cabeçalho: as
+                                 * etiquetas gravam-se com o resto do que o admin
+                                 * anota sobre a encomenda, num só PATCH.
+                                 */}
+                                <div className="grid gap-2">
+                                    <Label htmlFor="tags">Etiquetas</Label>
+                                    <TagInput
+                                        id="tags"
+                                        value={detailsForm.data.tags}
+                                        onChange={(tags) =>
+                                            detailsForm.setData('tags', tags)
+                                        }
+                                        suggestions={tagSuggestions}
+                                    />
+                                    <InputError
+                                        message={detailsForm.errors.tags}
                                     />
                                 </div>
 

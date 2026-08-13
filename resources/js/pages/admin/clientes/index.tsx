@@ -44,6 +44,8 @@ type Props = {
         /** Média por cliente que já pagou alguma coisa. */
         averagePaidCents: number;
     };
+    /** Vocabulário do âmbito `customer`, para o modal de criar. */
+    tagSuggestions: string[];
 };
 
 // O Radix Select não aceita value="" — sentinela para "sem filtro".
@@ -68,6 +70,7 @@ export default function CustomersIndex({
     filters,
     typeCounts,
     stats,
+    tagSuggestions,
 }: Props) {
     const [search, setSearch] = useState(filters.search);
     const [creating, setCreating] = useState(false);
@@ -281,7 +284,11 @@ export default function CustomersIndex({
                 <Pagination page={customers} noun="clientes" />
             </div>
 
-            <CustomerDialog open={creating} onOpenChange={setCreating} />
+            <CustomerDialog
+                open={creating}
+                onOpenChange={setCreating}
+                tagSuggestions={tagSuggestions}
+            />
         </>
     );
 }

@@ -19,6 +19,7 @@ import { EMPTY_CUSTOMER_FORM, isCustomerFormReady } from '@/types/customer';
 type Props = {
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    tagSuggestions: string[];
 };
 
 /**
@@ -29,7 +30,7 @@ type Props = {
  * admin fica na lista (ou salta para uma encomenda nova), da página cai no
  * formulário de edição, como em todo o resto do backoffice.
  */
-export function CustomerDialog({ open, onOpenChange }: Props) {
+export function CustomerDialog({ open, onOpenChange, tagSuggestions }: Props) {
     /*
      * `after` diz ao servidor para onde ir depois de gravar. Viaja no próprio
      * formulário, e não em estado à parte, porque é isso que o `useForm`
@@ -69,6 +70,7 @@ export function CustomerDialog({ open, onOpenChange }: Props) {
                         data={data}
                         setData={setData}
                         errors={errors}
+                        tagSuggestions={tagSuggestions}
                     />
 
                     <DialogFooter className="items-center gap-3 sm:justify-between">

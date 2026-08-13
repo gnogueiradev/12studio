@@ -10,7 +10,9 @@ use App\Http\Requests\Order\UpdateOrderStatusRequest;
 use App\Mail\OrderConfirmationMail;
 use App\Models\Order;
 use App\Models\OrderDraft;
+use App\Models\Tag;
 use App\Services\OrderService;
+use App\Services\TagService;
 use App\Support\ManualOrderOptions;
 use App\Support\OrderPresenter;
 use App\Support\ShortDate;
@@ -25,6 +27,7 @@ class OrderController extends Controller
 {
     public function __construct(
         private OrderService $orderService,
+        private TagService $tagService,
     ) {}
 
     public function index(Request $request): Response
@@ -131,6 +134,7 @@ class OrderController extends Controller
     {
         return Inertia::render('admin/encomendas/show', [
             'order' => OrderPresenter::detail($order),
+            'tagSuggestions' => $this->tagService->suggestions(Tag::SCOPE_ORDER),
         ]);
     }
 

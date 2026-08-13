@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Tag;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
@@ -19,6 +20,10 @@ use Illuminate\Support\Str;
  */
 class CustomerService
 {
+    public function __construct(
+        private TagService $tagService,
+    ) {}
+
     /**
      * O cliente criado no backoffice nao faz login: recebe uma password
      * aleatoria que ninguem ve nem recebe. Quando a Fase 5 abrir o registo,
@@ -36,6 +41,7 @@ class CustomerService
             ]);
 
             $this->syncAddress($customer, $data);
+            $this->syncTags($customer, $this->pullTags($data) ?? []);
 
             return $customer;
         });
@@ -47,12 +53,44 @@ class CustomerService
     public function update(User $customer, array $data): User
     {
         return DB::transaction(function () use ($customer, $data): User {
+            $tags = $this->pullTags($data);
+
             $customer->update($this->customerAttributes($data));
 
             $this->syncAddress($customer, $data);
 
+            // Null e "as etiquetas nao vieram no pedido" — nao mexer. Array
+            // vazio e "vieram vazias" — limpar. Mesma distincao do produto.
+            if ($tags !== null) {
+                $this->syncTags($customer, $tags);
+            }
+
             return $customer->refresh();
         });
+    }
+
+    /**
+     * @param  array<int, string>  $names
+     */
+    public function syncTags(User $customer, array $names): void
+    {
+        $customer->tags()->sync($this->tagService->idsFor(Tag::SCOPE_CUSTOMER, $names));
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<int, string>|null
+     */
+    private function pullTags(array $data): ?array
+    {
+        if (! array_key_exists('tags', $data)) {
+            return null;
+        }
+
+        /** @var array<int, string> $tags */
+        $tags = $data['tags'] ?? [];
+
+        return $tags;
     }
 
     /**

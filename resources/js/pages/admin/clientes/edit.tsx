@@ -31,9 +31,14 @@ type CustomerOrderRow = {
 type Props = {
     customer: CustomerDetail;
     orders: CustomerOrderRow[];
+    tagSuggestions: string[];
 };
 
-export default function CustomersEdit({ customer, orders }: Props) {
+export default function CustomersEdit({
+    customer,
+    orders,
+    tagSuggestions,
+}: Props) {
     const [confirmingDelete, setConfirmingDelete] = useState(false);
 
     const { data, setData, patch, processing, errors } =
@@ -44,6 +49,7 @@ export default function CustomersEdit({ customer, orders }: Props) {
             phone: customer.phone ?? '',
             nif: customer.nif ?? '',
             admin_note: customer.adminNote ?? '',
+            tags: customer.tags,
             line1: customer.line1 ?? '',
             line2: customer.line2 ?? '',
             postal_code: customer.postalCode ?? '',
@@ -135,6 +141,7 @@ export default function CustomersEdit({ customer, orders }: Props) {
                         processing={processing}
                         onSubmit={submit}
                         submitLabel="Guardar alterações"
+                        tagSuggestions={tagSuggestions}
                     />
                 </div>
 

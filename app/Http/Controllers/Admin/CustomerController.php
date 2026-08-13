@@ -7,8 +7,10 @@ use App\Http\Requests\Customer\StoreCustomerRequest;
 use App\Http\Requests\Customer\UpdateCustomerRequest;
 use App\Models\Address;
 use App\Models\Order;
+use App\Models\Tag;
 use App\Models\User;
 use App\Services\CustomerService;
+use App\Services\TagService;
 use App\Support\ShortDate;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
@@ -25,6 +27,7 @@ class CustomerController extends Controller
 {
     public function __construct(
         private CustomerService $customerService,
+        private TagService $tagService,
     ) {}
 
     public function index(Request $request): Response
@@ -99,12 +102,15 @@ class CustomerController extends Controller
             'filters' => $filters,
             'typeCounts' => $typeCounts,
             'stats' => $this->stats(),
+            'tagSuggestions' => $this->tagService->suggestions(Tag::SCOPE_CUSTOMER),
         ]);
     }
 
     public function create(): Response
     {
-        return Inertia::render('admin/clientes/create');
+        return Inertia::render('admin/clientes/create', [
+            'tagSuggestions' => $this->tagService->suggestions(Tag::SCOPE_CUSTOMER),
+        ]);
     }
 
     public function store(StoreCustomerRequest $request): RedirectResponse
@@ -142,10 +148,15 @@ class CustomerController extends Controller
                 'phone' => $customer->phone,
                 'nif' => $customer->nif,
                 'adminNote' => $customer->admin_note,
+                // Nomes e nao ids: o TagInput nunca soube o que e uma chave
+                // primaria, e e isso que o torna reutilizavel aqui sem tocar
+                // numa linha do componente.
+                'tags' => $customer->tags->pluck('name')->all(),
                 ...$this->addressFields($address),
                 'createdAt' => $customer->created_at?->format('Y-m-d'),
                 'canDelete' => ! $customer->orders()->exists(),
             ],
+            'tagSuggestions' => $this->tagService->suggestions(Tag::SCOPE_CUSTOMER),
             'orders' => $customer->orders()
                 ->orderByDesc('created_at')
                 ->get()

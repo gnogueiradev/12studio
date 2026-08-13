@@ -14,6 +14,7 @@ type Props = {
     processing: boolean;
     onSubmit: (event: React.FormEvent) => void;
     submitLabel: string;
+    tagSuggestions?: string[];
 };
 
 /**
@@ -28,10 +29,16 @@ export default function CustomerForm({
     processing,
     onSubmit,
     submitLabel,
+    tagSuggestions,
 }: Props) {
     return (
         <form onSubmit={onSubmit} className="flex max-w-xl flex-col gap-6">
-            <CustomerFields data={data} setData={setData} errors={errors} />
+            <CustomerFields
+                data={data}
+                setData={setData}
+                errors={errors}
+                tagSuggestions={tagSuggestions}
+            />
 
             <div>
                 <Button

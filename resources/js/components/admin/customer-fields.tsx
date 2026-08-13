@@ -1,5 +1,6 @@
 import { Minus, Plus } from 'lucide-react';
 import { useState } from 'react';
+import { TagInput } from '@/components/admin/tag-input';
 import InputError from '@/components/input-error';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -15,6 +16,8 @@ type Props = {
         value: CustomerFormData[K],
     ) => void;
     errors: Partial<Record<keyof CustomerFormData, string>>;
+    /** Vocabulário do âmbito `customer`. Vazio ainda deixa escrever de novo. */
+    tagSuggestions?: string[];
 };
 
 /**
@@ -27,7 +30,12 @@ type Props = {
  * por isso um seletor de país era uma promessa que o formulário não cumpria.
  * O valor viaja no `data` a 'PT'.
  */
-export function CustomerFields({ data, setData, errors }: Props) {
+export function CustomerFields({
+    data,
+    setData,
+    errors,
+    tagSuggestions = [],
+}: Props) {
     const company = data.customer_type === 'empresa';
 
     // Aberto de início quando já há morada — a editar um cliente, escondê-la
@@ -222,6 +230,22 @@ export function CustomerFields({ data, setData, errors }: Props) {
                     placeholder="Prefere cores neutras, entrega em mão no Porto…"
                 />
                 <InputError message={errors.admin_note} />
+            </div>
+
+            {/*
+             * A seguir às notas internas de propósito: é o mesmo tipo de
+             * informação — o que o admin sabe do cliente e o cliente não vê —,
+             * só que esta é a parte que se filtra e se conta.
+             */}
+            <div className="grid gap-2">
+                <Label htmlFor="tags">Etiquetas</Label>
+                <TagInput
+                    id="tags"
+                    value={data.tags}
+                    onChange={(tags) => setData('tags', tags)}
+                    suggestions={tagSuggestions}
+                />
+                <InputError message={errors.tags} />
             </div>
         </div>
     );

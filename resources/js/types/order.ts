@@ -181,6 +181,8 @@ export type OrderDetail = {
     trackingNumber: string | null;
     trackingUrl: string | null;
     adminNote: string | null;
+    /** Nomes, não ids — o campo de etiquetas nunca lida com chaves. */
+    tags: string[];
     stockIssue: boolean;
     createdAt: string | null;
     paidAt: string | null;

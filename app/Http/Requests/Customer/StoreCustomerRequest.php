@@ -42,6 +42,10 @@ class StoreCustomerRequest extends FormRequest
                 'nullable', 'string', 'max:20',
             ],
             'admin_note' => ['nullable', 'string', 'max:2000'],
+            // Mesmos limites do produto: o max:60 espelha a coluna `name` e o
+            // max:20 e um travao de sanidade, nao uma regra de negocio.
+            'tags' => ['array', 'max:20'],
+            'tags.*' => ['string', 'max:60'],
             'line1' => [$addressFilled, 'nullable', 'string', 'max:190'],
             'line2' => ['nullable', 'string', 'max:190'],
             // Formato PT NNNN-NNN; a coluna tem exatamente 8 caracteres.
@@ -71,6 +75,7 @@ class StoreCustomerRequest extends FormRequest
             'name' => 'nome',
             'customer_type' => 'tipo de cliente',
             'admin_note' => 'notas internas',
+            'tags' => 'etiquetas',
             'line1' => 'morada',
             'line2' => 'complemento',
             'postal_code' => 'código postal',
