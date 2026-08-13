@@ -12,6 +12,12 @@
             "runtimeExecutable": "php",
             "runtimeArgs": ["artisan", "serve", "--port=8001"],
             "port": 8001
+        },
+        {
+            "name": "12studio-8002",
+            "runtimeExecutable": "php",
+            "runtimeArgs": ["artisan", "serve", "--port=8002"],
+            "port": 8002
         }
     ]
 }
