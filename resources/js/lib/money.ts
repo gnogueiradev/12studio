@@ -69,9 +69,32 @@ export function initializeCurrency(): void {
     );
 }
 
+/**
+ * Cêntimos numa moeda à escolha, independente da que a loja tem em vigor.
+ *
+ * Existe para a pré-visualização da página de definições, que tem de mostrar
+ * como fica um preço na moeda nova ANTES de alguém a guardar — coisa que o
+ * formatador de módulo, preso à moeda em vigor, não sabe fazer.
+ *
+ * Reaproveita esse formatador quando o código pedido já é o corrente: no resto
+ * do backoffice é sempre esse o caso, e construir um Intl.NumberFormat por cada
+ * preço de uma tabela de variantes sairia caro por nada.
+ */
+export function formatCentsIn(cents: number, code: string): string {
+    const chosen =
+        code === currency
+            ? formatter
+            : new Intl.NumberFormat('pt-PT', {
+                  style: 'currency',
+                  currency: code,
+              });
+
+    return chosen.format(cents / 100);
+}
+
 /** Cêntimos inteiros → "12,50 €". Nunca guardamos floats. */
 export function formatCents(cents: number): string {
-    return formatter.format(cents / 100);
+    return formatCentsIn(cents, currency);
 }
 
 /**

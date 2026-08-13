@@ -3,6 +3,12 @@ import { cn } from '@/lib/utils';
 
 type Props = {
     title: string;
+    /**
+     * Explicação por baixo do título. Fica no cabeçalho e não como primeiro
+     * filho para se colar ao título — no meio do `mb-4` do bloco, o texto
+     * deixava de se ler como parte dele.
+     */
+    description?: ReactNode;
     /** Canto superior direito: uma contagem, um link "Ver todas". */
     aside?: ReactNode;
     children: ReactNode;
@@ -18,7 +24,13 @@ type Props = {
  * para blocos desta densidade, e sobrepor-lhe classes ficava mais confuso do
  * que a casca direta.
  */
-export function Panel({ title, aside, children, className }: Props) {
+export function Panel({
+    title,
+    description,
+    aside,
+    children,
+    className,
+}: Props) {
     return (
         <section
             className={cn(
@@ -27,7 +39,14 @@ export function Panel({ title, aside, children, className }: Props) {
             )}
         >
             <div className="mb-4 flex items-baseline justify-between gap-3">
-                <h2 className="text-sm font-semibold">{title}</h2>
+                <div>
+                    <h2 className="text-sm font-semibold">{title}</h2>
+                    {description && (
+                        <p className="mt-1 text-sm text-muted-foreground">
+                            {description}
+                        </p>
+                    )}
+                </div>
                 {aside && <div className="text-xs">{aside}</div>}
             </div>
             {children}

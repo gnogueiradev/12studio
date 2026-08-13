@@ -27,8 +27,27 @@ class SettingController extends Controller
             'settings' => [
                 'currency' => $this->settings->currency(),
             ],
-            'currencies' => Setting::CURRENCIES,
+            'currencies' => $this->currencyOptions(),
         ]);
+    }
+
+    /**
+     * Formato { value, label } — o mesmo `Option` que o resto do frontend usa
+     * (resources/js/lib/options.ts). A lista vai do servidor em vez de haver
+     * uma gemea em TypeScript: aqui, ao contrario das cores das categorias,
+     * so a pagina das definicoes precisa dela.
+     *
+     * @return array<int, array{value: string, label: string}>
+     */
+    private function currencyOptions(): array
+    {
+        return collect(Setting::CURRENCIES)
+            ->map(fn (string $name, string $code): array => [
+                'value' => $code,
+                'label' => $name,
+            ])
+            ->values()
+            ->all();
     }
 
     public function update(UpdateSettingsRequest $request): RedirectResponse

@@ -51,6 +51,28 @@ class SettingsTest extends TestCase
         );
     }
 
+    /**
+     * O select mostra "EUR — Euro": um "BRL" sozinho nao diz nada a quem nunca
+     * negociou em reais. A lista vai do servidor no formato {value,label} — o
+     * mesmo Option do resto do frontend (resources/js/lib/options.ts) — em vez
+     * de haver uma gemea em TypeScript a divergir em silencio.
+     *
+     * A lista vai escrita por extenso de proposito: assim tirar uma moeda ou
+     * trocar-lhe o nome tem de passar por aqui.
+     */
+    public function test_the_index_lists_every_currency_with_its_name(): void
+    {
+        $this->actingAs($this->admin)
+            ->get(route('admin.definicoes.index'))
+            ->assertInertia(fn (AssertableInertia $page) => $page->where('currencies', [
+                ['value' => 'EUR', 'label' => 'Euro'],
+                ['value' => 'USD', 'label' => 'Dólar'],
+                ['value' => 'GBP', 'label' => 'Libra'],
+                ['value' => 'BRL', 'label' => 'Real'],
+                ['value' => 'CHF', 'label' => 'Franco suíço'],
+            ]));
+    }
+
     public function test_the_admin_can_change_the_currency(): void
     {
         $this->actingAs($this->admin)
@@ -68,6 +90,21 @@ class SettingsTest extends TestCase
             ->assertSessionHasErrors('currency');
 
         $this->assertDatabaseCount('settings', 0);
+    }
+
+    /**
+     * O CHF entrou com o desenho novo da pagina. Guarda contra a regressao
+     * obvia: o CURRENCIES passou a ser um mapa codigo => nome, e uma validacao
+     * por Rule::in(Setting::CURRENCIES) em vez de array_keys() passaria a
+     * aceitar "Franco suico" e a recusar "CHF".
+     */
+    public function test_the_admin_can_choose_the_swiss_franc(): void
+    {
+        $this->actingAs($this->admin)
+            ->patch(route('admin.definicoes.update'), ['currency' => 'CHF'])
+            ->assertRedirect(route('admin.definicoes.index'));
+
+        $this->assertSame('CHF', app(SettingService::class)->currency());
     }
 
     /**

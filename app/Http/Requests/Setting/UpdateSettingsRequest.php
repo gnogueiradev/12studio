@@ -23,7 +23,9 @@ class UpdateSettingsRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'currency' => ['required', 'string', Rule::in(Setting::CURRENCIES)],
+            // As chaves, nao os valores: o CURRENCIES e um mapa codigo => nome
+            // e o que se guarda (e valida) e o codigo ISO.
+            'currency' => ['required', 'string', Rule::in(array_keys(Setting::CURRENCIES))],
         ];
     }
 
