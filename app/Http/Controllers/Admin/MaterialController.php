@@ -9,7 +9,6 @@ use App\Models\Color;
 use App\Models\Material;
 use App\Services\MaterialService;
 use App\Support\ColorPalette;
-use App\Support\Money;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
@@ -72,24 +71,6 @@ class MaterialController extends Controller
         $this->toast('Material criado.');
 
         return to_route('admin.materiais.index');
-    }
-
-    public function edit(Material $material): Response
-    {
-        return Inertia::render('admin/materiais/edit', [
-            'material' => [
-                'id' => $material->id,
-                'name' => $material->name,
-                'family' => $material->family,
-                'supplier' => $material->supplier,
-                'pricePerKg' => Money::toDecimal($material->price_per_kg_cents),
-                'spoolsInStock' => $material->spools_in_stock,
-                'minSpools' => $material->min_spools,
-                'active' => $material->active,
-                'sortOrder' => $material->sort_order,
-            ],
-            'families' => Material::FAMILIES,
-        ]);
     }
 
     public function update(UpdateMaterialRequest $request, Material $material): RedirectResponse

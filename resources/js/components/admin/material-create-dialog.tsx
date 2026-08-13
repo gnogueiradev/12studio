@@ -1,4 +1,4 @@
-import { useForm } from '@inertiajs/react';
+import { Link, useForm } from '@inertiajs/react';
 import { Plus } from 'lucide-react';
 import { useState } from 'react';
 import { ColorSwatch } from '@/components/admin/color-swatch';
@@ -24,13 +24,25 @@ import {
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { isPlainHex, sameColorName } from '@/lib/color';
-import { formatCents, formatCostPerGram, inputToCents } from '@/lib/money';
-import { store } from '@/routes/admin/materiais';
-import type { MaterialQuickFormData, PaletteColor } from '@/types/catalog';
+import {
+    centsToInput,
+    formatCents,
+    formatCostPerGram,
+    inputToCents,
+} from '@/lib/money';
+import { index as coresIndex } from '@/routes/admin/cores';
+import { store, update } from '@/routes/admin/materiais';
+import type {
+    MaterialFormData,
+    MaterialRow,
+    PaletteColor,
+} from '@/types/catalog';
 
 type Props = {
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    /** Null cria; uma linha da listagem edita esse material. */
+    editing: MaterialRow | null;
     /** As cores que já existem (App\Support\ColorPalette). */
     colorOptions: PaletteColor[];
     families: string[];
@@ -47,12 +59,12 @@ const DRAFT_HEX = '#8FAE7F';
 const EMPTY_DRAFT: PaletteColor = { name: '', hex: DRAFT_HEX };
 
 /**
- * Criar um material e as suas primeiras cores de uma vez.
+ * Criar e editar um material — os dois no mesmo sítio, para não haver dois
+ * formulários da mesma coisa a divergir com o tempo.
  *
- * As chips são as cores que já existem em /admin/cores. Na base de dados uma
- * Color pertence a UM material — ligar "Terracota" aqui cria a linha
+ * A criar, as chips são as cores que já existem em /admin/cores. Na base de
+ * dados uma Color pertence a UM material — ligar "Terracota" aqui cria a linha
  * Terracota×este material, com o hex da cor que já lá está e o preço a herdar.
- *
  * Quem precisa de uma cor que ainda não existe inventa-a no mini-formulário, e
  * ela nasce com o material na mesma transação: sem cores o material não gera
  * variante nenhuma, e mandar o admin a /admin/cores a meio do formulário era
@@ -61,20 +73,32 @@ const EMPTY_DRAFT: PaletteColor = { name: '', hex: DRAFT_HEX };
  * Sem uma única cor na base de dados o servidor manda os presets do
  * App\Support\FilamentPalette — senão o primeiro material da instalação abria
  * sem uma chip para ligar.
+ *
+ * A editar, as cores passam a ser só uma leitura do que este material tem — uma
+ * bobine é de uma cor só, e mexer nelas é a página das cores que faz. Em troca
+ * aparecem o stock e a ordem, que só fazem sentido em algo que já existe.
+ *
+ * Não há efeito nenhum a sincronizar o formulário com o `editing`: quem monta
+ * este componente dá-lhe uma `key` que muda com o alvo, e o remonte trata do
+ * resto. Um `useEffect` a chamar `setData` competia com o que o admin está a
+ * escrever no momento em que a resposta do servidor chega.
  */
 export function MaterialCreateDialog({
     open,
     onOpenChange,
+    editing,
     colorOptions,
     families,
 }: Props) {
-    const { data, setData, post, processing, errors, reset } =
-        useForm<MaterialQuickFormData>({
-            name: '',
-            family: '',
-            supplier: '',
-            price_per_kg: '',
-            min_spools: 0,
+    const { data, setData, post, patch, processing, errors, reset } =
+        useForm<MaterialFormData>({
+            name: editing?.name ?? '',
+            family: editing?.family ?? '',
+            supplier: editing?.supplier ?? '',
+            price_per_kg: editing ? centsToInput(editing.pricePerKgCents) : '',
+            spools_in_stock: editing?.spoolsInStock ?? 0,
+            min_spools: editing?.minSpools ?? 0,
+            sort_order: editing?.sortOrder ?? 0,
             colors: [],
         });
 
@@ -88,10 +112,15 @@ export function MaterialCreateDialog({
     const [draft, setDraft] = useState<PaletteColor>(EMPTY_DRAFT);
 
     const pricePerKgCents = inputToCents(data.price_per_kg);
-    const canCreate =
+    /*
+     * A criar exige-se pelo menos uma cor — um material sem cores não gera
+     * variante nenhuma. A editar não: as cores já existem e mudam-se noutro
+     * sítio, e `data.colors` vai vazia de propósito.
+     */
+    const canSave =
         data.name.trim() !== '' &&
         pricePerKgCents > 0 &&
-        data.colors.length > 0;
+        (editing !== null || data.colors.length > 0);
 
     const isChosen = (name: string) =>
         data.colors.some((color) => sameColorName(color.name, name));
@@ -153,21 +182,34 @@ export function MaterialCreateDialog({
         key.startsWith('colors'),
     )?.[1];
 
-    const submit = () =>
-        post(store().url, {
+    const submit = () => {
+        const options = {
             onSuccess: () => {
                 reset();
                 setDraft(EMPTY_DRAFT);
                 setAdding(false);
                 onOpenChange(false);
             },
-        });
+        };
+
+        if (editing) {
+            // A rota aceita PUT e PATCH; PATCH é o que diz a verdade sobre o
+            // payload, que não traz o `active` nem as cores.
+            patch(update(editing.id).url, options);
+
+            return;
+        }
+
+        post(store().url, options);
+    };
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-h-[88vh] gap-0 overflow-y-auto p-0 sm:max-w-2xl">
                 <DialogHeader className="border-b border-border/60 p-6">
-                    <DialogTitle>Novo material</DialogTitle>
+                    <DialogTitle>
+                        {editing ? 'Editar material' : 'Novo material'}
+                    </DialogTitle>
                     <DialogDescription>
                         O preço por quilo entra no cálculo do custo de cada
                         produto.
@@ -327,151 +369,266 @@ export function MaterialCreateDialog({
                         </p>
                     </div>
 
-                    <div className="grid gap-3 border-t border-border/60 pt-6">
-                        <div className="flex items-baseline justify-between gap-3">
-                            <Label>Cores disponíveis</Label>
-                            <span className="text-xs text-muted-foreground">
-                                {data.colors.length === 0
-                                    ? 'nenhuma selecionada'
-                                    : data.colors.length === 1
-                                      ? '1 selecionada'
-                                      : `${data.colors.length} selecionadas`}
-                            </span>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                            {colorOptions.map((color) => (
-                                <ToggleChip
-                                    key={color.name}
-                                    active={isChosen(color.name)}
-                                    onClick={() => toggleColor(color)}
-                                >
-                                    <ColorSwatch
-                                        hex={color.hex}
-                                        className="size-3.5"
-                                    />
-                                    {color.name}
-                                </ToggleChip>
-                            ))}
-
-                            {/*
-                             * Ligadas por definição — existem porque o admin as
-                             * escreveu. Clicar tira-as, que é a única coisa que
-                             * "desligar" pode querer dizer numa cor que ainda
-                             * não existe em lado nenhum.
-                             */}
-                            {invented.map((color) => (
-                                <ToggleChip
-                                    key={color.name}
-                                    active
-                                    onClick={() => toggleColor(color)}
-                                >
-                                    <ColorSwatch
-                                        hex={color.hex}
-                                        className="size-3.5"
-                                    />
-                                    {color.name}
-                                    <span className="font-normal text-muted-foreground">
-                                        nova
-                                    </span>
-                                </ToggleChip>
-                            ))}
-
-                            <button
-                                type="button"
-                                onClick={() => setAdding((open) => !open)}
-                                aria-expanded={adding}
-                                className="flex items-center gap-1.5 rounded-full border border-dashed border-border px-3.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-ring hover:text-foreground"
-                            >
-                                <Plus className="size-3.5" />
-                                Nova cor
-                            </button>
-                        </div>
-
-                        {adding && (
-                            <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border/60 bg-muted/40 p-4">
-                                {/*
-                                 * O seletor nativo é o próprio quadrado de
-                                 * pré-visualização: dá o picker do sistema sem
-                                 * uma linha de JavaScript, e o campo ao lado
-                                 * continua a aceitar um hex colado.
-                                 */}
-                                <input
-                                    type="color"
-                                    value={
-                                        isPlainHex(draft.hex)
-                                            ? draft.hex
-                                            : DRAFT_HEX
-                                    }
+                    {/*
+                     * Só a editar: um material acabado de nascer não tem stock
+                     * para contar nem posição para defender na listagem, e as
+                     * duas colunas são `default(0)` na base de dados.
+                     */}
+                    {editing && (
+                        <div className="grid gap-4 border-t border-border/60 pt-6 sm:grid-cols-2">
+                            <div className="grid gap-2">
+                                <Label htmlFor="material-spools">
+                                    Bobines em stock
+                                </Label>
+                                <Input
+                                    id="material-spools"
+                                    type="number"
+                                    min={0}
+                                    value={data.spools_in_stock}
                                     onChange={(event) =>
-                                        setDraft((current) => ({
-                                            ...current,
-                                            hex: event.target.value.toUpperCase(),
-                                        }))
+                                        setData(
+                                            'spools_in_stock',
+                                            Number(event.target.value),
+                                        )
                                     }
-                                    aria-label="Tom da cor nova"
-                                    className="size-9 shrink-0 cursor-pointer rounded-lg border border-border bg-transparent"
+                                    className="tabular-nums"
                                 />
-                                <div className="grid min-w-40 flex-1 gap-2">
-                                    <Label htmlFor="material-color-name">
-                                        Nome da cor
-                                    </Label>
-                                    <Input
-                                        id="material-color-name"
-                                        value={draft.name}
-                                        onChange={(event) =>
-                                            setDraft((current) => ({
-                                                ...current,
-                                                name: event.target.value,
-                                            }))
-                                        }
-                                        placeholder="Verde azeitona"
-                                        maxLength={60}
-                                    />
-                                </div>
-                                <div className="grid w-32 shrink-0 gap-2">
-                                    <Label htmlFor="material-color-hex">
-                                        Hex
-                                    </Label>
-                                    <Input
-                                        id="material-color-hex"
-                                        value={draft.hex}
-                                        onChange={(event) =>
-                                            setDraft((current) => ({
-                                                ...current,
-                                                hex: event.target.value,
-                                            }))
-                                        }
-                                        placeholder="#8FAE7F"
-                                        maxLength={9}
-                                        className="font-mono uppercase"
-                                    />
-                                </div>
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    onClick={addDraft}
-                                    disabled={!canAdd}
-                                >
-                                    Adicionar
-                                </Button>
-
-                                {draftMatch && (
-                                    <p className="w-full text-xs text-muted-foreground">
-                                        «{draftMatch.name}» já existe —
-                                        Adicionar liga a chip que já lá está.
-                                    </p>
-                                )}
+                                <p className="text-xs text-muted-foreground">
+                                    Abaixo do stock mínimo o material aparece
+                                    como "stock baixo".
+                                </p>
+                                <InputError message={errors.spools_in_stock} />
                             </div>
-                        )}
 
-                        <p className="text-xs text-muted-foreground">
-                            Só estas cores ficam disponíveis nas variantes dos
-                            produtos com este material. Todas herdam este preço
-                            por quilo — o preço próprio e a imagem afinam-se
-                            depois em Cores.
-                        </p>
-                        <InputError message={colorError} />
-                    </div>
+                            <div className="grid gap-2">
+                                <Label htmlFor="material-sort-order">
+                                    Ordem
+                                </Label>
+                                <Input
+                                    id="material-sort-order"
+                                    type="number"
+                                    min={0}
+                                    value={data.sort_order}
+                                    onChange={(event) =>
+                                        setData(
+                                            'sort_order',
+                                            Number(event.target.value),
+                                        )
+                                    }
+                                    className="tabular-nums"
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                    Menor primeiro. Em caso de empate manda o
+                                    nome.
+                                </p>
+                                <InputError message={errors.sort_order} />
+                            </div>
+                        </div>
+                    )}
+
+                    {/*
+                     * A editar as cores são só uma leitura: cada bobine é de
+                     * uma cor só, e as linhas de `colors` deste material
+                     * mexem-se em /admin/cores — o UpdateMaterialRequest até
+                     * as deita fora do payload de propósito.
+                     */}
+                    {editing ? (
+                        <div className="grid gap-3 border-t border-border/60 pt-6">
+                            <div className="flex items-baseline justify-between gap-3">
+                                <Label>Cores deste material</Label>
+                                <span className="text-xs text-muted-foreground">
+                                    {editing.colors.length === 0
+                                        ? 'nenhuma'
+                                        : editing.colors.length === 1
+                                          ? '1 cor'
+                                          : `${editing.colors.length} cores`}
+                                </span>
+                            </div>
+
+                            {editing.colors.length === 0 ? (
+                                <p className="text-xs text-muted-foreground">
+                                    Este material ainda não tem cores — sem pelo
+                                    menos uma não há variante nenhuma para
+                                    vender com ele.
+                                </p>
+                            ) : (
+                                <div className="flex flex-wrap gap-2">
+                                    {editing.colors.map((color) => (
+                                        <span
+                                            key={color.name}
+                                            className="flex items-center gap-2 rounded-full border border-border px-3.5 py-1.5 text-xs font-medium text-muted-foreground"
+                                        >
+                                            <ColorSwatch
+                                                hex={color.hex}
+                                                className="size-3.5"
+                                            />
+                                            {color.name}
+                                        </span>
+                                    ))}
+                                </div>
+                            )}
+
+                            <p className="text-xs text-muted-foreground">
+                                As bobines de {editing.name} que podes ter — uma
+                                bobine é de uma cor só. Juntar, tirar ou dar
+                                preço próprio a uma delas faz-se em{' '}
+                                <Link
+                                    href={coresIndex()}
+                                    className="underline underline-offset-4 hover:text-foreground"
+                                >
+                                    Cores
+                                </Link>
+                                .
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="grid gap-3 border-t border-border/60 pt-6">
+                            <div className="flex items-baseline justify-between gap-3">
+                                <Label>Cores disponíveis</Label>
+                                <span className="text-xs text-muted-foreground">
+                                    {data.colors.length === 0
+                                        ? 'nenhuma selecionada'
+                                        : data.colors.length === 1
+                                          ? '1 selecionada'
+                                          : `${data.colors.length} selecionadas`}
+                                </span>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                {colorOptions.map((color) => (
+                                    <ToggleChip
+                                        key={color.name}
+                                        active={isChosen(color.name)}
+                                        onClick={() => toggleColor(color)}
+                                    >
+                                        <ColorSwatch
+                                            hex={color.hex}
+                                            className="size-3.5"
+                                        />
+                                        {color.name}
+                                    </ToggleChip>
+                                ))}
+
+                                {/*
+                                 * Ligadas por definição — existem porque o admin as
+                                 * escreveu. Clicar tira-as, que é a única coisa que
+                                 * "desligar" pode querer dizer numa cor que ainda
+                                 * não existe em lado nenhum.
+                                 */}
+                                {invented.map((color) => (
+                                    <ToggleChip
+                                        key={color.name}
+                                        active
+                                        onClick={() => toggleColor(color)}
+                                    >
+                                        <ColorSwatch
+                                            hex={color.hex}
+                                            className="size-3.5"
+                                        />
+                                        {color.name}
+                                        <span className="font-normal text-muted-foreground">
+                                            nova
+                                        </span>
+                                    </ToggleChip>
+                                ))}
+
+                                <button
+                                    type="button"
+                                    onClick={() => setAdding((open) => !open)}
+                                    aria-expanded={adding}
+                                    className="flex items-center gap-1.5 rounded-full border border-dashed border-border px-3.5 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-ring hover:text-foreground"
+                                >
+                                    <Plus className="size-3.5" />
+                                    Nova cor
+                                </button>
+                            </div>
+
+                            {adding && (
+                                <div className="flex flex-wrap items-end gap-3 rounded-xl border border-border/60 bg-muted/40 p-4">
+                                    {/*
+                                     * O seletor nativo é o próprio quadrado de
+                                     * pré-visualização: dá o picker do sistema sem
+                                     * uma linha de JavaScript, e o campo ao lado
+                                     * continua a aceitar um hex colado.
+                                     */}
+                                    <input
+                                        type="color"
+                                        value={
+                                            isPlainHex(draft.hex)
+                                                ? draft.hex
+                                                : DRAFT_HEX
+                                        }
+                                        onChange={(event) =>
+                                            setDraft((current) => ({
+                                                ...current,
+                                                hex: event.target.value.toUpperCase(),
+                                            }))
+                                        }
+                                        aria-label="Tom da cor nova"
+                                        className="size-9 shrink-0 cursor-pointer rounded-lg border border-border bg-transparent"
+                                    />
+                                    <div className="grid min-w-40 flex-1 gap-2">
+                                        <Label htmlFor="material-color-name">
+                                            Nome da cor
+                                        </Label>
+                                        <Input
+                                            id="material-color-name"
+                                            value={draft.name}
+                                            onChange={(event) =>
+                                                setDraft((current) => ({
+                                                    ...current,
+                                                    name: event.target.value,
+                                                }))
+                                            }
+                                            placeholder="Verde azeitona"
+                                            maxLength={60}
+                                        />
+                                    </div>
+                                    <div className="grid w-32 shrink-0 gap-2">
+                                        <Label htmlFor="material-color-hex">
+                                            Hex
+                                        </Label>
+                                        <Input
+                                            id="material-color-hex"
+                                            value={draft.hex}
+                                            onChange={(event) =>
+                                                setDraft((current) => ({
+                                                    ...current,
+                                                    hex: event.target.value,
+                                                }))
+                                            }
+                                            placeholder="#8FAE7F"
+                                            maxLength={9}
+                                            className="font-mono uppercase"
+                                        />
+                                    </div>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        onClick={addDraft}
+                                        disabled={!canAdd}
+                                    >
+                                        Adicionar
+                                    </Button>
+
+                                    {draftMatch && (
+                                        <p className="w-full text-xs text-muted-foreground">
+                                            «{draftMatch.name}» já existe —
+                                            Adicionar liga a chip que já lá
+                                            está.
+                                        </p>
+                                    )}
+                                </div>
+                            )}
+
+                            <p className="text-xs text-muted-foreground">
+                                Só estas cores ficam disponíveis nas variantes
+                                dos produtos com este material. Todas herdam
+                                este preço por quilo — o preço próprio e a
+                                imagem afinam-se depois em Cores.
+                            </p>
+                            <InputError message={colorError} />
+                        </div>
+                    )}
                 </div>
 
                 <DialogFooter className="border-t border-border/60 p-6">
@@ -485,10 +642,10 @@ export function MaterialCreateDialog({
                     <Button
                         type="button"
                         onClick={submit}
-                        disabled={!canCreate || processing}
+                        disabled={!canSave || processing}
                     >
                         {processing && <Spinner />}
-                        Criar material
+                        {editing ? 'Guardar alterações' : 'Criar material'}
                     </Button>
                 </DialogFooter>
             </DialogContent>

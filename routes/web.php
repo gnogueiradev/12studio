@@ -86,12 +86,12 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         // a um material, mas a paleta gere-se toda de uma vez — aninhar as
         // cores dentro do material daria URLs mais longos sem ganho nenhum.
         //
-        // Sem `create`: o material novo nasce no modal da propria listagem, que
-        // e onde se escolhem as cores iniciais. O `edit` fica para o preco, o
-        // stock e para arquivar.
+        // Sem `create` nem `edit`: o material nasce e edita-se no mesmo modal da
+        // listagem, como as cores. As cores iniciais escolhem-se so na criacao
+        // (uma bobine tem uma cor so); depois disso mexem-se em /admin/cores.
         Route::resource('materiais', Admin\MaterialController::class)
             ->parameters(['materiais' => 'material'])
-            ->except(['show', 'create']);
+            ->except(['show', 'create', 'edit']);
 
         Route::patch('materiais/{material}/restaurar', [Admin\MaterialController::class, 'restore'])
             ->name('materiais.restaurar');
