@@ -120,7 +120,14 @@ class VariantService
             $data['wholesale_price_cents'] = $this->optionalCents($data['wholesale_price']);
         }
 
-        unset($data['normal_price'], $data['sale_price'], $data['wholesale_price']);
+        // Imanes, feltro, argolas, caixa: tudo o que se soma ao custo desta
+        // peca depois de ela sair da impressora. Entra na calculadora a cru,
+        // sem reserva de falha por cima.
+        if (array_key_exists('extra_cost', $data)) {
+            $data['extra_cost_cents'] = $this->optionalCents($data['extra_cost']);
+        }
+
+        unset($data['normal_price'], $data['sale_price'], $data['wholesale_price'], $data['extra_cost']);
 
         return $data;
     }

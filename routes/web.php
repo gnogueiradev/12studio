@@ -107,6 +107,24 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         Route::patch('cores/{color}/restaurar', [Admin\ColorController::class, 'restore'])
             ->name('cores.restaurar');
 
+        // Perfis de impressora: o custo/hora de cada maquina, que e a parcela
+        // de tempo do preco de cada peca. Sem `create`: a impressora nova nasce
+        // no modal da propria listagem, como os materiais.
+        Route::resource('impressoras', Admin\PrinterProfileController::class)
+            ->parameters(['impressoras' => 'printer_profile'])
+            ->except(['show', 'create']);
+
+        Route::patch('impressoras/{printer_profile}/restaurar', [Admin\PrinterProfileController::class, 'restore'])
+            ->name('impressoras.restaurar');
+
+        Route::patch('impressoras/{printer_profile}/predefinida', [Admin\PrinterProfileController::class, 'setDefault'])
+            ->name('impressoras.predefinida');
+
+        // Calculadora de precos: simulacao livre, sem gravar nada. O mesmo
+        // motor alimenta o formulario de variante.
+        Route::get('calculadora', Admin\PricingCalculatorController::class)
+            ->name('calculadora');
+
         // Definicoes editaveis em runtime (tabela `settings`). URIs proprios
         // por acao — o Wayfinder duplica chaves quando dois verbos partilham
         // o mesmo URI fora de um Route::resource.
@@ -114,6 +132,8 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
             ->name('definicoes.index');
         Route::patch('definicoes/guardar', [Admin\SettingController::class, 'update'])
             ->name('definicoes.update');
+        Route::patch('definicoes/precos', [Admin\SettingController::class, 'updatePricing'])
+            ->name('definicoes.precos');
 
         // Sem `create`: o produto novo nasce no modal da propria listagem, que
         // e onde se escolhem as cores e os tamanhos que geram as variantes. O

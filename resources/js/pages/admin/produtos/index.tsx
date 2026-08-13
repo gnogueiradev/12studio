@@ -25,6 +25,7 @@ import { destroy, edit, index, restaurar } from '@/routes/admin/produtos';
 import type { CategoryOption, ColorGroup, ProductRow } from '@/types/catalog';
 import { FULFILLMENT_MODES, PRODUCT_STATUSES } from '@/types/catalog';
 import type { Paginated } from '@/types/pagination';
+import type { PricingBreakdown } from '@/types/pricing';
 
 type Filters = {
     search: string;
@@ -41,6 +42,8 @@ type Props = {
     categories: CategoryOption[];
     colorGroups: ColorGroup[];
     defaultVatRate: number;
+    /** Preço sugerido para o modal de novo produto. */
+    pricingPreview: { result: PricingBreakdown | null };
 };
 
 // O Radix Select não aceita value="" — sentinela para "sem filtro".
@@ -102,6 +105,7 @@ export default function ProductsIndex({
     categories,
     colorGroups,
     defaultVatRate,
+    pricingPreview,
 }: Props) {
     const [search, setSearch] = useState(filters.search);
     /*
@@ -395,6 +399,7 @@ export default function ProductsIndex({
                 categories={categories}
                 colorGroups={colorGroups}
                 defaultVatRate={defaultVatRate}
+                pricingPreview={pricingPreview}
             />
 
             <ConfirmDialog

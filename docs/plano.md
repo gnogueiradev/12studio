@@ -66,25 +66,44 @@ Cêntimos inteiros; IDs auto-increment (`$table->id()`, convenção qrcode); `ti
   - Montra: `in_stock` → "Envio em 1–2 dias úteis"; `made_to_order` → "Produzido por encomenda — envio em X–Y dias úteis"
 - **variants** — product_id, sku único, color_id?, size_label?, price_cents (IVA incl.), compare_at_cents?, **wholesale_price_cents?** (revenda — só backoffice, aplicável numa encomenda manual), **stock**, **reserved_stock**, low_stock_threshold, is_default, active
   - O formulário fala **preço normal + preço promocional**; a BD guarda `price_cents` = preço EFETIVO e `compare_at_cents` = preço riscado, invertidos em promoção. A tradução vive só no `VariantService::normalizePrices()` (escrita) e em `Variant::normalPriceCents()`/`salePriceCents()` (leitura) — tudo a jusante (carrinho, order_items, Stripe) continua a ler `price_cents` como o valor cobrado
-  - **Custos:** filament_weight_grams?, printing_time_minutes?, **labor_minutes?**, packaging_cost_cents?, energy_cost_cents? (manual ou auto), **failure_rate_percent?**
+  - **Custos:** filament_weight_grams?, **printing_time_minutes?**, **printer_profile_id?** (null = a predefinida), **extra_cost_cents?** (ímanes, feltro, caixa)
+- **printer_profiles** — name único, **hourly_rate_cents** (energia + desgaste + manutenção + depreciação num número só), notes?, is_default, active, sort_order. Unicidade da predefinida por **índice único parcial** (`unique WHERE is_default = 1`), escrita só via `PrinterProfileService::setDefault()` transacional
   - **Envio/dimensões:** product_weight_grams?, package_weight_grams?, length_mm?, width_mm?, height_mm? (v1 só armazena/mostra; portes por peso e transportadoras ficam para depois)
   - `availableStock = stock - reserved_stock` (accessor, nunca persistido)
 - **product_images** — product_id, variant_id?, color_id?, path, alt, sort_order, **is_primary**
   - Unicidade da principal: **índice único parcial** (`unique WHERE is_primary = 1` — o SQLite suporta; o qrcode já tem migrações com este padrão) + `ImageService::setPrimary()` transacional (desmarca todas → marca uma) como única via de escrita
 
-### Cálculo de custo e margem (calculado, não persistido — `app/Services/CostService.php`)
+### Cálculo de custo, revenda e preço final (calculado, não persistido — `app/Services/PricingCalculator.php`)
+
+**O preço não sai da gramagem.** Duas peças de 32 g podem demorar 30 minutos ou 4 horas: o material custa o mesmo e a produção não. O **tempo de impressão é input obrigatório** do cálculo.
+
 ```
-filamento  = filament_weight_grams × price_per_kg(color→material) ÷ 1000
-energia    = printing_time_minutes × printer_wattage × energy_cost_per_kwh_cents ÷ 60 ÷ 1000
-             (ex.: 300 min × 100 W × 25 ¢/kWh ÷ 60 ÷ 1000 = 12,5 ¢ — o ÷1000 converte Wh→kWh; sem ele sai 1000× maior)
-trabalho   = labor_minutes × labor_cost_per_hour_cents ÷ 60
-falhas     = (filamento + energia) × failure_rate_percent ÷ 100
-custo      = filamento + energia + trabalho + embalagem + falhas
-lucro      = price_cents − custo
-margem %   = lucro ÷ price_cents × 100    ← margem sobre venda (definição oficial do projeto)
-markup %   = lucro ÷ custo × 100          (o admin mostra ambos, rotulados)
+material   = weightGrams × pricePerKgCents × 10                  ← micros; o ÷1000 do kg
+                                                                   dissolve-se na constante
+máquina    = printTimeMinutes ÷ 60 × hourlyRateCents             ← do printer_profile
+manuseam.  = tabela por peso (≤50 g 0,25 € … >500 g 1,00 €)
+risco      = (material + máquina) × failure_reserve_bp           ← extras NÃO pagam risco
+custo      = material + máquina + manuseamento + risco + extras
+
+revenda    = ceil(custo × multiplicador_da_faixa, 0,50 €)        ← chão de 1,50 €
+cliente    = arredondamento comercial(revenda × 1,75)            ← 0,50/1/5 € por faixa
+             com chão de revenda × 1,60 (rede de segurança)
+
+lucro produtor    = revenda − custo
+margem produtor   = lucro ÷ revenda × 100    ← margem sobre venda (definição oficial)
+lucro revendedor  = cliente − revenda
+markup revendedor = lucro ÷ revenda × 100    (o admin mostra ambos, rotulados)
 ```
-Parâmetros globais (`settings`): energy_cost_per_kwh_cents, printer_wattage, labor_cost_per_hour_cents.
+
+**Aritmética em micro-euros** (`app/Support/Micros.php`): inteiros de 1/1 000 000 €. A regra do projeto é "cêntimos, nunca floats", mas as parcelas intermédias (0,544 € de filamento, 0,10352 € de reserva) não cabem num cêntimo e arredondá-las desviava o preço final. Caso de referência oficial, fixado em teste: **17 €/kg, 32 g, 1h30 → custo 1,64752 €, revenda 3,50 €, cliente 6,00 €**.
+
+**Tempo em horas e minutos separados, nunca num decimal**: "1,30" tanto se lê como uma hora e trinta como 1,3 horas, e a diferença são 12 minutos de máquina em cada peça. A BD guarda o total em minutos.
+
+**Modos**: `per_unit` (o utilizador descreve uma peça; a quantidade só multiplica os totais) e `batch` (peso e tempo da mesa inteira; o custo divide-se pela quantidade). Em lote a tabela por peso **não se usa** — ela é calibrada por peça, e o peso de uma placa não diz nada sobre o trabalho de a limpar. Em vez disso: montagem por impressão + trabalho por unidade.
+
+Parâmetros globais em `config/pricing.php`, sobrepostos pelas chaves `pricing.*` da tabela `settings` e editáveis em `/admin/definicoes`: reserva de falha, preço mínimo de revenda, multiplicadores de revenda, multiplicador do cliente, multiplicador mínimo, faixas de manuseamento, manuseamento em lote. **Fora do config de propósito**: o degrau de 0,50 € da revenda e as faixas de arredondamento do retalho — são regras comerciais fixas.
+
+Superfícies: `/admin/calculadora` (simulação livre, estado no URL), o formulário de variante (com "Aplicar preços") e o modal de novo produto. Todas usam o **mesmo motor no servidor** — a fórmula nunca é espelhada em TypeScript, porque não há runner de testes JS e os números caem em cima das fronteiras de arredondamento.
 
 ### Encomendas
 - **orders** — **order_number** (formato `2026-0042`; gerado dentro da transação via tabela `order_sequences` {year PK, last_number} com **`UPDATE ... SET last_number = last_number + 1 ... RETURNING`** — statement único e atómico, porque o SQLite não tem `SELECT ... FOR UPDATE`; nunca read-modify-write nem contagem de linhas), user_id? (nullable — guest; contas só na Fase 5), **customer_name** (notNull — pesquisa, quadro de produção, emails, etiquetas), email, phone?, **nif?**, status, **payment_method** (`card` | `multibanco` | `mbway` | `cash` | `bank_transfer` | `vinted` | `other`), **payment_status** (`pending` | `paid` | `partially_refunded` | `refunded` | `failed`) — **o indicador financeiro é `payment_status`**, não o status da encomenda, **sales_channel** (`website` | `vinted` | `instagram` | `manual`), **external_order_reference?**, **created_by_user_id?** (admin, em manuais), stripe_session_id? único (null em manuais), stripe_payment_intent_id?, subtotal_cents, shipping_cents, total_cents, currency, **shipping_address json snapshot**, billing_address?, shipping_method_name?, tracking_number?, tracking_url?, timestamps de estado, admin_note?, stock_issue, **guest_access_token**, campos de faturação agnósticos (invoice_provider?, invoice_external_id?, invoice_number?, invoice_url?, invoiced_at?)
@@ -164,9 +183,11 @@ app/
                               OrderShippedMail, AdminAlertMail   (queued, afterCommit)
   Models/                     flat: Product, Variant, Material, Color, Order, OrderItem, …
   Services/                   CartService, CheckoutService, StripeCheckoutService,
-                              OrderService, StockService, CostService, ImageService,
+                              OrderService, StockService, ImageService,
+                              PricingCalculator, PricingSettings, PricingPreview,
                               Invoicing/{InvoicingProvider (interface), NullProvider}
-  Support/                    Money.php
+  Support/                    Money.php, Rate.php, Micros.php,
+                              PricingInput.php, PricingResult.php
 config/shop.php               (+ env() APENAS aqui — guardado por teste)
 routes/web.php                montra pública → grupo auth (/conta, Fase 5) →
                               grupo admin (prefix /admin, middleware 'admin') aninhado
@@ -212,7 +233,7 @@ Jenkinsfile · Dockerfile · docker-compose.yml   (adaptados do qrcode, IMAGE_NA
 | Fase | Âmbito | Esforço |
 |---|---|---|
 | **1. Base** | Scaffold do `laravel/react-starter-kit` (Laravel 12, Inertia React 19 TS, Tailwind 4, shadcn, Wayfinder, SSR), scripts composer/npm do qrcode (`test`, `lint`, `ci:check`), Pint + ESLint + Prettier + tsconfig iguais, **migrações completas de todo o schema** (SQLite dev + MySQL prod — evita churn), Fortify só com login (registo desativado até à Fase 5), seed do admin (`is_admin`, falha se password vazia em produção), middleware `EnsureAdmin` + testes, layouts montra/admin, CRUD de categorias e produtos base (controller fino + service + Form Request + páginas Inertia), **testes-guarda** (`ConfigCacheSafetyTest`, `QueueRoutingTest`), pragmas SQLite de produção (WAL, busy_timeout) + **backup diário agendado**, Dockerfile + docker-compose (volume persistente p/ o `.sqlite`) + supervisor confs + **Jenkinsfile** adaptados do qrcode | M–L |
-| **2. Produtos** | Materiais & cores (CRUD, swatches), variantes (cor × tamanho, gerador de combinações), fotos (upload disco public, `ImageService::setPrimary` transacional, galeria por cor), **custos & margens completos** (CostService + testes incl. caso 12,5 ¢), dimensões/pesos, personalizações (campos + surcharge), fulfillment_mode + capacidade + prazos, montra: home, /produtos c/ filtros, página de produto (swatches, prazo, personalização c/ preço) | L |
+| **2. Produtos** | Materiais & cores (CRUD, swatches), variantes (cor × tamanho, gerador de combinações), fotos (upload disco public, `ImageService::setPrimary` transacional, galeria por cor), **custos & margens completos** (PricingCalculator + testes, incl. o caso de referência 32 g/1h30), dimensões/pesos, personalizações (campos + surcharge), fulfillment_mode + capacidade + prazos, montra: home, /produtos c/ filtros, página de produto (swatches, prazo, personalização c/ preço) | L |
 | **3. Venda** | CartService (cookie) + drawer + /carrinho, portes (CRUD + free-above), CheckoutService c/ revalidação e surcharges, Stripe test (cartão + Multibanco), webhook completo c/ CSRF except, **reservas + sweep no scheduler + capacidade**, encomendas guest, páginas sucesso/cancelado, tracking por token | XL |
 | **4. Operação** | Quadro de produção **por item** no admin, detalhe de encomenda (timeline dos 2 históricos, notas, tracking CTT, **personalização renderizada com labels — nunca JSON bruto**), auto-avanço para ready_to_ship, **encomendas manuais** (canal, referência, pagamento, preço c/ override + motivo), Mailables (confirmação, pendente MB, enviado, alerta), ajustes manuais de stock, alertas de stock baixo | M–L |
 | **5. Lançamento** | Registo de clientes (Fortify registration + verificação), /conta (histórico, 1 morada, prefill), páginas legais + nota de devolução em personalizados, SEO (meta, OG c/ imagem principal, sitemap — padrão qrcode), domínio + Nginx Proxy Manager. **Gate do dono: atividade aberta, Moloni manual, Stripe live KYC** | M |
@@ -234,9 +255,9 @@ Numa segunda ronda, ainda antes da Fase 2 propriamente dita, foi antecipado o re
 
 - **Materiais & cores** (Fase 2 parcial) — CRUD completo com swatches e preço/kg (override por cor), e o seletor de cor na variante. `variants.color_id` deixou de ficar a null. **Sem gerador de combinações cor × tamanho e sem galeria por cor** — continuam a ser Fase 2.
 - **Fotografias** (Fase 2 parcial) — `ImageService` (upload no disco `public`, `setPrimary` transacional contra o índice único parcial, reordenar, apagar) e a galeria na página de edição do produto. **Sem redimensionamento nem miniaturas**: os originais (até 5 MB) são servidos como estão — tem de mudar antes da montra pública.
-- **Gramagem** — `variants.filament_weight_grams` no formulário. Os restantes campos de custo (tempo de impressão, mão de obra, embalagem, taxa de falha) continuam a ser Fase 2, com o `CostService`.
+- **Custo, revenda e preço final** — o `PricingCalculator` completo, `/admin/calculadora`, perfis de impressora (`/admin/impressoras`) e a pré-visualização dentro do formulário de variante e do modal de novo produto. O tempo de impressão passou a ser input do cálculo; as colunas da fórmula antiga (`labor_minutes`, `energy_cost_cents`, `failure_rate_percent`) saíram do esquema e `packaging_cost_cents` virou `extra_cost_cents`.
 - **Tags, slug editável e descrição formatada** — ver o schema acima.
-- **Definições em runtime** — `SettingService` + `/admin/definicoes`, por agora só a moeda. É onde entram `energy_cost_per_kwh_cents`, `printer_wattage` e `labor_cost_per_hour_cents` na Fase 2. O serviço tolera a tabela `settings` não existir (é lido em todos os pedidos pelo `HandleInertiaRequests`) e cai no `config/shop.php`.
+- **Definições em runtime** — `SettingService` + `/admin/definicoes`: a moeda e os parâmetros de preço (chaves `pricing.*`, por cima do `config/pricing.php`). Duas rotas e dois formulários independentes, para uma gravação de moeda não rebentar numa faixa de manuseamento que ninguém tocou. O serviço tolera a tabela `settings` não existir (é lido em todos os pedidos pelo `HandleInertiaRequests`) e cai no config.
 
 O que **não** foi antecipado e continua exatamente como planeado: carrinho, checkout, Stripe, webhook, reservas, sweep, capacidade de produção, montra pública de produtos, custos e margens.
 
@@ -246,7 +267,7 @@ O que **não** foi antecipado e continua exatamente como planeado: carrinho, che
 
 - **Contínuo:** `composer test` (config:clear → pint --test → artisan test), `npm run lint && npm run types:check && npm run format:check`; suites `Unit`/`Feature` como no qrcode (NonFunctional opcional mais tarde); testes em SQLite `:memory:`; PHPUnit class-style (convenção dominante do qrcode)
 - **Fase 1:** ver critérios abaixo
-- **Fase 2:** seed (2 materiais × 3 cores, produtos dos 3 fulfillment modes); custo/margem conferem (unit tests em `Money` e `CostService` — **incl. 300 min × 100 W × 25 ¢/kWh = 12,5 ¢**, trabalho, falhas, margem vs markup); combinação inexistente não aparece; personalização required bloqueia; `setPrimary` transacional testado
+- **Fase 2:** seed (2 materiais × 3 cores, produtos dos 3 fulfillment modes); custo/margem conferem (unit tests em `Money`, `Micros`, `Rate` e `PricingCalculator` — **incl. o caso de referência 17 €/kg + 32 g + 1h30 → 1,64752 € / 3,50 € / 6,00 €**, a sensibilidade ao tempo, o lote, margem vs markup); combinação inexistente não aparece; personalização required bloqueia; `setPrimary` transacional testado
 - **Fase 3:** `stripe listen --forward-to 12studio.test/webhooks/stripe`; cartão `4242…` → paid + stock decrementado; Multibanco → `pending_payment` + reserva (stock intacto, available reduzido) → sucesso simulado → conversão; falha → libertação; **replay de evento** → zero duplicados (PK `webhook_events`); corrida: 2 checkouts c/ availableStock=1 → um passa; capacidade: made_to_order max=2 com 2 em produção → rejeitado; sweep do scheduler liberta reserva expirada (teste com `travel()`); assinatura inválida → 403; feature tests com `Inertia\Testing\AssertableInertia`
 - **Fase 4:** encomenda mista (in_stock + made_to_order) mostra estados independentes e só avança quando o segundo fica ready; manual Vinted desconta stock e aparece no quadro; email em `→ shipped` (Mail::fake + afterCommit); invariantes payment_status × status testadas exaustivamente no `OrderService`
 - **Fase 5:** registo/verificação/login; encomendas em /conta; sitemap e meta OG; smoke E2E manual browse → carrinho → checkout → sucesso
@@ -295,5 +316,5 @@ Por decisão do dono, a implementação avança fase a fase — **não construir
 - `app/Services/StockService.php` — decrementos condicionais, reservas, sweep, movimentos
 - `app/Services/CheckoutService.php` + `StripeCheckoutService.php` — revalidação, capacidade, surcharges, snapshot, session
 - `app/Http/Controllers/Webhooks/StripeWebhookController.php` — idempotência, transação, emails afterCommit
-- `app/Services/CostService.php` — fórmula completa (com ÷1000) e margens
+- `app/Support/Micros.php` + `app/Services/PricingCalculator.php` — aritmética em micro-euros e a fórmula de custo → revenda → preço final
 - `Jenkinsfile` / `Dockerfile` / `docker-compose.yml` / `docker/*.conf` — adaptados do qrcode

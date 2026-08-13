@@ -11,6 +11,22 @@ class Money
      */
     public static function fromDecimal(string $value): int
     {
+        return (int) round(self::normalizeDecimal($value) * 100);
+    }
+
+    /**
+     * Numero escrito por humanos -> float com ponto decimal.
+     *
+     * Publico porque o App\Support\Rate precisa exatamente da mesma leitura
+     * para as taxas ("1,75" multiplicador, "8" por cento): o admin escreve com
+     * virgula num campo e com ponto no seguinte, e a regra de qual dos dois
+     * separadores e o decimal so deve existir num sitio.
+     *
+     * O float vive so aqui, entre o input do formulario e o inteiro que sai —
+     * nunca chega a nenhum calculo.
+     */
+    public static function normalizeDecimal(string $value): float
+    {
         $clean = preg_replace('/[^0-9,.\-]/', '', $value) ?? '';
 
         // Se tem os dois separadores, o ultimo e o decimal ("1.234,56" ou "1,234.56").
@@ -26,7 +42,7 @@ class Money
             $clean = str_replace(',', '.', $clean);
         }
 
-        return (int) round(((float) $clean) * 100);
+        return (float) $clean;
     }
 
     /**

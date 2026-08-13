@@ -352,6 +352,12 @@ export type VariantDetail = {
     salePrice: string | null;
     wholesalePrice: string | null;
     filamentWeightGrams: number | null;
+    /** Total em minutos: "1h30" são 90, nunca 1,30. */
+    printingTimeMinutes: number | null;
+    /** Null = a impressora predefinida. */
+    printerProfileId: number | null;
+    /** Decimais em euros; ímanes, feltro, caixa. */
+    extraCost: string | null;
     stock: number;
     reservedStock: number;
     lowStockThreshold: number;
@@ -367,6 +373,9 @@ export type VariantFormData = {
     sale_price: string;
     wholesale_price: string;
     filament_weight_grams: number | null;
+    printing_time_minutes: number | null;
+    printer_profile_id: number | null;
+    extra_cost: string;
     stock: number;
     low_stock_threshold: number;
     is_default: boolean;

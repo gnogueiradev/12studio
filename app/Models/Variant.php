@@ -27,10 +27,8 @@ use Illuminate\Support\Carbon;
  * @property bool $active
  * @property int|null $filament_weight_grams
  * @property int|null $printing_time_minutes
- * @property int|null $labor_minutes
- * @property int|null $packaging_cost_cents
- * @property int|null $energy_cost_cents
- * @property int|null $failure_rate_percent
+ * @property int|null $printer_profile_id
+ * @property int|null $extra_cost_cents
  * @property int|null $product_weight_grams
  * @property int|null $package_weight_grams
  * @property int|null $length_mm
@@ -41,14 +39,15 @@ use Illuminate\Support\Carbon;
  * @property-read int $available_stock
  * @property-read Product $product
  * @property-read Color|null $color
+ * @property-read PrinterProfile|null $printerProfile
  */
 #[Fillable([
     'product_id', 'sku', 'color_id', 'size_label', 'price_cents',
     'compare_at_cents', 'wholesale_price_cents', 'stock', 'reserved_stock',
     'low_stock_threshold',
     'is_default', 'active', 'filament_weight_grams', 'printing_time_minutes',
-    'labor_minutes', 'packaging_cost_cents', 'energy_cost_cents',
-    'failure_rate_percent', 'product_weight_grams', 'package_weight_grams',
+    'printer_profile_id', 'extra_cost_cents',
+    'product_weight_grams', 'package_weight_grams',
     'length_mm', 'width_mm', 'height_mm',
 ])]
 class Variant extends Model
@@ -74,6 +73,11 @@ class Variant extends Model
             'active' => 'boolean',
             'color_id' => 'integer',
             'filament_weight_grams' => 'integer',
+            // Entram todos na calculadora de precos: sem cast, um "90" vindo
+            // do SQLite chegava ao PricingInput como string.
+            'printing_time_minutes' => 'integer',
+            'printer_profile_id' => 'integer',
+            'extra_cost_cents' => 'integer',
         ];
     }
 
@@ -87,6 +91,18 @@ class Variant extends Model
     public function color(): BelongsTo
     {
         return $this->belongsTo(Color::class);
+    }
+
+    /**
+     * A impressora em que esta variante e feita. Null = a predefinida —
+     * o custo/hora quase nunca difere e obrigar a escolher em cada variante
+     * era ceremonia sem ganho.
+     *
+     * @return BelongsTo<PrinterProfile, $this>
+     */
+    public function printerProfile(): BelongsTo
+    {
+        return $this->belongsTo(PrinterProfile::class);
     }
 
     /** @return HasMany<StockMovement, $this> */

@@ -34,7 +34,11 @@ return new class extends Migration
             $table->boolean('is_default')->default(false);
             $table->boolean('active')->default(true);
 
-            // Custos de producao — alimentam o CostService (custo estimado e margem).
+            // Custos de producao — alimentam a calculadora de precos.
+            // Ver a migracao 2026_08_13_000040_rework_variant_cost_columns: as
+            // quatro colunas abaixo do tempo saem quando a formula muda, e o
+            // printer_profile_id entra. Ficam aqui como estavam no dia em que
+            // esta migracao correu — reescrever historia era mentir sobre ela.
             $table->unsignedInteger('filament_weight_grams')->nullable();
             $table->unsignedInteger('printing_time_minutes')->nullable();
             $table->unsignedInteger('labor_minutes')->nullable();

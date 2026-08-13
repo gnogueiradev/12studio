@@ -3,10 +3,13 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Pricing\PricingPreviewRequest;
 use App\Http\Requests\Variant\StoreVariantRequest;
 use App\Http\Requests\Variant\UpdateVariantRequest;
+use App\Models\PrinterProfile;
 use App\Models\Product;
 use App\Models\Variant;
+use App\Services\PricingPreview;
 use App\Services\VariantService;
 use App\Support\ColorGroups;
 use App\Support\Money;
@@ -21,22 +24,26 @@ use Inertia\Response;
  * /admin/variantes/{variant}/edit. A listagem e a seccao "Variantes" da
  * pagina de edicao do produto.
  *
- * Ja tem cor e gramagem; os restantes campos de custo (tempo de impressao,
- * mao de obra, embalagem, taxa de falha) continuam a ser Fase 2 — chegam
- * com o CostService, que e quem lhes da uso.
+ * O formulario tem cor, gramagem, tempo de impressao, impressora e custos
+ * extra — os cinco campos de que a calculadora precisa. A pre-visualizacao do
+ * preco chega na prop `pricing` e recarrega-se sozinha (`only: ['pricing']`),
+ * com o MESMO motor que calcula o preco gravado.
  */
 class VariantController extends Controller
 {
     public function __construct(
         private VariantService $variantService,
+        private PricingPreview $preview,
     ) {}
 
-    public function create(Product $product): Response
+    public function create(Product $product, PricingPreviewRequest $request): Response
     {
         return Inertia::render('admin/variantes/create', [
             'product' => $this->productSummary($product),
             'suggestedSku' => VariantSku::next($product),
             'colorGroups' => ColorGroups::all(),
+            'printers' => $this->printerOptions(),
+            'pricing' => $this->preview->fromRequest($request),
         ]);
     }
 
@@ -49,13 +56,17 @@ class VariantController extends Controller
         return to_route('admin.produtos.edit', $product);
     }
 
-    public function edit(Variant $variant): Response
+    public function edit(Variant $variant, PricingPreviewRequest $request): Response
     {
         $variant->load('product');
+
+        $this->seedPreviewFromVariant($request, $variant);
 
         return Inertia::render('admin/variantes/edit', [
             'product' => $this->productSummary($variant->product),
             'colorGroups' => ColorGroups::all($variant->color_id),
+            'printers' => $this->printerOptions(),
+            'pricing' => $this->preview->fromRequest($request),
             'variant' => [
                 'id' => $variant->id,
                 'sku' => $variant->sku,
@@ -71,6 +82,11 @@ class VariantController extends Controller
                     ? null
                     : Money::toDecimal($variant->wholesale_price_cents),
                 'filamentWeightGrams' => $variant->filament_weight_grams,
+                'printingTimeMinutes' => $variant->printing_time_minutes,
+                'printerProfileId' => $variant->printer_profile_id,
+                'extraCost' => $variant->extra_cost_cents === null
+                    ? null
+                    : Money::toDecimal($variant->extra_cost_cents),
                 'stock' => $variant->stock,
                 'reservedStock' => $variant->reserved_stock,
                 'lowStockThreshold' => $variant->low_stock_threshold,
@@ -111,5 +127,52 @@ class VariantController extends Controller
             'id' => $product->id,
             'name' => $product->name,
         ];
+    }
+
+    /**
+     * Na PRIMEIRA abertura da ficha nao ha parametros no URL, e a
+     * pre-visualizacao tem de mostrar o preco da variante como ela esta
+     * gravada. Nos recarregamentos parciais que vem a seguir o formulario ja
+     * manda os campos, e ai sao esses que mandam.
+     *
+     * Escrever no pedido depois da validacao e seguro aqui: estes valores vem
+     * da base de dados, nao de quem fez o pedido.
+     */
+    private function seedPreviewFromVariant(PricingPreviewRequest $request, Variant $variant): void
+    {
+        if ($request->hasAny(['weight_grams', 'hours', 'minutes', 'color_id', 'printer_profile_id', 'extra_cost'])) {
+            return;
+        }
+
+        $minutes = $variant->printing_time_minutes ?? 0;
+
+        $request->merge([
+            'weight_grams' => $variant->filament_weight_grams ?? 0,
+            'hours' => intdiv($minutes, 60),
+            'minutes' => $minutes % 60,
+            'color_id' => $variant->color_id,
+            'printer_profile_id' => $variant->printer_profile_id,
+            'extra_cost' => Money::toDecimal($variant->extra_cost_cents ?? 0),
+        ]);
+    }
+
+    /**
+     * @return array<int, array{id: int, name: string, hourlyRateCents: int, isDefault: bool}>
+     */
+    private function printerOptions(): array
+    {
+        return PrinterProfile::query()
+            ->where('active', true)
+            ->orderByDesc('is_default')
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get()
+            ->map(fn (PrinterProfile $profile): array => [
+                'id' => $profile->id,
+                'name' => $profile->name,
+                'hourlyRateCents' => $profile->hourly_rate_cents,
+                'isDefault' => $profile->is_default,
+            ])
+            ->all();
     }
 }

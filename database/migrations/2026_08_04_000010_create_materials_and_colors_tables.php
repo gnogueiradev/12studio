@@ -15,7 +15,7 @@ return new class extends Migration
             $table->id();
             $table->string('name', 60)->unique();
             // Preco por kg do filamento — alimenta o calculo automatico de custo
-            // (CostService). Cor pode ter override proprio.
+            // (PricingCalculator). Cor pode ter override proprio.
             $table->unsignedInteger('price_per_kg_cents')->default(0);
             $table->boolean('active')->default(true);
             $table->unsignedSmallInteger('sort_order')->default(0);

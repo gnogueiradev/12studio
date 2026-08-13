@@ -4,14 +4,17 @@ namespace App\Services;
 
 use App\Models\Setting;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Definicoes editaveis pelo admin em runtime, guardadas na tabela
  * chave-valor `settings`. O que NAO muda sem deploy fica em config/shop.php —
  * este servico so trata do que o dono pode mudar sozinho.
  *
- * Cresce na Fase 2 com energy_cost_per_kwh_cents, printer_wattage e
- * labor_cost_per_hour_cents (parametros do CostService).
+ * Este servico e deliberadamente burro: sabe ler, escrever e esquecer chaves,
+ * e nao sabe que chaves existem. Quem conhece nomes, valores por omissao e
+ * casts e o SettingService::currency() para a moeda e o
+ * App\Services\PricingSettings para a calculadora de precos.
  */
 class SettingService
 {
@@ -32,6 +35,36 @@ class SettingService
         Setting::query()->updateOrCreate(['key' => $key], ['value' => $value]);
 
         $this->cache[$key] = $value;
+    }
+
+    /**
+     * Grava varias chaves de uma vez. Uma seccao das definicoes (os precos sao
+     * oito chaves) ou fica toda gravada ou nao fica nenhuma: meia tabela de
+     * faixas nova e meia antiga daria precos que nao correspondem a
+     * configuracao nenhuma.
+     *
+     * @param  array<string, mixed>  $values
+     */
+    public function setMany(array $values): void
+    {
+        DB::transaction(function () use ($values): void {
+            foreach ($values as $key => $value) {
+                $this->set($key, $value);
+            }
+        });
+    }
+
+    /**
+     * Apaga a chave e volta ao valor por omissao do config. Ao contrario do
+     * resto do dominio, aqui apagar e mesmo apagar: uma definicao nao tem
+     * historial comercial para preservar, e "repor os valores de fabrica" tem
+     * de deixar a linha por escrever para o config voltar a mandar.
+     */
+    public function forget(string $key): void
+    {
+        Setting::query()->whereKey($key)->delete();
+
+        unset($this->cache[$key]);
     }
 
     /**
