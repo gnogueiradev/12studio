@@ -15,12 +15,20 @@ class PricingCalculatorPageTest extends TestCase
 
     private User $admin;
 
+    /**
+     * O filamento de referencia, a 17,00 EUR/kg. Todos os casos deste ficheiro
+     * o mandam no URL: o preco a mao deixou de existir, portanto sem material
+     * escolhido nao ha calculo nenhum para testar.
+     */
+    private Material $material;
+
     protected function setUp(): void
     {
         parent::setUp();
 
         $this->admin = User::factory()->admin()->create();
         PrinterProfile::factory()->isDefault()->create(['name' => 'Bambu Lab A1', 'hourly_rate_cents' => 50]);
+        $this->material = Material::factory()->create(['price_per_kg_cents' => 1_700]);
     }
 
     /**
@@ -52,7 +60,7 @@ class PricingCalculatorPageTest extends TestCase
                 'weight_grams' => 32,
                 'hours' => 1,
                 'minutes' => 30,
-                'price_per_kg' => '17,00',
+                'material_id' => $this->material->id,
             ]))
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('result.filamentCostMicros', 544_000)
@@ -80,7 +88,7 @@ class PricingCalculatorPageTest extends TestCase
                 'weight_grams' => 32,
                 'hours' => 1,
                 'minutes' => 30,
-                'price_per_kg' => '17,00',
+                'material_id' => $this->material->id,
             ]))
             ->assertInertia(fn (AssertableInertia $page) => $page
                 // 90 min x 0,50 EUR/h = 0,75 EUR. Com 1,30 h dariam 0,65 EUR.
@@ -99,7 +107,7 @@ class PricingCalculatorPageTest extends TestCase
                 'hours' => 4,
                 'minutes' => 20,
                 'quantity' => 6,
-                'price_per_kg' => '17,00',
+                'material_id' => $this->material->id,
             ]))
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('result.mode', 'batch')
@@ -110,25 +118,60 @@ class PricingCalculatorPageTest extends TestCase
     }
 
     /**
-     * O material manda no preco por kg quando ha um escolhido: e a bobine que
-     * tem preco. Deixar o cliente mandar o numero abria a porta a um custo que
-     * nao corresponde a filamento nenhum que exista.
+     * O preco por kg vem do MATERIAL e de mais lado nenhum. Este teste fixa a
+     * remocao do preco a mao: um "price_per_kg" no URL — de um link antigo, ou
+     * escrito a mao — nao pode mandar no custo, senao o preco saia de um numero
+     * que nao corresponde a filamento nenhum em stock.
      */
-    public function test_the_chosen_material_overrides_the_typed_price_per_kg(): void
+    public function test_a_typed_price_per_kg_in_the_url_is_ignored(): void
     {
-        $material = Material::factory()->create(['price_per_kg_cents' => 1_700]);
-
         $this->actingAs($this->admin)
             ->get(route('admin.calculadora', [
                 'weight_grams' => 32,
                 'hours' => 1,
                 'minutes' => 30,
-                'material_id' => $material->id,
+                'material_id' => $this->material->id,
                 'price_per_kg' => '99,00',
             ]))
             ->assertInertia(fn (AssertableInertia $page) => $page
+                // 32 g x 0,017 EUR/g. A 99,00 EUR/kg dariam 3 168 000.
                 ->where('result.filamentCostMicros', 544_000)
-                ->where('inputs.price_per_kg', '17.00')
+                ->missing('inputs.price_per_kg')
+            );
+    }
+
+    /**
+     * Sem filamento escolhido nao ha preco, mesmo com peso e tempo. Como o
+     * filamento so pode vir da loja, sem material o custo do plastico era zero —
+     * e um preco que finge que o plastico e de graca engana mais do que preco
+     * nenhum.
+     */
+    public function test_without_a_material_there_is_no_price(): void
+    {
+        $this->actingAs($this->admin)
+            ->get(route('admin.calculadora', [
+                'weight_grams' => 32,
+                'hours' => 1,
+                'minutes' => 30,
+            ]))
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('inputs.material_id', null)
+                ->where('result', null)
+            );
+    }
+
+    /**
+     * A pagina abre vazia: nenhum filamento vem pre-escolhido. A impressora tem
+     * predefinida, o material nao — sao dois filamentos com precos diferentes e
+     * adivinhar qual e que se ia usar era inventar meio orcamento.
+     */
+    public function test_the_page_opens_without_a_material_chosen(): void
+    {
+        $this->actingAs($this->admin)
+            ->get(route('admin.calculadora'))
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('inputs.material_id', null)
+                ->has('materials', 1)
             );
     }
 
@@ -146,7 +189,7 @@ class PricingCalculatorPageTest extends TestCase
                 'weight_grams' => 32,
                 'hours' => 1,
                 'minutes' => 30,
-                'price_per_kg' => '17,00',
+                'material_id' => $this->material->id,
             ]))
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('usingFallbackRate', true)
@@ -170,7 +213,7 @@ class PricingCalculatorPageTest extends TestCase
                 'weight_grams' => 32,
                 'hours' => 1,
                 'minutes' => 30,
-                'price_per_kg' => '17,00',
+                'material_id' => $this->material->id,
                 'printer_profile_id' => $archived->id,
             ]))
             ->assertInertia(fn (AssertableInertia $page) => $page

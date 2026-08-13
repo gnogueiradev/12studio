@@ -17,6 +17,7 @@ import type { Option } from '@/lib/options';
 import { cn } from '@/lib/utils';
 import { calculadora } from '@/routes/admin';
 import { index as impressorasIndex } from '@/routes/admin/impressoras';
+import { index as materiaisIndex } from '@/routes/admin/materiais';
 import type { MaterialOption } from '@/types/catalog';
 import type {
     PricingBreakdown as Breakdown,
@@ -36,8 +37,6 @@ type Props = {
     materials: MaterialOption[];
     modes: Option[];
 };
-
-const NO_MATERIAL = 'none';
 
 /**
  * Espera antes de pedir um novo cálculo. Curto o suficiente para parecer ao
@@ -169,77 +168,64 @@ export default function CalculadoraIndex({
 
                             {/*
                              * Material e não cor: é a bobine que tem preço/kg.
-                             * O €/kg de cada uma aparece à direita, que é
-                             * precisamente aquilo sobre que se está a decidir.
+                             * O €/kg aparece dentro da própria opção, tal como o
+                             * custo/hora da impressora — é precisamente aquilo
+                             * sobre que se está a decidir.
+                             *
+                             * Não há campo de preço separado, de propósito: era
+                             * o mesmo facto escrito em dois sítios, e o segundo
+                             * ficava a mostrar o valor antigo depois de se
+                             * trocar de filamento. Um valor que não existe em
+                             * estado não pode ficar desatualizado.
                              */}
                             <div className="grid gap-2">
                                 <Label>Material / filamento</Label>
                                 <Select
                                     value={
                                         fields.material_id === null
-                                            ? NO_MATERIAL
+                                            ? ''
                                             : String(fields.material_id)
                                     }
                                     onValueChange={(value) =>
-                                        patch({
-                                            material_id:
-                                                value === NO_MATERIAL
-                                                    ? null
-                                                    : Number(value),
-                                        })
+                                        patch({ material_id: Number(value) })
                                     }
                                     disabled={!hasMaterials}
                                 >
                                     <SelectTrigger aria-label="Material">
-                                        <SelectValue placeholder="Preço à mão" />
+                                        <SelectValue
+                                            placeholder={
+                                                hasMaterials
+                                                    ? 'Escolhe um filamento'
+                                                    : 'Nenhum criado'
+                                            }
+                                        />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value={NO_MATERIAL}>
-                                            Preço à mão
-                                        </SelectItem>
                                         {materials.map((material) => (
                                             <SelectItem
                                                 key={material.id}
                                                 value={String(material.id)}
                                             >
-                                                <span className="flex items-center gap-2">
-                                                    {material.name}
-                                                    <span className="text-muted-foreground tabular-nums">
-                                                        {formatCents(
-                                                            material.pricePerKgCents,
-                                                        )}
-                                                        /kg
-                                                    </span>
-                                                </span>
+                                                {material.name} —{' '}
+                                                {formatCents(
+                                                    material.pricePerKgCents,
+                                                )}
+                                                /kg
                                             </SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
-                            </div>
-
-                            <div className="grid gap-2">
-                                <Label htmlFor="price_per_kg">
-                                    Preço do filamento (€/kg)
-                                </Label>
-                                <Input
-                                    id="price_per_kg"
-                                    type="number"
-                                    step="0.01"
-                                    min={0}
-                                    value={fields.price_per_kg}
-                                    onChange={(event) =>
-                                        patch({
-                                            price_per_kg: event.target.value,
-                                        })
-                                    }
-                                    disabled={fields.material_id !== null}
-                                />
-                                {fields.material_id !== null && (
-                                    <p className="text-xs text-muted-foreground">
-                                        Vem do material escolhido — é a bobine
-                                        que tem preço.
-                                    </p>
-                                )}
+                                <p className="text-xs text-muted-foreground">
+                                    {hasMaterials
+                                        ? 'É a bobine que tem preço: o €/kg vem do filamento escolhido.'
+                                        : 'Sem filamentos criados não há preço nenhum para calcular.'}{' '}
+                                    <Link
+                                        href={materiaisIndex()}
+                                        className="underline underline-offset-2"
+                                    >
+                                        Gerir materiais
+                                    </Link>
+                                </p>
                             </div>
 
                             <div className="grid gap-2">
@@ -423,6 +409,7 @@ export default function CalculadoraIndex({
                             hourlyRateCents={hourlyRateCents}
                             printerName={printer?.name ?? null}
                             usingFallbackRate={usingFallbackRate}
+                            emptyHint="Escolhe o filamento e preenche o peso e o tempo de impressão para ver o preço."
                         />
 
                         {/*
@@ -432,7 +419,7 @@ export default function CalculadoraIndex({
                          */}
                         <p role="status" className="sr-only">
                             {result === null
-                                ? 'Sem cálculo: falta o peso ou o tempo.'
+                                ? 'Sem cálculo: falta o filamento, o peso ou o tempo.'
                                 : `Custo ${formatCents(result.productionCostCents)}, revenda ${formatCents(result.resalePriceCents)}, cliente ${formatCents(result.retailPriceCents)}.`}
                         </p>
                     </div>

@@ -37,7 +37,16 @@ class PricingCalculatorController extends Controller
                 // no pedido: uma arquivada cai na predefinida.
                 'printer_profile_id' => $preview['printerProfileId'],
             ],
-            'result' => $preview['result'],
+            // Sem filamento escolhido nao ha preco, mesmo havendo peso e tempo.
+            // O filamento so pode vir da loja, portanto sem material o custo do
+            // plastico seria zero — e um preco que finge que o plastico e de
+            // graca engana mais do que preco nenhum.
+            //
+            // A regra fica AQUI e nao no isCalculable() do pedido porque esse e
+            // partilhado com a ficha de variante, onde o material e opcional:
+            // exigi-lo la apagava em silencio a sugestao de todas as variantes
+            // que ainda nao tem material.
+            'result' => $request->materialId() === null ? null : $preview['result'],
             'hourlyRateCents' => $preview['hourlyRateCents'],
             'usingFallbackRate' => $preview['usingFallbackRate'],
             'printers' => $this->printerOptions(),

@@ -118,6 +118,35 @@ class VariantPricingTest extends TestCase
     }
 
     /**
+     * A fronteira com a calculadora, escrita como teste.
+     *
+     * A calculadora recusa mostrar preco sem filamento escolhido, mas essa regra
+     * e DELA e vive no PricingCalculatorController. Aqui o material e opcional:
+     * uma variante sem material ainda tem tempo de maquina e manuseamento a
+     * contar, e o painel tem de continuar a mostra-los.
+     *
+     * Se alguem "simplificar" a regra para dentro do PricingPreviewRequest — que
+     * as duas paginas partilham — este teste cai. E o aviso.
+     */
+    public function test_a_variant_without_a_material_still_gets_a_suggestion(): void
+    {
+        $variant = Variant::factory()->create([
+            'material_id' => null,
+            'filament_weight_grams' => 32,
+            'printing_time_minutes' => 90,
+        ]);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.variantes.edit', $variant))
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                // Sem bobine nao ha plastico a pagar, mas a maquina andou:
+                // 1,5 h x 0,50 EUR/h.
+                ->where('pricing.result.filamentCostMicros', 0)
+                ->where('pricing.result.machineCostMicros', 750_000)
+            );
+    }
+
+    /**
      * O painel recarrega-se sozinho com `only: ['pricing']` enquanto o admin
      * escreve — sem gravar nada e sem perder o resto do formulario.
      */

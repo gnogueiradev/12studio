@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Admin;
 
+use App\Models\Material;
 use App\Models\PrinterProfile;
 use App\Models\User;
 use App\Services\PricingSettings;
@@ -82,12 +83,13 @@ class PricingSettingsTest extends TestCase
     public function test_saving_the_pricing_settings_changes_the_calculated_price(): void
     {
         PrinterProfile::factory()->isDefault()->create(['hourly_rate_cents' => 50]);
+        $material = Material::factory()->create(['price_per_kg_cents' => 1_700]);
 
         $query = [
             'weight_grams' => 32,
             'hours' => 1,
             'minutes' => 30,
-            'price_per_kg' => '17,00',
+            'material_id' => $material->id,
         ];
 
         $this->actingAs($this->admin)
