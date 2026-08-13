@@ -185,30 +185,6 @@ export type ProductRow = {
     readyStock: number;
 };
 
-/**
- * O modal "Novo produto" da listagem: os campos do produto mais a matriz que
- * gera as variantes de uma vez. O resto do formulário (etiquetas, IVA, SEO,
- * destaque) vive na página de edição.
- */
-export type ProductQuickFormData = {
-    name: string;
-    category_id: number | null;
-    description: string;
-    status: string;
-    fulfillment_mode: string;
-    production_time_days: number | null;
-    vat_rate: number;
-    variants: {
-        color_ids: number[];
-        material_ids: number[];
-        sizes: string[];
-        /** Euros escritos à mão; o servidor converte para cêntimos. */
-        price: string;
-        filament_weight_grams: number | null;
-        printing_time_minutes: number | null;
-    };
-};
-
 export type ProductDetail = {
     id: number;
     name: string;
@@ -226,11 +202,20 @@ export type ProductDetail = {
     maxOpenProductionQty: number | null;
 };
 
+/**
+ * Um só formulário para o modal de produto, nos dois modos. As duas últimas
+ * chaves são as que distinguem criar de editar e por isso nunca vão as duas no
+ * mesmo pedido: a matriz e as fotografias são exclusivas da criação, e o
+ * `transform` do modal tira-as antes de um `patch`. O `UpdateProductRequest`
+ * também as descarta — uma chave que não vai no pedido é uma coluna que o
+ * servidor não toca, e aqui são duas tabelas inteiras que ele não escreve.
+ */
 export type ProductFormData = {
     name: string;
     /** Vazio = gerado a partir do nome pelo ProductService. */
     slug: string;
     category_id: number | null;
+    /** HTML do editor rico; o servidor sanitiza-o antes de gravar. */
     description: string;
     tags: string[];
     status: string;
@@ -240,6 +225,30 @@ export type ProductFormData = {
     production_time_days: number | null;
     allow_backorder: boolean;
     max_open_production_qty: number | null;
+    /** Só ao criar: viajam no mesmo POST, em multipart. */
+    images: File[];
+    /** Só ao criar: cor × material × tamanho, multiplicados no servidor. */
+    variants: {
+        color_ids: number[];
+        material_ids: number[];
+        sizes: string[];
+        /** Euros escritos à mão; o servidor converte para cêntimos. */
+        price: string;
+        filament_weight_grams: number | null;
+        printing_time_minutes: number | null;
+    };
+};
+
+/**
+ * O que o modal precisa para editar um produto, pedido por `?editar={id}` num
+ * recarregamento parcial. Não vem da linha da listagem como nos materiais e nas
+ * impressoras: a linha não traz categoria, descrição, etiquetas nem IVA, e a
+ * galeria e as variantes são tabelas próprias.
+ */
+export type ProductEditing = {
+    product: ProductDetail;
+    images: ProductImageRow[];
+    variants: VariantRow[];
 };
 
 export type ProductImageRow = {

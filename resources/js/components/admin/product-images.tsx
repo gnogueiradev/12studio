@@ -36,6 +36,13 @@ export function ProductImages({ productId, images }: Props) {
 
         post(store(productId).url, {
             forceFormData: true,
+            /*
+             * A galeria vive dentro do modal de edição do produto, e o servidor
+             * responde com um `back()` — sem preservar o estado, cada foto
+             * carregada fechava o modal e obrigava a reabri-lo.
+             */
+            preserveScroll: true,
+            preserveState: true,
             onSuccess: () => reset(),
             onFinish: () => {
                 if (fileInput.current) {
@@ -66,7 +73,7 @@ export function ProductImages({ productId, images }: Props) {
         router.patch(
             ordem(productId).url,
             { ids: reordered.map((image) => image.id) },
-            { preserveScroll: true },
+            { preserveScroll: true, preserveState: true },
         );
     };
 
@@ -149,6 +156,7 @@ export function ProductImages({ productId, images }: Props) {
                     if (deleting) {
                         router.delete(destroy(deleting.id).url, {
                             preserveScroll: true,
+                            preserveState: true,
                             onFinish: () => setDeleting(null),
                         });
                     }
@@ -241,7 +249,10 @@ function ImageCard({ image, first, last, onMove, onDelete }: CardProps) {
                                 router.patch(
                                     principal(image.id).url,
                                     {},
-                                    { preserveScroll: true },
+                                    {
+                                        preserveScroll: true,
+                                        preserveState: true,
+                                    },
                                 )
                             }
                             aria-label="Marcar como principal"

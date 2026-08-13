@@ -1,4 +1,4 @@
-import { Head, Link, router, usePage } from '@inertiajs/react';
+import { Head, router, usePage } from '@inertiajs/react';
 import { Package, Search } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { AdminTable } from '@/components/admin/admin-table';
@@ -18,14 +18,16 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { Spinner } from '@/components/ui/spinner';
 import { formatCents } from '@/lib/money';
 import { label } from '@/lib/options';
 import { cn } from '@/lib/utils';
-import { destroy, edit, index, restaurar } from '@/routes/admin/produtos';
+import { destroy, index, restaurar } from '@/routes/admin/produtos';
 import type {
     CategoryOption,
     ColorOption,
     MaterialOption,
+    ProductEditing,
     ProductRow,
 } from '@/types/catalog';
 import { FULFILLMENT_MODES, PRODUCT_STATUSES } from '@/types/catalog';
@@ -47,9 +49,12 @@ type Props = {
     categories: CategoryOption[];
     colors: ColorOption[];
     materials: MaterialOption[];
+    tagSuggestions: string[];
     defaultVatRate: number;
     /** Preço sugerido para o modal de novo produto. */
     pricingPreview: { result: PricingBreakdown | null };
+    /** O produto a editar, carregado por `?editar={id}`. Null a criar. */
+    editing: ProductEditing | null;
 };
 
 // O Radix Select não aceita value="" — sentinela para "sem filtro".
@@ -111,8 +116,10 @@ export default function ProductsIndex({
     categories,
     colors,
     materials,
+    tagSuggestions,
     defaultVatRate,
     pricingPreview,
+    editing,
 }: Props) {
     const [search, setSearch] = useState(filters.search);
     /*
@@ -123,6 +130,38 @@ export default function ProductsIndex({
     const { url } = usePage();
     const [creating, setCreating] = useState(() => url.includes('novo=1'));
     const [archiving, setArchiving] = useState<ProductRow | null>(null);
+
+    /*
+     * `?editar={id}` faz para a edição o que o `?novo=1` faz para a criação, e
+     * pela mesma razão: o modal tem de sobreviver a uma recarga da página. É
+     * também para lá que voltam o carregamento de fotografias e a criação de
+     * variantes — de outro modo, cada uma dessas ações deixava o admin na
+     * listagem, sem o produto em que estava a trabalhar.
+     *
+     * O id é estado local e o produto é uma prop: separá-los é o que impede o
+     * modal de abrir com os dados do produto anterior enquanto o
+     * recarregamento parcial do produto novo ainda vem a caminho.
+     */
+    const [editingId, setEditingId] = useState<number | null>(
+        () => Number(url.match(/[?&]editar=(\d+)/)?.[1]) || null,
+    );
+    const [loadingId, setLoadingId] = useState<number | null>(null);
+
+    const openEdit = (id: number) => {
+        if (editing?.product.id === id) {
+            setEditingId(id);
+
+            return;
+        }
+
+        setLoadingId(id);
+        router.reload({
+            only: ['editing'],
+            data: { editar: id },
+            onSuccess: () => setEditingId(id),
+            onFinish: () => setLoadingId(null),
+        });
+    };
 
     const applyFilters = (changes: Partial<Filters>) =>
         visit({ ...filters, search, ...changes });
@@ -169,12 +208,13 @@ export default function ProductsIndex({
                         )}
                     </span>
                     <span>
-                        <Link
-                            href={edit(product.id)}
-                            className="font-medium hover:underline"
+                        <button
+                            type="button"
+                            onClick={() => openEdit(product.id)}
+                            className="text-left font-medium hover:underline"
                         >
                             {product.name}
-                        </Link>
+                        </button>
                         <span className="mt-0.5 block text-xs text-muted-foreground">
                             {productMeta(product)}
                         </span>
@@ -252,8 +292,14 @@ export default function ProductsIndex({
             className: 'text-right',
             cell: (product) => (
                 <div className="flex justify-end gap-2">
-                    <Button variant="outline" size="sm" asChild>
-                        <Link href={edit(product.id)}>Editar</Link>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        disabled={loadingId === product.id}
+                        onClick={() => openEdit(product.id)}
+                    >
+                        {loadingId === product.id && <Spinner />}
+                        Editar
                     </Button>
                     {product.status === 'archived' ? (
                         <Button
@@ -400,12 +446,28 @@ export default function ProductsIndex({
                 <Pagination page={products} noun="produtos" />
             </div>
 
+            {/*
+             * O `key` é o que remonta o modal ao trocar de produto: a semente
+             * do formulário é lida uma vez, na montagem, e sem isto abrir o
+             * produto B logo a seguir ao A mostrava os dados do A.
+             */}
             <ProductCreateDialog
-                open={creating}
-                onOpenChange={setCreating}
+                key={editingId ?? 'new'}
+                open={
+                    creating ||
+                    (editingId !== null && editing?.product.id === editingId)
+                }
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setCreating(false);
+                        setEditingId(null);
+                    }
+                }}
+                editing={editingId === null ? null : editing}
                 categories={categories}
                 colors={colors}
                 materials={materials}
+                tagSuggestions={tagSuggestions}
                 defaultVatRate={defaultVatRate}
                 pricingPreview={pricingPreview}
             />

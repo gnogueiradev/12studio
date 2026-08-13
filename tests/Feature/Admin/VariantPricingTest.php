@@ -161,7 +161,7 @@ class VariantPricingTest extends TestCase
                 'is_default' => false,
                 'active' => true,
             ])
-            ->assertRedirect(route('admin.produtos.edit', $product));
+            ->assertRedirect(route('admin.produtos.index', ['editar' => $product->id]));
 
         $this->assertDatabaseHas('variants', [
             'sku' => 'TEST-0001',

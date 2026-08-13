@@ -101,29 +101,49 @@ class ProductController extends Controller
             'products' => $products,
             'filters' => $filters,
             'statusCounts' => $statusCounts,
-            // Listas do modal de novo produto, que vive nesta pagina.
+            // Listas do modal de produto, que vive nesta pagina.
             'categories' => $this->categoryOptions(),
             'colors' => ColorOptions::all(),
             'materials' => MaterialOptions::all(),
+            'tagSuggestions' => $this->tagSuggestions(),
             'defaultVatRate' => (int) config('shop.default_vat_rate', 23),
             'pricingPreview' => $this->preview->fromRequest($pricing),
+            'editing' => $this->editingProduct($request),
         ]);
     }
 
-    public function store(StoreProductRequest $request): RedirectResponse
+    /**
+     * O produto que o modal esta a editar, ou null quando esta a criar.
+     *
+     * Vem por `?editar={id}` e nao pela linha da listagem, ao contrario dos
+     * materiais e das impressoras: a linha nao traz categoria, descricao,
+     * etiquetas nem IVA, e alargar o `->through()` para os trazer era carregar
+     * vinte descricoes em HTML, vinte galerias e vinte matrizes de variantes em
+     * cada render da listagem para servir a que se abre.
+     *
+     * O modal pede-o com um recarregamento parcial (`only: ['editing']`), o
+     * mesmo mecanismo com que ja pede o preco sugerido. O parametro fica no URL
+     * de proposito: e o que faz o modal reabrir no produto certo depois de
+     * qualquer accao da galeria ou das variantes, e o que torna
+     * `/admin/produtos?editar=12` um endereco que se pode partilhar.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function editingProduct(Request $request): ?array
     {
-        $this->productService->store($request->validated());
+        $id = $request->query('editar');
 
-        $this->toast('Produto criado.');
+        if ($id === null || ! ctype_digit((string) $id)) {
+            return null;
+        }
 
-        return to_route('admin.produtos.index');
-    }
+        $product = Product::query()->with(['tags', 'images'])->find((int) $id);
 
-    public function edit(Product $product): Response
-    {
-        $product->load(['tags', 'images']);
+        if ($product === null) {
+            return null;
+        }
 
-        return Inertia::render('admin/produtos/edit', [
+        return [
             'product' => [
                 'id' => $product->id,
                 'name' => $product->name,
@@ -139,11 +159,18 @@ class ProductController extends Controller
                 'allowBackorder' => $product->allow_backorder,
                 'maxOpenProductionQty' => $product->max_open_production_qty,
             ],
-            'categories' => $this->categoryOptions(),
-            'tagSuggestions' => $this->tagSuggestions(),
             'images' => $this->imageRows($product),
             'variants' => $this->variantRows($product),
-        ]);
+        ];
+    }
+
+    public function store(StoreProductRequest $request): RedirectResponse
+    {
+        $this->productService->store($request->validated());
+
+        $this->toast('Produto criado.');
+
+        return to_route('admin.produtos.index');
     }
 
     public function update(UpdateProductRequest $request, Product $product): RedirectResponse
@@ -180,7 +207,7 @@ class ProductController extends Controller
     }
 
     /**
-     * Variantes do produto para a seccao "Variantes" da pagina de edicao.
+     * Variantes do produto para a seccao "Variantes" do modal de edicao.
      *
      * @return array<int, array<string, mixed>>
      */
@@ -222,7 +249,7 @@ class ProductController extends Controller
     }
 
     /**
-     * Galeria do produto para a seccao "Fotografias" da pagina de edicao.
+     * Galeria do produto para a seccao "Fotografias" do modal de edicao.
      * A relacao `images` ja vem ordenada por sort_order.
      *
      * @return array<int, array<string, mixed>>

@@ -52,7 +52,9 @@ class VariantCrudTest extends TestCase
                 ...$this->validPayload(),
                 'normal_price' => '24,90',
             ])
-            ->assertRedirect(route('admin.produtos.edit', $this->product));
+            // O produto ja nao tem pagina de edicao: volta-se a listagem com o
+            // modal aberto no produto, que e onde as variantes se veem.
+            ->assertRedirect(route('admin.produtos.index', ['editar' => $this->product->id]));
 
         $this->assertDatabaseHas('variants', [
             'sku' => 'VASO-PLA-20',
@@ -312,10 +314,15 @@ class VariantCrudTest extends TestCase
     public function test_destroy_archives_instead_of_deleting(): void
     {
         $variant = Variant::factory()->create(['product_id' => $this->product->id]);
+        $modal = route('admin.produtos.index', ['editar' => $this->product->id]);
 
+        // Arquivar dispara-se de dentro do modal, e por isso responde com um
+        // `back()` — ao contrario de criar e editar, que vem do formulario da
+        // variante e tem de nomear o destino.
         $this->actingAs($this->admin)
+            ->from($modal)
             ->delete(route('admin.variantes.destroy', $variant))
-            ->assertRedirect(route('admin.produtos.edit', $this->product));
+            ->assertRedirect($modal);
 
         $this->assertDatabaseHas('variants', [
             'id' => $variant->id,

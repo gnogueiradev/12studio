@@ -41,13 +41,25 @@ class ProductImageTest extends TestCase
         );
     }
 
+    /**
+     * O endereco da galeria: a listagem com o modal de edicao aberto. O produto
+     * nao tem pagina de edicao — a galeria e uma seccao do modal, e por isso
+     * todas as accoes dela respondem com um `back()` para aqui, que e o que
+     * guarda a pagina, os filtros e a pesquisa que estavam por tras.
+     */
+    private function modal(): string
+    {
+        return route('admin.produtos.index', ['editar' => $this->product->id]);
+    }
+
     private function upload(string ...$names): void
     {
         $this->actingAs($this->admin)
+            ->from($this->modal())
             ->post(route('admin.produtos.imagens.store', $this->product), [
                 'images' => $this->files($names),
             ])
-            ->assertRedirect(route('admin.produtos.edit', $this->product));
+            ->assertRedirect($this->modal());
     }
 
     public function test_several_images_upload_at_once(): void
@@ -98,8 +110,9 @@ class ProductImageTest extends TestCase
         $target = ProductImage::query()->orderBy('sort_order')->get()->last();
 
         $this->actingAs($this->admin)
+            ->from($this->modal())
             ->patch(route('admin.imagens.principal', $target))
-            ->assertRedirect(route('admin.produtos.edit', $this->product));
+            ->assertRedirect($this->modal());
 
         $this->assertTrue($target->refresh()->is_primary);
         $this->assertSame(

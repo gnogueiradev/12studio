@@ -8,6 +8,8 @@ use App\Models\Material;
 use App\Models\Product;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
@@ -342,6 +344,103 @@ class ProductCrudTest extends TestCase
         // A matriz so existe na criacao: senao cada correccao ao nome do
         // produto criava variantes novas por baixo.
         $this->assertSame(0, $product->variants()->count());
+    }
+
+    /**
+     * O modal so manda `images` a criar — mas a defesa esta no
+     * UpdateProductRequest, nao no browser.
+     */
+    public function test_update_ignores_images_smuggled_into_the_payload(): void
+    {
+        Storage::fake('public');
+
+        $product = Product::factory()->create();
+
+        $this->actingAs($this->admin)->patch(route('admin.produtos.update', $product), [
+            ...$this->validPayload(),
+            'images' => [UploadedFile::fake()->image('a.jpg', 800, 800)],
+        ]);
+
+        // Senao cada correccao ao nome do produto acumulava mais uma copia da
+        // mesma foto na galeria.
+        $this->assertSame(0, $product->images()->count());
+        Storage::disk('public')->assertDirectoryEmpty('products');
+    }
+
+    /**
+     * As fotografias viajam no mesmo pedido que cria o produto: nao ha para
+     * onde as enviar antes disso — o ImageService precisa de um Product, e o
+     * indice parcial product_images_one_primary_per_product exige que a
+     * primeira de um produto seja a principal.
+     */
+    public function test_store_saves_the_photos_that_came_with_the_product(): void
+    {
+        Storage::fake('public');
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.produtos.store'), [
+                ...$this->validPayload(),
+                'images' => [
+                    UploadedFile::fake()->image('frente.jpg', 800, 800),
+                    UploadedFile::fake()->image('verso.jpg', 800, 800),
+                ],
+            ])
+            ->assertRedirect(route('admin.produtos.index'));
+
+        $product = Product::query()->where('name', 'Caixa Âmbar')->firstOrFail();
+        $images = $product->images()->orderBy('sort_order')->get();
+
+        $this->assertCount(2, $images);
+        $this->assertTrue($images[0]->is_primary);
+        $this->assertFalse($images[1]->is_primary);
+        $this->assertSame([1, 2], $images->pluck('sort_order')->all());
+
+        foreach ($images as $image) {
+            Storage::disk('public')->assertExists($image->path);
+        }
+    }
+
+    /**
+     * O caminho sem fotografias e o normal, e continua a ser um pedido JSON —
+     * o Inertia so passa a multipart quando ha mesmo ficheiros.
+     */
+    public function test_store_creates_the_product_without_any_photo(): void
+    {
+        Storage::fake('public');
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.produtos.store'), $this->validPayload())
+            ->assertRedirect(route('admin.produtos.index'));
+
+        $this->assertDatabaseCount('product_images', 0);
+    }
+
+    public function test_store_rejects_a_file_that_is_not_an_image(): void
+    {
+        Storage::fake('public');
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.produtos.store'), [
+                ...$this->validPayload(),
+                'images' => [UploadedFile::fake()->create('malware.php', 10, 'application/x-php')],
+            ])
+            ->assertSessionHasErrors('images.0');
+
+        // O produto tambem nao nasce: a validacao corre antes do servico.
+        $this->assertDatabaseCount('products', 0);
+    }
+
+    /**
+     * A rota de edicao foi-se com a pagina: o produto edita-se no modal da
+     * listagem, como os materiais e as impressoras.
+     */
+    public function test_the_old_edit_page_is_gone(): void
+    {
+        $product = Product::factory()->create();
+
+        $this->actingAs($this->admin)
+            ->get("/admin/produtos/{$product->id}/edit")
+            ->assertNotFound();
     }
 
     public function test_store_rejects_invalid_fulfillment_mode_and_status(): void

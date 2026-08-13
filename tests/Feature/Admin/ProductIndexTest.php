@@ -4,6 +4,8 @@ namespace Tests\Feature\Admin;
 
 use App\Models\Category;
 use App\Models\Product;
+use App\Models\ProductImage;
+use App\Models\Tag;
 use App\Models\User;
 use App\Models\Variant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -178,7 +180,67 @@ class ProductIndexTest extends TestCase
                 ->has('categories', 1)
                 ->has('colors')
                 ->has('materials')
-                ->has('defaultVatRate'));
+                ->has('tagSuggestions')
+                ->has('defaultVatRate')
+                // Sem `?editar`, o modal esta em modo de criacao e nao ha
+                // produto nenhum a carregar.
+                ->where('editing', null));
+    }
+
+    /**
+     * O modal de edicao nao se semeia da linha, como o dos materiais e o das
+     * impressoras: a linha nao traz categoria, descricao, etiquetas nem IVA, e
+     * a galeria e as variantes sao tabelas proprias. Vem por `?editar={id}`,
+     * num recarregamento parcial.
+     */
+    public function test_the_page_carries_the_product_the_edit_modal_needs(): void
+    {
+        $category = Category::query()->create(['name' => 'Decoração', 'slug' => 'decoracao']);
+
+        $product = Product::factory()->create([
+            'name' => 'Vaso Espiral',
+            'category_id' => $category->id,
+            'description' => '<p>Impresso em PLA.</p>',
+            'vat_rate' => 6,
+        ]);
+        $product->tags()->attach(
+            Tag::query()->create(['name' => 'Natal', 'slug' => 'natal']),
+        );
+
+        $variant = Variant::factory()->create(['product_id' => $product->id]);
+        ProductImage::factory()->create(['product_id' => $product->id]);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.produtos.index', ['editar' => $product->id]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('editing.product.id', $product->id)
+                ->where('editing.product.name', 'Vaso Espiral')
+                ->where('editing.product.categoryId', $category->id)
+                ->where('editing.product.description', '<p>Impresso em PLA.</p>')
+                ->where('editing.product.vatRate', 6)
+                ->where('editing.product.tags', ['Natal'])
+                ->has('editing.images', 1)
+                ->has('editing.variants', 1)
+                ->where('editing.variants.0.sku', $variant->sku));
+    }
+
+    /**
+     * Um id que nao existe (ou lixo) devolve a listagem normal em vez de
+     * rebentar: o parametro vem do URL, e um URL partilhado sobrevive ao
+     * produto que o originou.
+     */
+    public function test_an_unknown_product_to_edit_leaves_the_modal_closed(): void
+    {
+        $this->actingAs($this->admin)
+            ->get(route('admin.produtos.index', ['editar' => 99999]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page->where('editing', null));
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.produtos.index', ['editar' => 'ou-nem-um-numero']))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page->where('editing', null));
     }
 
     public function test_non_admins_cannot_list_products(): void
