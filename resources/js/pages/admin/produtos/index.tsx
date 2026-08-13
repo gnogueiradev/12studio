@@ -32,7 +32,6 @@ import type {
 } from '@/types/catalog';
 import { FULFILLMENT_MODES, PRODUCT_STATUSES } from '@/types/catalog';
 import type { Paginated } from '@/types/pagination';
-import type { PricingBreakdown } from '@/types/pricing';
 
 type Filters = {
     search: string;
@@ -51,8 +50,6 @@ type Props = {
     materials: MaterialOption[];
     tagSuggestions: string[];
     defaultVatRate: number;
-    /** Preço sugerido para o modal de novo produto. */
-    pricingPreview: { result: PricingBreakdown | null };
     /** O produto a editar, carregado por `?editar={id}`. Null a criar. */
     editing: ProductEditing | null;
 };
@@ -118,7 +115,6 @@ export default function ProductsIndex({
     materials,
     tagSuggestions,
     defaultVatRate,
-    pricingPreview,
     editing,
 }: Props) {
     const [search, setSearch] = useState(filters.search);
@@ -469,7 +465,6 @@ export default function ProductsIndex({
                 materials={materials}
                 tagSuggestions={tagSuggestions}
                 defaultVatRate={defaultVatRate}
-                pricingPreview={pricingPreview}
             />
 
             <ConfirmDialog

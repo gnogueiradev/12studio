@@ -232,10 +232,15 @@ export type ProductFormData = {
         color_ids: number[];
         material_ids: number[];
         sizes: string[];
-        /** Euros escritos à mão; o servidor converte para cêntimos. */
-        price: string;
-        filament_weight_grams: number | null;
-        printing_time_minutes: number | null;
+        /*
+         * Euros escritos à mão; o servidor converte para cêntimos. Os mesmos
+         * nomes da ficha da variante, porque é o mesmo VariantService que os
+         * grava — `normal_price` + `sale_price` trocam de lugar em promoção,
+         * e `wholesale_price` só vive no backoffice.
+         */
+        wholesale_price: string;
+        normal_price: string;
+        sale_price: string;
     };
 };
 

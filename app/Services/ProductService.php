@@ -100,9 +100,9 @@ class ProductService
 
     /**
      * Matriz do modal de novo produto: cor x material x tamanho, tres eixos
-     * independentes. Cada combinacao da uma variante, todas com o mesmo preco e
-     * a mesma gramagem. Sao um molde — o que difere entre variantes (stock,
-     * promocao, revenda) edita-se depois, uma a uma.
+     * independentes. Cada combinacao da uma variante, todas com os mesmos tres
+     * precos. Sao um molde — o que difere entre variantes (stock, gramagem,
+     * tempo de impressao) edita-se depois, uma a uma.
      *
      * Cor e material sao obrigatorios: sao os dois que definem uma peca
      * imprimivel — que tom, e em que filamento. Sem um deles nao ha matriz
@@ -159,9 +159,11 @@ class ProductService
             $this->variantService->store($product, [
                 ...$combo,
                 'sku' => $skus[$index],
-                'normal_price' => (string) $seed['price'],
-                'filament_weight_grams' => $seed['filament_weight_grams'] ?? null,
-                'printing_time_minutes' => $seed['printing_time_minutes'] ?? null,
+                // As chaves que o VariantService::normalizePrices() espera: e
+                // la que a promocao troca de lugar com o preco normal.
+                'normal_price' => (string) $seed['normal_price'],
+                'sale_price' => $seed['sale_price'] ?? null,
+                'wholesale_price' => $seed['wholesale_price'] ?? null,
                 'stock' => 0,
             ]);
         }

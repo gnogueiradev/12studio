@@ -28,7 +28,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { centsToInput, formatCents, inputToCents } from '@/lib/money';
+import { formatCents, inputToCents } from '@/lib/money';
 import { cn } from '@/lib/utils';
 import { store, update } from '@/routes/admin/produtos';
 import { create as createVariant } from '@/routes/admin/produtos/variantes';
@@ -45,7 +45,6 @@ import type {
     VariantRow,
 } from '@/types/catalog';
 import { FULFILLMENT_MODES, PRODUCT_STATUSES } from '@/types/catalog';
-import type { PricingBreakdown } from '@/types/pricing';
 
 type Props = {
     open: boolean;
@@ -57,8 +56,6 @@ type Props = {
     materials: MaterialOption[];
     tagSuggestions: string[];
     defaultVatRate: number;
-    /** Calculado no servidor, recarregado em `only: ['pricingPreview']`. */
-    pricingPreview: { result: PricingBreakdown | null };
 };
 
 const NO_CATEGORY = 'none';
@@ -112,7 +109,6 @@ export function ProductCreateDialog({
     materials,
     tagSuggestions,
     defaultVatRate,
-    pricingPreview,
 }: Props) {
     const { data, setData, post, patch, transform, processing, errors, reset } =
         useForm<ProductFormData>({
@@ -134,9 +130,9 @@ export function ProductCreateDialog({
                 color_ids: [],
                 material_ids: [],
                 sizes: [],
-                price: '',
-                filament_weight_grams: null,
-                printing_time_minutes: null,
+                wholesale_price: '',
+                normal_price: '',
+                sale_price: '',
             },
         });
 
@@ -200,51 +196,8 @@ export function ProductCreateDialog({
         materialsById,
     ]);
 
-    const priceCents = inputToCents(data.variants.price);
-    const grams = data.variants.filament_weight_grams ?? 0;
-    const minutes = data.variants.printing_time_minutes ?? 0;
-
-    /*
-     * O material mais caro dos escolhidos: a matriz gera uma variante por
-     * material, e o preço tem de cobrir o mais caro deles. A cor não entra na
-     * conta — não tem preço.
-     */
-    const dearestMaterialId = data.variants.material_ids.reduce<number | null>(
-        (dearest, id) =>
-            (materialsById.get(id)?.pricePerKgCents ?? 0) >
-            (dearest === null
-                ? -1
-                : (materialsById.get(dearest)?.pricePerKgCents ?? 0))
-                ? id
-                : dearest,
-        null,
-    );
-
-    const canSuggest = grams > 0 && minutes > 0 && dearestMaterialId !== null;
-
-    /*
-     * O preço sugerido vem do SERVIDOR, com o mesmo motor da calculadora — não
-     * de uma estimativa aqui. Botão e não debounce: isto é um modal, e um
-     * pedido por tecla enquanto se preenche uma matriz de variantes era ruído.
-     */
-    const suggest = () =>
-        router.reload({
-            only: ['pricingPreview'],
-            data: {
-                weight_grams: grams,
-                hours: Math.floor(minutes / 60),
-                minutes: minutes % 60,
-                material_id: dearestMaterialId,
-            },
-        });
-
-    const suggestion = pricingPreview.result;
-
-    /** Lucro sobre o preço escrito, com o custo real — não só o do filamento. */
-    const marginCents =
-        suggestion && priceCents > 0
-            ? priceCents - suggestion.productionCostCents
-            : null;
+    const normalCents = inputToCents(data.variants.normal_price);
+    const wholesaleCents = inputToCents(data.variants.wholesale_price);
 
     // Cor E material, a espelhar o ProductService::generateVariants(). A editar
     // não há matriz nenhuma para validar — as variantes já existem.
@@ -252,13 +205,23 @@ export function ProductCreateDialog({
     const canSubmit =
         editing !== null ||
         (named &&
-            priceCents > 0 &&
+            normalCents > 0 &&
+            wholesaleCents > 0 &&
             data.variants.color_ids.length > 0 &&
             data.variants.material_ids.length > 0);
 
     const messages = errors as Record<string, string>;
-    const variantsError = Object.entries(messages).find(([key]) =>
-        key.startsWith('variants'),
+
+    /*
+     * Só os eixos: os três preços mostram o erro por baixo do campo, e um
+     * apanha-tudo sobre `variants` repetia essa mensagem no fim da secção,
+     * longe do campo que a causou.
+     */
+    const variantsError = Object.entries(messages).find(
+        ([key]) =>
+            key.startsWith('variants.color_ids') ||
+            key.startsWith('variants.material_ids') ||
+            key.startsWith('variants.sizes'),
     )?.[1];
     const imagesError = Object.entries(messages).find(([key]) =>
         key.startsWith('images'),
@@ -451,211 +414,109 @@ export function ProductCreateDialog({
                     </div>
 
                     {/*
-                     * Preço, gramagem e tempo são o molde que a matriz
-                     * aplica a todas as combinações. A editar não aparecem:
-                     * cada variante já tem os seus, e um campo aqui em cima
-                     * prometia escrever nas trinta de uma vez.
+                     * Os três preços são o molde que a matriz aplica a todas
+                     * as combinações. A editar não aparecem: cada variante já
+                     * tem os seus, e um campo aqui em cima prometia escrever
+                     * nas trinta de uma vez.
+                     *
+                     * A gramagem e o tempo de impressão não estão aqui de
+                     * propósito — são dados de produção, e vivem na ficha de
+                     * cada variante, ao lado do painel que os transforma em
+                     * custo.
                      */}
                     {editing === null && (
-                        <>
-                            <div className="grid gap-4 sm:grid-cols-3">
-                                <div className="grid gap-2">
-                                    <Label htmlFor="variant-price">
-                                        Preço de venda
-                                    </Label>
-                                    <div className="relative">
-                                        <Input
-                                            id="variant-price"
-                                            type="number"
-                                            step="0.5"
-                                            min={0}
-                                            value={data.variants.price}
-                                            onChange={(event) =>
-                                                setVariants({
-                                                    price: event.target.value,
-                                                })
-                                            }
-                                            placeholder="29,00"
-                                            className="pr-8 tabular-nums"
-                                        />
-                                        <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-muted-foreground">
-                                            €
-                                        </span>
-                                    </div>
+                        <div className="grid gap-4 sm:grid-cols-3">
+                            <div className="grid gap-2">
+                                <Label htmlFor="variant-wholesale-price">
+                                    Preço de revenda
+                                </Label>
+                                <div className="relative">
+                                    <Input
+                                        id="variant-wholesale-price"
+                                        type="number"
+                                        step="0.01"
+                                        min={0}
+                                        value={data.variants.wholesale_price}
+                                        onChange={(event) =>
+                                            setVariants({
+                                                wholesale_price:
+                                                    event.target.value,
+                                            })
+                                        }
+                                        placeholder="21,00"
+                                        className="pr-8 tabular-nums"
+                                    />
+                                    <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-muted-foreground">
+                                        €
+                                    </span>
                                 </div>
-
-                                <div className="grid gap-2">
-                                    <Label htmlFor="variant-grams">
-                                        Filamento
-                                    </Label>
-                                    <div className="relative">
-                                        <Input
-                                            id="variant-grams"
-                                            type="number"
-                                            min={0}
-                                            value={
-                                                data.variants
-                                                    .filament_weight_grams ?? ''
-                                            }
-                                            onChange={(event) =>
-                                                setVariants({
-                                                    filament_weight_grams:
-                                                        event.target.value ===
-                                                        ''
-                                                            ? null
-                                                            : Number(
-                                                                  event.target
-                                                                      .value,
-                                                              ),
-                                                })
-                                            }
-                                            placeholder="84"
-                                            className="pr-8 tabular-nums"
-                                        />
-                                        <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-muted-foreground">
-                                            g
-                                        </span>
-                                    </div>
-                                </div>
-
-                                <div className="grid gap-2">
-                                    <Label htmlFor="variant-minutes">
-                                        Tempo de impressão
-                                    </Label>
-                                    <div className="relative">
-                                        <Input
-                                            id="variant-minutes"
-                                            type="number"
-                                            min={0}
-                                            value={
-                                                data.variants
-                                                    .printing_time_minutes ?? ''
-                                            }
-                                            onChange={(event) =>
-                                                setVariants({
-                                                    printing_time_minutes:
-                                                        event.target.value ===
-                                                        ''
-                                                            ? null
-                                                            : Number(
-                                                                  event.target
-                                                                      .value,
-                                                              ),
-                                                })
-                                            }
-                                            placeholder="130"
-                                            className="pr-12 tabular-nums"
-                                        />
-                                        <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-muted-foreground">
-                                            min
-                                        </span>
-                                    </div>
-                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                    Só no backoffice — a montra nunca o mostra.
+                                </p>
+                                <InputError
+                                    message={
+                                        messages['variants.wholesale_price']
+                                    }
+                                />
                             </div>
 
-                            <div className="flex flex-col gap-3 rounded-xl border border-border/60 bg-secondary/40 px-4 py-3">
-                                <div className="flex items-center justify-between gap-4">
-                                    <span>
-                                        <span className="block text-sm">
-                                            Custo real estimado
-                                        </span>
-                                        <span className="mt-0.5 block text-xs text-muted-foreground">
-                                            {suggestion
-                                                ? 'Material, máquina, manuseamento e risco — o material mais caro dos escolhidos.'
-                                                : 'Preenche a gramagem, o tempo e um material para calcular.'}
-                                        </span>
-                                    </span>
-                                    <span className="text-lg font-semibold tabular-nums">
-                                        {suggestion
-                                            ? formatCents(
-                                                  suggestion.productionCostCents,
-                                              )
-                                            : '—'}
-                                    </span>
-                                </div>
-
-                                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-3">
-                                    {suggestion ? (
-                                        <span className="text-xs text-muted-foreground">
-                                            Sugerido: revenda{' '}
-                                            <strong className="text-foreground tabular-nums">
-                                                {formatCents(
-                                                    suggestion.resalePriceCents,
-                                                )}
-                                            </strong>
-                                            , cliente{' '}
-                                            <strong className="text-foreground tabular-nums">
-                                                {formatCents(
-                                                    suggestion.retailPriceCents,
-                                                )}
-                                            </strong>
-                                            {marginCents !== null && (
-                                                <>
-                                                    {' · '}
-                                                    lucro deste preço{' '}
-                                                    <strong
-                                                        className={cn(
-                                                            'tabular-nums',
-                                                            marginCents <= 0
-                                                                ? 'text-destructive'
-                                                                : 'text-success',
-                                                        )}
-                                                    >
-                                                        {formatCents(
-                                                            marginCents,
-                                                        )}
-                                                    </strong>
-                                                </>
-                                            )}
-                                        </span>
-                                    ) : (
-                                        <span className="text-xs text-muted-foreground">
-                                            O tempo de impressão conta tanto
-                                            como o plástico.
-                                        </span>
-                                    )}
-
-                                    {/*
-                                     * O botão fica sempre: mexer na
-                                     * gramagem ou no tempo depois de
-                                     * calcular deixava um número obsoleto
-                                     * no ecrã sem nada que o dissesse.
-                                     */}
-                                    <span className="flex gap-2">
-                                        {suggestion && (
-                                            <Button
-                                                type="button"
-                                                variant="outline"
-                                                size="sm"
-                                                onClick={() =>
-                                                    setVariants({
-                                                        price: centsToInput(
-                                                            suggestion.retailPriceCents,
-                                                        ),
-                                                    })
-                                                }
-                                            >
-                                                Usar{' '}
-                                                {formatCents(
-                                                    suggestion.retailPriceCents,
-                                                )}
-                                            </Button>
-                                        )}
-                                        <Button
-                                            type="button"
-                                            variant="ghost"
-                                            size="sm"
-                                            disabled={!canSuggest}
-                                            onClick={suggest}
-                                        >
-                                            {suggestion
-                                                ? 'Recalcular'
-                                                : 'Calcular'}
-                                        </Button>
+                            <div className="grid gap-2">
+                                <Label htmlFor="variant-price">
+                                    Preço de venda
+                                </Label>
+                                <div className="relative">
+                                    <Input
+                                        id="variant-price"
+                                        type="number"
+                                        step="0.01"
+                                        min={0}
+                                        value={data.variants.normal_price}
+                                        onChange={(event) =>
+                                            setVariants({
+                                                normal_price:
+                                                    event.target.value,
+                                            })
+                                        }
+                                        placeholder="29,00"
+                                        className="pr-8 tabular-nums"
+                                    />
+                                    <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-muted-foreground">
+                                        €
                                     </span>
                                 </div>
+                                <InputError
+                                    message={messages['variants.normal_price']}
+                                />
                             </div>
-                        </>
+
+                            <div className="grid gap-2">
+                                <Label htmlFor="variant-sale-price">
+                                    Preço em promo
+                                </Label>
+                                <div className="relative">
+                                    <Input
+                                        id="variant-sale-price"
+                                        type="number"
+                                        step="0.01"
+                                        min={0}
+                                        value={data.variants.sale_price}
+                                        onChange={(event) =>
+                                            setVariants({
+                                                sale_price: event.target.value,
+                                            })
+                                        }
+                                        placeholder="Opcional"
+                                        className="pr-8 tabular-nums"
+                                    />
+                                    <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-muted-foreground">
+                                        €
+                                    </span>
+                                </div>
+                                <InputError
+                                    message={messages['variants.sale_price']}
+                                />
+                            </div>
+                        </div>
                     )}
 
                     <div className="flex flex-col gap-4 border-t border-border/60 pt-5">
