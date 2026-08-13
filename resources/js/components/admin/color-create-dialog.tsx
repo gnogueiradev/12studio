@@ -15,6 +15,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
+import { isPlainHex } from '@/lib/color';
 import { centsToInput, formatCents, inputToCents } from '@/lib/money';
 import { cn } from '@/lib/utils';
 import { store, update } from '@/routes/admin/cores';
@@ -33,9 +34,6 @@ type Props = {
     materials: ColorMaterialCard[];
     palette: PaletteColor[];
 };
-
-/** O `type="color"` e a validação em espelho só aceitam #rrggbb. */
-const isPlainHex = (value: string) => /^#[0-9a-fA-F]{6}$/.test(value);
 
 /**
  * Criar e editar uma cor — os dois no mesmo sítio, porque escolher em que

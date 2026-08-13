@@ -3,7 +3,7 @@
 namespace App\Services;
 
 use App\Models\Material;
-use App\Support\FilamentPalette;
+use App\Support\ColorPalette;
 use App\Support\Money;
 use Illuminate\Support\Facades\DB;
 
@@ -18,25 +18,26 @@ class MaterialService
      */
     public function store(array $data): Material
     {
-        $colors = $this->pullColors($data);
+        // Resolver ANTES de abrir a transacao: e a leitura do catalogo que
+        // decide se cada cor ja existe, e la dentro ela mudava a cada linha
+        // inserida.
+        $colors = ColorPalette::resolve($this->pullColors($data));
 
         return DB::transaction(function () use ($data, $colors): Material {
             $material = Material::query()->create($this->normalizePrice($data));
 
-            foreach ($colors as $index => $name) {
-                $hex = FilamentPalette::hex($name);
-
-                if ($hex === null) {
-                    continue;
-                }
-
+            foreach ($colors as $index => $color) {
                 $material->colors()->create([
-                    'name' => $name,
-                    'hex_color' => $hex,
+                    'name' => $color['name'],
+                    'hex_color' => $color['hex'],
                     // Sem override: a cor herda o preco/kg do material, que e
                     // o que o modal acabou de pedir ao admin.
                     'price_per_kg_cents' => null,
                     'is_active' => true,
+                    // A ordem por que o admin ligou as chips. O sort_order da
+                    // linha irma noutro material nao servia: e um ordinal
+                    // dentro desse material, e a primeira cor e 0 em toda a
+                    // gente.
                     'sort_order' => $index,
                 ]);
             }
@@ -81,15 +82,31 @@ class MaterialService
      * `colors` vem do formulario mas nao e coluna de `materials` — sai do
      * payload antes do create(), como o ProductService faz com as tags.
      *
+     * Desduplica pelo nome, sem distinguir maiusculas, e reindexa: e o indice
+     * do array que vira `sort_order`, por isso ele tem de ficar denso.
+     *
      * @param  array<string, mixed>  $data
-     * @return array<int, string>
+     * @return array<int, array{name: string, hex: string}>
      */
     private function pullColors(array &$data): array
     {
         $colors = $data['colors'] ?? [];
         unset($data['colors']);
 
-        return is_array($colors) ? array_values(array_unique($colors)) : [];
+        if (! is_array($colors)) {
+            return [];
+        }
+
+        $unique = [];
+
+        foreach ($colors as $color) {
+            $unique[mb_strtolower(trim($color['name']))] ??= [
+                'name' => $color['name'],
+                'hex' => $color['hex'],
+            ];
+        }
+
+        return array_values($unique);
     }
 
     /**

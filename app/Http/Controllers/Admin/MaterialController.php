@@ -8,7 +8,7 @@ use App\Http\Requests\Material\UpdateMaterialRequest;
 use App\Models\Color;
 use App\Models\Material;
 use App\Services\MaterialService;
-use App\Support\FilamentPalette;
+use App\Support\ColorPalette;
 use App\Support\Money;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
@@ -56,7 +56,11 @@ class MaterialController extends Controller
                     ->values(),
             ]),
             'stats' => $this->stats($materials),
-            'palette' => FilamentPalette::all(),
+            // As chips do modal sao a paleta que o admin construiu em
+            // /admin/cores, nao uma lista fixa. Nao se chama `palette` por isso
+            // mesmo: neste projeto "paleta" sao os presets do FilamentPalette,
+            // e o formulario de nova cor continua a receber esses.
+            'colorOptions' => ColorPalette::all(),
             'families' => Material::FAMILIES,
         ]);
     }

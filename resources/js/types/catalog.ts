@@ -94,7 +94,11 @@ export type MaterialFormData = {
     sort_order: number;
 };
 
-/** Preset da paleta de filamento (App\Support\FilamentPalette). */
+/**
+ * Nome e hex de uma chip ou swatch. Em /admin/cores são os presets do
+ * App\Support\FilamentPalette (atalho para escolher um tom); no modal de novo
+ * material são as cores que já existem, do App\Support\ColorPalette.
+ */
 export type PaletteColor = {
     name: string;
     hex: string;
@@ -102,8 +106,11 @@ export type PaletteColor = {
 
 /**
  * Criar material no modal da listagem. Chaves em snake_case porque espelham as
- * regras do StoreMaterialRequest; `colors` são nomes de presets da paleta, e é
- * o servidor que lhes descobre o hex.
+ * regras do StoreMaterialRequest.
+ *
+ * Cada cor vai com hex porque o modal também deixa inventar uma ali mesmo — mas
+ * o hex só conta para nomes novos: numa cor que já existe ganha o do catálogo,
+ * senão o grupo que /admin/cores mostra como uma cor só ficava com dois tons.
  */
 export type MaterialQuickFormData = {
     name: string;
@@ -112,7 +119,7 @@ export type MaterialQuickFormData = {
     /** Euros escritos à mão; o servidor converte para cêntimos. */
     price_per_kg: string;
     min_spools: number;
-    colors: string[];
+    colors: PaletteColor[];
 };
 
 /**
