@@ -113,6 +113,7 @@ export type OrderRow = {
     itemsSummary: string | null;
     /** Soma das quantidades — o "2 un." do resumo. */
     itemsQty: number;
+    tags: string[];
     createdAt: string | null;
     /** "09 ago", já formatado em PT pelo servidor. */
     createdAtShort: string | null;
@@ -181,6 +182,8 @@ export type OrderDetail = {
     trackingNumber: string | null;
     trackingUrl: string | null;
     adminNote: string | null;
+    /** Nomes, não ids — o campo de etiquetas nunca lida com chaves. */
+    tags: string[];
     stockIssue: boolean;
     createdAt: string | null;
     paidAt: string | null;

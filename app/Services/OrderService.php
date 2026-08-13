@@ -7,6 +7,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\OrderItemStatusHistory;
 use App\Models\OrderStatusHistory;
+use App\Models\Tag;
 use App\Models\User;
 use App\Models\Variant;
 use App\Support\Money;
@@ -51,6 +52,7 @@ class OrderService
 
     public function __construct(
         private StockService $stockService,
+        private TagService $tagService,
     ) {}
 
     /**
@@ -363,6 +365,14 @@ class OrderService
             'tracking_url' => $data['tracking_url'] ?? null,
             'shipping_method_name' => $data['shipping_method_name'] ?? null,
         ]);
+
+        // Ao contrario do cliente e do produto, aqui nao ha "nao mexer": este
+        // form submete os campos todos de uma vez, portanto etiquetas ausentes
+        // sao etiquetas apagadas — que e o que o admin acabou de fazer no ecra.
+        /** @var array<int, string> $tags */
+        $tags = $data['tags'] ?? [];
+
+        $order->tags()->sync($this->tagService->idsFor(Tag::SCOPE_ORDER, $tags));
 
         return $order;
     }

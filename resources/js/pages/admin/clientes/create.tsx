@@ -5,7 +5,11 @@ import { index, store } from '@/routes/admin/clientes';
 import type { CustomerFormData } from '@/types/customer';
 import { EMPTY_CUSTOMER_FORM } from '@/types/customer';
 
-export default function CustomersCreate() {
+type Props = {
+    tagSuggestions: string[];
+};
+
+export default function CustomersCreate({ tagSuggestions }: Props) {
     const { data, setData, post, processing, errors } =
         useForm<CustomerFormData>({ ...EMPTY_CUSTOMER_FORM });
 
@@ -29,6 +33,7 @@ export default function CustomersCreate() {
                     processing={processing}
                     onSubmit={submit}
                     submitLabel="Criar cliente"
+                    tagSuggestions={tagSuggestions}
                 />
             </div>
         </>

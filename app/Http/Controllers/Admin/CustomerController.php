@@ -7,8 +7,10 @@ use App\Http\Requests\Customer\StoreCustomerRequest;
 use App\Http\Requests\Customer\UpdateCustomerRequest;
 use App\Models\Address;
 use App\Models\Order;
+use App\Models\Tag;
 use App\Models\User;
 use App\Services\CustomerService;
+use App\Services\TagService;
 use App\Support\ShortDate;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\RedirectResponse;
@@ -25,6 +27,7 @@ class CustomerController extends Controller
 {
     public function __construct(
         private CustomerService $customerService,
+        private TagService $tagService,
     ) {}
 
     public function index(Request $request): Response
@@ -33,6 +36,7 @@ class CustomerController extends Controller
             'search' => trim((string) $request->query('search', '')),
             'customer_type' => (string) $request->query('customer_type', ''),
             'sales_channel' => (string) $request->query('sales_channel', ''),
+            'tag' => (string) $request->query('tag', ''),
         ];
 
         // Base com todos os filtros MENOS o tipo, pela mesma razao das chips de
@@ -50,6 +54,12 @@ class CustomerController extends Controller
             ->when($filters['sales_channel'] !== '', fn ($query) => $query->whereHas(
                 'orders',
                 fn ($order) => $order->where('sales_channel', $filters['sales_channel']),
+            ))
+            // Dentro do $scoped, como a pesquisa: filtrar por etiqueta tem de
+            // reduzir as contagens das chips de tipo.
+            ->when($filters['tag'] !== '', fn ($query) => $query->whereHas(
+                'tags',
+                fn ($tag) => $tag->where('slug', $filters['tag']),
             ));
 
         $typeCounts = $scoped()
@@ -62,7 +72,7 @@ class CustomerController extends Controller
 
         $customers = $scoped()
             ->when($filters['customer_type'] !== '', fn ($query) => $query->where('customer_type', $filters['customer_type']))
-            ->with('addresses')
+            ->with(['addresses', 'tags'])
             ->withCount('orders')
             // Total gasto = so o que esta efetivamente pago; o indicador
             // financeiro e payment_status, nunca o status da encomenda.
@@ -85,6 +95,7 @@ class CustomerController extends Controller
                 'email' => $customer->email,
                 'customerType' => $customer->customer_type,
                 'nif' => $customer->nif,
+                'tags' => $customer->tags->pluck('name')->all(),
                 'habitualChannel' => $history[$customer->id]['channel'] ?? null,
                 'ordersCount' => $customer->orders_count,
                 'paidTotalCents' => (int) ($customer->paid_total_cents ?? 0),
@@ -99,12 +110,16 @@ class CustomerController extends Controller
             'filters' => $filters,
             'typeCounts' => $typeCounts,
             'stats' => $this->stats(),
+            'tagSuggestions' => $this->tagService->suggestions(Tag::SCOPE_CUSTOMER),
+            'tagOptions' => $this->tagService->optionsFor(Tag::SCOPE_CUSTOMER),
         ]);
     }
 
     public function create(): Response
     {
-        return Inertia::render('admin/clientes/create');
+        return Inertia::render('admin/clientes/create', [
+            'tagSuggestions' => $this->tagService->suggestions(Tag::SCOPE_CUSTOMER),
+        ]);
     }
 
     public function store(StoreCustomerRequest $request): RedirectResponse
@@ -142,10 +157,15 @@ class CustomerController extends Controller
                 'phone' => $customer->phone,
                 'nif' => $customer->nif,
                 'adminNote' => $customer->admin_note,
+                // Nomes e nao ids: o TagInput nunca soube o que e uma chave
+                // primaria, e e isso que o torna reutilizavel aqui sem tocar
+                // numa linha do componente.
+                'tags' => $customer->tags->pluck('name')->all(),
                 ...$this->addressFields($address),
                 'createdAt' => $customer->created_at?->format('Y-m-d'),
                 'canDelete' => ! $customer->orders()->exists(),
             ],
+            'tagSuggestions' => $this->tagService->suggestions(Tag::SCOPE_CUSTOMER),
             'orders' => $customer->orders()
                 ->orderByDesc('created_at')
                 ->get()

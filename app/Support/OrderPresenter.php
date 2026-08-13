@@ -24,7 +24,7 @@ class OrderPresenter
      */
     public static function detail(Order $order): array
     {
-        $order->load(['items.statusHistories.changedBy', 'statusHistories.changedBy', 'createdBy']);
+        $order->load(['items.statusHistories.changedBy', 'statusHistories.changedBy', 'createdBy', 'tags']);
 
         return [
             'id' => $order->id,
@@ -49,6 +49,7 @@ class OrderPresenter
             'trackingNumber' => $order->tracking_number,
             'trackingUrl' => $order->tracking_url,
             'adminNote' => $order->admin_note,
+            'tags' => $order->tags->pluck('name')->all(),
             'stockIssue' => $order->stock_issue,
             'createdAt' => $order->created_at?->format('Y-m-d H:i'),
             'paidAt' => $order->paid_at?->format('Y-m-d H:i'),

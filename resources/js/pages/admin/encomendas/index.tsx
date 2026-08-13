@@ -11,6 +11,8 @@ import {
     StatusBadge,
     StatusText,
 } from '@/components/admin/status-badge';
+import { TagChips } from '@/components/admin/tag-chips';
+import { TagFilter } from '@/components/admin/tag-filter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -22,6 +24,7 @@ import {
 } from '@/components/ui/select';
 import { formatCents } from '@/lib/money';
 import { label } from '@/lib/options';
+import type { Option } from '@/lib/options';
 import { create, index, show } from '@/routes/admin/encomendas';
 import { index as drafts } from '@/routes/admin/encomendas/rascunhos';
 import type { OrderRow } from '@/types/order';
@@ -38,6 +41,8 @@ type Filters = {
     status: string;
     payment_status: string;
     sales_channel: string;
+    /** Slug da etiqueta, ou '' sem filtro. */
+    tag: string;
 };
 
 type Props = {
@@ -47,6 +52,8 @@ type Props = {
     statusCounts: Record<string, number>;
     /** Encomendas manuais guardadas a meio por este admin. */
     draftsCount: number;
+    /** Só as que alguma encomenda usa — as outras dariam zero resultados. */
+    tagOptions: Option[];
 };
 
 // O Radix Select não aceita value="" — sentinela para "sem filtro".
@@ -71,6 +78,7 @@ export default function OrdersIndex({
     filters,
     statusCounts,
     draftsCount,
+    tagOptions,
 }: Props) {
     const [search, setSearch] = useState(filters.search);
 
@@ -139,6 +147,7 @@ export default function OrdersIndex({
                             {order.itemsQty > 1 && ` · ${order.itemsQty} un.`}
                         </div>
                     )}
+                    <TagChips tags={order.tags} />
                 </>
             ),
         },
@@ -284,6 +293,12 @@ export default function OrdersIndex({
                             ))}
                         </SelectContent>
                     </Select>
+
+                    <TagFilter
+                        value={filters.tag}
+                        options={tagOptions}
+                        onChange={(tag) => applyFilters({ tag })}
+                    />
 
                     <span className="ml-auto text-xs text-muted-foreground">
                         {orders.total}{' '}

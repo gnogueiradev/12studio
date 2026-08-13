@@ -2,12 +2,12 @@
 
 namespace App\Models;
 
+use App\Concerns\HasTags;
 use Database\Factories\ProductFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
@@ -48,10 +48,17 @@ class Product extends Model
     /** @use HasFactory<ProductFactory> */
     use HasFactory;
 
+    use HasTags;
+
     // Convencao qrcode: const arrays em vez de PHP enums.
     public const STATUSES = ['draft', 'active', 'archived'];
 
     public const FULFILLMENT_MODES = ['in_stock', 'made_to_order', 'custom'];
+
+    public function tagScope(): string
+    {
+        return Tag::SCOPE_PRODUCT;
+    }
 
     /**
      * Get the attributes that should be cast.
@@ -81,12 +88,6 @@ class Product extends Model
     public function variants(): HasMany
     {
         return $this->hasMany(Variant::class);
-    }
-
-    /** @return BelongsToMany<Tag, $this> */
-    public function tags(): BelongsToMany
-    {
-        return $this->belongsToMany(Tag::class)->orderBy('name');
     }
 
     /** @return HasMany<ProductImage, $this> */

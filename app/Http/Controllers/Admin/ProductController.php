@@ -11,6 +11,7 @@ use App\Models\ProductImage;
 use App\Models\Tag;
 use App\Models\Variant;
 use App\Services\ProductService;
+use App\Services\TagService;
 use App\Support\ColorOptions;
 use App\Support\MaterialOptions;
 use Illuminate\Http\RedirectResponse;
@@ -23,6 +24,7 @@ class ProductController extends Controller
 {
     public function __construct(
         private ProductService $productService,
+        private TagService $tagService,
     ) {}
 
     public function index(Request $request): Response
@@ -32,6 +34,7 @@ class ProductController extends Controller
             'status' => (string) $request->query('status', ''),
             'category_id' => (string) $request->query('category_id', ''),
             'fulfillment_mode' => (string) $request->query('fulfillment_mode', ''),
+            'tag' => (string) $request->query('tag', ''),
         ];
 
         // Base com todos os filtros MENOS o estado, como nas encomendas e nos
@@ -41,6 +44,14 @@ class ProductController extends Controller
         $scoped = fn () => Product::query()
             ->when($filters['category_id'] !== '', fn ($query) => $query->where('category_id', $filters['category_id']))
             ->when($filters['fulfillment_mode'] !== '', fn ($query) => $query->where('fulfillment_mode', $filters['fulfillment_mode']))
+            // Dentro do $scoped e nao depois: filtrar por etiqueta tem de
+            // reduzir as contagens das chips de estado, como a pesquisa faz.
+            // A relacao ja restringe ao ambito, portanto o slug nao precisa de
+            // desempate — "natal" de encomenda nunca chega aqui.
+            ->when($filters['tag'] !== '', fn ($query) => $query->whereHas(
+                'tags',
+                fn ($tag) => $tag->where('slug', $filters['tag']),
+            ))
             // A referencia que o admin procura e o SKU da variante — o produto
             // nao tem nenhuma. Procurar so pelo nome deixava de fora a via mais
             // rapida de chegar a um produto: copiar a referencia de uma etiqueta.
@@ -60,7 +71,7 @@ class ProductController extends Controller
             ->when($filters['status'] !== '', fn ($query) => $query->where('status', $filters['status']))
             // A variante default e a que a montra usa para mostrar preco — e a
             // mesma de quem serve a referencia, a gramagem e o tempo na linha.
-            ->with(['category', 'primaryImage', 'defaultVariant'])
+            ->with(['category', 'primaryImage', 'defaultVariant', 'tags'])
             ->withCount('variants')
             // Pronto a sair hoje, somado em todas as variantes. A subtracao vai
             // dentro do SUM porque `available_stock` e um acessor calculado —
@@ -78,6 +89,7 @@ class ProductController extends Controller
                 'fulfillmentMode' => $product->fulfillment_mode,
                 'productionTimeDays' => $product->production_time_days,
                 'category' => $product->category?->name,
+                'tags' => $product->tags->pluck('name')->all(),
                 'imageUrl' => $product->primaryImage?->url,
                 'variantsCount' => $product->variants_count,
                 'sku' => $product->defaultVariant?->sku,
@@ -95,7 +107,11 @@ class ProductController extends Controller
             'categories' => $this->categoryOptions(),
             'colors' => ColorOptions::all(),
             'materials' => MaterialOptions::all(),
-            'tagSuggestions' => $this->tagSuggestions(),
+            // Do ambito `product` e so dele: desde que as etiquetas deixaram de
+            // ser exclusivas do catalogo, sugerir todas era oferecer
+            // "revendedor" e "urgente" ao classificar um vaso.
+            'tagSuggestions' => $this->tagService->suggestions(Tag::SCOPE_PRODUCT),
+            'tagOptions' => $this->tagService->optionsFor(Tag::SCOPE_PRODUCT),
             'defaultVatRate' => (int) config('shop.default_vat_rate', 23),
             'editing' => $this->editingProduct($request),
         ]);
@@ -254,17 +270,6 @@ class ProductController extends Controller
             ])
             ->values()
             ->all();
-    }
-
-    /**
-     * Todas as etiquetas ja usadas, para o campo sugerir em vez de deixar o
-     * admin criar "natal" e "Natal" sem dar por isso.
-     *
-     * @return array<int, string>
-     */
-    private function tagSuggestions(): array
-    {
-        return Tag::query()->orderBy('name')->pluck('name')->all();
     }
 
     /**

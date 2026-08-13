@@ -14,6 +14,7 @@ export type CustomerRow = {
     email: string | null;
     customerType: string;
     nif: string | null;
+    tags: string[];
     /** Canal mais frequente nas encomendas; null sem histórico. */
     habitualChannel: string | null;
     ordersCount: number;
@@ -38,6 +39,8 @@ export type CustomerDetail = {
     postalCode: string | null;
     city: string | null;
     country: string;
+    /** Nomes, não ids — o campo de etiquetas nunca lida com chaves. */
+    tags: string[];
     createdAt: string | null;
     /** Falso assim que existe uma encomenda (regra global de eliminação). */
     canDelete: boolean;
@@ -50,6 +53,7 @@ export type CustomerFormData = {
     phone: string;
     nif: string;
     admin_note: string;
+    tags: string[];
     line1: string;
     line2: string;
     postal_code: string;
@@ -65,6 +69,7 @@ export const EMPTY_CUSTOMER_FORM: CustomerFormData = {
     phone: '',
     nif: '',
     admin_note: '',
+    tags: [],
     line1: '',
     line2: '',
     postal_code: '',
