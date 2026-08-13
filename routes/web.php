@@ -82,9 +82,9 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         Route::patch('categorias/{category}/restaurar', [Admin\CategoryController::class, 'restore'])
             ->name('categorias.restaurar');
 
-        // Materiais e cores em recursos irmaos: uma cor pertence a um
-        // material, mas a paleta gere-se toda de uma vez — aninhar as cores
-        // dentro do material daria URLs mais longos sem ganho nenhum.
+        // Materiais e cores em recursos irmaos: cada linha de `colors` pertence
+        // a um material, mas a paleta gere-se toda de uma vez — aninhar as
+        // cores dentro do material daria URLs mais longos sem ganho nenhum.
         //
         // Sem `create`: o material novo nasce no modal da propria listagem, que
         // e onde se escolhem as cores iniciais. O `edit` fica para o preco, o
@@ -96,9 +96,16 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         Route::patch('materiais/{material}/restaurar', [Admin\MaterialController::class, 'restore'])
             ->name('materiais.restaurar');
 
+        // Sem `create` nem `edit`: a cor nasce e edita-se no mesmo modal da
+        // listagem, porque escolher os materiais onde existe faz parte de a
+        // definir. O `{color}` do update/destroy/restaurar e o representante do
+        // grupo — ver o docblock do ColorController.
         Route::resource('cores', Admin\ColorController::class)
             ->parameters(['cores' => 'color'])
-            ->except(['show']);
+            ->except(['show', 'create', 'edit']);
+
+        Route::patch('cores/{color}/restaurar', [Admin\ColorController::class, 'restore'])
+            ->name('cores.restaurar');
 
         // Definicoes editaveis em runtime (tabela `settings`). URIs proprios
         // por acao — o Wayfinder duplica chaves quando dois verbos partilham

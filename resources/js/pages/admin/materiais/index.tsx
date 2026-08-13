@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { formatCents, formatCostPerGram } from '@/lib/money';
 import { label } from '@/lib/options';
+import { fold } from '@/lib/text';
 import { cn } from '@/lib/utils';
 import { index as coresIndex } from '@/routes/admin/cores';
 import { destroy, edit, index, restaurar } from '@/routes/admin/materiais';
@@ -45,15 +46,6 @@ const MATCHERS: Record<string, (material: MaterialRow) => boolean> = {
     low_stock: (material) => material.state === 'low_stock',
     archived: (material) => material.state === 'archived',
 };
-
-/**
- * "Ceramica" encontra "Cerâmica" — ninguém escreve acentos numa pesquisa.
- * Mesmo par NFD + `\p{M}` do `slugify`, mas sem lhe mexer no resto: aqui os
- * espaços e a pontuação têm de sobreviver para "PLA Silk" continuar a bater.
- */
-function fold(value: string): string {
-    return value.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
-}
 
 export default function MaterialsIndex({
     materials,

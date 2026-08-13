@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Color;
 
 use App\Models\Color;
+use Illuminate\Contracts\Database\Query\Builder;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -40,20 +41,35 @@ class StoreColorRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'material_id' => ['required', 'integer', Rule::exists('materials', 'id')],
-            // Unico DENTRO do material: "Preto" existe em PLA e em PETG e sao
-            // linhas distintas (indice colors_material_name_unique).
+            // A cor grava-se em leque: uma linha `colors` por material
+            // escolhido, todas com este nome e este hex.
+            'material_ids' => ['required', 'array', 'min:1'],
+            'material_ids.*' => ['integer', Rule::exists('materials', 'id')],
+            /*
+             * O nome tem de estar livre em CADA material escolhido — o indice
+             * colors_material_name_unique e por material, nao global.
+             *
+             * Duas excepcoes, e as duas sao o mesmo principio: so colide com o
+             * que esta VIVO noutra cor.
+             *   - As linhas do proprio grupo, porque sao elas que estao a ser
+             *     gravadas. Sem isto nenhuma cor se editava sem lhe mudar o
+             *     nome.
+             *   - As arquivadas, porque um nome arquivado nao esta ocupado —
+             *     esta a espera de voltar. O ColorService restaura essa linha
+             *     em vez de inserir uma nova, e recusar aqui era proibir
+             *     exactamente a operacao que ele sabe fazer.
+             */
             'name' => [
                 'required', 'string', 'max:60',
                 Rule::unique('colors', 'name')
-                    ->where('material_id', (int) $this->input('material_id'))
-                    ->ignore($this->colorId()),
+                    ->whereIn('material_id', $this->materialIds())
+                    ->where(fn (Builder $query) => $query
+                        ->where('is_active', true)
+                        ->whereNotIn('id', $this->groupColorIds())),
             ],
             // 6 digitos, ou 8 quando a cor tem alfa (a coluna aceita 9 chars).
             'hex_color' => ['required', 'string', 'regex:/^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/'],
             'price_per_kg' => ['nullable', 'numeric', 'min:0', 'max:9999.99'],
-            'is_active' => ['boolean'],
-            'sort_order' => ['integer', 'min:0', 'max:65535'],
         ];
     }
 
@@ -64,7 +80,9 @@ class StoreColorRequest extends FormRequest
     {
         return [
             'hex_color.regex' => 'A cor tem de ser um hexadecimal como #1A2B3C.',
-            'name.unique' => 'Este material já tem uma cor com este nome.',
+            'name.unique' => 'Um dos materiais escolhidos já tem uma cor com este nome.',
+            'material_ids.required' => 'Escolhe pelo menos um material onde esta cor existe.',
+            'material_ids.min' => 'Escolhe pelo menos um material onde esta cor existe.',
         ];
     }
 
@@ -74,20 +92,39 @@ class StoreColorRequest extends FormRequest
     public function attributes(): array
     {
         return [
-            'material_id' => 'material',
+            'material_ids' => 'materiais',
             'hex_color' => 'cor',
             'price_per_kg' => 'preço por kg',
-            'sort_order' => 'ordem',
         ];
     }
 
     /**
-     * Null no store; o id da cor em edicao no update.
+     * @return array<int, int>
      */
-    protected function colorId(): ?int
+    protected function materialIds(): array
+    {
+        $ids = $this->input('material_ids');
+
+        return is_array($ids) ? array_map('intval', array_values($ids)) : [];
+    }
+
+    /**
+     * Linhas que ja pertencem a esta cor. Vazio no store; no update sai do
+     * representante que a rota vinculou, pelo nome — que e o que agrupa.
+     *
+     * @return array<int, int>
+     */
+    protected function groupColorIds(): array
     {
         $color = $this->route('color');
 
-        return $color instanceof Color ? $color->id : null;
+        if (! $color instanceof Color) {
+            return [];
+        }
+
+        return Color::query()
+            ->where('name', $color->name)
+            ->pluck('id')
+            ->all();
     }
 }

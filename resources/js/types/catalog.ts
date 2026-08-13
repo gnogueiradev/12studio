@@ -115,46 +115,95 @@ export type MaterialQuickFormData = {
     colors: string[];
 };
 
-export type MaterialOption = {
+/**
+ * Uma cor não tem stock — os materiais é que têm. `low_stock` é derivado no
+ * servidor e só quando TODOS os materiais onde a cor existe estão em falta:
+ * enquanto houver um com bobines, a cor imprime-se.
+ */
+export type ColorState = 'active' | 'low_stock' | 'archived';
+
+/**
+ * De onde vem o preço/kg da cor. `mixed` é o caso que o desenho não previa mas
+ * os dados permitem: preço próprio nuns materiais e herdado noutros.
+ */
+export type ColorPriceOrigin = 'none' | 'inherited' | 'own' | 'mixed';
+
+/** Material onde a cor existe, com o preço/kg em vigor nessa combinação. */
+export type ColorMaterialChip = {
     id: number;
     name: string;
-    /** Preço/kg do material, para mostrar o que a cor herda se não fizer override. */
     pricePerKgCents: number;
 };
 
-export type ColorRow = {
+/**
+ * Uma cor como o backoffice a pensa: um nome, espalhado pelas linhas `colors`
+ * dos materiais onde existe.
+ */
+export type ColorGroupRow = {
+    /** Linha representante — é por ela que as rotas alcançam o grupo. */
     id: number;
     name: string;
-    hexColor: string;
-    material: string;
-    materialId: number;
-    /** Preço/kg em vigor: o override da cor, ou o herdado do material. */
-    effectivePricePerKgCents: number;
-    hasOwnPrice: boolean;
-    isActive: boolean;
-    sortOrder: number;
+    hex: string;
+    /** Só os materiais ativos; um grupo arquivado vem sem nenhum. */
+    materials: ColorMaterialChip[];
+    materialIds: number[];
+    /** Null quando o grupo está todo arquivado e não sobra preço nenhum. */
+    minPricePerKgCents: number | null;
+    maxPricePerKgCents: number | null;
+    priceOrigin: ColorPriceOrigin;
+    /**
+     * O preço próprio, só quando é UM valor em todos os materiais. Null quando
+     * eles divergem — o modal abre o campo vazio a pedir o que os uniformiza,
+     * em vez de escolher um por conta própria.
+     */
+    ownPricePerKgCents: number | null;
+    /** Soma de todas as linhas, arquivadas incluídas. */
     variantsCount: number;
+    state: ColorState;
 };
 
-export type ColorDetail = {
+/** Cartão da vista "Por material" — e as chips de material do modal. */
+export type ColorMaterialCard = {
     id: number;
-    materialId: number;
     name: string;
-    hexColor: string;
-    /** Vazio quando a cor herda o preço do material. */
-    pricePerKg: string | null;
-    isActive: boolean;
-    sortOrder: number;
+    pricePerKgCents: number;
+    active: boolean;
+    colors: {
+        name: string;
+        hex: string;
+        /** Só quando difere do material — senão o cartão já o disse no topo. */
+        ownPricePerKgCents: number | null;
+    }[];
 };
 
-export type ColorFormData = {
-    material_id: number | null;
+export type ColorStats = {
+    activeCount: number;
+    /** Linhas `colors` ativas: quantos pares cor × material as cores ocupam. */
+    pairsCount: number;
+    ownPriceCount: number;
+    /** Cores disponíveis que nenhuma variante usa. */
+    unusedCount: number;
+};
+
+/**
+ * Criar ou editar uma cor no modal da listagem. Chaves em snake_case porque
+ * espelham as regras do StoreColorRequest; o servidor grava uma linha por
+ * material escolhido.
+ */
+export type ColorGroupFormData = {
     name: string;
     hex_color: string;
+    material_ids: number[];
+    /** Vazio = herda o preço de cada material. */
     price_per_kg: string;
-    is_active: boolean;
-    sort_order: number;
 };
+
+/** Mesma convenção do MATERIAL_STATES: singular na pastilha, plural na chip. */
+export const COLOR_STATES = [
+    { value: 'active', label: 'Disponível', chipLabel: 'Disponíveis' },
+    { value: 'low_stock', label: 'Stock baixo', chipLabel: 'Stock baixo' },
+    { value: 'archived', label: 'Arquivada', chipLabel: 'Arquivadas' },
+] as const;
 
 export type ColorSummary = {
     id: number;
