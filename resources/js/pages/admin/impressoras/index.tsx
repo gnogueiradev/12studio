@@ -14,7 +14,6 @@ import { label } from '@/lib/options';
 import { calculadora } from '@/routes/admin';
 import {
     destroy,
-    edit,
     index,
     predefinida,
     restaurar,
@@ -41,6 +40,7 @@ const MATCHERS: Record<string, (printer: PrinterProfileRow) => boolean> = {
 export default function PrintersIndex({ printers, stats }: Props) {
     const [state, setState] = useState<string>(ALL);
     const [creating, setCreating] = useState(false);
+    const [editing, setEditing] = useState<PrinterProfileRow | null>(null);
     const [archiving, setArchiving] = useState<PrinterProfileRow | null>(null);
 
     const visible = useMemo(
@@ -140,8 +140,12 @@ export default function PrintersIndex({ printers, stats }: Props) {
                             Tornar predefinida
                         </Button>
                     )}
-                    <Button variant="outline" size="sm" asChild>
-                        <Link href={edit(printer.id)}>Editar</Link>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setEditing(printer)}
+                    >
+                        Editar
                     </Button>
                     {printer.active ? (
                         <Button
@@ -252,9 +256,22 @@ export default function PrintersIndex({ printers, stats }: Props) {
                 />
             </div>
 
+            {/*
+             * A `key` muda com o alvo para forçar o remonte: o `useForm` do
+             * Inertia só lê os valores iniciais no primeiro render, e sem isto
+             * abrir o editar de uma impressora logo a seguir a outra mostrava
+             * os dados da anterior.
+             */}
             <PrinterCreateDialog
-                open={creating}
-                onOpenChange={setCreating}
+                key={editing?.id ?? 'new'}
+                open={creating || editing !== null}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setCreating(false);
+                        setEditing(null);
+                    }
+                }}
+                editing={editing}
                 isFirst={printers.length === 0}
             />
 

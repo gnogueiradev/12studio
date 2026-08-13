@@ -22,6 +22,10 @@ class PrinterProfileCrudTest extends TestCase
     }
 
     /**
+     * Exactamente o que o modal manda — sem `is_default` nem `active`. Um
+     * payload de teste mais rico do que o real e um payload que deixa passar a
+     * regressao que interessa.
+     *
      * @return array<string, mixed>
      */
     private function validPayload(): array
@@ -30,7 +34,6 @@ class PrinterProfileCrudTest extends TestCase
             'name' => 'Bambu Lab P1S',
             'hourly_rate' => '0.65',
             'notes' => 'Inclui energia, desgaste e depreciacao.',
-            'active' => true,
             'sort_order' => 0,
         ];
     }
@@ -180,6 +183,54 @@ class PrinterProfileCrudTest extends TestCase
             ->assertRedirect(route('admin.impressoras.index'));
 
         $this->assertSame(75, $profile->refresh()->hourly_rate_cents);
+    }
+
+    /**
+     * O modal nao manda `is_default` nem `active`: predefinir e arquivar sao um
+     * clique na propria linha da listagem. Guardar uma alteracao ao nome ou ao
+     * custo/hora nao pode despromover a predefinida nem desarquivar seja o que
+     * for — e este o teste que apanha um `$data['is_default'] ?? false` posto no
+     * servico a fingir que a ausencia da chave e um "nao".
+     */
+    public function test_update_leaves_the_default_and_active_flags_alone(): void
+    {
+        $profile = PrinterProfile::factory()->isDefault()->create(['name' => 'A1']);
+
+        $this->actingAs($this->admin)
+            ->patch(route('admin.impressoras.update', $profile), [
+                'name' => 'A1 Combo',
+                'hourly_rate' => '0,80',
+                'notes' => 'Com AMS.',
+                'sort_order' => 3,
+            ])
+            ->assertRedirect(route('admin.impressoras.index'));
+
+        $profile->refresh();
+
+        $this->assertSame('A1 Combo', $profile->name);
+        $this->assertSame(80, $profile->hourly_rate_cents);
+        $this->assertSame(3, $profile->sort_order);
+        $this->assertTrue($profile->is_default);
+        $this->assertTrue($profile->active);
+    }
+
+    /**
+     * O mesmo pelo outro lado: uma maquina arquivada nao volta a activo so
+     * porque alguem lhe corrigiu o custo/hora.
+     */
+    public function test_update_does_not_unarchive_a_profile(): void
+    {
+        $profile = PrinterProfile::factory()->archived()->create(['name' => 'A1']);
+
+        $this->actingAs($this->admin)
+            ->patch(route('admin.impressoras.update', $profile), [
+                'name' => 'A1',
+                'hourly_rate' => '0,90',
+                'notes' => null,
+                'sort_order' => 0,
+            ]);
+
+        $this->assertFalse($profile->refresh()->active);
     }
 
     public function test_restore_brings_a_profile_back(): void
