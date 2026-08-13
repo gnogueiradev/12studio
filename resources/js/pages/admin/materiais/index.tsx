@@ -23,7 +23,8 @@ import { MATERIAL_STATES } from '@/types/catalog';
 type Props = {
     materials: MaterialRow[];
     stats: MaterialStats;
-    palette: PaletteColor[];
+    /** As cores que já existem em /admin/cores — as chips do modal de criação. */
+    colorOptions: PaletteColor[];
     families: string[];
 };
 
@@ -50,7 +51,7 @@ const MATCHERS: Record<string, (material: MaterialRow) => boolean> = {
 export default function MaterialsIndex({
     materials,
     stats,
-    palette,
+    colorOptions,
     families,
 }: Props) {
     /*
@@ -316,7 +317,7 @@ export default function MaterialsIndex({
             <MaterialCreateDialog
                 open={creating}
                 onOpenChange={setCreating}
-                palette={palette}
+                colorOptions={colorOptions}
                 families={families}
             />
 
