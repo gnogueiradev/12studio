@@ -70,30 +70,6 @@ export type MaterialStats = {
     belowMinimumCount: number;
 };
 
-export type MaterialDetail = {
-    id: number;
-    name: string;
-    family: string | null;
-    supplier: string | null;
-    /** Decimal em euros ("21.90") — o formulário edita euros. */
-    pricePerKg: string;
-    spoolsInStock: number;
-    minSpools: number;
-    active: boolean;
-    sortOrder: number;
-};
-
-export type MaterialFormData = {
-    name: string;
-    family: string;
-    supplier: string;
-    price_per_kg: string;
-    spools_in_stock: number;
-    min_spools: number;
-    active: boolean;
-    sort_order: number;
-};
-
 /**
  * Nome e hex de uma chip ou swatch. Em /admin/cores são os presets do
  * App\Support\FilamentPalette (atalho para escolher um tom); no modal de novo
@@ -105,20 +81,28 @@ export type PaletteColor = {
 };
 
 /**
- * Criar material no modal da listagem. Chaves em snake_case porque espelham as
- * regras do StoreMaterialRequest.
+ * Criar e editar material no modal da listagem. Chaves em snake_case porque
+ * espelham as regras do StoreMaterialRequest.
+ *
+ * Uma só forma para os dois modos: o `store` aceita tudo o que aqui está, e o
+ * `UpdateMaterialRequest` deita fora as `colors` de propósito — as cores nascem
+ * com o material e depois vivem em /admin/cores. Sem `active`: quem arquiva e
+ * restaura são os botões da linha, e uma chave que não vai no pedido é uma
+ * coluna que o servidor não toca.
  *
  * Cada cor vai com hex porque o modal também deixa inventar uma ali mesmo — mas
  * o hex só conta para nomes novos: numa cor que já existe ganha o do catálogo,
  * senão o grupo que /admin/cores mostra como uma cor só ficava com dois tons.
  */
-export type MaterialQuickFormData = {
+export type MaterialFormData = {
     name: string;
     family: string;
     supplier: string;
     /** Euros escritos à mão; o servidor converte para cêntimos. */
     price_per_kg: string;
+    spools_in_stock: number;
     min_spools: number;
+    sort_order: number;
     colors: PaletteColor[];
 };
 

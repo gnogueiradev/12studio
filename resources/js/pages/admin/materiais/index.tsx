@@ -16,7 +16,7 @@ import { label } from '@/lib/options';
 import { fold } from '@/lib/text';
 import { cn } from '@/lib/utils';
 import { index as coresIndex } from '@/routes/admin/cores';
-import { destroy, edit, index, restaurar } from '@/routes/admin/materiais';
+import { destroy, index, restaurar } from '@/routes/admin/materiais';
 import type { MaterialRow, MaterialStats, PaletteColor } from '@/types/catalog';
 import { MATERIAL_STATES } from '@/types/catalog';
 
@@ -69,6 +69,7 @@ export default function MaterialsIndex({
      */
     const { url } = usePage();
     const [creating, setCreating] = useState(() => url.includes('novo=1'));
+    const [editing, setEditing] = useState<MaterialRow | null>(null);
     const [archiving, setArchiving] = useState<MaterialRow | null>(null);
 
     const visible = useMemo(() => {
@@ -199,8 +200,12 @@ export default function MaterialsIndex({
             className: 'text-right',
             cell: (material) => (
                 <div className="flex justify-end gap-2">
-                    <Button variant="outline" size="sm" asChild>
-                        <Link href={edit(material.id)}>Editar</Link>
+                    <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setEditing(material)}
+                    >
+                        Editar
                     </Button>
                     {material.active ? (
                         <Button
@@ -314,9 +319,22 @@ export default function MaterialsIndex({
                 />
             </div>
 
+            {/*
+             * A `key` é o que faz o formulário nascer com o material certo: o
+             * modal semeia-se do `editing` no primeiro render e não tem efeito
+             * nenhum a sincronizá-lo depois. Sem ela, editar um material a
+             * seguir a outro abria com o que lá tinha ficado.
+             */}
             <MaterialCreateDialog
-                open={creating}
-                onOpenChange={setCreating}
+                key={editing?.id ?? 'new'}
+                open={creating || editing !== null}
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setCreating(false);
+                        setEditing(null);
+                    }
+                }}
+                editing={editing}
                 colorOptions={colorOptions}
                 families={families}
             />
