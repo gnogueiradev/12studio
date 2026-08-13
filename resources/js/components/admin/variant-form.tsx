@@ -1,4 +1,7 @@
+import { router } from '@inertiajs/react';
+import { useEffect } from 'react';
 import { ColorSwatch } from '@/components/admin/color-swatch';
+import { PricingBreakdown } from '@/components/admin/pricing-breakdown';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -14,8 +17,20 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
-import { formatCents, inputToCents } from '@/lib/money';
+import { centsToInput, formatCents, inputToCents } from '@/lib/money';
 import type { ColorGroup, VariantFormData } from '@/types/catalog';
+import type {
+    PricingBreakdown as Breakdown,
+    PrinterProfileOption,
+} from '@/types/pricing';
+
+/** O que o PricingPreview do servidor devolve para esta variante. */
+export type VariantPricingPreview = {
+    result: Breakdown | null;
+    hourlyRateCents: number;
+    usingFallbackRate: boolean;
+    printerProfileId: number | null;
+};
 
 type Props = {
     data: VariantFormData;
@@ -28,11 +43,20 @@ type Props = {
     onSubmit: (event: React.FormEvent) => void;
     submitLabel: string;
     colorGroups: ColorGroup[];
+    printers: PrinterProfileOption[];
+    /** Calculada no servidor e recarregada em `only: ['pricing']`. */
+    pricing: VariantPricingPreview;
     /** Unidades presas a pagamentos pendentes — só existem a partir da Fase 3. */
     reservedStock?: number;
 };
 
 const NO_COLOR = 'none';
+
+/** O valor do seletor que quer dizer "usa a que estiver predefinida". */
+const DEFAULT_PRINTER = 'default';
+
+/** Espera antes de pedir um preço novo ao servidor. */
+const DEBOUNCE_MS = 300;
 
 export default function VariantForm({
     data,
@@ -42,8 +66,69 @@ export default function VariantForm({
     onSubmit,
     submitLabel,
     colorGroups,
+    printers,
+    pricing,
     reservedStock = 0,
 }: Props) {
+    const printMinutes = data.printing_time_minutes ?? 0;
+
+    const setPrintTime = (hours: number, minutes: number) =>
+        setData('printing_time_minutes', hours * 60 + minutes);
+
+    const defaultPrinter = printers.find((printer) => printer.isDefault);
+    const chosenPrinter =
+        printers.find((printer) => printer.id === data.printer_profile_id) ??
+        defaultPrinter;
+
+    /*
+     * O preço vem do SERVIDOR — o formulário não espelha a fórmula. É o mesmo
+     * motor que calcula esta pré-visualização e o preço que fica gravado, por
+     * isso não há duas versões a divergir.
+     *
+     * `only: ['pricing']` recarrega só esta prop: o resto do formulário (o que
+     * o admin já escreveu nos outros campos) fica intacto.
+     */
+    useEffect(() => {
+        const timer = setTimeout(() => {
+            router.reload({
+                only: ['pricing'],
+                data: {
+                    weight_grams: data.filament_weight_grams ?? 0,
+                    hours: Math.floor(printMinutes / 60),
+                    minutes: printMinutes % 60,
+                    color_id: data.color_id,
+                    printer_profile_id: data.printer_profile_id,
+                    extra_cost: data.extra_cost,
+                },
+            });
+        }, DEBOUNCE_MS);
+
+        return () => clearTimeout(timer);
+    }, [
+        data.filament_weight_grams,
+        data.color_id,
+        data.printer_profile_id,
+        data.extra_cost,
+        printMinutes,
+    ]);
+
+    /**
+     * Escreve os preços sugeridos nos campos, sem gravar nada. O admin continua
+     * a rever antes de submeter — e a regra cruzada "revenda <= venda" fica
+     * satisfeita por construção, porque o preço ao cliente é sempre maior.
+     */
+    const applySuggestedPrices = () => {
+        if (!pricing.result) {
+            return;
+        }
+
+        setData('normal_price', centsToInput(pricing.result.retailPriceCents));
+        setData(
+            'wholesale_price',
+            centsToInput(pricing.result.resalePriceCents),
+        );
+    };
+
     const normalCents = inputToCents(data.normal_price);
     const saleCents =
         data.sale_price === '' ? null : inputToCents(data.sale_price);
@@ -226,6 +311,167 @@ export default function VariantForm({
                     </p>
                     <InputError message={errors.filament_weight_grams} />
                 </div>
+            </div>
+
+            <div className="flex flex-col gap-4 border-t border-border/60 pt-6">
+                <div>
+                    <h2 className="text-sm font-semibold">Custo de produção</h2>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                        Duas peças com o mesmo plástico podem demorar 30 minutos
+                        ou 4 horas — e não custam o mesmo. É o tempo que decide.
+                    </p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                    <fieldset className="grid gap-2">
+                        {/*
+                         * Horas e minutos separados: "1,30" tanto se lê como uma
+                         * hora e trinta como 1,3 horas, e a diferença são 12
+                         * minutos de máquina em cada peça. A BD guarda o total
+                         * em minutos.
+                         */}
+                        <legend className="mb-2 text-sm font-medium">
+                            Tempo de impressão
+                        </legend>
+                        <div className="grid grid-cols-2 gap-3">
+                            <div className="grid gap-2">
+                                <Label
+                                    htmlFor="print_hours"
+                                    className="text-xs font-normal text-muted-foreground"
+                                >
+                                    Horas
+                                </Label>
+                                <Input
+                                    id="print_hours"
+                                    type="number"
+                                    min={0}
+                                    max={999}
+                                    value={Math.floor(printMinutes / 60) || ''}
+                                    onChange={(event) =>
+                                        setPrintTime(
+                                            Number(event.target.value || 0),
+                                            printMinutes % 60,
+                                        )
+                                    }
+                                    placeholder="0"
+                                />
+                            </div>
+                            <div className="grid gap-2">
+                                <Label
+                                    htmlFor="print_minutes"
+                                    className="text-xs font-normal text-muted-foreground"
+                                >
+                                    Minutos
+                                </Label>
+                                <Input
+                                    id="print_minutes"
+                                    type="number"
+                                    min={0}
+                                    max={59}
+                                    value={printMinutes % 60 || ''}
+                                    onChange={(event) =>
+                                        setPrintTime(
+                                            Math.floor(printMinutes / 60),
+                                            Number(event.target.value || 0),
+                                        )
+                                    }
+                                    placeholder="0"
+                                />
+                            </div>
+                        </div>
+                        <InputError message={errors.printing_time_minutes} />
+                    </fieldset>
+
+                    <div className="grid gap-2">
+                        <Label htmlFor="extra_cost">
+                            Custos adicionais (€)
+                        </Label>
+                        <Input
+                            id="extra_cost"
+                            type="number"
+                            step="0.01"
+                            min={0}
+                            value={data.extra_cost}
+                            onChange={(event) =>
+                                setData('extra_cost', event.target.value)
+                            }
+                            placeholder="0.00"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                            Ímanes, feltro, argolas, caixa. Entram a cru: não
+                            pagam reserva de falha.
+                        </p>
+                        <InputError message={errors.extra_cost} />
+                    </div>
+                </div>
+
+                <div className="grid gap-2">
+                    <Label>Impressora</Label>
+                    <Select
+                        value={
+                            data.printer_profile_id === null
+                                ? DEFAULT_PRINTER
+                                : String(data.printer_profile_id)
+                        }
+                        onValueChange={(value) =>
+                            setData(
+                                'printer_profile_id',
+                                value === DEFAULT_PRINTER
+                                    ? null
+                                    : Number(value),
+                            )
+                        }
+                        disabled={printers.length === 0}
+                    >
+                        <SelectTrigger aria-label="Impressora">
+                            <SelectValue placeholder="Predefinida" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value={DEFAULT_PRINTER}>
+                                {defaultPrinter
+                                    ? `Predefinida (${defaultPrinter.name})`
+                                    : 'Predefinida'}
+                            </SelectItem>
+                            {printers.map((printer) => (
+                                <SelectItem
+                                    key={printer.id}
+                                    value={String(printer.id)}
+                                >
+                                    {printer.name} —{' '}
+                                    {formatCents(printer.hourlyRateCents)}/h
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    <InputError message={errors.printer_profile_id} />
+                </div>
+
+                <PricingBreakdown
+                    result={pricing.result}
+                    printTimeMinutes={printMinutes}
+                    hourlyRateCents={pricing.hourlyRateCents}
+                    printerName={chosenPrinter?.name ?? null}
+                    usingFallbackRate={pricing.usingFallbackRate}
+                    emptyHint="Preenche a gramagem e o tempo de impressão para veres o custo e o preço sugerido."
+                    action={
+                        pricing.result && (
+                            <div className="flex flex-wrap items-center gap-3">
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    onClick={applySuggestedPrices}
+                                >
+                                    Aplicar preços
+                                </Button>
+                                <p className="text-xs text-muted-foreground">
+                                    Preenche revenda e preço normal com os
+                                    valores sugeridos. Ainda podes mexer antes
+                                    de gravar.
+                                </p>
+                            </div>
+                        )
+                    }
+                />
             </div>
 
             <div className="grid grid-cols-2 gap-4 border-t border-border/60 pt-6">

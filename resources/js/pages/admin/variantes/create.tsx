@@ -1,6 +1,7 @@
 import { Head, useForm } from '@inertiajs/react';
 import { PageHeader } from '@/components/admin/page-header';
 import VariantForm from '@/components/admin/variant-form';
+import type { VariantPricingPreview } from '@/components/admin/variant-form';
 import { index } from '@/routes/admin/produtos';
 import { store } from '@/routes/admin/produtos/variantes';
 import type {
@@ -8,17 +9,22 @@ import type {
     ProductSummary,
     VariantFormData,
 } from '@/types/catalog';
+import type { PrinterProfileOption } from '@/types/pricing';
 
 type Props = {
     product: ProductSummary;
     suggestedSku: string;
     colorGroups: ColorGroup[];
+    printers: PrinterProfileOption[];
+    pricing: VariantPricingPreview;
 };
 
 export default function VariantsCreate({
     product,
     suggestedSku,
     colorGroups,
+    printers,
+    pricing,
 }: Props) {
     const { data, setData, post, processing, errors } =
         useForm<VariantFormData>({
@@ -29,6 +35,9 @@ export default function VariantsCreate({
             sale_price: '',
             wholesale_price: '',
             filament_weight_grams: null,
+            printing_time_minutes: null,
+            printer_profile_id: null,
+            extra_cost: '',
             stock: 0,
             low_stock_threshold: 3,
             is_default: false,
@@ -56,6 +65,8 @@ export default function VariantsCreate({
                     onSubmit={submit}
                     submitLabel="Criar variante"
                     colorGroups={colorGroups}
+                    printers={printers}
+                    pricing={pricing}
                 />
             </div>
         </>

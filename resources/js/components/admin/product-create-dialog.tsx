@@ -1,4 +1,4 @@
-import { useForm } from '@inertiajs/react';
+import { router, useForm } from '@inertiajs/react';
 import { useMemo, useState } from 'react';
 import { ToggleChip } from '@/components/admin/toggle-chip';
 import InputError from '@/components/input-error';
@@ -22,7 +22,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { formatCents, inputToCents } from '@/lib/money';
+import { centsToInput, formatCents, inputToCents } from '@/lib/money';
 import { cn } from '@/lib/utils';
 import { store } from '@/routes/admin/produtos';
 import type {
@@ -31,6 +31,7 @@ import type {
     ProductQuickFormData,
 } from '@/types/catalog';
 import { FULFILLMENT_MODES } from '@/types/catalog';
+import type { PricingBreakdown } from '@/types/pricing';
 
 type Props = {
     open: boolean;
@@ -38,6 +39,8 @@ type Props = {
     categories: CategoryOption[];
     colorGroups: ColorGroup[];
     defaultVatRate: number;
+    /** Calculado no servidor, recarregado em `only: ['pricingPreview']`. */
+    pricingPreview: { result: PricingBreakdown | null };
 };
 
 const NO_CATEGORY = 'none';
@@ -72,6 +75,7 @@ export function ProductCreateDialog({
     categories,
     colorGroups,
     defaultVatRate,
+    pricingPreview,
 }: Props) {
     const { data, setData, post, transform, processing, errors, reset } =
         useForm<ProductQuickFormData>({
@@ -190,21 +194,49 @@ export function ProductCreateDialog({
         });
     }, [data.variants.color_ids, data.variants.sizes, colorsById]);
 
-    /*
-     * Margem = preço menos o filamento gasto, ao preço/kg REAL da cor mais cara
-     * escolhida (o design usava 0,025 €/g fixos, mas a app conhece o preço de
-     * cada material). Sem mão de obra, energia nem embalagem — esses chegam com
-     * o CostService.
-     */
-    const pricePerKgCents = data.variants.color_ids.reduce(
-        (max, id) => Math.max(max, colorsById.get(id)?.pricePerKgCents ?? 0),
-        0,
-    );
     const priceCents = inputToCents(data.variants.price);
     const grams = data.variants.filament_weight_grams ?? 0;
+    const minutes = data.variants.printing_time_minutes ?? 0;
+
+    /*
+     * A cor mais cara das escolhidas: a matriz gera uma variante por cor, e o
+     * preço tem de cobrir a mais cara delas.
+     */
+    const dearestColorId = data.variants.color_ids.reduce<number | null>(
+        (dearest, id) =>
+            (colorsById.get(id)?.pricePerKgCents ?? 0) >
+            (dearest === null
+                ? -1
+                : (colorsById.get(dearest)?.pricePerKgCents ?? 0))
+                ? id
+                : dearest,
+        null,
+    );
+
+    const canSuggest = grams > 0 && minutes > 0 && dearestColorId !== null;
+
+    /*
+     * O preço sugerido vem do SERVIDOR, com o mesmo motor da calculadora — não
+     * de uma estimativa aqui. Botão e não debounce: isto é um modal, e um
+     * pedido por tecla enquanto se preenche uma matriz de variantes era ruído.
+     */
+    const suggest = () =>
+        router.reload({
+            only: ['pricingPreview'],
+            data: {
+                weight_grams: grams,
+                hours: Math.floor(minutes / 60),
+                minutes: minutes % 60,
+                color_id: dearestColorId,
+            },
+        });
+
+    const suggestion = pricingPreview.result;
+
+    /** Lucro sobre o preço escrito, com o custo real — não só o do filamento. */
     const marginCents =
-        priceCents > 0 && grams > 0 && pricePerKgCents > 0
-            ? priceCents - Math.round((grams * pricePerKgCents) / 1000)
+        suggestion && priceCents > 0
+            ? priceCents - suggestion.productionCostCents
             : null;
 
     const canCreate =
@@ -460,33 +492,102 @@ export function ProductCreateDialog({
                         </div>
                     </div>
 
-                    <div className="flex items-center justify-between gap-4 rounded-xl border border-border/60 bg-secondary/40 px-4 py-3">
-                        <span>
-                            <span className="block text-sm">
-                                Margem estimada
+                    <div className="flex flex-col gap-3 rounded-xl border border-border/60 bg-secondary/40 px-4 py-3">
+                        <div className="flex items-center justify-between gap-4">
+                            <span>
+                                <span className="block text-sm">
+                                    Custo real estimado
+                                </span>
+                                <span className="mt-0.5 block text-xs text-muted-foreground">
+                                    {suggestion
+                                        ? 'Material, máquina, manuseamento e risco — a cor mais cara das escolhidas.'
+                                        : 'Preenche a gramagem, o tempo e uma cor para calcular.'}
+                                </span>
                             </span>
-                            <span className="mt-0.5 block text-xs text-muted-foreground">
-                                {pricePerKgCents > 0
-                                    ? `Filamento a ${formatCents(pricePerKgCents)}/kg, sem mão de obra.`
-                                    : 'Escolhe uma cor para saber o custo do filamento.'}
+                            <span className="text-lg font-semibold tabular-nums">
+                                {suggestion
+                                    ? formatCents(
+                                          suggestion.productionCostCents,
+                                      )
+                                    : '—'}
                             </span>
-                        </span>
-                        <span
-                            className={cn(
-                                'text-lg font-semibold tabular-nums',
-                                marginCents === null && 'text-muted-foreground',
-                                marginCents !== null &&
-                                    marginCents <= 0 &&
-                                    'text-destructive',
-                                marginCents !== null &&
-                                    marginCents > 0 &&
-                                    'text-success',
+                        </div>
+
+                        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-3">
+                            {suggestion ? (
+                                <span className="text-xs text-muted-foreground">
+                                    Sugerido: revenda{' '}
+                                    <strong className="text-foreground tabular-nums">
+                                        {formatCents(
+                                            suggestion.resalePriceCents,
+                                        )}
+                                    </strong>
+                                    , cliente{' '}
+                                    <strong className="text-foreground tabular-nums">
+                                        {formatCents(
+                                            suggestion.retailPriceCents,
+                                        )}
+                                    </strong>
+                                    {marginCents !== null && (
+                                        <>
+                                            {' · '}
+                                            lucro deste preço{' '}
+                                            <strong
+                                                className={cn(
+                                                    'tabular-nums',
+                                                    marginCents <= 0
+                                                        ? 'text-destructive'
+                                                        : 'text-success',
+                                                )}
+                                            >
+                                                {formatCents(marginCents)}
+                                            </strong>
+                                        </>
+                                    )}
+                                </span>
+                            ) : (
+                                <span className="text-xs text-muted-foreground">
+                                    O tempo de impressão conta tanto como o
+                                    plástico.
+                                </span>
                             )}
-                        >
-                            {marginCents === null
-                                ? '—'
-                                : formatCents(marginCents)}
-                        </span>
+
+                            {/*
+                             * O botão fica sempre: mexer na gramagem ou no tempo
+                             * depois de calcular deixava um número obsoleto no
+                             * ecrã sem nada que o dissesse.
+                             */}
+                            <span className="flex gap-2">
+                                {suggestion && (
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        onClick={() =>
+                                            setVariants({
+                                                price: centsToInput(
+                                                    suggestion.retailPriceCents,
+                                                ),
+                                            })
+                                        }
+                                    >
+                                        Usar{' '}
+                                        {formatCents(
+                                            suggestion.retailPriceCents,
+                                        )}
+                                    </Button>
+                                )}
+                                <Button
+                                    type="button"
+                                    variant="ghost"
+                                    size="sm"
+                                    disabled={!canSuggest}
+                                    onClick={suggest}
+                                >
+                                    {suggestion ? 'Recalcular' : 'Calcular'}
+                                </Button>
+                            </span>
+                        </div>
                     </div>
 
                     <div className="flex flex-col gap-4 border-t border-border/60 pt-5">

@@ -2,6 +2,7 @@ import { Head, useForm } from '@inertiajs/react';
 import { useState } from 'react';
 import { PageHeader } from '@/components/admin/page-header';
 import { Panel } from '@/components/admin/panel';
+import { PricingSettingsPanel } from '@/components/admin/pricing-settings-panel';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import {
@@ -16,10 +17,12 @@ import { formatCentsIn } from '@/lib/money';
 import type { Option } from '@/lib/options';
 import { cn } from '@/lib/utils';
 import { index, update } from '@/routes/admin/definicoes';
+import type { PricingSettingsForm } from '@/types/pricing';
 
 type Props = {
     settings: { currency: string };
     currencies: Option[];
+    pricing: PricingSettingsForm;
 };
 
 /**
@@ -29,7 +32,11 @@ type Props = {
  */
 const EXAMPLE_CENTS = 2490;
 
-export default function SettingsIndex({ settings, currencies }: Props) {
+export default function SettingsIndex({
+    settings,
+    currencies,
+    pricing,
+}: Props) {
     const { data, setData, patch, processing, errors } = useForm({
         currency: settings.currency,
     });
@@ -169,6 +176,15 @@ export default function SettingsIndex({ settings, currencies }: Props) {
                         </p>
                     </div>
                 </form>
+
+                {/*
+                 * Formulário próprio, com rota própria. Quem vem trocar o
+                 * símbolo da moeda não pode levar com um erro de validação numa
+                 * faixa de manuseamento em que não tocou — e um endpoint único
+                 * obrigava todas as regras de preço a `sometimes`, o que fazia
+                 * uma gravação parcial saltar a validação em silêncio.
+                 */}
+                <PricingSettingsPanel pricing={pricing} />
             </div>
         </>
     );
