@@ -1,7 +1,14 @@
-import { router, useForm } from '@inertiajs/react';
-import { useMemo, useState } from 'react';
+import { Link, router, useForm } from '@inertiajs/react';
+import { Archive, Upload, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ColorSwatch } from '@/components/admin/color-swatch';
+import { ConfirmDialog } from '@/components/admin/confirm-dialog';
+import { ProductImages } from '@/components/admin/product-images';
+import { RichTextEditor } from '@/components/admin/rich-text-editor';
+import { TagInput } from '@/components/admin/tag-input';
 import { ToggleChip } from '@/components/admin/toggle-chip';
 import InputError from '@/components/input-error';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import {
@@ -21,25 +28,34 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { Textarea } from '@/components/ui/textarea';
 import { centsToInput, formatCents, inputToCents } from '@/lib/money';
 import { cn } from '@/lib/utils';
-import { store } from '@/routes/admin/produtos';
+import { store, update } from '@/routes/admin/produtos';
+import { create as createVariant } from '@/routes/admin/produtos/variantes';
+import {
+    destroy as destroyVariant,
+    edit as editVariant,
+} from '@/routes/admin/variantes';
 import type {
     CategoryOption,
     ColorOption,
     MaterialOption,
-    ProductQuickFormData,
+    ProductEditing,
+    ProductFormData,
+    VariantRow,
 } from '@/types/catalog';
-import { FULFILLMENT_MODES } from '@/types/catalog';
+import { FULFILLMENT_MODES, PRODUCT_STATUSES } from '@/types/catalog';
 import type { PricingBreakdown } from '@/types/pricing';
 
 type Props = {
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    /** Null cria; um produto carregado edita esse produto. */
+    editing: ProductEditing | null;
     categories: CategoryOption[];
     colors: ColorOption[];
     materials: MaterialOption[];
+    tagSuggestions: string[];
     defaultVatRate: number;
     /** Calculado no servidor, recarregado em `only: ['pricingPreview']`. */
     pricingPreview: { result: PricingBreakdown | null };
@@ -49,6 +65,9 @@ const NO_CATEGORY = 'none';
 
 /** Quantas combinações se pré-visualizam antes do "+N". */
 const PREVIEW_LIMIT = 6;
+
+/** O mesmo tecto do StoreProductRequest. */
+const MAX_PHOTOS = 10;
 
 /**
  * Tamanhos oferecidos. São `size_label` — texto livre na base de dados — mas
@@ -64,35 +83,53 @@ const MODE_HINTS: Record<string, string> = {
 };
 
 /**
- * Criar um produto e as suas variantes de uma vez.
+ * Criar e editar um produto, no mesmo modal.
  *
- * A matriz é Cor × Material × Tamanho — três eixos que se MULTIPLICAM. Nem
- * sempre foi assim: enquanto uma cor pertenceu a um material, "TPU × Dourado"
- * podia não existir, e as chips de material limitavam-se a filtrar a paleta. Com
- * a ligação fora, qualquer cor imprime-se em qualquer bobine e todas as
- * combinações que a matriz gera são válidas por construção.
- *
+ * Ao criar, a matriz é Cor × Material × Tamanho — três eixos que se
+ * MULTIPLICAM. Nem sempre foi assim: enquanto uma cor pertenceu a um material,
+ * "TPU × Dourado" podia não existir, e as chips de material limitavam-se a
+ * filtrar a paleta. Com a ligação fora, qualquer cor imprime-se em qualquer
+ * bobine e todas as combinações que a matriz gera são válidas por construção.
  * Cor e material são obrigatórios; o tamanho não. São eles que definem uma peça
  * imprimível — que tom, e em que filamento.
+ *
+ * Ao editar, as três secções que multiplicam trocam de face: a matriz dá lugar
+ * às variantes que existem, os ficheiros por enviar dão lugar à galeria real, e
+ * o preço desaparece — a partir do momento em que há variantes, o preço e o
+ * stock são delas, não do produto.
+ *
+ * NENHUM `useEffect` sincroniza o formulário com o `editing`: a semente é lida
+ * uma vez, na montagem, e é o `key` do pai que remonta o modal quando se troca
+ * de produto. Um efeito a chamar `setData` competia com o que o admin está a
+ * escrever.
  */
 export function ProductCreateDialog({
     open,
     onOpenChange,
+    editing,
     categories,
     colors,
     materials,
+    tagSuggestions,
     defaultVatRate,
     pricingPreview,
 }: Props) {
-    const { data, setData, post, transform, processing, errors, reset } =
-        useForm<ProductQuickFormData>({
-            name: '',
-            category_id: null,
-            description: '',
-            status: 'draft',
-            fulfillment_mode: 'in_stock',
-            production_time_days: null,
-            vat_rate: defaultVatRate,
+    const { data, setData, post, patch, transform, processing, errors, reset } =
+        useForm<ProductFormData>({
+            name: editing?.product.name ?? '',
+            slug: editing?.product.slug ?? '',
+            category_id: editing?.product.categoryId ?? null,
+            description: editing?.product.description ?? '',
+            tags: editing?.product.tags ?? [],
+            status: editing?.product.status ?? 'draft',
+            featured: editing?.product.featured ?? false,
+            vat_rate: editing?.product.vatRate ?? defaultVatRate,
+            fulfillment_mode: editing?.product.fulfillmentMode ?? 'in_stock',
+            production_time_days: editing?.product.productionTimeDays ?? null,
+            allow_backorder: editing?.product.allowBackorder ?? false,
+            max_open_production_qty:
+                editing?.product.maxOpenProductionQty ?? null,
+            images: [],
             variants: {
                 color_ids: [],
                 material_ids: [],
@@ -106,7 +143,9 @@ export function ProductCreateDialog({
     /*
      * "Publicar" também não é um campo — é o que decide, no envio, se o
      * `status` sai como `active` ou fica em `draft`. Mantê-lo fora do
-     * formulário poupa ter de o limpar do payload antes de cada post.
+     * formulário poupa ter de o limpar do payload antes de cada post. A editar
+     * não existe: aí o estado é um seletor com os três valores à vista, porque
+     * arquivar também tem de caber nele.
      */
     const [publish, setPublish] = useState(false);
 
@@ -123,7 +162,7 @@ export function ProductCreateDialog({
         [materials],
     );
 
-    const setVariants = (changes: Partial<ProductQuickFormData['variants']>) =>
+    const setVariants = (changes: Partial<ProductFormData['variants']>) =>
         setData('variants', { ...data.variants, ...changes });
 
     const toggle = <T,>(list: readonly T[], value: T): T[] =>
@@ -207,38 +246,77 @@ export function ProductCreateDialog({
             ? priceCents - suggestion.productionCostCents
             : null;
 
-    // Cor E material, a espelhar o ProductService::generateVariants().
-    const canCreate =
-        data.name.trim() !== '' &&
-        priceCents > 0 &&
-        data.variants.color_ids.length > 0 &&
-        data.variants.material_ids.length > 0;
+    // Cor E material, a espelhar o ProductService::generateVariants(). A editar
+    // não há matriz nenhuma para validar — as variantes já existem.
+    const named = data.name.trim() !== '';
+    const canSubmit =
+        editing !== null ||
+        (named &&
+            priceCents > 0 &&
+            data.variants.color_ids.length > 0 &&
+            data.variants.material_ids.length > 0);
 
     const messages = errors as Record<string, string>;
     const variantsError = Object.entries(messages).find(([key]) =>
         key.startsWith('variants'),
     )?.[1];
+    const imagesError = Object.entries(messages).find(([key]) =>
+        key.startsWith('images'),
+    )?.[1];
 
     const submit = (status: string) => {
-        transform((current) => ({ ...current, status }));
-
-        post(store().url, {
+        const options = {
             onSuccess: () => {
                 reset();
                 setPublish(false);
                 onOpenChange(false);
             },
-        });
+        };
+
+        if (editing !== null) {
+            transform((current) => {
+                /*
+                 * A matriz e os ficheiros são exclusivos da criação — uma chave
+                 * que não vai no pedido é uma tabela que o servidor não toca. A
+                 * galeria e as variantes de um produto que já existe editam-se
+                 * pelos endpoints próprios, não por um update ao produto.
+                 */
+                const payload: Partial<ProductFormData> & { status: string } = {
+                    ...current,
+                    status,
+                };
+                delete payload.images;
+                delete payload.variants;
+
+                return payload;
+            });
+
+            // `patch` e não `put`: o payload não traz colunas que o formulário
+            // não mostra, e um PUT prometia substituir o recurso inteiro.
+            patch(update(editing.product.id).url, options);
+
+            return;
+        }
+
+        transform((current) => ({ ...current, status }));
+
+        // Sem `forceFormData`: o Inertia deteta os File em `images` sozinho e
+        // só então serializa em multipart. Sem fotografias, o pedido continua
+        // a ser o JSON de sempre.
+        post(store().url, options);
     };
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="max-h-[88vh] gap-0 overflow-y-auto p-0 sm:max-w-2xl">
                 <DialogHeader className="border-b border-border/60 p-6">
-                    <DialogTitle>Novo produto</DialogTitle>
+                    <DialogTitle>
+                        {editing ? 'Editar produto' : 'Novo produto'}
+                    </DialogTitle>
                     <DialogDescription>
-                        Cruza cores, materiais e tamanhos — as variantes são
-                        criadas automaticamente.
+                        {editing
+                            ? 'O preço e o stock vivem nas variantes, não aqui.'
+                            : 'Cruza cores, materiais e tamanhos — as variantes são criadas automaticamente.'}
                     </DialogDescription>
                 </DialogHeader>
 
@@ -372,191 +450,235 @@ export function ProductCreateDialog({
                         <InputError message={errors.fulfillment_mode} />
                     </div>
 
-                    <div className="grid gap-4 sm:grid-cols-3">
-                        <div className="grid gap-2">
-                            <Label htmlFor="variant-price">
-                                Preço de venda
-                            </Label>
-                            <div className="relative">
-                                <Input
-                                    id="variant-price"
-                                    type="number"
-                                    step="0.5"
-                                    min={0}
-                                    value={data.variants.price}
-                                    onChange={(event) =>
-                                        setVariants({
-                                            price: event.target.value,
-                                        })
-                                    }
-                                    placeholder="29,00"
-                                    className="pr-8 tabular-nums"
-                                />
-                                <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-muted-foreground">
-                                    €
-                                </span>
+                    {/*
+                     * Preço, gramagem e tempo são o molde que a matriz
+                     * aplica a todas as combinações. A editar não aparecem:
+                     * cada variante já tem os seus, e um campo aqui em cima
+                     * prometia escrever nas trinta de uma vez.
+                     */}
+                    {editing === null && (
+                        <>
+                            <div className="grid gap-4 sm:grid-cols-3">
+                                <div className="grid gap-2">
+                                    <Label htmlFor="variant-price">
+                                        Preço de venda
+                                    </Label>
+                                    <div className="relative">
+                                        <Input
+                                            id="variant-price"
+                                            type="number"
+                                            step="0.5"
+                                            min={0}
+                                            value={data.variants.price}
+                                            onChange={(event) =>
+                                                setVariants({
+                                                    price: event.target.value,
+                                                })
+                                            }
+                                            placeholder="29,00"
+                                            className="pr-8 tabular-nums"
+                                        />
+                                        <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-muted-foreground">
+                                            €
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="grid gap-2">
+                                    <Label htmlFor="variant-grams">
+                                        Filamento
+                                    </Label>
+                                    <div className="relative">
+                                        <Input
+                                            id="variant-grams"
+                                            type="number"
+                                            min={0}
+                                            value={
+                                                data.variants
+                                                    .filament_weight_grams ?? ''
+                                            }
+                                            onChange={(event) =>
+                                                setVariants({
+                                                    filament_weight_grams:
+                                                        event.target.value ===
+                                                        ''
+                                                            ? null
+                                                            : Number(
+                                                                  event.target
+                                                                      .value,
+                                                              ),
+                                                })
+                                            }
+                                            placeholder="84"
+                                            className="pr-8 tabular-nums"
+                                        />
+                                        <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-muted-foreground">
+                                            g
+                                        </span>
+                                    </div>
+                                </div>
+
+                                <div className="grid gap-2">
+                                    <Label htmlFor="variant-minutes">
+                                        Tempo de impressão
+                                    </Label>
+                                    <div className="relative">
+                                        <Input
+                                            id="variant-minutes"
+                                            type="number"
+                                            min={0}
+                                            value={
+                                                data.variants
+                                                    .printing_time_minutes ?? ''
+                                            }
+                                            onChange={(event) =>
+                                                setVariants({
+                                                    printing_time_minutes:
+                                                        event.target.value ===
+                                                        ''
+                                                            ? null
+                                                            : Number(
+                                                                  event.target
+                                                                      .value,
+                                                              ),
+                                                })
+                                            }
+                                            placeholder="130"
+                                            className="pr-12 tabular-nums"
+                                        />
+                                        <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-muted-foreground">
+                                            min
+                                        </span>
+                                    </div>
+                                </div>
                             </div>
-                        </div>
 
-                        <div className="grid gap-2">
-                            <Label htmlFor="variant-grams">Filamento</Label>
-                            <div className="relative">
-                                <Input
-                                    id="variant-grams"
-                                    type="number"
-                                    min={0}
-                                    value={
-                                        data.variants.filament_weight_grams ??
-                                        ''
-                                    }
-                                    onChange={(event) =>
-                                        setVariants({
-                                            filament_weight_grams:
-                                                event.target.value === ''
-                                                    ? null
-                                                    : Number(
-                                                          event.target.value,
-                                                      ),
-                                        })
-                                    }
-                                    placeholder="84"
-                                    className="pr-8 tabular-nums"
-                                />
-                                <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-muted-foreground">
-                                    g
-                                </span>
-                            </div>
-                        </div>
+                            <div className="flex flex-col gap-3 rounded-xl border border-border/60 bg-secondary/40 px-4 py-3">
+                                <div className="flex items-center justify-between gap-4">
+                                    <span>
+                                        <span className="block text-sm">
+                                            Custo real estimado
+                                        </span>
+                                        <span className="mt-0.5 block text-xs text-muted-foreground">
+                                            {suggestion
+                                                ? 'Material, máquina, manuseamento e risco — o material mais caro dos escolhidos.'
+                                                : 'Preenche a gramagem, o tempo e um material para calcular.'}
+                                        </span>
+                                    </span>
+                                    <span className="text-lg font-semibold tabular-nums">
+                                        {suggestion
+                                            ? formatCents(
+                                                  suggestion.productionCostCents,
+                                              )
+                                            : '—'}
+                                    </span>
+                                </div>
 
-                        <div className="grid gap-2">
-                            <Label htmlFor="variant-minutes">
-                                Tempo de impressão
-                            </Label>
-                            <div className="relative">
-                                <Input
-                                    id="variant-minutes"
-                                    type="number"
-                                    min={0}
-                                    value={
-                                        data.variants.printing_time_minutes ??
-                                        ''
-                                    }
-                                    onChange={(event) =>
-                                        setVariants({
-                                            printing_time_minutes:
-                                                event.target.value === ''
-                                                    ? null
-                                                    : Number(
-                                                          event.target.value,
-                                                      ),
-                                        })
-                                    }
-                                    placeholder="130"
-                                    className="pr-12 tabular-nums"
-                                />
-                                <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-muted-foreground">
-                                    min
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="flex flex-col gap-3 rounded-xl border border-border/60 bg-secondary/40 px-4 py-3">
-                        <div className="flex items-center justify-between gap-4">
-                            <span>
-                                <span className="block text-sm">
-                                    Custo real estimado
-                                </span>
-                                <span className="mt-0.5 block text-xs text-muted-foreground">
-                                    {suggestion
-                                        ? 'Material, máquina, manuseamento e risco — o material mais caro dos escolhidos.'
-                                        : 'Preenche a gramagem, o tempo e um material para calcular.'}
-                                </span>
-                            </span>
-                            <span className="text-lg font-semibold tabular-nums">
-                                {suggestion
-                                    ? formatCents(
-                                          suggestion.productionCostCents,
-                                      )
-                                    : '—'}
-                            </span>
-                        </div>
-
-                        <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-3">
-                            {suggestion ? (
-                                <span className="text-xs text-muted-foreground">
-                                    Sugerido: revenda{' '}
-                                    <strong className="text-foreground tabular-nums">
-                                        {formatCents(
-                                            suggestion.resalePriceCents,
-                                        )}
-                                    </strong>
-                                    , cliente{' '}
-                                    <strong className="text-foreground tabular-nums">
-                                        {formatCents(
-                                            suggestion.retailPriceCents,
-                                        )}
-                                    </strong>
-                                    {marginCents !== null && (
-                                        <>
-                                            {' · '}
-                                            lucro deste preço{' '}
-                                            <strong
-                                                className={cn(
-                                                    'tabular-nums',
-                                                    marginCents <= 0
-                                                        ? 'text-destructive'
-                                                        : 'text-success',
+                                <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-3">
+                                    {suggestion ? (
+                                        <span className="text-xs text-muted-foreground">
+                                            Sugerido: revenda{' '}
+                                            <strong className="text-foreground tabular-nums">
+                                                {formatCents(
+                                                    suggestion.resalePriceCents,
                                                 )}
-                                            >
-                                                {formatCents(marginCents)}
                                             </strong>
-                                        </>
-                                    )}
-                                </span>
-                            ) : (
-                                <span className="text-xs text-muted-foreground">
-                                    O tempo de impressão conta tanto como o
-                                    plástico.
-                                </span>
-                            )}
-
-                            {/*
-                             * O botão fica sempre: mexer na gramagem ou no tempo
-                             * depois de calcular deixava um número obsoleto no
-                             * ecrã sem nada que o dissesse.
-                             */}
-                            <span className="flex gap-2">
-                                {suggestion && (
-                                    <Button
-                                        type="button"
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() =>
-                                            setVariants({
-                                                price: centsToInput(
+                                            , cliente{' '}
+                                            <strong className="text-foreground tabular-nums">
+                                                {formatCents(
                                                     suggestion.retailPriceCents,
-                                                ),
-                                            })
-                                        }
-                                    >
-                                        Usar{' '}
-                                        {formatCents(
-                                            suggestion.retailPriceCents,
+                                                )}
+                                            </strong>
+                                            {marginCents !== null && (
+                                                <>
+                                                    {' · '}
+                                                    lucro deste preço{' '}
+                                                    <strong
+                                                        className={cn(
+                                                            'tabular-nums',
+                                                            marginCents <= 0
+                                                                ? 'text-destructive'
+                                                                : 'text-success',
+                                                        )}
+                                                    >
+                                                        {formatCents(
+                                                            marginCents,
+                                                        )}
+                                                    </strong>
+                                                </>
+                                            )}
+                                        </span>
+                                    ) : (
+                                        <span className="text-xs text-muted-foreground">
+                                            O tempo de impressão conta tanto
+                                            como o plástico.
+                                        </span>
+                                    )}
+
+                                    {/*
+                                     * O botão fica sempre: mexer na
+                                     * gramagem ou no tempo depois de
+                                     * calcular deixava um número obsoleto
+                                     * no ecrã sem nada que o dissesse.
+                                     */}
+                                    <span className="flex gap-2">
+                                        {suggestion && (
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={() =>
+                                                    setVariants({
+                                                        price: centsToInput(
+                                                            suggestion.retailPriceCents,
+                                                        ),
+                                                    })
+                                                }
+                                            >
+                                                Usar{' '}
+                                                {formatCents(
+                                                    suggestion.retailPriceCents,
+                                                )}
+                                            </Button>
                                         )}
-                                    </Button>
-                                )}
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    disabled={!canSuggest}
-                                    onClick={suggest}
-                                >
-                                    {suggestion ? 'Recalcular' : 'Calcular'}
-                                </Button>
-                            </span>
+                                        <Button
+                                            type="button"
+                                            variant="ghost"
+                                            size="sm"
+                                            disabled={!canSuggest}
+                                            onClick={suggest}
+                                        >
+                                            {suggestion
+                                                ? 'Recalcular'
+                                                : 'Calcular'}
+                                        </Button>
+                                    </span>
+                                </div>
+                            </div>
+                        </>
+                    )}
+
+                    <div className="flex flex-col gap-4 border-t border-border/60 pt-5">
+                        <div className="flex items-baseline justify-between gap-3">
+                            <Label>Fotografias</Label>
+                            <p className="text-xs text-muted-foreground">
+                                A primeira é a que aparece nas listagens, no
+                                carrinho e nos emails.
+                            </p>
                         </div>
+
+                        {editing === null ? (
+                            <StagedPhotos
+                                files={data.images}
+                                onChange={(files) => setData('images', files)}
+                                error={imagesError}
+                            />
+                        ) : (
+                            <ProductImages
+                                productId={editing.product.id}
+                                images={editing.images}
+                            />
+                        )}
                     </div>
 
                     <div className="flex flex-col gap-4 border-t border-border/60 pt-5">
@@ -567,216 +689,725 @@ export function ProductCreateDialog({
                             </p>
                         </div>
 
-                        {colors.length === 0 || materials.length === 0 ? (
-                            <p className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-                                {colors.length === 0
-                                    ? 'Ainda não há cores ativas. Cria uma antes de gerar variantes.'
-                                    : 'Ainda não há materiais ativos. Cria um antes de gerar variantes.'}
-                            </p>
-                        ) : (
+                        {editing === null ? (
                             <>
-                                <div className="grid gap-2">
-                                    <span className="text-xs text-muted-foreground">
-                                        Cor
-                                    </span>
-                                    <div className="flex flex-wrap gap-2">
-                                        {colors.map((color) => (
-                                            <ToggleChip
-                                                key={color.id}
-                                                active={data.variants.color_ids.includes(
-                                                    color.id,
-                                                )}
-                                                onClick={() =>
-                                                    setVariants({
-                                                        color_ids: toggle(
-                                                            data.variants
-                                                                .color_ids,
-                                                            color.id,
-                                                        ),
-                                                    })
-                                                }
-                                            >
-                                                <span
-                                                    className="size-3 rounded-full border border-border"
-                                                    style={{
-                                                        background: color.hex,
-                                                    }}
-                                                />
-                                                {color.name}
-                                            </ToggleChip>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                <div className="grid gap-2">
-                                    <span className="text-xs text-muted-foreground">
-                                        Material
-                                    </span>
-                                    <div className="flex flex-wrap gap-2">
-                                        {materials.map((material) => (
-                                            <ToggleChip
-                                                key={material.id}
-                                                active={data.variants.material_ids.includes(
-                                                    material.id,
-                                                )}
-                                                onClick={() =>
-                                                    setVariants({
-                                                        material_ids: toggle(
-                                                            data.variants
-                                                                .material_ids,
-                                                            material.id,
-                                                        ),
-                                                    })
-                                                }
-                                            >
-                                                {material.name}
-                                                <span className="text-muted-foreground tabular-nums">
-                                                    {formatCents(
-                                                        material.pricePerKgCents,
-                                                    )}
-                                                </span>
-                                            </ToggleChip>
-                                        ))}
-                                    </div>
-                                </div>
-                            </>
-                        )}
-
-                        <div className="grid gap-2">
-                            <span className="text-xs text-muted-foreground">
-                                Tamanho{' '}
-                                <span className="opacity-70">(opcional)</span>
-                            </span>
-                            <div className="flex flex-wrap gap-2">
-                                {SIZES.map((size) => (
-                                    <ToggleChip
-                                        key={size}
-                                        active={data.variants.sizes.includes(
-                                            size,
-                                        )}
-                                        onClick={() =>
-                                            setVariants({
-                                                sizes: toggle(
-                                                    data.variants.sizes,
-                                                    size,
-                                                ),
-                                            })
-                                        }
-                                    >
-                                        {size}
-                                    </ToggleChip>
-                                ))}
-                            </div>
-                        </div>
-
-                        <div className="rounded-xl border border-border/60 bg-secondary/40 px-4 py-3">
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                                <span
-                                    className={cn(
-                                        'text-sm font-semibold',
-                                        combos.length === 0 &&
-                                            'font-normal text-muted-foreground',
-                                    )}
-                                >
-                                    {combos.length === 0
-                                        ? 'Escolhe pelo menos uma cor e um material'
-                                        : combos.length === 1
-                                          ? '1 variante vai ser criada'
-                                          : `${combos.length} variantes vão ser criadas`}
-                                </span>
-                                {combos.length > 0 && (
-                                    <span className="text-xs text-muted-foreground">
-                                        {[
-                                            `${data.variants.color_ids.length} ${data.variants.color_ids.length === 1 ? 'cor' : 'cores'}`,
-                                            `${data.variants.material_ids.length} ${data.variants.material_ids.length === 1 ? 'material' : 'materiais'}`,
-                                            data.variants.sizes.length === 0
-                                                ? null
-                                                : `${data.variants.sizes.length} ${data.variants.sizes.length === 1 ? 'tamanho' : 'tamanhos'}`,
-                                        ]
-                                            .filter((part) => part !== null)
-                                            .join(' × ')}
-                                    </span>
-                                )}
-                            </div>
-
-                            {combos.length > 0 && (
-                                <div className="mt-2.5 flex flex-wrap gap-1.5">
-                                    {combos
-                                        .slice(0, PREVIEW_LIMIT)
-                                        .map((combo) => (
-                                            <span
-                                                key={combo.key}
-                                                className="rounded-md border border-border/60 bg-card px-2 py-1 text-xs text-muted-foreground"
-                                            >
-                                                {combo.label}
+                                {colors.length === 0 ||
+                                materials.length === 0 ? (
+                                    <p className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+                                        {colors.length === 0
+                                            ? 'Ainda não há cores ativas. Cria uma antes de gerar variantes.'
+                                            : 'Ainda não há materiais ativos. Cria um antes de gerar variantes.'}
+                                    </p>
+                                ) : (
+                                    <>
+                                        <div className="grid gap-2">
+                                            <span className="text-xs text-muted-foreground">
+                                                Cor
                                             </span>
-                                        ))}
-                                    {combos.length > PREVIEW_LIMIT && (
-                                        <span className="px-1 py-1 text-xs text-muted-foreground">
-                                            +{combos.length - PREVIEW_LIMIT}
+                                            <div className="flex flex-wrap gap-2">
+                                                {colors.map((color) => (
+                                                    <ToggleChip
+                                                        key={color.id}
+                                                        active={data.variants.color_ids.includes(
+                                                            color.id,
+                                                        )}
+                                                        onClick={() =>
+                                                            setVariants({
+                                                                color_ids:
+                                                                    toggle(
+                                                                        data
+                                                                            .variants
+                                                                            .color_ids,
+                                                                        color.id,
+                                                                    ),
+                                                            })
+                                                        }
+                                                    >
+                                                        <span
+                                                            className="size-3 rounded-full border border-border"
+                                                            style={{
+                                                                background:
+                                                                    color.hex,
+                                                            }}
+                                                        />
+                                                        {color.name}
+                                                    </ToggleChip>
+                                                ))}
+                                            </div>
+                                        </div>
+
+                                        <div className="grid gap-2">
+                                            <span className="text-xs text-muted-foreground">
+                                                Material
+                                            </span>
+                                            <div className="flex flex-wrap gap-2">
+                                                {materials.map((material) => (
+                                                    <ToggleChip
+                                                        key={material.id}
+                                                        active={data.variants.material_ids.includes(
+                                                            material.id,
+                                                        )}
+                                                        onClick={() =>
+                                                            setVariants({
+                                                                material_ids:
+                                                                    toggle(
+                                                                        data
+                                                                            .variants
+                                                                            .material_ids,
+                                                                        material.id,
+                                                                    ),
+                                                            })
+                                                        }
+                                                    >
+                                                        {material.name}
+                                                        <span className="text-muted-foreground tabular-nums">
+                                                            {formatCents(
+                                                                material.pricePerKgCents,
+                                                            )}
+                                                        </span>
+                                                    </ToggleChip>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    </>
+                                )}
+
+                                <div className="grid gap-2">
+                                    <span className="text-xs text-muted-foreground">
+                                        Tamanho{' '}
+                                        <span className="opacity-70">
+                                            (opcional)
                                         </span>
-                                    )}
+                                    </span>
+                                    <div className="flex flex-wrap gap-2">
+                                        {SIZES.map((size) => (
+                                            <ToggleChip
+                                                key={size}
+                                                active={data.variants.sizes.includes(
+                                                    size,
+                                                )}
+                                                onClick={() =>
+                                                    setVariants({
+                                                        sizes: toggle(
+                                                            data.variants.sizes,
+                                                            size,
+                                                        ),
+                                                    })
+                                                }
+                                            >
+                                                {size}
+                                            </ToggleChip>
+                                        ))}
+                                    </div>
                                 </div>
-                            )}
 
-                            <p className="mt-2.5 text-xs text-muted-foreground">
-                                As referências são geradas a partir do nome. O
-                                stock começa a zero — a primeira contagem entra
-                                pelo registo de stock de cada variante.
-                            </p>
-                        </div>
+                                <div className="rounded-xl border border-border/60 bg-secondary/40 px-4 py-3">
+                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                        <span
+                                            className={cn(
+                                                'text-sm font-semibold',
+                                                combos.length === 0 &&
+                                                    'font-normal text-muted-foreground',
+                                            )}
+                                        >
+                                            {combos.length === 0
+                                                ? 'Escolhe pelo menos uma cor e um material'
+                                                : combos.length === 1
+                                                  ? '1 variante vai ser criada'
+                                                  : `${combos.length} variantes vão ser criadas`}
+                                        </span>
+                                        {combos.length > 0 && (
+                                            <span className="text-xs text-muted-foreground">
+                                                {[
+                                                    `${data.variants.color_ids.length} ${data.variants.color_ids.length === 1 ? 'cor' : 'cores'}`,
+                                                    `${data.variants.material_ids.length} ${data.variants.material_ids.length === 1 ? 'material' : 'materiais'}`,
+                                                    data.variants.sizes
+                                                        .length === 0
+                                                        ? null
+                                                        : `${data.variants.sizes.length} ${data.variants.sizes.length === 1 ? 'tamanho' : 'tamanhos'}`,
+                                                ]
+                                                    .filter(
+                                                        (part) => part !== null,
+                                                    )
+                                                    .join(' × ')}
+                                            </span>
+                                        )}
+                                    </div>
 
-                        <InputError message={variantsError} />
+                                    {combos.length > 0 && (
+                                        <div className="mt-2.5 flex flex-wrap gap-1.5">
+                                            {combos
+                                                .slice(0, PREVIEW_LIMIT)
+                                                .map((combo) => (
+                                                    <span
+                                                        key={combo.key}
+                                                        className="rounded-md border border-border/60 bg-card px-2 py-1 text-xs text-muted-foreground"
+                                                    >
+                                                        {combo.label}
+                                                    </span>
+                                                ))}
+                                            {combos.length > PREVIEW_LIMIT && (
+                                                <span className="px-1 py-1 text-xs text-muted-foreground">
+                                                    +
+                                                    {combos.length -
+                                                        PREVIEW_LIMIT}
+                                                </span>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    <p className="mt-2.5 text-xs text-muted-foreground">
+                                        As referências são geradas a partir do
+                                        nome. O stock começa a zero — a primeira
+                                        contagem entra pelo registo de stock de
+                                        cada variante.
+                                    </p>
+                                </div>
+
+                                <InputError message={variantsError} />
+                            </>
+                        ) : (
+                            <ExistingVariants
+                                editing={editing}
+                                onClose={() => onOpenChange(false)}
+                            />
+                        )}
                     </div>
 
-                    <div className="grid gap-2">
+                    <div className="grid gap-2 border-t border-border/60 pt-5">
                         <Label htmlFor="product-description">
                             Descrição na loja
                         </Label>
-                        <Textarea
+                        <RichTextEditor
                             id="product-description"
-                            rows={2}
                             value={data.description}
-                            onChange={(event) =>
-                                setData('description', event.target.value)
-                            }
-                            placeholder="Vaso impresso em PLA reciclado, ideal para plantas pequenas."
+                            onChange={(html) => setData('description', html)}
                         />
                         <InputError message={errors.description} />
                     </div>
+
+                    {/*
+                     * Recolhido por omissão: são os campos que quem despacha
+                     * um produto novo nunca abre, mas que a edição precisa
+                     * de ter à mão para o modal substituir a página que
+                     * havia.
+                     */}
+                    <details className="rounded-xl border border-border/60">
+                        <summary className="cursor-pointer px-4 py-3 text-sm font-medium select-none">
+                            Avançado
+                            <span className="ml-2 font-normal text-muted-foreground">
+                                endereço, etiquetas, IVA, destaque
+                            </span>
+                        </summary>
+
+                        <div className="flex flex-col gap-4 border-t border-border/60 p-4">
+                            <div className="grid gap-2">
+                                <Label htmlFor="product-slug">
+                                    Endereço na loja
+                                </Label>
+                                <div className="flex items-center gap-1">
+                                    <span className="text-sm text-muted-foreground">
+                                        /produtos/
+                                    </span>
+                                    <Input
+                                        id="product-slug"
+                                        value={data.slug}
+                                        onChange={(event) =>
+                                            setData('slug', event.target.value)
+                                        }
+                                        maxLength={140}
+                                        placeholder={
+                                            slugify(data.name) ||
+                                            'nome-do-produto'
+                                        }
+                                        className="font-mono"
+                                    />
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                    Deixa vazio para gerar a partir do nome. Se
+                                    lhe mexeres depois de o produto estar
+                                    online, os links antigos deixam de
+                                    funcionar.
+                                </p>
+                                <InputError message={errors.slug} />
+                            </div>
+
+                            <div className="grid gap-2">
+                                <Label htmlFor="product-tags">Etiquetas</Label>
+                                <TagInput
+                                    id="product-tags"
+                                    value={data.tags}
+                                    onChange={(tags) => setData('tags', tags)}
+                                    suggestions={tagSuggestions}
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                    Segundo eixo de organização, ao lado da
+                                    categoria: "natal", "presente",
+                                    "minimalista".
+                                </p>
+                                <InputError message={errors.tags} />
+                            </div>
+
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                <div className="grid gap-2">
+                                    <Label htmlFor="product-vat">IVA (%)</Label>
+                                    <Input
+                                        id="product-vat"
+                                        type="number"
+                                        min={0}
+                                        max={100}
+                                        value={data.vat_rate}
+                                        onChange={(event) =>
+                                            setData(
+                                                'vat_rate',
+                                                Number(event.target.value),
+                                            )
+                                        }
+                                        className="tabular-nums"
+                                    />
+                                    <InputError message={errors.vat_rate} />
+                                </div>
+
+                                {data.fulfillment_mode !== 'in_stock' && (
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="product-max-open">
+                                            Capacidade máx. em produção
+                                        </Label>
+                                        <Input
+                                            id="product-max-open"
+                                            type="number"
+                                            min={1}
+                                            value={
+                                                data.max_open_production_qty ??
+                                                ''
+                                            }
+                                            onChange={(event) =>
+                                                setData(
+                                                    'max_open_production_qty',
+                                                    event.target.value === ''
+                                                        ? null
+                                                        : Number(
+                                                              event.target
+                                                                  .value,
+                                                          ),
+                                                )
+                                            }
+                                            className="tabular-nums"
+                                        />
+                                        <InputError
+                                            message={
+                                                errors.max_open_production_qty
+                                            }
+                                        />
+                                    </div>
+                                )}
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-6">
+                                <label className="flex items-center gap-2 text-sm">
+                                    <Checkbox
+                                        checked={data.featured}
+                                        onCheckedChange={(checked) =>
+                                            setData(
+                                                'featured',
+                                                checked === true,
+                                            )
+                                        }
+                                    />
+                                    Destacado
+                                </label>
+
+                                {data.fulfillment_mode !== 'in_stock' && (
+                                    <label className="flex items-center gap-2 text-sm">
+                                        <Checkbox
+                                            checked={data.allow_backorder}
+                                            onCheckedChange={(checked) =>
+                                                setData(
+                                                    'allow_backorder',
+                                                    checked === true,
+                                                )
+                                            }
+                                        />
+                                        Aceitar além da capacidade
+                                    </label>
+                                )}
+                            </div>
+                        </div>
+                    </details>
                 </div>
 
                 <DialogFooter className="items-center gap-3 border-t border-border/60 bg-secondary/30 p-6 sm:justify-between">
-                    <label className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <Checkbox
-                            checked={publish}
-                            onCheckedChange={(checked) =>
-                                setPublish(checked === true)
-                            }
-                        />
-                        Publicar na loja online
-                    </label>
+                    {editing ? (
+                        <div className="flex items-center gap-2">
+                            <Label
+                                htmlFor="product-status"
+                                className="text-sm text-muted-foreground"
+                            >
+                                Estado
+                            </Label>
+                            <Select
+                                value={data.status}
+                                onValueChange={(value) =>
+                                    setData('status', value)
+                                }
+                            >
+                                <SelectTrigger
+                                    id="product-status"
+                                    className="w-40"
+                                >
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {PRODUCT_STATUSES.map((status) => (
+                                        <SelectItem
+                                            key={status.value}
+                                            value={status.value}
+                                        >
+                                            {status.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    ) : (
+                        <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                            <Checkbox
+                                checked={publish}
+                                onCheckedChange={(checked) =>
+                                    setPublish(checked === true)
+                                }
+                            />
+                            Publicar na loja online
+                        </label>
+                    )}
+
                     <div className="flex gap-2">
+                        {editing === null && (
+                            <Button
+                                type="button"
+                                variant="outline"
+                                className="rounded-full"
+                                disabled={processing || !named}
+                                onClick={() => submit('draft')}
+                            >
+                                Guardar rascunho
+                            </Button>
+                        )}
                         <Button
                             type="button"
-                            variant="outline"
                             className="rounded-full"
-                            disabled={processing || data.name.trim() === ''}
-                            onClick={() => submit('draft')}
+                            disabled={processing || !named || !canSubmit}
+                            onClick={() =>
+                                submit(
+                                    editing
+                                        ? data.status
+                                        : publish
+                                          ? 'active'
+                                          : 'draft',
+                                )
+                            }
                         >
-                            Guardar rascunho
-                        </Button>
-                        <Button
-                            type="button"
-                            className="rounded-full"
-                            disabled={processing || !canCreate}
-                            onClick={() => submit(publish ? 'active' : 'draft')}
-                        >
-                            Criar produto
+                            {editing ? 'Guardar alterações' : 'Criar produto'}
                         </Button>
                     </div>
                 </DialogFooter>
             </DialogContent>
         </Dialog>
+    );
+}
+
+/** Espelha o Str::slug do servidor o suficiente para servir de pré-visualização. */
+function slugify(value: string) {
+    return value
+        .normalize('NFD')
+        .replace(/[̀-ͯ]/g, '')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '');
+}
+
+type StagedProps = {
+    files: File[];
+    onChange: (files: File[]) => void;
+    error?: string;
+};
+
+/**
+ * As fotografias de um produto que ainda não existe.
+ *
+ * Não há para onde as enviar — `ImageService::store` precisa de um `Product`, e
+ * o índice parcial `product_images_one_primary_per_product` exige que a
+ * primeira de um produto seja a principal. Por isso ficam em memória e viajam
+ * no mesmo POST que cria o produto: ou nasce com as fotos, ou não nasce.
+ *
+ * A ordem é a que se vê — a primeira da lista é a que fica principal, e
+ * remover a primeira promove a seguinte, exactamente como o servidor faz.
+ */
+function StagedPhotos({ files, onChange, error }: StagedProps) {
+    const fileInput = useRef<HTMLInputElement>(null);
+    const [dragging, setDragging] = useState(false);
+
+    /*
+     * Um object URL por ficheiro, revogado sempre que a lista muda e no
+     * desmonte. Sem o revoke, cada foto largada e retirada deixava o blob
+     * agarrado à memória do separador até ele fechar.
+     */
+    const previews = useMemo(
+        () => files.map((file) => URL.createObjectURL(file)),
+        [files],
+    );
+
+    useEffect(
+        () => () => previews.forEach((url) => URL.revokeObjectURL(url)),
+        [previews],
+    );
+
+    const add = (incoming: FileList | null) => {
+        if (!incoming || incoming.length === 0) {
+            return;
+        }
+
+        onChange([...files, ...Array.from(incoming)].slice(0, MAX_PHOTOS));
+
+        if (fileInput.current) {
+            fileInput.current.value = '';
+        }
+    };
+
+    const full = files.length >= MAX_PHOTOS;
+
+    return (
+        <div className="flex flex-col gap-3">
+            <label
+                onDragOver={(event) => {
+                    event.preventDefault();
+                    setDragging(true);
+                }}
+                onDragLeave={() => setDragging(false)}
+                onDrop={(event) => {
+                    event.preventDefault();
+                    setDragging(false);
+                    add(event.dataTransfer.files);
+                }}
+                className={cn(
+                    'flex flex-col items-center gap-1.5 rounded-xl border border-dashed p-6 text-center transition-colors',
+                    full
+                        ? 'cursor-not-allowed border-border opacity-60'
+                        : 'cursor-pointer',
+                    dragging
+                        ? 'border-foreground/40 bg-accent'
+                        : 'border-border hover:border-foreground/30',
+                )}
+            >
+                <Upload className="size-5 text-muted-foreground" />
+                <span className="text-sm font-medium">
+                    {full
+                        ? `Máximo de ${MAX_PHOTOS} fotografias`
+                        : 'Larga as fotografias aqui ou clica para escolher'}
+                </span>
+                <span className="text-xs text-muted-foreground">
+                    JPG, PNG ou WEBP · até 5 MB cada · o texto alternativo
+                    escreve-se depois de o produto existir
+                </span>
+                <input
+                    ref={fileInput}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    multiple
+                    disabled={full}
+                    className="sr-only"
+                    onChange={(event) => add(event.target.files)}
+                />
+            </label>
+
+            <InputError message={error} />
+
+            {files.length > 0 && (
+                <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
+                    {files.map((file, index) => (
+                        <div
+                            key={`${file.name}-${file.lastModified}-${index}`}
+                            className="relative aspect-square overflow-hidden rounded-lg border border-border/60 bg-muted"
+                        >
+                            <img
+                                src={previews[index]}
+                                alt=""
+                                className="size-full object-cover"
+                            />
+                            {index === 0 && (
+                                <Badge className="absolute top-1 left-1 text-[10px]">
+                                    Principal
+                                </Badge>
+                            )}
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    onChange(
+                                        files.filter(
+                                            (_, position) => position !== index,
+                                        ),
+                                    )
+                                }
+                                aria-label={`Retirar ${file.name}`}
+                                className="absolute top-1 right-1 grid size-6 place-items-center rounded-full bg-background/90 text-muted-foreground transition-colors hover:text-foreground"
+                            >
+                                <X className="size-3.5" />
+                            </button>
+                        </div>
+                    ))}
+                </div>
+            )}
+        </div>
+    );
+}
+
+type ExistingProps = {
+    editing: ProductEditing;
+    onClose: () => void;
+};
+
+/**
+ * As variantes que já existem. Criar e editar uma variante continuam a ser
+ * ecrãs próprios — são formulários com preço promocional, revenda, perfil de
+ * impressora e stock, e não cabiam aqui dentro. Daí o `onClose` antes de
+ * navegar: sair para outra página com o modal por fechar deixava-o a reabrir
+ * ao voltar atrás.
+ *
+ * Arquivar, esse, fica: é a única porta que a variante tem para sair de
+ * circulação, e não existe no formulário de edição dela.
+ */
+function ExistingVariants({ editing, onClose }: ExistingProps) {
+    const [archiving, setArchiving] = useState<VariantRow | null>(null);
+
+    return (
+        <div className="flex flex-col gap-3">
+            {editing.variants.length === 0 ? (
+                <p className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
+                    Este produto ainda não tem variantes — cria a primeira para
+                    lhe dar preço e stock.
+                </p>
+            ) : (
+                <ul className="divide-y divide-border/60 overflow-hidden rounded-xl border border-border/60">
+                    {editing.variants.map((variant) => (
+                        <li
+                            key={variant.id}
+                            className="flex items-center gap-3 px-3 py-2"
+                        >
+                            <span className="min-w-0 flex-1">
+                                <span className="flex flex-wrap items-center gap-2 text-sm font-medium">
+                                    {variant.sku}
+                                    {variant.isDefault && (
+                                        <Badge variant="outline">
+                                            Principal
+                                        </Badge>
+                                    )}
+                                    {!variant.active && (
+                                        <Badge variant="secondary">
+                                            Arquivada
+                                        </Badge>
+                                    )}
+                                </span>
+                                <span className="mt-0.5 flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground">
+                                    {variant.color && (
+                                        <>
+                                            <ColorSwatch
+                                                hex={variant.color.hex}
+                                            />
+                                            <span>{variant.color.name}</span>
+                                        </>
+                                    )}
+                                    {variant.material && (
+                                        <span>{variant.material.name}</span>
+                                    )}
+                                    {variant.sizeLabel && (
+                                        <span>{variant.sizeLabel}</span>
+                                    )}
+                                    {!variant.color &&
+                                        !variant.material &&
+                                        !variant.sizeLabel &&
+                                        '—'}
+                                </span>
+                            </span>
+
+                            <span className="text-right text-sm tabular-nums">
+                                <span className="block">
+                                    {formatCents(variant.priceCents)}
+                                </span>
+                                <span
+                                    className={cn(
+                                        'block text-xs',
+                                        variant.lowStock
+                                            ? 'text-warning'
+                                            : 'text-muted-foreground',
+                                    )}
+                                >
+                                    {variant.availableStock} em stock
+                                </span>
+                            </span>
+
+                            <span className="flex gap-1">
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    asChild
+                                    onClick={onClose}
+                                >
+                                    <Link href={editVariant(variant.id)}>
+                                        Editar
+                                    </Link>
+                                </Button>
+                                {variant.active && (
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="size-8"
+                                        onClick={() => setArchiving(variant)}
+                                        aria-label={`Arquivar ${variant.sku}`}
+                                        title="Arquivar"
+                                    >
+                                        <Archive className="size-4" />
+                                    </Button>
+                                )}
+                            </span>
+                        </li>
+                    ))}
+                </ul>
+            )}
+
+            <div>
+                <Button variant="outline" size="sm" asChild onClick={onClose}>
+                    <Link href={createVariant(editing.product.id)}>
+                        Nova variante
+                    </Link>
+                </Button>
+            </div>
+
+            <ConfirmDialog
+                open={archiving !== null}
+                onOpenChange={(open) => !open && setArchiving(null)}
+                title="Arquivar variante"
+                description={
+                    <>
+                        A variante <strong>{archiving?.sku}</strong> deixa de
+                        poder ser vendida. Os movimentos de stock e as
+                        encomendas onde aparece mantêm-se.
+                    </>
+                }
+                confirmLabel="Arquivar"
+                destructive
+                onConfirm={() => {
+                    if (archiving) {
+                        router.delete(destroyVariant(archiving.id).url, {
+                            // O modal fica onde está: o servidor devolve um
+                            // `back()`, e sem isto o produto que se estava a
+                            // editar fechava a cada variante arquivada.
+                            preserveScroll: true,
+                            preserveState: true,
+                            onFinish: () => setArchiving(null),
+                        });
+                    }
+                }}
+            />
+        </div>
     );
 }

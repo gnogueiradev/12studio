@@ -7,27 +7,73 @@ use App\Models\ProductImage;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
+use RuntimeException;
 
 class ImageService
 {
     /**
-     * Guarda o ficheiro no disco `public` e cria a linha. A primeira imagem
-     * de um produto fica automaticamente como principal — sem principal, as
-     * listagens, o carrinho, os emails e o OG nao sabem que imagem mostrar.
+     * Guarda o ficheiro no disco `public` e cria a linha.
      */
     public function store(Product $product, UploadedFile $file, ?string $alt = null): ProductImage
     {
-        $path = $file->store('products', 'public');
+        return $this->attach($product, $this->put([$file]), $alt)[0];
+    }
 
-        return DB::transaction(function () use ($product, $path, $alt): ProductImage {
+    /**
+     * Metade "disco" do store, isolada de proposito: gravar ficheiros e criar
+     * linhas sao duas coisas, e quem cria um produto COM fotografias precisa
+     * de fazer a primeira antes de abrir a transacao. Ver o comentario final
+     * do delete() — uma escrita no disco dentro de DB::transaction prende o
+     * unico escritor do SQLite o tempo que o upload demorar.
+     *
+     * @param  array<int, UploadedFile>  $files
+     * @return array<int, string>
+     */
+    public function put(array $files): array
+    {
+        return array_map(function (UploadedFile $file): string {
+            $path = $file->store('products', 'public');
+
+            // `false` e o disco a falhar (sem espaco, sem permissoes). Deixar
+            // passar era criar uma linha a apontar para um ficheiro que nunca
+            // existiu, e a galeria so daria pelo erro ao renderizar.
+            if ($path === false) {
+                throw new RuntimeException("Nao foi possivel guardar {$file->getClientOriginalName()}.");
+            }
+
+            return $path;
+        }, array_values($files));
+    }
+
+    /**
+     * Metade "base de dados": cria as linhas de ficheiros que ja estao no
+     * disco. A primeira imagem de um produto fica automaticamente como
+     * principal — sem principal, as listagens, o carrinho, os emails e o OG
+     * nao sabem que imagem mostrar.
+     *
+     * @param  array<int, string>  $paths
+     * @return array<int, ProductImage>
+     */
+    public function attach(Product $product, array $paths, ?string $alt = null): array
+    {
+        if ($paths === []) {
+            return [];
+        }
+
+        return DB::transaction(function () use ($product, $paths, $alt): array {
             $isFirst = ! $product->images()->exists();
+            $order = (int) $product->images()->max('sort_order');
 
-            return $product->images()->create([
-                'path' => $path,
-                'alt' => $alt,
-                'sort_order' => (int) $product->images()->max('sort_order') + 1,
-                'is_primary' => $isFirst,
-            ]);
+            return array_map(
+                fn (string $path, int $index): ProductImage => $product->images()->create([
+                    'path' => $path,
+                    'alt' => $alt,
+                    'sort_order' => $order + $index + 1,
+                    'is_primary' => $isFirst && $index === 0,
+                ]),
+                array_values($paths),
+                array_keys(array_values($paths)),
+            );
         });
     }
 

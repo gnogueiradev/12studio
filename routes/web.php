@@ -132,13 +132,14 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         Route::patch('definicoes/precos', [Admin\SettingController::class, 'updatePricing'])
             ->name('definicoes.precos');
 
-        // Sem `create`: o produto novo nasce no modal da propria listagem, que
-        // e onde se cruzam as cores, os materiais e os tamanhos que geram as
-        // variantes. O
-        // resto do formulario (etiquetas, IVA, SEO, destaque) vive no `edit`.
+        // Sem `create` nem `edit`: o produto vive todo no modal da propria
+        // listagem — a criar, e onde se cruzam as cores, os materiais e os
+        // tamanhos que geram as variantes; a editar, chega la por
+        // `?editar={id}`, que o `index` le para carregar o produto, a galeria e
+        // as variantes. Como nos materiais e nas impressoras.
         Route::resource('produtos', Admin\ProductController::class)
             ->parameters(['produtos' => 'product'])
-            ->except(['show', 'create']);
+            ->except(['show', 'create', 'edit']);
 
         Route::patch('produtos/{product}/restaurar', [Admin\ProductController::class, 'restore'])
             ->name('produtos.restaurar');

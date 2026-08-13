@@ -59,6 +59,22 @@ class StoreProductRequest extends FormRequest
             'allow_backorder' => ['boolean'],
             'max_open_production_qty' => ['nullable', 'integer', 'min:1', 'max:65535'],
             ...$this->variantRules(),
+            ...$this->imageRules(),
+        ];
+    }
+
+    /**
+     * Fotografias do modal de novo produto, com as mesmas restricoes do
+     * StoreProductImageRequest — menos o `required`: nascer sem foto continua
+     * a ser o caso normal, e quem quiser adiciona-as depois pela galeria.
+     *
+     * @return array<string, array<int, mixed>>
+     */
+    protected function imageRules(): array
+    {
+        return [
+            'images' => ['array', 'max:10'],
+            'images.*' => ['image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
         ];
     }
 
@@ -111,6 +127,8 @@ class StoreProductRequest extends FormRequest
             'category_id' => 'categoria',
             'vat_rate' => 'IVA',
             'tags' => 'etiquetas',
+            'images' => 'fotografias',
+            'images.*' => 'fotografia',
             'variants.color_ids' => 'cores',
             'variants.material_ids' => 'materiais',
             'variants.sizes' => 'tamanhos',

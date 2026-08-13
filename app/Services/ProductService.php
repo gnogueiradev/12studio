@@ -6,6 +6,7 @@ use App\Models\Product;
 use App\Models\Tag;
 use App\Support\Slug;
 use App\Support\VariantSku;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
 use Mews\Purifier\Facades\Purifier;
 
@@ -13,6 +14,7 @@ class ProductService
 {
     public function __construct(
         private VariantService $variantService,
+        private ImageService $imageService,
     ) {}
 
     /**
@@ -20,7 +22,14 @@ class ProductService
      */
     public function store(array $data): Product
     {
-        return DB::transaction(function () use ($data): Product {
+        $images = $this->pullImages($data);
+
+        // Os ficheiros vao para o disco ANTES de a transacao abrir: escrever
+        // dez ficheiros de cinco megabytes com o unico escritor do SQLite na
+        // mao era prende-lo o tempo todo do upload. Ver ImageService::put.
+        $paths = $this->imageService->put($images);
+
+        return DB::transaction(function () use ($data, $paths): Product {
             $tags = $this->pullTags($data);
             $variants = $this->pullVariantSeed($data);
             $data = $this->sanitizeDescription($data);
@@ -32,6 +41,7 @@ class ProductService
 
             $product = Product::query()->create($data);
 
+            $this->imageService->attach($product, $paths);
             $this->syncTags($product, $tags ?? []);
             $this->generateVariants($product, $variants);
 
@@ -240,6 +250,28 @@ class ProductService
         unset($data['tags']);
 
         return $tags;
+    }
+
+    /**
+     * Tira as fotografias do payload, pela mesma razao das etiquetas: nao sao
+     * colunas de `products`, e uma imagem so pode ser gravada depois de haver
+     * um produto a que pertenca. So o modal de criar as manda — o de editar
+     * carrega a galeria a parte, pelo ProductImageController.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<int, UploadedFile>
+     */
+    private function pullImages(array &$data): array
+    {
+        if (! array_key_exists('images', $data)) {
+            return [];
+        }
+
+        /** @var array<int, UploadedFile> $images */
+        $images = $data['images'] ?? [];
+        unset($data['images']);
+
+        return $images;
     }
 
     /**

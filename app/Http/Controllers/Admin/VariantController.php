@@ -56,7 +56,10 @@ class VariantController extends Controller
 
         $this->toast('Variante criada.');
 
-        return to_route('admin.produtos.edit', $product);
+        // O produto ja nao tem pagina de edicao: volta-se a listagem com
+        // `?editar={id}`, que e o que reabre o modal na seccao das variantes.
+        // Aqui nao serve um `back()` — vinha-se do formulario da variante.
+        return to_route('admin.produtos.index', ['editar' => $product->id]);
     }
 
     public function edit(Variant $variant, PricingPreviewRequest $request): Response
@@ -107,7 +110,7 @@ class VariantController extends Controller
 
         $this->toast('Variante atualizada.');
 
-        return to_route('admin.produtos.edit', $variant->product_id);
+        return to_route('admin.produtos.index', ['editar' => $variant->product_id]);
     }
 
     /**
@@ -120,7 +123,10 @@ class VariantController extends Controller
 
         $this->toast('Variante arquivada.');
 
-        return to_route('admin.produtos.edit', $variant->product_id);
+        // `back()` e nao a listagem crua: arquivar dispara-se de dentro do
+        // modal, e voltar ao endereco de onde se veio guarda a pagina, os
+        // filtros e a pesquisa que estavam por tras dele.
+        return back();
     }
 
     /**

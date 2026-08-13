@@ -14,8 +14,12 @@ use Illuminate\Http\RedirectResponse;
 /**
  * Fotografias vivem no contexto de um produto (rota shallow, como as
  * variantes): carregar passa por /admin/produtos/{product}/imagens, o resto
- * por /admin/imagens/{image}. A galeria e uma seccao da pagina de edicao do
+ * por /admin/imagens/{image}. A galeria e uma seccao do modal de edicao do
  * produto — nao tem ecra proprio.
+ *
+ * Dai o `back()` de todas as accoes: a galeria vive na listagem, com o modal
+ * aberto por `?editar={id}`, e voltar ao endereco de onde se veio e o que
+ * mantem o modal no sitio com a paginacao, os filtros e a pesquisa intactos.
  */
 class ProductImageController extends Controller
 {
@@ -28,13 +32,12 @@ class ProductImageController extends Controller
         $images = $request->file('images');
         $images = is_array($images) ? $images : [$images];
 
-        foreach ($images as $file) {
-            $this->imageService->store($product, $file);
-        }
+        // Disco primeiro, linhas depois, numa transacao so: ver ImageService::put.
+        $this->imageService->attach($product, $this->imageService->put($images));
 
         $this->toast(count($images) === 1 ? 'Fotografia adicionada.' : 'Fotografias adicionadas.');
 
-        return to_route('admin.produtos.edit', $product);
+        return back();
     }
 
     public function update(UpdateProductImageRequest $request, ProductImage $image): RedirectResponse
@@ -43,7 +46,7 @@ class ProductImageController extends Controller
 
         $this->toast('Fotografia atualizada.');
 
-        return to_route('admin.produtos.edit', $image->product_id);
+        return back();
     }
 
     public function setPrimary(ProductImage $image): RedirectResponse
@@ -52,7 +55,7 @@ class ProductImageController extends Controller
 
         $this->toast('Fotografia principal alterada.');
 
-        return to_route('admin.produtos.edit', $image->product_id);
+        return back();
     }
 
     public function reorder(ReorderProductImagesRequest $request, Product $product): RedirectResponse
@@ -62,7 +65,7 @@ class ProductImageController extends Controller
 
         $this->imageService->reorder($product, $ids);
 
-        return to_route('admin.produtos.edit', $product);
+        return back();
     }
 
     /**
@@ -71,12 +74,10 @@ class ProductImageController extends Controller
      */
     public function destroy(ProductImage $image): RedirectResponse
     {
-        $productId = $image->product_id;
-
         $this->imageService->delete($image);
 
         $this->toast('Fotografia apagada.');
 
-        return to_route('admin.produtos.edit', $productId);
+        return back();
     }
 }
