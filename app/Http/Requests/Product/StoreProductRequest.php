@@ -5,9 +5,17 @@ namespace App\Http\Requests\Product;
 use App\Models\Product;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class StoreProductRequest extends FormRequest
 {
+    /**
+     * Os tres precos do molde, na lingua do VariantService: `normal_price` e
+     * `sale_price` trocam de lugar em promocao, `wholesale_price` fica so no
+     * backoffice.
+     */
+    private const PRICE_FIELDS = ['wholesale_price', 'normal_price', 'sale_price'];
+
     /**
      * Segunda camada de defesa por cima do middleware 'admin'.
      */
@@ -21,18 +29,26 @@ class StoreProductRequest extends FormRequest
      * "24,90" vindo de outro lado — a mesma normalizacao do
      * StoreVariantRequest, para o `numeric` passar e o Money::fromDecimal
      * receber sempre a mesma forma.
+     *
+     * Um unico merge no fim: `variants` e um array, e tres merges seguidos
+     * sobre a mesma chave davam tres copias a competir pela ultima palavra.
      */
     protected function prepareForValidation(): void
     {
-        $price = $this->input('variants.price');
+        $variants = (array) $this->input('variants');
+        $touched = false;
 
-        if (is_string($price) && $price !== '') {
-            $this->merge([
-                'variants' => [
-                    ...(array) $this->input('variants'),
-                    'price' => str_replace(',', '.', $price),
-                ],
-            ]);
+        foreach (self::PRICE_FIELDS as $field) {
+            $value = $variants[$field] ?? null;
+
+            if (is_string($value) && $value !== '') {
+                $variants[$field] = str_replace(',', '.', $value);
+                $touched = true;
+            }
+        }
+
+        if ($touched) {
+            $this->merge(['variants' => $variants]);
         }
     }
 
@@ -80,19 +96,25 @@ class StoreProductRequest extends FormRequest
 
     /**
      * Matriz de variantes do modal de novo produto: as cores, os materiais e os
-     * tamanhos escolhidos, mais o molde (preco, gramagem, tempo) aplicado a
-     * todas as combinacoes. Ausente = produto sem variantes, que e o que um
-     * rascunho e.
+     * tamanhos escolhidos, mais o molde (os tres precos) aplicado a todas as
+     * combinacoes. Ausente = produto sem variantes, que e o que um rascunho e.
      *
-     * O `required_with` no preco e o que impede uma matriz sem preco: as
-     * variantes nasceriam todas a zero euros e vendaveis. Olha para os dois
-     * eixos obrigatorios — basta um deles vir preenchido para o preco passar a
-     * ser exigido.
+     * A gramagem e o tempo de impressao NAO estao aqui: sao dados de producao e
+     * editam-se variante a variante, na ficha onde o painel de custo os usa.
+     *
+     * O `required_with` nos dois precos obrigatorios e o que impede uma matriz
+     * sem preco: as variantes nasceriam todas a zero euros e vendaveis. Olha
+     * para os dois eixos obrigatorios — basta um deles vir preenchido para os
+     * precos passarem a ser exigidos. Um array vazio nao conta como preenchido,
+     * por isso um rascunho sem matriz atravessa isto sem preco nenhum.
      *
      * @return array<string, array<int, mixed>>
      */
     protected function variantRules(): array
     {
+        $required = 'required_with:variants.color_ids,variants.material_ids';
+        $money = ['nullable', 'numeric', 'min:0', 'max:99999.99'];
+
         return [
             'variants' => ['nullable', 'array'],
             'variants.color_ids' => ['array', 'max:60'],
@@ -101,10 +123,66 @@ class StoreProductRequest extends FormRequest
             'variants.material_ids.*' => ['integer', Rule::exists('materials', 'id')],
             'variants.sizes' => ['array', 'max:10'],
             'variants.sizes.*' => ['string', 'max:60'],
-            'variants.price' => ['required_with:variants.color_ids,variants.material_ids', 'nullable', 'numeric', 'min:0', 'max:99999.99'],
-            'variants.filament_weight_grams' => ['nullable', 'integer', 'min:0', 'max:99999'],
-            'variants.printing_time_minutes' => ['nullable', 'integer', 'min:0', 'max:99999'],
+            'variants.normal_price' => [$required, ...$money],
+            // Obrigatorio ao contrario da ficha da variante: um produto que
+            // nasce sem preco de revenda chega as encomendas manuais sem nada
+            // que se lhe aplique, e ninguem volta atras para o preencher.
+            'variants.wholesale_price' => [$required, ...$money],
+            'variants.sale_price' => $money,
         ];
+    }
+
+    /**
+     * As mesmas duas regras cruzadas do StoreVariantRequest, com as mesmas
+     * mensagens: o molde nao pode gerar variantes que a ficha delas recusaria.
+     *
+     * @return array<int, callable>
+     */
+    public function after(): array
+    {
+        return [
+            function (Validator $validator): void {
+                $normal = $this->price('normal_price');
+
+                if ($normal === null) {
+                    return;
+                }
+
+                $sale = $this->price('sale_price');
+
+                // Uma "promocao" igual ou acima do preco normal riscaria na
+                // montra um valor mais baixo do que o pedido — anuncio de
+                // aumento em vez de desconto.
+                if ($sale !== null && $sale >= $normal) {
+                    $validator->errors()->add(
+                        'variants.sale_price',
+                        'O preço promocional tem de ser inferior ao preço normal.',
+                    );
+                }
+
+                $wholesale = $this->price('wholesale_price');
+
+                // O preco de revenda existe para vender mais barato a quem
+                // revende; acima do que o cliente final paga nao e revenda.
+                if ($wholesale !== null && $wholesale > ($sale ?? $normal)) {
+                    $validator->errors()->add(
+                        'variants.wholesale_price',
+                        'O preço de revenda não pode ser superior ao preço de venda.',
+                    );
+                }
+            },
+        ];
+    }
+
+    /**
+     * Um preco do molde em euros, ou null quando nao veio — a comparacao so
+     * faz sentido entre valores que existem.
+     */
+    private function price(string $field): ?float
+    {
+        $value = $this->input("variants.{$field}");
+
+        return is_numeric($value) ? (float) $value : null;
     }
 
     /**
@@ -132,9 +210,9 @@ class StoreProductRequest extends FormRequest
             'variants.color_ids' => 'cores',
             'variants.material_ids' => 'materiais',
             'variants.sizes' => 'tamanhos',
-            'variants.price' => 'preço de venda',
-            'variants.filament_weight_grams' => 'gramagem',
-            'variants.printing_time_minutes' => 'tempo de impressão',
+            'variants.normal_price' => 'preço de venda',
+            'variants.wholesale_price' => 'preço de revenda',
+            'variants.sale_price' => 'preço em promoção',
         ];
     }
 }

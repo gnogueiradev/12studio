@@ -50,6 +50,25 @@ class ProductCrudTest extends TestCase
         ];
     }
 
+    /**
+     * A matriz do modal, ja com os dois precos que ela exige — os testes que
+     * nao falam de precos passam so os eixos e nao repetem o molde.
+     *
+     * @param  array<string, mixed>  $overrides
+     * @return array<string, mixed>
+     */
+    private function matrix(array $overrides = []): array
+    {
+        return [
+            'color_ids' => [],
+            'material_ids' => [],
+            'sizes' => [],
+            'normal_price' => '29.00',
+            'wholesale_price' => '21.00',
+            ...$overrides,
+        ];
+    }
+
     public function test_index_lists_products(): void
     {
         Product::query()->create([
@@ -97,28 +116,30 @@ class ProductCrudTest extends TestCase
             ->post(route('admin.produtos.store'), [
                 ...$this->validPayload(),
                 'name' => 'Vaso ondulado',
-                'variants' => [
+                'variants' => $this->matrix([
                     'color_ids' => $colors->modelKeys(),
                     'material_ids' => [$this->material->id, $petg->id],
                     'sizes' => ['Pequeno', 'Grande'],
-                    'price' => '29.00',
-                    'filament_weight_grams' => 84,
-                    'printing_time_minutes' => 130,
-                ],
+                ]),
             ])
             ->assertRedirect(route('admin.produtos.index'));
 
         $product = Product::query()->where('slug', 'vaso-ondulado')->sole();
 
-        // 3 cores x 2 materiais x 2 tamanhos, com o molde (preco, gramagem,
-        // tempo) aplicado a todas — o que difere entre variantes edita-se
-        // depois, uma a uma.
+        // 3 cores x 2 materiais x 2 tamanhos, com o molde (os precos) aplicado
+        // a todas — o que difere entre variantes edita-se depois, uma a uma.
         $this->assertSame(12, $product->variants()->count());
         $this->assertSame(12, $product->variants()->where([
             'price_cents' => 2900,
-            'filament_weight_grams' => 84,
-            'printing_time_minutes' => 130,
+            'wholesale_price_cents' => 2100,
         ])->count());
+
+        // A gramagem e o tempo nao vem do modal: sao dados de producao e
+        // nascem por preencher, na ficha de cada variante.
+        $this->assertSame(12, $product->variants()
+            ->whereNull('filament_weight_grams')
+            ->whereNull('printing_time_minutes')
+            ->count());
 
         // O stock entra sempre a zero: a primeira contagem tem de passar pelo
         // StockService para ficar registada como movimento.
@@ -137,12 +158,10 @@ class ProductCrudTest extends TestCase
             ->post(route('admin.produtos.store'), [
                 ...$this->validPayload(),
                 'name' => 'Vaso ondulado',
-                'variants' => [
+                'variants' => $this->matrix([
                     'color_ids' => [$color->id],
                     'material_ids' => [$this->material->id],
-                    'sizes' => [],
-                    'price' => '29.00',
-                ],
+                ]),
             ]);
 
         $this->assertDatabaseHas('variants', [
@@ -163,12 +182,10 @@ class ProductCrudTest extends TestCase
             ->post(route('admin.produtos.store'), [
                 ...$this->validPayload(),
                 'name' => 'Vaso ondulado',
-                'variants' => [
+                'variants' => $this->matrix([
                     'color_ids' => [$color->id],
-                    'material_ids' => [],
                     'sizes' => ['Pequeno'],
-                    'price' => '29.00',
-                ],
+                ]),
             ])
             ->assertSessionHasNoErrors();
 
@@ -181,12 +198,10 @@ class ProductCrudTest extends TestCase
             ->post(route('admin.produtos.store'), [
                 ...$this->validPayload(),
                 'name' => 'Vaso ondulado',
-                'variants' => [
-                    'color_ids' => [],
+                'variants' => $this->matrix([
                     'material_ids' => [$this->material->id],
                     'sizes' => ['Pequeno'],
-                    'price' => '29.00',
-                ],
+                ]),
             ])
             ->assertSessionHasNoErrors();
 
@@ -203,12 +218,10 @@ class ProductCrudTest extends TestCase
             ->post(route('admin.produtos.store'), [
                 ...$this->validPayload(),
                 'name' => 'Vaso ondulado',
-                'variants' => [
+                'variants' => $this->matrix([
                     'color_ids' => $colors->modelKeys(),
                     'material_ids' => [$this->material->id, $petg->id],
-                    'sizes' => [],
-                    'price' => '29.00',
-                ],
+                ]),
             ]);
 
         $product = Product::query()->where('slug', 'vaso-ondulado')->sole();
@@ -217,7 +230,7 @@ class ProductCrudTest extends TestCase
         $this->assertSame(0, $product->variants()->whereNotNull('size_label')->count());
     }
 
-    public function test_the_matrix_price_accepts_a_decimal_comma(): void
+    public function test_the_matrix_prices_accept_a_decimal_comma(): void
     {
         $color = Color::factory()->create();
 
@@ -225,17 +238,75 @@ class ProductCrudTest extends TestCase
             ->post(route('admin.produtos.store'), [
                 ...$this->validPayload(),
                 'name' => 'Vaso ondulado',
-                'variants' => [
+                // Colados de outro lado com virgula, como o admin escreve. Os
+                // tres campos, e nao so o do meio: a normalizacao corre sobre
+                // o molde inteiro.
+                'variants' => $this->matrix([
                     'color_ids' => [$color->id],
                     'material_ids' => [$this->material->id],
-                    'sizes' => [],
-                    // Colado de outro lado com virgula, como o admin escreve.
-                    'price' => '29,50',
-                ],
+                    'normal_price' => '29,50',
+                    'wholesale_price' => '21,25',
+                    'sale_price' => '24,90',
+                ]),
             ])
             ->assertSessionHasNoErrors();
 
-        $this->assertDatabaseHas('variants', ['price_cents' => 2950]);
+        $this->assertDatabaseHas('variants', [
+            'price_cents' => 2490,
+            'compare_at_cents' => 2950,
+            'wholesale_price_cents' => 2125,
+        ]);
+    }
+
+    /**
+     * Em promocao os dois precos trocam de lugar: `price_cents` passa a ser o
+     * efectivo e `compare_at_cents` o riscado. E o VariantService quem o faz —
+     * o molde limita-se a mandar os dois.
+     */
+    public function test_a_matrix_with_a_sale_price_swaps_the_two_columns(): void
+    {
+        $colors = Color::factory()->count(2)->create();
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.produtos.store'), [
+                ...$this->validPayload(),
+                'name' => 'Vaso ondulado',
+                'variants' => $this->matrix([
+                    'color_ids' => $colors->modelKeys(),
+                    'material_ids' => [$this->material->id],
+                    'sale_price' => '24.90',
+                ]),
+            ])
+            ->assertSessionHasNoErrors();
+
+        $product = Product::query()->where('slug', 'vaso-ondulado')->sole();
+
+        $this->assertSame(2, $product->variants()->where([
+            'price_cents' => 2490,
+            'compare_at_cents' => 2900,
+        ])->count());
+    }
+
+    /** Sem promocao nao ha nada para riscar na montra. */
+    public function test_a_matrix_without_a_sale_price_leaves_nothing_struck_through(): void
+    {
+        $color = Color::factory()->create();
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.produtos.store'), [
+                ...$this->validPayload(),
+                'name' => 'Vaso ondulado',
+                'variants' => $this->matrix([
+                    'color_ids' => [$color->id],
+                    'material_ids' => [$this->material->id],
+                ]),
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('variants', [
+            'price_cents' => 2900,
+            'compare_at_cents' => null,
+        ]);
     }
 
     public function test_store_numbers_the_generated_references_in_sequence(): void
@@ -246,12 +317,10 @@ class ProductCrudTest extends TestCase
             ->post(route('admin.produtos.store'), [
                 ...$this->validPayload(),
                 'name' => 'Vaso ondulado',
-                'variants' => [
+                'variants' => $this->matrix([
                     'color_ids' => $colors->modelKeys(),
                     'material_ids' => [$this->material->id],
-                    'sizes' => [],
-                    'price' => '29.00',
-                ],
+                ]),
             ]);
 
         $product = Product::query()->where('slug', 'vaso-ondulado')->sole();
@@ -273,12 +342,10 @@ class ProductCrudTest extends TestCase
             ->post(route('admin.produtos.store'), [
                 ...$this->validPayload(),
                 'name' => 'Vaso ondulado',
-                'variants' => [
+                'variants' => $this->matrix([
                     'color_ids' => $colors->modelKeys(),
                     'material_ids' => [$this->material->id],
-                    'sizes' => [],
-                    'price' => '29.00',
-                ],
+                ]),
             ]);
 
         $product = Product::query()->where('slug', 'vaso-ondulado')->sole();
@@ -313,16 +380,83 @@ class ProductCrudTest extends TestCase
         $this->actingAs($this->admin)
             ->post(route('admin.produtos.store'), [
                 ...$this->validPayload(),
-                'variants' => [
+                'variants' => $this->matrix([
                     'color_ids' => [$color->id],
                     'material_ids' => [$this->material->id],
-                    'sizes' => [],
-                    'price' => '',
-                ],
+                    'normal_price' => '',
+                ]),
             ])
-            ->assertSessionHasErrors('variants.price');
+            ->assertSessionHasErrors('variants.normal_price');
 
         // Sem esta regra as variantes nasciam todas a zero euros e vendaveis.
+        $this->assertDatabaseCount('variants', 0);
+    }
+
+    /**
+     * Obrigatorio ao contrario da ficha da variante, onde e opcional: um
+     * produto que nasce sem preco de revenda chega as encomendas manuais sem
+     * nada que se lhe aplique, e ninguem volta atras para o preencher.
+     */
+    public function test_a_matrix_without_a_wholesale_price_is_rejected(): void
+    {
+        $color = Color::factory()->create();
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.produtos.store'), [
+                ...$this->validPayload(),
+                'variants' => $this->matrix([
+                    'color_ids' => [$color->id],
+                    'material_ids' => [$this->material->id],
+                    'wholesale_price' => '',
+                ]),
+            ])
+            ->assertSessionHasErrors('variants.wholesale_price');
+
+        $this->assertDatabaseCount('variants', 0);
+    }
+
+    /**
+     * Uma "promocao" igual ou acima do preco normal riscaria na montra um valor
+     * mais baixo do que o pedido — anuncio de aumento em vez de desconto. A
+     * mesma regra da ficha da variante, para o molde nao gerar variantes que
+     * ela recusaria.
+     */
+    public function test_a_matrix_sale_price_above_the_normal_one_is_rejected(): void
+    {
+        $color = Color::factory()->create();
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.produtos.store'), [
+                ...$this->validPayload(),
+                'variants' => $this->matrix([
+                    'color_ids' => [$color->id],
+                    'material_ids' => [$this->material->id],
+                    'sale_price' => '29.00',
+                ]),
+            ])
+            ->assertSessionHasErrors('variants.sale_price');
+
+        $this->assertDatabaseCount('variants', 0);
+    }
+
+    /** Acima do que o cliente final paga nao e revenda. */
+    public function test_a_matrix_wholesale_price_above_the_sale_price_is_rejected(): void
+    {
+        $color = Color::factory()->create();
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.produtos.store'), [
+                ...$this->validPayload(),
+                // 21,00 cabe debaixo dos 29,00 normais, mas nao dos 19,90 que
+                // o cliente passa a pagar em promocao.
+                'variants' => $this->matrix([
+                    'color_ids' => [$color->id],
+                    'material_ids' => [$this->material->id],
+                    'sale_price' => '19.90',
+                ]),
+            ])
+            ->assertSessionHasErrors('variants.wholesale_price');
+
         $this->assertDatabaseCount('variants', 0);
     }
 
@@ -333,12 +467,10 @@ class ProductCrudTest extends TestCase
 
         $this->actingAs($this->admin)->patch(route('admin.produtos.update', $product), [
             ...$this->validPayload(),
-            'variants' => [
+            'variants' => $this->matrix([
                 'color_ids' => [$color->id],
                 'material_ids' => [$this->material->id],
-                'sizes' => [],
-                'price' => '29.00',
-            ],
+            ]),
         ]);
 
         // A matriz so existe na criacao: senao cada correccao ao nome do

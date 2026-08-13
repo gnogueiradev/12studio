@@ -3,7 +3,6 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use App\Http\Requests\Pricing\PricingPreviewRequest;
 use App\Http\Requests\Product\StoreProductRequest;
 use App\Http\Requests\Product\UpdateProductRequest;
 use App\Models\Category;
@@ -11,7 +10,6 @@ use App\Models\Product;
 use App\Models\ProductImage;
 use App\Models\Tag;
 use App\Models\Variant;
-use App\Services\PricingPreview;
 use App\Services\ProductService;
 use App\Support\ColorOptions;
 use App\Support\MaterialOptions;
@@ -25,17 +23,9 @@ class ProductController extends Controller
 {
     public function __construct(
         private ProductService $productService,
-        private PricingPreview $preview,
     ) {}
 
-    /**
-     * O `PricingPreviewRequest` a mais na assinatura serve o modal de novo
-     * produto, que vive nesta pagina: ele pede o preco sugerido com um
-     * recarregamento parcial (`only: ['pricingPreview']`) em vez de estimar a
-     * margem no browser. Todas as regras dele sao `nullable`, por isso uma
-     * listagem normal atravessa-o sem dar por ele.
-     */
-    public function index(Request $request, PricingPreviewRequest $pricing): Response
+    public function index(Request $request): Response
     {
         $filters = [
             'search' => trim((string) $request->query('search', '')),
@@ -107,7 +97,6 @@ class ProductController extends Controller
             'materials' => MaterialOptions::all(),
             'tagSuggestions' => $this->tagSuggestions(),
             'defaultVatRate' => (int) config('shop.default_vat_rate', 23),
-            'pricingPreview' => $this->preview->fromRequest($pricing),
             'editing' => $this->editingProduct($request),
         ]);
     }
