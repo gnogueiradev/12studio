@@ -3,22 +3,30 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Setting\UpdatePricingSettingsRequest;
 use App\Http\Requests\Setting\UpdateSettingsRequest;
 use App\Models\Setting;
+use App\Services\PricingSettings;
 use App\Services\SettingService;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * Definicoes que o dono pode mudar sem deploy. Por agora so a moeda; os
- * parametros de custo (kWh, wattagem, custo/hora) entram aqui na Fase 2,
- * quando o CostService lhes der uso.
+ * Definicoes que o dono pode mudar sem deploy: a moeda da loja e os parametros
+ * da calculadora de precos.
+ *
+ * Dois formularios e duas rotas, e nao um so. Um endpoint unico obrigava todas
+ * as regras de preco a `sometimes` — e uma gravacao parcial saltava a validacao
+ * em silencio — e a pagina precisa de dois estados "por guardar" independentes
+ * de qualquer forma: quem vem mudar o simbolo da moeda nao quer levar com um
+ * erro numa faixa de manuseamento que nao tocou.
  */
 class SettingController extends Controller
 {
     public function __construct(
         private SettingService $settings,
+        private PricingSettings $pricing,
     ) {}
 
     public function index(): Response
@@ -28,6 +36,7 @@ class SettingController extends Controller
                 'currency' => $this->settings->currency(),
             ],
             'currencies' => $this->currencyOptions(),
+            'pricing' => $this->pricing->toForm(),
         ]);
     }
 
@@ -50,11 +59,29 @@ class SettingController extends Controller
             ->all();
     }
 
+    /**
+     * Agnostico da chave: o que existe e o que a UpdateSettingsRequest validou.
+     * Quem sabe que definicoes ha e o Form Request, nao o controlador.
+     */
     public function update(UpdateSettingsRequest $request): RedirectResponse
     {
-        $this->settings->set('currency', $request->validated()['currency']);
+        $this->settings->setMany($request->validated());
 
         $this->toast('Definições guardadas.');
+
+        return to_route('admin.definicoes.index');
+    }
+
+    /**
+     * Os parametros da calculadora. A traducao entre o que o formulario mostra
+     * (percentagem, euros, "1,75") e o que se guarda (pontos base, centimos)
+     * vive toda no PricingSettings — o controlador so passa o payload.
+     */
+    public function updatePricing(UpdatePricingSettingsRequest $request): RedirectResponse
+    {
+        $this->settings->setMany($this->pricing->fromForm($request->validated()));
+
+        $this->toast('Preços atualizados.');
 
         return to_route('admin.definicoes.index');
     }

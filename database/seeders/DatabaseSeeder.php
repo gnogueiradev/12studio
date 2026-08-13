@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\PrinterProfile;
 use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
@@ -17,6 +18,30 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
         $this->seedAdmin();
+        $this->seedPrinterProfiles();
+    }
+
+    /**
+     * A impressora da casa. Sem ela a calculadora cai no custo/hora do
+     * config/pricing.php e mostra um aviso — funciona, mas o dono nao tem onde
+     * mudar a taxa sem um deploy.
+     *
+     * Idempotente pelo nome, como o admin: o deploy corre este seeder sempre, e
+     * uma taxa que o dono ja ajustou nao pode voltar aos 0,50 EUR a cada
+     * lancamento.
+     */
+    private function seedPrinterProfiles(): void
+    {
+        PrinterProfile::query()->firstOrCreate(
+            ['name' => 'Bambu Lab A1'],
+            [
+                'hourly_rate_cents' => 50,
+                'notes' => 'Inclui energia, desgaste, manutencao e depreciacao.',
+                'is_default' => true,
+                'active' => true,
+                'sort_order' => 0,
+            ],
+        );
     }
 
     /**

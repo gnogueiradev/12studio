@@ -1,10 +1,12 @@
 import { Link } from '@inertiajs/react';
 import {
     Boxes,
+    Calculator,
     Factory,
     LayoutGrid,
     Package,
     Palette,
+    Printer,
     Settings,
     ShoppingCart,
     Store,
@@ -68,6 +70,16 @@ const mainNavItems: NavItem[] = [
         title: 'Cores',
         href: '/admin/cores',
         icon: Palette,
+    },
+    {
+        title: 'Impressoras',
+        href: '/admin/impressoras',
+        icon: Printer,
+    },
+    {
+        title: 'Calculadora',
+        href: '/admin/calculadora',
+        icon: Calculator,
     },
     {
         title: 'Definições',

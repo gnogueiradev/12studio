@@ -13,6 +13,25 @@ const DEFAULT_CURRENCY = 'EUR';
  */
 const GRAM_FRACTION_DIGITS = 3;
 
+/**
+ * Casas do cálculo detalhado. Cinco porque é o que a fórmula produz: uma
+ * reserva de falha de 0,10352 € e um custo de 1,64752 € são os números que o
+ * servidor calcula, e mostrar 0,10 € nesse painel escondia precisamente o que
+ * ele existe para explicar.
+ */
+const MICRO_FRACTION_DIGITS = 5;
+
+const percentFormatter = new Intl.NumberFormat('pt-PT', {
+    style: 'percent',
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+});
+
+const multiplierFormatter = new Intl.NumberFormat('pt-PT', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+});
+
 let currency = DEFAULT_CURRENCY;
 let formatter = new Intl.NumberFormat('pt-PT', {
     style: 'currency',
@@ -106,6 +125,43 @@ export function formatCents(cents: number): string {
  */
 export function formatCostPerGram(pricePerKgCents: number): string {
     return gramFormatter.format(pricePerKgCents / 100 / 1000);
+}
+
+/**
+ * Micro-euros → string com a precisão que o valor tiver ("544000" → "0,544 €").
+ *
+ * O cálculo de custo corre em micros (1/1 000 000 €) para não arredondar as
+ * parcelas intermédias — 0,10352 € de reserva de falha não cabe num cêntimo.
+ * É esse detalhe que o painel "Ver cálculo detalhado" mostra, e é a única
+ * razão para este formatador existir: em todo o resto do backoffice o cêntimo
+ * chega e o `formatCents` é o certo.
+ *
+ * `maximumFractionDigits` sem mínimo: 0,75 € mostra-se com duas casas e
+ * 0,10352 € com cinco, em vez de encher tudo de zeros à direita.
+ */
+export function formatMicros(micros: number): string {
+    return new Intl.NumberFormat('pt-PT', {
+        style: 'currency',
+        currency,
+        minimumFractionDigits: 2,
+        maximumFractionDigits: MICRO_FRACTION_DIGITS,
+    }).format(micros / 1_000_000);
+}
+
+/**
+ * Pontos base → percentagem legível ("5293" → "52,9 %").
+ *
+ * As margens e os multiplicadores viajam em bp (10 000 = 100 %) para o servidor
+ * nunca ter de mandar um float. Uma casa decimal chega: a diferença entre
+ * 52,93 % e 52,9 % de margem não muda decisão nenhuma.
+ */
+export function formatPercentBp(bp: number): string {
+    return percentFormatter.format(bp / 10_000);
+}
+
+/** Pontos base → multiplicador ("20000" → "2,00×"). */
+export function formatMultiplierBp(bp: number): string {
+    return `${multiplierFormatter.format(bp / 10_000)}×`;
 }
 
 /** Cêntimos → string para inputs de texto ("1250" → "12.50"). */
