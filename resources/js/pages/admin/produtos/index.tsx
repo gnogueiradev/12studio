@@ -9,6 +9,8 @@ import { PageHeader } from '@/components/admin/page-header';
 import { Pagination } from '@/components/admin/pagination';
 import { ProductCreateDialog } from '@/components/admin/product-create-dialog';
 import { StatusBadge, StatusText } from '@/components/admin/status-badge';
+import { TagChips } from '@/components/admin/tag-chips';
+import { TagFilter } from '@/components/admin/tag-filter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -21,6 +23,7 @@ import {
 import { Spinner } from '@/components/ui/spinner';
 import { formatCents } from '@/lib/money';
 import { label } from '@/lib/options';
+import type { Option } from '@/lib/options';
 import { cn } from '@/lib/utils';
 import { destroy, index, restaurar } from '@/routes/admin/produtos';
 import type {
@@ -38,6 +41,8 @@ type Filters = {
     status: string;
     category_id: string;
     fulfillment_mode: string;
+    /** Slug da etiqueta, ou '' sem filtro. */
+    tag: string;
 };
 
 type Props = {
@@ -49,6 +54,8 @@ type Props = {
     colors: ColorOption[];
     materials: MaterialOption[];
     tagSuggestions: string[];
+    /** Só as que algum produto usa — as outras dariam zero resultados. */
+    tagOptions: Option[];
     defaultVatRate: number;
     /** O produto a editar, carregado por `?editar={id}`. Null a criar. */
     editing: ProductEditing | null;
@@ -114,6 +121,7 @@ export default function ProductsIndex({
     colors,
     materials,
     tagSuggestions,
+    tagOptions,
     defaultVatRate,
     editing,
 }: Props) {
@@ -214,6 +222,7 @@ export default function ProductsIndex({
                         <span className="mt-0.5 block text-xs text-muted-foreground">
                             {productMeta(product)}
                         </span>
+                        <TagChips tags={product.tags} />
                     </span>
                 </div>
             ),
@@ -402,6 +411,12 @@ export default function ProductsIndex({
                             ))}
                         </SelectContent>
                     </Select>
+
+                    <TagFilter
+                        value={filters.tag}
+                        options={tagOptions}
+                        onChange={(tag) => applyFilters({ tag })}
+                    />
 
                     <span className="ml-auto text-xs text-muted-foreground">
                         {products.total}{' '}

@@ -170,6 +170,7 @@ export type ProductRow = {
     fulfillmentMode: string;
     productionTimeDays: number | null;
     category: string | null;
+    tags: string[];
     imageUrl: string | null;
     variantsCount: number;
     /*

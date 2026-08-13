@@ -14,6 +14,7 @@ export type CustomerRow = {
     email: string | null;
     customerType: string;
     nif: string | null;
+    tags: string[];
     /** Canal mais frequente nas encomendas; null sem histórico. */
     habitualChannel: string | null;
     ordersCount: number;

@@ -9,6 +9,8 @@ import { PageHeader } from '@/components/admin/page-header';
 import { Pagination } from '@/components/admin/pagination';
 import { StatCard } from '@/components/admin/stat-card';
 import { StatusBadge } from '@/components/admin/status-badge';
+import { TagChips } from '@/components/admin/tag-chips';
+import { TagFilter } from '@/components/admin/tag-filter';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -20,6 +22,7 @@ import {
 } from '@/components/ui/select';
 import { formatCents } from '@/lib/money';
 import { label } from '@/lib/options';
+import type { Option } from '@/lib/options';
 import { edit, index } from '@/routes/admin/clientes';
 import type { CustomerRow } from '@/types/customer';
 import { CUSTOMER_TYPES, initials } from '@/types/customer';
@@ -30,6 +33,8 @@ type Filters = {
     search: string;
     customer_type: string;
     sales_channel: string;
+    /** Slug da etiqueta, ou '' sem filtro. */
+    tag: string;
 };
 
 type Props = {
@@ -46,6 +51,8 @@ type Props = {
     };
     /** Vocabulário do âmbito `customer`, para o modal de criar. */
     tagSuggestions: string[];
+    /** Só as que algum cliente usa — as outras dariam zero resultados. */
+    tagOptions: Option[];
 };
 
 // O Radix Select não aceita value="" — sentinela para "sem filtro".
@@ -71,6 +78,7 @@ export default function CustomersIndex({
     typeCounts,
     stats,
     tagSuggestions,
+    tagOptions,
 }: Props) {
     const [search, setSearch] = useState(filters.search);
     const [creating, setCreating] = useState(false);
@@ -119,6 +127,7 @@ export default function CustomersIndex({
                         <div className="text-xs text-muted-foreground">
                             {customer.email ?? 'Sem email'}
                         </div>
+                        <TagChips tags={customer.tags} />
                     </div>
                 </div>
             ),
@@ -242,6 +251,12 @@ export default function CustomersIndex({
                             ))}
                         </SelectContent>
                     </Select>
+
+                    <TagFilter
+                        value={filters.tag}
+                        options={tagOptions}
+                        onChange={(tag) => applyFilters({ tag })}
+                    />
 
                     <span className="ml-auto text-xs text-muted-foreground">
                         {customers.total}{' '}

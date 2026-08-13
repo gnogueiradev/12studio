@@ -37,6 +37,7 @@ class OrderController extends Controller
             'status' => (string) $request->query('status', ''),
             'payment_status' => (string) $request->query('payment_status', ''),
             'sales_channel' => (string) $request->query('sales_channel', ''),
+            'tag' => (string) $request->query('tag', ''),
         ];
 
         // Base com todos os filtros MENOS o estado. As chips de estado contam
@@ -49,7 +50,13 @@ class OrderController extends Controller
             ->when($filters['search'] !== '', fn ($query) => $query->where(fn ($inner) => $inner
                 ->where('order_number', 'like', "%{$filters['search']}%")
                 ->orWhere('customer_name', 'like', "%{$filters['search']}%")
-                ->orWhere('email', 'like', "%{$filters['search']}%")));
+                ->orWhere('email', 'like', "%{$filters['search']}%")))
+            // Dentro do $scoped, como a pesquisa: filtrar por etiqueta tem de
+            // reduzir as contagens das chips de estado.
+            ->when($filters['tag'] !== '', fn ($query) => $query->whereHas(
+                'tags',
+                fn ($tag) => $tag->where('slug', $filters['tag']),
+            ));
 
         $statusCounts = $scoped()
             ->toBase()
@@ -64,7 +71,10 @@ class OrderController extends Controller
             // Os artigos servem o resumo da linha ("Vaso ondulado · 2 un.").
             // Substituem o withCount('items'): com a colecao carregada, tanto a
             // contagem como a soma das quantidades saem da mesma leitura.
-            ->with(['items' => fn ($query) => $query->select('id', 'order_id', 'product_name', 'qty')->orderBy('id')])
+            ->with([
+                'items' => fn ($query) => $query->select('id', 'order_id', 'product_name', 'qty')->orderBy('id'),
+                'tags',
+            ])
             ->orderByDesc('created_at')
             ->paginate(20)
             ->withQueryString()
@@ -81,6 +91,7 @@ class OrderController extends Controller
                 'itemsCount' => $order->items->count(),
                 'itemsSummary' => $order->items->first()?->product_name,
                 'itemsQty' => (int) $order->items->sum('qty'),
+                'tags' => $order->tags->pluck('name')->all(),
                 'createdAt' => $order->created_at?->format('Y-m-d H:i'),
                 'createdAtShort' => ShortDate::of($order->created_at),
             ]);
@@ -92,6 +103,7 @@ class OrderController extends Controller
             'draftsCount' => OrderDraft::query()
                 ->where('created_by_user_id', $request->user()?->getKey())
                 ->count(),
+            'tagOptions' => $this->tagService->optionsFor(Tag::SCOPE_ORDER),
         ]);
     }
 

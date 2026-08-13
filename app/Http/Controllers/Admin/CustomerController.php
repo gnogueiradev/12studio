@@ -36,6 +36,7 @@ class CustomerController extends Controller
             'search' => trim((string) $request->query('search', '')),
             'customer_type' => (string) $request->query('customer_type', ''),
             'sales_channel' => (string) $request->query('sales_channel', ''),
+            'tag' => (string) $request->query('tag', ''),
         ];
 
         // Base com todos os filtros MENOS o tipo, pela mesma razao das chips de
@@ -53,6 +54,12 @@ class CustomerController extends Controller
             ->when($filters['sales_channel'] !== '', fn ($query) => $query->whereHas(
                 'orders',
                 fn ($order) => $order->where('sales_channel', $filters['sales_channel']),
+            ))
+            // Dentro do $scoped, como a pesquisa: filtrar por etiqueta tem de
+            // reduzir as contagens das chips de tipo.
+            ->when($filters['tag'] !== '', fn ($query) => $query->whereHas(
+                'tags',
+                fn ($tag) => $tag->where('slug', $filters['tag']),
             ));
 
         $typeCounts = $scoped()
@@ -65,7 +72,7 @@ class CustomerController extends Controller
 
         $customers = $scoped()
             ->when($filters['customer_type'] !== '', fn ($query) => $query->where('customer_type', $filters['customer_type']))
-            ->with('addresses')
+            ->with(['addresses', 'tags'])
             ->withCount('orders')
             // Total gasto = so o que esta efetivamente pago; o indicador
             // financeiro e payment_status, nunca o status da encomenda.
@@ -88,6 +95,7 @@ class CustomerController extends Controller
                 'email' => $customer->email,
                 'customerType' => $customer->customer_type,
                 'nif' => $customer->nif,
+                'tags' => $customer->tags->pluck('name')->all(),
                 'habitualChannel' => $history[$customer->id]['channel'] ?? null,
                 'ordersCount' => $customer->orders_count,
                 'paidTotalCents' => (int) ($customer->paid_total_cents ?? 0),
@@ -103,6 +111,7 @@ class CustomerController extends Controller
             'typeCounts' => $typeCounts,
             'stats' => $this->stats(),
             'tagSuggestions' => $this->tagService->suggestions(Tag::SCOPE_CUSTOMER),
+            'tagOptions' => $this->tagService->optionsFor(Tag::SCOPE_CUSTOMER),
         ]);
     }
 

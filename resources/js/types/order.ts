@@ -113,6 +113,7 @@ export type OrderRow = {
     itemsSummary: string | null;
     /** Soma das quantidades — o "2 un." do resumo. */
     itemsQty: number;
+    tags: string[];
     createdAt: string | null;
     /** "09 ago", já formatado em PT pelo servidor. */
     createdAtShort: string | null;

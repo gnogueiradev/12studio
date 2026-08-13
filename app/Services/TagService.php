@@ -67,6 +67,32 @@ class TagService
     }
 
     /**
+     * Opcoes do filtro por etiqueta de uma listagem: so as que tem pelo menos um
+     * uso. Ao contrario das sugestoes, aqui uma etiqueta sem uso e uma opcao que
+     * so pode dar zero resultados.
+     *
+     * @return array<int, array{value: string, label: string}>
+     */
+    public function optionsFor(string $scope): array
+    {
+        $relation = match ($scope) {
+            Tag::SCOPE_CUSTOMER => 'customers',
+            Tag::SCOPE_ORDER => 'orders',
+            default => 'products',
+        };
+
+        return Tag::query()
+            ->inScope($scope)
+            ->has($relation)
+            ->orderBy('name')
+            ->get(['slug', 'name'])
+            // O valor e o slug e nao o id: mantem o `?tag=natal` do URL legivel
+            // e estavel se a etiqueta for renomeada sem mudar de slug.
+            ->map(fn (Tag $tag): array => ['value' => $tag->slug, 'label' => $tag->name])
+            ->all();
+    }
+
+    /**
      * Criar da pagina de gestao. Um nome que ja exista no ambito devolve a
      * etiqueta que la esta em vez de rebentar: e o mesmo pedido, feito duas
      * vezes. Quem chama distingue os dois casos pelo `wasRecentlyCreated`.
