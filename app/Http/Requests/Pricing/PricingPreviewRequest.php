@@ -33,12 +33,10 @@ class PricingPreviewRequest extends FormRequest
      */
     protected function prepareForValidation(): void
     {
-        foreach (['price_per_kg', 'extra_cost'] as $field) {
-            $value = $this->input($field);
+        $value = $this->input('extra_cost');
 
-            if (is_string($value) && $value !== '') {
-                $this->merge([$field => str_replace(',', '.', $value)]);
-            }
+        if (is_string($value) && $value !== '') {
+            $this->merge(['extra_cost' => str_replace(',', '.', $value)]);
         }
     }
 
@@ -54,7 +52,6 @@ class PricingPreviewRequest extends FormRequest
             'weight_grams' => ['nullable', 'integer', 'min:0', 'max:50000'],
             'hours' => ['nullable', 'integer', 'min:0', 'max:999'],
             'minutes' => ['nullable', 'integer', 'min:0', 'max:59'],
-            'price_per_kg' => ['nullable', 'numeric', 'min:0', 'max:9999.99'],
             'extra_cost' => ['nullable', 'numeric', 'min:0', 'max:9999.99'],
             'quantity' => ['nullable', 'integer', 'min:1', 'max:9999'],
             'material_id' => ['nullable', 'integer', Rule::exists('materials', 'id')],
@@ -72,7 +69,6 @@ class PricingPreviewRequest extends FormRequest
             'weight_grams' => 'peso',
             'hours' => 'horas',
             'minutes' => 'minutos',
-            'price_per_kg' => 'preço por kg',
             'extra_cost' => 'custos adicionais',
             'quantity' => 'quantidade',
             'material_id' => 'material',
@@ -129,27 +125,28 @@ class PricingPreviewRequest extends FormRequest
     /**
      * Preco por kg do filamento.
      *
-     * O MATERIAL manda quando ha um escolhido, porque e a bobine que tem preco
-     * — a cor e so um tom. Deixar o cliente mandar o numero abria a porta a um
-     * preco de custo que nao corresponde a filamento nenhum que exista. Sem
-     * material, vale o que o admin escreveu: a calculadora tambem serve para
-     * simular filamento que ainda nao se comprou.
+     * Ha uma fonte so, e e o MATERIAL: e a bobine que tem preco — a cor e so um
+     * tom. O preco escrito a mao deixou de existir de proposito. Enquanto
+     * existiu, um custo podia sair de um numero que nao correspondia a filamento
+     * nenhum em stock, e a calculadora abria a dizer 0,00 EUR/kg, ou seja, a
+     * fingir que o plastico e de graca.
+     *
+     * Sem material devolve zero, e nao um valor de recurso: quem chama decide o
+     * que fazer com isso. A calculadora recusa mostrar preco (ver
+     * PricingCalculatorController); a ficha de variante deixa-o passar, porque
+     * uma variante sem material ainda assim tem tempo de maquina a contar.
      */
     public function pricePerKgCents(): int
     {
         $materialId = $this->materialId();
 
-        if ($materialId !== null) {
-            $material = Material::query()->find($materialId);
-
-            if ($material !== null) {
-                return $material->price_per_kg_cents;
-            }
+        if ($materialId === null) {
+            return 0;
         }
 
-        $value = $this->input('price_per_kg');
+        $material = Material::query()->find($materialId);
 
-        return is_string($value) || is_numeric($value) ? Money::fromDecimal((string) $value) : 0;
+        return $material === null ? 0 : $material->price_per_kg_cents;
     }
 
     /**
@@ -170,7 +167,6 @@ class PricingPreviewRequest extends FormRequest
      *     weight_grams: int,
      *     hours: int,
      *     minutes: int,
-     *     price_per_kg: string,
      *     extra_cost: string,
      *     quantity: int,
      *     material_id: int|null,
@@ -184,7 +180,6 @@ class PricingPreviewRequest extends FormRequest
             'weight_grams' => $this->weightGrams(),
             'hours' => intdiv($this->printTimeMinutes(), 60),
             'minutes' => $this->printTimeMinutes() % 60,
-            'price_per_kg' => Money::toDecimal($this->pricePerKgCents()),
             'extra_cost' => Money::toDecimal($this->extraCostCents()),
             'quantity' => $this->quantity(),
             'material_id' => $this->materialId(),

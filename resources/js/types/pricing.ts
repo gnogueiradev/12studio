@@ -27,11 +27,14 @@ export type PricingFormFields = {
      */
     hours: number;
     minutes: number;
-    /** Euros escritos à mão; o servidor converte para cêntimos. */
-    price_per_kg: string;
     extra_cost: string;
     quantity: number;
-    /** O €/kg vem daqui quando está escolhido — a bobine é quem tem preço. */
+    /**
+     * O filamento, e a única fonte do €/kg — a bobine é quem tem preço. Só pode
+     * ser um dos materiais criados na loja: não há preço escrito à mão.
+     *
+     * Null é "ainda não escolhido", e nesse estado não há preço nenhum.
+     */
     material_id: number | null;
     printer_profile_id: number | null;
 };
