@@ -3,9 +3,23 @@
 namespace App\Services;
 
 use App\Models\Tag;
+use App\Support\TagMergePlan;
+use Illuminate\Support\Facades\DB;
 
 class TagService
 {
+    /**
+     * Os tres pivots, por tabela e coluna do dono. O `scope` de uma etiqueta ja
+     * diz qual deles e o seu, mas quem conta usos e quem funde percorre os tres:
+     * sao duas queries a mais e uma classe inteira de bugs a menos se um dia uma
+     * etiqueta mudar de ambito por engano.
+     */
+    private const PIVOTS = [
+        'product_tag' => 'product_id',
+        'tag_user' => 'user_id',
+        'order_tag' => 'order_id',
+    ];
+
     /**
      * Nomes escritos a mao -> ids do vocabulario de um ambito, criando as
      * etiquetas que ainda nao existem. A chave e o slug: "Natal", "natal" e
@@ -50,5 +64,135 @@ class TagService
             ->orderBy('name')
             ->pluck('name')
             ->all();
+    }
+
+    /**
+     * Criar da pagina de gestao. Um nome que ja exista no ambito devolve a
+     * etiqueta que la esta em vez de rebentar: e o mesmo pedido, feito duas
+     * vezes. Quem chama distingue os dois casos pelo `wasRecentlyCreated`.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public function store(array $data): Tag
+    {
+        $name = trim((string) $data['name']);
+
+        return Tag::query()->firstOrCreate(
+            ['scope' => $data['scope'], 'slug' => str($name)->slug()->value()],
+            ['name' => $name],
+        );
+    }
+
+    /**
+     * Renomear — ou fundir, quando o nome novo ja pertence a outra etiqueta do
+     * mesmo ambito. O ambito nunca muda: move-la deixava os usos existentes a
+     * apontar para o pivot errado, e nao ha resposta certa para o que fazer com
+     * eles. Para mover, cria-se no ambito certo.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    public function update(Tag $tag, array $data): TagMergePlan
+    {
+        $plan = TagMergePlan::for(
+            $tag->id,
+            (string) $data['name'],
+            Tag::query()->inScope($tag->scope)->pluck('id', 'slug')->all(),
+        );
+
+        DB::transaction(function () use ($tag, $plan): void {
+            if (! $plan->isMerge()) {
+                $tag->update(['name' => $plan->name, 'slug' => $plan->slug]);
+
+                return;
+            }
+
+            $this->repoint($tag->id, (int) $plan->mergeInto);
+
+            // O delete leva o que sobrou dos pivots por cascade — as linhas que
+            // o insertOrIgnore nao copiou porque o destino ja as tinha.
+            $tag->delete();
+        });
+
+        return $plan;
+    }
+
+    /**
+     * Apagar mesmo, e nao arquivar: e a excepcao consciente a regra global de
+     * eliminacao logica, ja escrita na migracao original. Uma etiqueta nao e
+     * historial — nenhuma encomenda a referencia no valor que cobrou — e uma
+     * etiqueta arquivada seria so uma sugestao que ninguem volta a ver.
+     */
+    public function destroy(Tag $tag): void
+    {
+        $tag->delete();
+    }
+
+    /**
+     * Limpa as etiquetas que nenhum produto, cliente ou encomenda usa. Cumpre a
+     * promessa da migracao original ("uma tag sem produtos e ruido") sem o
+     * efeito lateral que ela implicava: aqui e o admin que decide quando, e nao
+     * o acto de desmarcar o ultimo uso.
+     *
+     * @return int quantas foram apagadas
+     */
+    public function pruneUnused(): int
+    {
+        $query = Tag::query();
+
+        foreach (array_keys(self::PIVOTS) as $pivot) {
+            $query->whereNotExists(
+                fn ($sub) => $sub->from($pivot)->whereColumn('tag_id', 'tags.id'),
+            );
+        }
+
+        return $query->delete();
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    public function listing(): array
+    {
+        return Tag::query()
+            ->withCount(['products', 'customers', 'orders'])
+            ->orderBy('scope')
+            ->orderBy('name')
+            ->get()
+            ->map(fn (Tag $tag): array => [
+                'id' => $tag->id,
+                'scope' => $tag->scope,
+                'name' => $tag->name,
+                'slug' => $tag->slug,
+                // Uma so contagem: a etiqueta vive num ambito, portanto duas das
+                // tres sao sempre zero. Quem le a tabela quer saber "quantos
+                // perdem isto se eu apagar", nao a decomposicao.
+                'usageCount' => (int) $tag->products_count
+                    + (int) $tag->customers_count
+                    + (int) $tag->orders_count,
+            ])
+            ->all();
+    }
+
+    /**
+     * Reaponta os pivots de uma etiqueta para outra. O insertOrIgnore encosta-se
+     * a primary composta de cada pivot: um produto que ja tenha as duas
+     * etiquetas nao pode ficar com a linha repetida.
+     */
+    private function repoint(int $from, int $into): void
+    {
+        foreach (self::PIVOTS as $pivot => $ownerColumn) {
+            $owners = DB::table($pivot)->where('tag_id', $from)->pluck($ownerColumn);
+
+            if ($owners->isEmpty()) {
+                continue;
+            }
+
+            DB::table($pivot)->insertOrIgnore(
+                $owners->map(fn (int $owner): array => [
+                    $ownerColumn => $owner,
+                    'tag_id' => $into,
+                ])->all(),
+            );
+        }
     }
 }

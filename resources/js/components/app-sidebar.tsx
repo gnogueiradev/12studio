@@ -3,6 +3,7 @@ import {
     Boxes,
     Calculator,
     Factory,
+    FolderTree,
     LayoutGrid,
     Package,
     Palette,
@@ -57,8 +58,16 @@ const mainNavItems: NavItem[] = [
         icon: Package,
     },
     {
+        // Os dois eixos de organização, lado a lado. O ícone `Tags` (plural)
+        // passa para as etiquetas, que são muitas por item; a categoria, que é
+        // uma só, fica com a pasta.
         title: 'Categorias',
         href: '/admin/categorias',
+        icon: FolderTree,
+    },
+    {
+        title: 'Etiquetas',
+        href: '/admin/etiquetas',
         icon: Tags,
     },
     {

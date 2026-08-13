@@ -82,6 +82,21 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         Route::patch('categorias/{category}/restaurar', [Admin\CategoryController::class, 'restore'])
             ->name('categorias.restaurar');
 
+        // O outro eixo de organizacao, e o unico que serve tambem clientes e
+        // encomendas. Sem `restaurar`: uma etiqueta nao arquiva, apaga-se mesmo
+        // — a excepcao consciente a regra de eliminacao logica, ja escrita na
+        // migracao que criou a tabela.
+        //
+        // A limpeza vem ANTES do resource: `etiquetas/nao-usadas` colidia com o
+        // DELETE `etiquetas/{tag}` e o router resolvia a favor do primeiro que
+        // registasse.
+        Route::delete('etiquetas/nao-usadas', [Admin\TagController::class, 'prune'])
+            ->name('etiquetas.limpar');
+
+        Route::resource('etiquetas', Admin\TagController::class)
+            ->parameters(['etiquetas' => 'tag'])
+            ->except(['show', 'create', 'edit']);
+
         // Materiais e cores em recursos irmaos, e irmaos mesmo: sao dois eixos
         // independentes. Uma cor nao pertence a um material — quem os cruza e a
         // variante, que aponta para os dois.
