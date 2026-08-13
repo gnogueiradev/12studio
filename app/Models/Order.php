@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Concerns\HasTags;
 use Database\Factories\OrderFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -67,6 +68,13 @@ class Order extends Model
 {
     /** @use HasFactory<OrderFactory> */
     use HasFactory;
+
+    use HasTags;
+
+    public function tagScope(): string
+    {
+        return Tag::SCOPE_ORDER;
+    }
 
     // Pipeline de fulfilment. O indicador FINANCEIRO e payment_status;
     // as invariantes entre os dois vivem no OrderService (Fase 4) e sao a

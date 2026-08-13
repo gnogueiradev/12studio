@@ -15,6 +15,7 @@ class ProductService
     public function __construct(
         private VariantService $variantService,
         private ImageService $imageService,
+        private TagService $tagService,
     ) {}
 
     /**
@@ -170,28 +171,11 @@ class ProductService
     }
 
     /**
-     * Etiquetas por nome -> ids no pivot, criando as que ainda nao existem.
-     * A chave e o slug: "Natal", "natal" e "NATAL" sao a mesma etiqueta.
-     *
      * @param  array<int, string>  $names
      */
     public function syncTags(Product $product, array $names): void
     {
-        $ids = collect($names)
-            ->map(fn (string $name): string => trim($name))
-            ->filter()
-            // Desambigua ANTES de ir a BD: "Natal" e "natal" dariam o mesmo
-            // slug e o firstOrCreate devolveria a mesma linha duas vezes.
-            ->keyBy(fn (string $name): string => str($name)->slug()->value())
-            ->reject(fn (string $name, string $slug): bool => $slug === '')
-            ->map(fn (string $name, string $slug): int => Tag::query()->firstOrCreate(
-                ['slug' => $slug],
-                ['name' => $name],
-            )->id)
-            ->values()
-            ->all();
-
-        $product->tags()->sync($ids);
+        $product->tags()->sync($this->tagService->idsFor(Tag::SCOPE_PRODUCT, $names));
     }
 
     /**

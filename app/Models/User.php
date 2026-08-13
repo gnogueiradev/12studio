@@ -3,6 +3,7 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Concerns\HasTags;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
@@ -38,7 +39,16 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
 class User extends Authenticatable implements PasskeyUser
 {
     /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable, PasskeyAuthenticatable, TwoFactorAuthenticatable;
+    use HasFactory, HasTags, Notifiable, PasskeyAuthenticatable, TwoFactorAuthenticatable;
+
+    /**
+     * Quem tem etiquetas e o cliente, nao a conta. Um admin herda a relacao por
+     * ser o mesmo modelo, mas nada no backoffice lha oferece.
+     */
+    public function tagScope(): string
+    {
+        return Tag::SCOPE_CUSTOMER;
+    }
 
     /**
      * Get the attributes that should be cast.

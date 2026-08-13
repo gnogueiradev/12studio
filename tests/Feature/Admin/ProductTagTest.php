@@ -47,12 +47,12 @@ class ProductTagTest extends TestCase
         $product = Product::query()->firstOrFail();
 
         $this->assertSame(['natal', 'presente'], $product->tags->pluck('name')->all());
-        $this->assertDatabaseHas('tags', ['slug' => 'natal']);
+        $this->assertDatabaseHas('tags', ['slug' => 'natal', 'scope' => Tag::SCOPE_PRODUCT]);
     }
 
     public function test_an_existing_tag_is_reused_not_duplicated(): void
     {
-        Tag::query()->create(['name' => 'Natal', 'slug' => 'natal']);
+        Tag::query()->create(['scope' => Tag::SCOPE_PRODUCT, 'name' => 'Natal', 'slug' => 'natal']);
 
         $this->actingAs($this->admin)
             ->post(route('admin.produtos.store'), $this->payload([
