@@ -5,7 +5,8 @@ import type { VariantPricingPreview } from '@/components/admin/variant-form';
 import { index } from '@/routes/admin/produtos';
 import { update } from '@/routes/admin/variantes';
 import type {
-    ColorGroup,
+    ColorOption,
+    MaterialOption,
     ProductSummary,
     VariantDetail,
     VariantFormData,
@@ -15,7 +16,8 @@ import type { PrinterProfileOption } from '@/types/pricing';
 type Props = {
     product: ProductSummary;
     variant: VariantDetail;
-    colorGroups: ColorGroup[];
+    colors: ColorOption[];
+    materials: MaterialOption[];
     printers: PrinterProfileOption[];
     pricing: VariantPricingPreview;
 };
@@ -23,7 +25,8 @@ type Props = {
 export default function VariantsEdit({
     product,
     variant,
-    colorGroups,
+    colors,
+    materials,
     printers,
     pricing,
 }: Props) {
@@ -31,6 +34,7 @@ export default function VariantsEdit({
         useForm<VariantFormData>({
             sku: variant.sku,
             color_id: variant.colorId,
+            material_id: variant.materialId,
             size_label: variant.sizeLabel ?? '',
             normal_price: variant.normalPrice,
             sale_price: variant.salePrice ?? '',
@@ -62,7 +66,8 @@ export default function VariantsEdit({
                     processing={processing}
                     onSubmit={submit}
                     submitLabel="Guardar alterações"
-                    colorGroups={colorGroups}
+                    colors={colors}
+                    materials={materials}
                     printers={printers}
                     pricing={pricing}
                     reservedStock={variant.reservedStock}

@@ -1,9 +1,6 @@
 import { useForm } from '@inertiajs/react';
-import { useState } from 'react';
-import { ToggleChip } from '@/components/admin/toggle-chip';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
     Dialog,
     DialogContent,
@@ -16,33 +13,23 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { isPlainHex } from '@/lib/color';
-import { centsToInput, formatCents, inputToCents } from '@/lib/money';
 import { cn } from '@/lib/utils';
 import { store, update } from '@/routes/admin/cores';
-import type {
-    ColorGroupFormData,
-    ColorGroupRow,
-    ColorMaterialCard,
-    PaletteColor,
-} from '@/types/catalog';
+import type { ColorFormData, ColorRow, PaletteColor } from '@/types/catalog';
 
 type Props = {
     open: boolean;
     onOpenChange: (open: boolean) => void;
-    /** Null cria; um grupo edita todas as linhas com aquele nome. */
-    editing: ColorGroupRow | null;
-    materials: ColorMaterialCard[];
+    /** Null cria; uma cor edita. */
+    editing: ColorRow | null;
     palette: PaletteColor[];
 };
 
 /**
- * Criar e editar uma cor — os dois no mesmo sítio, porque escolher em que
- * materiais ela existe faz parte de a definir.
+ * Criar e editar uma cor: um nome, um tom e a ordem em que aparece.
  *
- * O que aqui se grava vai em leque: uma linha `colors` por material ligado, com
- * o mesmo nome e o mesmo hex. Tirar um material arquiva a linha respetiva em vez
- * de a apagar (as variantes que já a usam continuam a apontar para lá), e é o
- * ColorService que trata disso.
+ * Não há materiais aqui, e é essa a questão — uma cor imprime-se em qualquer
+ * bobine. O cruzamento acontece na variante, ao criar um produto.
  *
  * Não há efeito nenhum a sincronizar o formulário com o `editing`: quem monta
  * este componente dá-lhe uma `key` que muda com o alvo, e o remonte trata do
@@ -53,44 +40,16 @@ export function ColorCreateDialog({
     open,
     onOpenChange,
     editing,
-    materials,
     palette,
 }: Props) {
     const { data, setData, post, put, processing, errors, reset } =
-        useForm<ColorGroupFormData>({
+        useForm<ColorFormData>({
             name: editing?.name ?? '',
             hex_color: editing?.hex ?? '',
-            material_ids: editing?.materialIds ?? [],
-            price_per_kg: centsToInput(editing?.ownPricePerKgCents ?? null),
+            sort_order: editing?.sortOrder ?? 0,
         });
 
-    /*
-     * O override não é um campo do payload: é a decisão de mandar ou não mandar
-     * `price_per_kg`. Vazio significa "herda de cada material" — nunca zero.
-     */
-    const hasOwnPrice =
-        editing !== null &&
-        (editing.priceOrigin === 'own' || editing.priceOrigin === 'mixed');
-    const [override, setOverride] = useState(hasOwnPrice);
-
-    const chosen = materials.filter((material) =>
-        data.material_ids.includes(material.id),
-    );
-
-    const priceCents = inputToCents(data.price_per_kg);
-    const canSave =
-        data.name.trim() !== '' &&
-        isPlainHex(data.hex_color) &&
-        data.material_ids.length > 0 &&
-        (!override || priceCents > 0);
-
-    const toggleMaterial = (id: number) =>
-        setData(
-            'material_ids',
-            data.material_ids.includes(id)
-                ? data.material_ids.filter((current) => current !== id)
-                : [...data.material_ids, id],
-        );
+    const canSave = data.name.trim() !== '' && isPlainHex(data.hex_color);
 
     const pickSwatch = (color: PaletteColor) => {
         setData((current) => ({
@@ -100,14 +59,6 @@ export function ColorCreateDialog({
             // "Verde azeitona" e depois foi buscar o tom não quer perdê-lo.
             name: current.name.trim() === '' ? color.name : current.name,
         }));
-    };
-
-    const toggleOverride = (on: boolean) => {
-        setOverride(on);
-
-        if (!on) {
-            setData('price_per_kg', '');
-        }
     };
 
     const submit = () => {
@@ -135,9 +86,8 @@ export function ColorCreateDialog({
                         {editing ? 'Editar cor' : 'Nova cor'}
                     </DialogTitle>
                     <DialogDescription>
-                        {editing
-                            ? 'Mudar os materiais onde existe muda as variantes disponíveis nos produtos.'
-                            : 'Escolhe em que materiais existe. O preço vem de cada material, a não ser que definas um próprio.'}
+                        Uma cor é um nome e um tom. Imprime-se em qualquer
+                        material — o preço por quilo é da bobine.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -206,107 +156,22 @@ export function ColorCreateDialog({
                         ))}
                     </div>
 
-                    <div className="grid gap-3 border-t border-border/60 pt-6">
-                        <div className="flex items-baseline justify-between gap-3">
-                            <Label>Materiais em que existe</Label>
-                            <span
-                                className={cn(
-                                    'text-xs',
-                                    data.material_ids.length === 0
-                                        ? 'text-warning'
-                                        : 'text-muted-foreground',
-                                )}
-                            >
-                                {data.material_ids.length === 0
-                                    ? 'nenhum selecionado'
-                                    : data.material_ids.length === 1
-                                      ? '1 selecionado'
-                                      : `${data.material_ids.length} selecionados`}
-                            </span>
-                        </div>
-                        <div className="flex flex-wrap gap-2">
-                            {materials.map((material) => (
-                                <ToggleChip
-                                    key={material.id}
-                                    active={data.material_ids.includes(
-                                        material.id,
-                                    )}
-                                    onClick={() => toggleMaterial(material.id)}
-                                >
-                                    {material.name}
-                                    <span className="text-muted-foreground tabular-nums">
-                                        {formatCents(material.pricePerKgCents)}
-                                    </span>
-                                </ToggleChip>
-                            ))}
-                        </div>
-                        <InputError message={errors.material_ids} />
-                    </div>
-
-                    <div className="flex flex-col gap-3 rounded-xl border border-border/60 bg-muted/40 p-4">
-                        <div className="flex items-start justify-between gap-4">
-                            <div>
-                                <Label
-                                    htmlFor="color-override"
-                                    className="text-sm"
-                                >
-                                    Preço próprio
-                                </Label>
-                                <p className="mt-1 text-xs text-muted-foreground">
-                                    {override
-                                        ? 'Ignora o preço dos materiais selecionados.'
-                                        : chosen.length > 0
-                                          ? `Herda de ${chosen.map((material) => material.name).join(', ')}.`
-                                          : 'Sem preço próprio, herda de cada material.'}
-                                </p>
-                            </div>
-                            <Checkbox
-                                id="color-override"
-                                checked={override}
-                                onCheckedChange={(checked) =>
-                                    toggleOverride(checked === true)
-                                }
-                            />
-                        </div>
-
-                        {override && (
-                            <div className="grid gap-2">
-                                <div className="relative">
-                                    <Input
-                                        type="number"
-                                        step="0.5"
-                                        min={0}
-                                        value={data.price_per_kg}
-                                        onChange={(event) =>
-                                            setData(
-                                                'price_per_kg',
-                                                event.target.value,
-                                            )
-                                        }
-                                        placeholder="29,00"
-                                        className="pr-16 tabular-nums"
-                                        aria-label="Preço próprio por quilo"
-                                    />
-                                    <span className="pointer-events-none absolute top-1/2 right-3 -translate-y-1/2 text-sm text-muted-foreground">
-                                        € / kg
-                                    </span>
-                                </div>
-                                {/*
-                                 * O campo é um valor só. Se o grupo trazia
-                                 * preços diferentes por material, o servidor
-                                 * mandou-o vazio de propósito — gravar aqui
-                                 * uniformiza-os, e vale a pena dizê-lo.
-                                 */}
-                                {editing?.priceOrigin === 'mixed' && (
-                                    <p className="text-xs text-warning">
-                                        Esta cor tem preços diferentes conforme
-                                        o material. O valor que escreveres passa
-                                        a valer em todos.
-                                    </p>
-                                )}
-                                <InputError message={errors.price_per_kg} />
-                            </div>
-                        )}
+                    <div className="grid w-32 gap-2 border-t border-border/60 pt-6">
+                        <Label htmlFor="color-order">Ordem</Label>
+                        <Input
+                            id="color-order"
+                            type="number"
+                            min={0}
+                            value={data.sort_order}
+                            onChange={(event) =>
+                                setData(
+                                    'sort_order',
+                                    Number(event.target.value),
+                                )
+                            }
+                            className="tabular-nums"
+                        />
+                        <InputError message={errors.sort_order} />
                     </div>
                 </div>
 

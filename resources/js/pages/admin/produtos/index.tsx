@@ -22,7 +22,12 @@ import { formatCents } from '@/lib/money';
 import { label } from '@/lib/options';
 import { cn } from '@/lib/utils';
 import { destroy, edit, index, restaurar } from '@/routes/admin/produtos';
-import type { CategoryOption, ColorGroup, ProductRow } from '@/types/catalog';
+import type {
+    CategoryOption,
+    ColorOption,
+    MaterialOption,
+    ProductRow,
+} from '@/types/catalog';
 import { FULFILLMENT_MODES, PRODUCT_STATUSES } from '@/types/catalog';
 import type { Paginated } from '@/types/pagination';
 import type { PricingBreakdown } from '@/types/pricing';
@@ -40,7 +45,8 @@ type Props = {
     /** Contagem por estado, já sem o filtro de estado aplicado. */
     statusCounts: Record<string, number>;
     categories: CategoryOption[];
-    colorGroups: ColorGroup[];
+    colors: ColorOption[];
+    materials: MaterialOption[];
     defaultVatRate: number;
     /** Preço sugerido para o modal de novo produto. */
     pricingPreview: { result: PricingBreakdown | null };
@@ -103,7 +109,8 @@ export default function ProductsIndex({
     filters,
     statusCounts,
     categories,
-    colorGroups,
+    colors,
+    materials,
     defaultVatRate,
     pricingPreview,
 }: Props) {
@@ -397,7 +404,8 @@ export default function ProductsIndex({
                 open={creating}
                 onOpenChange={setCreating}
                 categories={categories}
-                colorGroups={colorGroups}
+                colors={colors}
+                materials={materials}
                 defaultVatRate={defaultVatRate}
                 pricingPreview={pricingPreview}
             />

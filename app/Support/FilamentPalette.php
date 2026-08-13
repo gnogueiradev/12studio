@@ -3,23 +3,19 @@
 namespace App\Support;
 
 /**
- * Paleta de cores de filamento oferecida ao criar um material.
+ * Presets de cor de filamento, oferecidos como chips no modal de nova cor.
  *
- * Vive em Support pelo mesmo motivo que o ColorGroups: dois sitios a pedem — a
- * validacao do StoreMaterialRequest (que so aceita nomes desta lista) e as
- * chips do modal de novo material. Duplica-la eram duas oportunidades de o hex
- * gravado deixar de ser o hex mostrado.
+ * NAO e o catalogo: as cores vivem na base de dados. Isto e o atalho que evita
+ * escolher o nome e o tom a mao para as oito que qualquer loja tem — clicar na
+ * chip preenche os dois campos, e a partir daí a cor e uma cor como as outras.
  *
- * Note-se que isto NAO e a lista de cores do catalogo: uma Color pertence a um
- * Material e vive na base de dados. Isto sao presets, o atalho que evita criar
- * o material e a seguir ir criar "Preto" e "Branco" a mao.
+ * Vive em Support e nao numa constante do TypeScript porque a prop ja viajava
+ * daqui para o modal; mover custava uma constante gemea e um teste a
+ * compara-las, por ganho nenhum.
  */
 class FilamentPalette
 {
     /**
-     * A ordem e a que aparece nas chips e a que vai para o `sort_order` das
-     * cores criadas.
-     *
      * @return array<int, array{name: string, hex: string}>
      */
     public static function all(): array
@@ -34,22 +30,5 @@ class FilamentPalette
             ['name' => 'Azul pedra', 'hex' => '#7C93A9'],
             ['name' => 'Malva', 'hex' => '#A9829C'],
         ];
-    }
-
-    /**
-     * @return array<int, string>
-     */
-    public static function names(): array
-    {
-        return array_column(self::all(), 'name');
-    }
-
-    /**
-     * Hex do preset, ou null se o nome nao pertencer a paleta. O
-     * MaterialService usa isto para nunca gravar uma cor sem hex conhecido.
-     */
-    public static function hex(string $name): ?string
-    {
-        return array_column(self::all(), 'hex', 'name')[$name] ?? null;
     }
 }

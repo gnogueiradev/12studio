@@ -35,7 +35,6 @@ final readonly class PricingInput
         public int $extraCostCents = 0,
         public int $quantity = 1,
         public ?int $printerProfileId = null,
-        public ?int $colorId = null,
     ) {}
 
     public function isBatch(): bool

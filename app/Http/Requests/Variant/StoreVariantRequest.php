@@ -44,6 +44,7 @@ class StoreVariantRequest extends FormRequest
         return [
             'sku' => ['required', 'string', 'max:60', Rule::unique('variants', 'sku')->ignore($this->variantId())],
             'color_id' => ['nullable', 'integer', Rule::exists('colors', 'id')],
+            'material_id' => ['nullable', 'integer', Rule::exists('materials', 'id')],
             'size_label' => ['nullable', 'string', 'max:60'],
             'normal_price' => ['required', 'numeric', 'min:0', 'max:99999.99'],
             'sale_price' => ['nullable', 'numeric', 'min:0', 'max:99999.99'],
@@ -107,6 +108,7 @@ class StoreVariantRequest extends FormRequest
         return [
             'sku' => 'SKU',
             'color_id' => 'cor',
+            'material_id' => 'material',
             'normal_price' => 'preço normal',
             'sale_price' => 'preço promocional',
             'wholesale_price' => 'preço de revenda',

@@ -10,15 +10,17 @@ import { Label } from '@/components/ui/label';
 import {
     Select,
     SelectContent,
-    SelectGroup,
     SelectItem,
-    SelectLabel,
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { centsToInput, formatCents, inputToCents } from '@/lib/money';
-import type { ColorGroup, VariantFormData } from '@/types/catalog';
+import type {
+    ColorOption,
+    MaterialOption,
+    VariantFormData,
+} from '@/types/catalog';
 import type {
     PricingBreakdown as Breakdown,
     PrinterProfileOption,
@@ -42,7 +44,8 @@ type Props = {
     processing: boolean;
     onSubmit: (event: React.FormEvent) => void;
     submitLabel: string;
-    colorGroups: ColorGroup[];
+    colors: ColorOption[];
+    materials: MaterialOption[];
     printers: PrinterProfileOption[];
     /** Calculada no servidor e recarregada em `only: ['pricing']`. */
     pricing: VariantPricingPreview;
@@ -51,6 +54,8 @@ type Props = {
 };
 
 const NO_COLOR = 'none';
+
+const NO_MATERIAL = 'none';
 
 /** O valor do seletor que quer dizer "usa a que estiver predefinida". */
 const DEFAULT_PRINTER = 'default';
@@ -65,7 +70,8 @@ export default function VariantForm({
     processing,
     onSubmit,
     submitLabel,
-    colorGroups,
+    colors,
+    materials,
     printers,
     pricing,
     reservedStock = 0,
@@ -96,7 +102,10 @@ export default function VariantForm({
                     weight_grams: data.filament_weight_grams ?? 0,
                     hours: Math.floor(printMinutes / 60),
                     minutes: printMinutes % 60,
-                    color_id: data.color_id,
+                    // O MATERIAL e não a cor: é a bobine que tem preço/kg.
+                    // Deixar a cor aqui era disparar um recálculo idêntico a
+                    // cada troca de tom.
+                    material_id: data.material_id,
                     printer_profile_id: data.printer_profile_id,
                     extra_cost: data.extra_cost,
                 },
@@ -106,7 +115,7 @@ export default function VariantForm({
         return () => clearTimeout(timer);
     }, [
         data.filament_weight_grams,
-        data.color_id,
+        data.material_id,
         data.printer_profile_id,
         data.extra_cost,
         printMinutes,
@@ -137,7 +146,8 @@ export default function VariantForm({
             ? Math.round(((normalCents - saleCents) / normalCents) * 100)
             : null;
 
-    const hasColors = colorGroups.length > 0;
+    const hasColors = colors.length > 0;
+    const hasMaterials = materials.length > 0;
 
     return (
         <form onSubmit={onSubmit} className="flex max-w-xl flex-col gap-6">
@@ -170,52 +180,102 @@ export default function VariantForm({
                 </div>
             </div>
 
-            <div className="grid gap-2">
-                <Label>Cor</Label>
-                <Select
-                    value={
-                        data.color_id === null
-                            ? NO_COLOR
-                            : String(data.color_id)
-                    }
-                    onValueChange={(value) =>
-                        setData(
-                            'color_id',
-                            value === NO_COLOR ? null : Number(value),
-                        )
-                    }
-                    disabled={!hasColors}
-                >
-                    <SelectTrigger>
-                        <SelectValue placeholder="Sem cor" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        <SelectItem value={NO_COLOR}>Sem cor</SelectItem>
-                        {colorGroups.map((group) => (
-                            <SelectGroup key={group.material}>
-                                <SelectLabel>{group.material}</SelectLabel>
-                                {group.colors.map((color) => (
-                                    <SelectItem
-                                        key={color.id}
-                                        value={String(color.id)}
-                                    >
-                                        <span className="flex items-center gap-2">
-                                            <ColorSwatch hex={color.hex} />
-                                            {color.name}
+            {/*
+             * Cor e material lado a lado, duas listas planas: são dois eixos
+             * independentes. Só o material influencia o preço — a cor é o tom.
+             */}
+            <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                    <Label>Cor</Label>
+                    <Select
+                        value={
+                            data.color_id === null
+                                ? NO_COLOR
+                                : String(data.color_id)
+                        }
+                        onValueChange={(value) =>
+                            setData(
+                                'color_id',
+                                value === NO_COLOR ? null : Number(value),
+                            )
+                        }
+                        disabled={!hasColors}
+                    >
+                        <SelectTrigger>
+                            <SelectValue placeholder="Sem cor" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value={NO_COLOR}>Sem cor</SelectItem>
+                            {colors.map((color) => (
+                                <SelectItem
+                                    key={color.id}
+                                    value={String(color.id)}
+                                >
+                                    <span className="flex items-center gap-2">
+                                        <ColorSwatch hex={color.hex} />
+                                        {color.name}
+                                    </span>
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    {!hasColors && (
+                        <p className="text-xs text-muted-foreground">
+                            Ainda não há cores. Cria-as em Cores para as poderes
+                            escolher aqui.
+                        </p>
+                    )}
+                    <InputError message={errors.color_id} />
+                </div>
+
+                <div className="grid gap-2">
+                    <Label>Material</Label>
+                    <Select
+                        value={
+                            data.material_id === null
+                                ? NO_MATERIAL
+                                : String(data.material_id)
+                        }
+                        onValueChange={(value) =>
+                            setData(
+                                'material_id',
+                                value === NO_MATERIAL ? null : Number(value),
+                            )
+                        }
+                        disabled={!hasMaterials}
+                    >
+                        <SelectTrigger>
+                            <SelectValue placeholder="Sem material" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value={NO_MATERIAL}>
+                                Sem material
+                            </SelectItem>
+                            {materials.map((material) => (
+                                <SelectItem
+                                    key={material.id}
+                                    value={String(material.id)}
+                                >
+                                    <span className="flex items-center gap-2">
+                                        {material.name}
+                                        <span className="text-muted-foreground tabular-nums">
+                                            {formatCents(
+                                                material.pricePerKgCents,
+                                            )}
+                                            /kg
                                         </span>
-                                    </SelectItem>
-                                ))}
-                            </SelectGroup>
-                        ))}
-                    </SelectContent>
-                </Select>
-                {!hasColors && (
-                    <p className="text-xs text-muted-foreground">
-                        Ainda não há cores. Cria-as em Materiais e cores para as
-                        poderes escolher aqui.
-                    </p>
-                )}
-                <InputError message={errors.color_id} />
+                                    </span>
+                                </SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                    {!hasMaterials && (
+                        <p className="text-xs text-muted-foreground">
+                            Ainda não há materiais. Cria-os em Materiais.
+                        </p>
+                    )}
+                    <InputError message={errors.material_id} />
+                </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4">

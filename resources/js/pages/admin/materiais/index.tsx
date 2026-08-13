@@ -2,7 +2,6 @@ import { Head, Link, router, usePage } from '@inertiajs/react';
 import { useMemo, useState } from 'react';
 import { AdminTable } from '@/components/admin/admin-table';
 import type { Column } from '@/components/admin/admin-table';
-import { ColorSwatch } from '@/components/admin/color-swatch';
 import { ConfirmDialog } from '@/components/admin/confirm-dialog';
 import { FilterChip } from '@/components/admin/filter-chip';
 import { MaterialCreateDialog } from '@/components/admin/material-create-dialog';
@@ -17,21 +16,16 @@ import { fold } from '@/lib/text';
 import { cn } from '@/lib/utils';
 import { index as coresIndex } from '@/routes/admin/cores';
 import { destroy, index, restaurar } from '@/routes/admin/materiais';
-import type { MaterialRow, MaterialStats, PaletteColor } from '@/types/catalog';
+import type { MaterialRow, MaterialStats } from '@/types/catalog';
 import { MATERIAL_STATES } from '@/types/catalog';
 
 type Props = {
     materials: MaterialRow[];
     stats: MaterialStats;
-    /** As cores que já existem em /admin/cores — as chips do modal de criação. */
-    colorOptions: PaletteColor[];
     families: string[];
 };
 
 const ALL = 'all';
-
-/** Swatches mostrados por linha antes do "+N". */
-const SWATCH_LIMIT = 5;
 
 /**
  * Chips como predicados, não como partição.
@@ -48,12 +42,7 @@ const MATCHERS: Record<string, (material: MaterialRow) => boolean> = {
     archived: (material) => material.state === 'archived',
 };
 
-export default function MaterialsIndex({
-    materials,
-    stats,
-    colorOptions,
-    families,
-}: Props) {
+export default function MaterialsIndex({ materials, stats, families }: Props) {
     /*
      * Filtros no cliente, ao contrário dos produtos: esta listagem não pagina e
      * são meia dúzia de linhas que a página já trouxe inteiras. Um pedido ao
@@ -120,29 +109,10 @@ export default function MaterialsIndex({
             ),
         },
         {
-            key: 'colors',
-            header: 'Cores',
-            cell: (material) =>
-                material.colors.length === 0 ? (
-                    <span className="text-xs text-muted-foreground">
-                        Sem cores
-                    </span>
-                ) : (
-                    <span className="flex items-center gap-1.5">
-                        {material.colors.slice(0, SWATCH_LIMIT).map((color) => (
-                            <ColorSwatch
-                                key={color.name}
-                                hex={color.hex}
-                                className="size-3.5"
-                            />
-                        ))}
-                        {material.colors.length > SWATCH_LIMIT && (
-                            <span className="text-xs text-muted-foreground">
-                                +{material.colors.length - SWATCH_LIMIT}
-                            </span>
-                        )}
-                    </span>
-                ),
+            key: 'variants',
+            header: 'Variantes',
+            className: 'text-right tabular-nums',
+            cell: (material) => material.variantsCount,
         },
         {
             key: 'price',
@@ -313,7 +283,7 @@ export default function MaterialsIndex({
                     }
                     empty={
                         materials.length === 0
-                            ? 'Ainda não há materiais — cria o primeiro (PLA, PETG…) para lhe poderes juntar cores.'
+                            ? 'Ainda não há materiais — cria o primeiro (PLA, PETG…) para o poderes cruzar com uma cor.'
                             : 'Nenhum material com estes filtros.'
                     }
                 />
@@ -335,7 +305,6 @@ export default function MaterialsIndex({
                     }
                 }}
                 editing={editing}
-                colorOptions={colorOptions}
                 families={families}
             />
 

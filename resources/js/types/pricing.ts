@@ -31,7 +31,8 @@ export type PricingFormFields = {
     price_per_kg: string;
     extra_cost: string;
     quantity: number;
-    color_id: number | null;
+    /** O €/kg vem daqui quando está escolhido — a bobine é quem tem preço. */
+    material_id: number | null;
     printer_profile_id: number | null;
 };
 

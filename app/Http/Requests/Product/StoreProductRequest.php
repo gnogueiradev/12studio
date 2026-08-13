@@ -63,12 +63,15 @@ class StoreProductRequest extends FormRequest
     }
 
     /**
-     * Matriz de variantes do modal de novo produto: as cores e os tamanhos
-     * escolhidos, mais o molde (preco, gramagem, tempo) aplicado a todas as
-     * combinacoes. Ausente = produto sem variantes, que e o que um rascunho e.
+     * Matriz de variantes do modal de novo produto: as cores, os materiais e os
+     * tamanhos escolhidos, mais o molde (preco, gramagem, tempo) aplicado a
+     * todas as combinacoes. Ausente = produto sem variantes, que e o que um
+     * rascunho e.
      *
      * O `required_with` no preco e o que impede uma matriz sem preco: as
-     * variantes nasceriam todas a zero euros e vendaveis.
+     * variantes nasceriam todas a zero euros e vendaveis. Olha para os dois
+     * eixos obrigatorios — basta um deles vir preenchido para o preco passar a
+     * ser exigido.
      *
      * @return array<string, array<int, mixed>>
      */
@@ -78,9 +81,11 @@ class StoreProductRequest extends FormRequest
             'variants' => ['nullable', 'array'],
             'variants.color_ids' => ['array', 'max:60'],
             'variants.color_ids.*' => ['integer', Rule::exists('colors', 'id')],
+            'variants.material_ids' => ['array', 'max:10'],
+            'variants.material_ids.*' => ['integer', Rule::exists('materials', 'id')],
             'variants.sizes' => ['array', 'max:10'],
             'variants.sizes.*' => ['string', 'max:60'],
-            'variants.price' => ['required_with:variants.color_ids', 'nullable', 'numeric', 'min:0', 'max:99999.99'],
+            'variants.price' => ['required_with:variants.color_ids,variants.material_ids', 'nullable', 'numeric', 'min:0', 'max:99999.99'],
             'variants.filament_weight_grams' => ['nullable', 'integer', 'min:0', 'max:99999'],
             'variants.printing_time_minutes' => ['nullable', 'integer', 'min:0', 'max:99999'],
         ];
@@ -107,6 +112,7 @@ class StoreProductRequest extends FormRequest
             'vat_rate' => 'IVA',
             'tags' => 'etiquetas',
             'variants.color_ids' => 'cores',
+            'variants.material_ids' => 'materiais',
             'variants.sizes' => 'tamanhos',
             'variants.price' => 'preço de venda',
             'variants.filament_weight_grams' => 'gramagem',

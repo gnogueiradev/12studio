@@ -4,6 +4,7 @@ namespace Tests\Feature\Admin;
 
 use App\Models\Category;
 use App\Models\Color;
+use App\Models\Material;
 use App\Models\Product;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -16,11 +17,16 @@ class ProductCrudTest extends TestCase
 
     private User $admin;
 
+    private Material $material;
+
     protected function setUp(): void
     {
         parent::setUp();
 
         $this->admin = User::factory()->admin()->create();
+        // A matriz precisa de cor E material: sao os dois eixos que definem uma
+        // peca imprimivel.
+        $this->material = Material::factory()->create();
     }
 
     /**
@@ -80,9 +86,10 @@ class ProductCrudTest extends TestCase
         ]);
     }
 
-    public function test_store_generates_a_variant_per_colour_and_size(): void
+    public function test_store_generates_a_variant_per_colour_material_and_size(): void
     {
         $colors = Color::factory()->count(3)->create();
+        $petg = Material::factory()->create();
 
         $this->actingAs($this->admin)
             ->post(route('admin.produtos.store'), [
@@ -90,6 +97,7 @@ class ProductCrudTest extends TestCase
                 'name' => 'Vaso ondulado',
                 'variants' => [
                     'color_ids' => $colors->modelKeys(),
+                    'material_ids' => [$this->material->id, $petg->id],
                     'sizes' => ['Pequeno', 'Grande'],
                     'price' => '29.00',
                     'filament_weight_grams' => 84,
@@ -100,10 +108,11 @@ class ProductCrudTest extends TestCase
 
         $product = Product::query()->where('slug', 'vaso-ondulado')->sole();
 
-        // 3 cores x 2 tamanhos, com o molde (preco, gramagem, tempo) aplicado
-        // a todas — o que difere entre variantes edita-se depois, uma a uma.
-        $this->assertSame(6, $product->variants()->count());
-        $this->assertSame(6, $product->variants()->where([
+        // 3 cores x 2 materiais x 2 tamanhos, com o molde (preco, gramagem,
+        // tempo) aplicado a todas — o que difere entre variantes edita-se
+        // depois, uma a uma.
+        $this->assertSame(12, $product->variants()->count());
+        $this->assertSame(12, $product->variants()->where([
             'price_cents' => 2900,
             'filament_weight_grams' => 84,
             'printing_time_minutes' => 130,
@@ -112,6 +121,98 @@ class ProductCrudTest extends TestCase
         // O stock entra sempre a zero: a primeira contagem tem de passar pelo
         // StockService para ficar registada como movimento.
         $this->assertSame(0, (int) $product->variants()->sum('stock'));
+    }
+
+    /**
+     * Cada variante gerada aponta para os DOIS eixos. Sem o material, o custo
+     * de producao dela ficava sem preco/kg de onde sair.
+     */
+    public function test_the_generated_variants_carry_the_material(): void
+    {
+        $color = Color::factory()->create();
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.produtos.store'), [
+                ...$this->validPayload(),
+                'name' => 'Vaso ondulado',
+                'variants' => [
+                    'color_ids' => [$color->id],
+                    'material_ids' => [$this->material->id],
+                    'sizes' => [],
+                    'price' => '29.00',
+                ],
+            ]);
+
+        $this->assertDatabaseHas('variants', [
+            'color_id' => $color->id,
+            'material_id' => $this->material->id,
+        ]);
+    }
+
+    /**
+     * Cor e material sao os dois eixos que definem uma peca imprimivel — que
+     * tom, e em que filamento. Sem um deles nao ha matriz nenhuma.
+     */
+    public function test_a_matrix_without_materials_creates_no_variants(): void
+    {
+        $color = Color::factory()->create();
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.produtos.store'), [
+                ...$this->validPayload(),
+                'name' => 'Vaso ondulado',
+                'variants' => [
+                    'color_ids' => [$color->id],
+                    'material_ids' => [],
+                    'sizes' => ['Pequeno'],
+                    'price' => '29.00',
+                ],
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseCount('variants', 0);
+    }
+
+    public function test_a_matrix_without_colours_creates_no_variants(): void
+    {
+        $this->actingAs($this->admin)
+            ->post(route('admin.produtos.store'), [
+                ...$this->validPayload(),
+                'name' => 'Vaso ondulado',
+                'variants' => [
+                    'color_ids' => [],
+                    'material_ids' => [$this->material->id],
+                    'sizes' => ['Pequeno'],
+                    'price' => '29.00',
+                ],
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseCount('variants', 0);
+    }
+
+    /** Sem tamanhos, o produto cartesiano degenera num par cor x material. */
+    public function test_a_matrix_without_sizes_generates_one_variant_per_pair(): void
+    {
+        $colors = Color::factory()->count(2)->create();
+        $petg = Material::factory()->create();
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.produtos.store'), [
+                ...$this->validPayload(),
+                'name' => 'Vaso ondulado',
+                'variants' => [
+                    'color_ids' => $colors->modelKeys(),
+                    'material_ids' => [$this->material->id, $petg->id],
+                    'sizes' => [],
+                    'price' => '29.00',
+                ],
+            ]);
+
+        $product = Product::query()->where('slug', 'vaso-ondulado')->sole();
+
+        $this->assertSame(4, $product->variants()->count());
+        $this->assertSame(0, $product->variants()->whereNotNull('size_label')->count());
     }
 
     public function test_the_matrix_price_accepts_a_decimal_comma(): void
@@ -124,6 +225,7 @@ class ProductCrudTest extends TestCase
                 'name' => 'Vaso ondulado',
                 'variants' => [
                     'color_ids' => [$color->id],
+                    'material_ids' => [$this->material->id],
                     'sizes' => [],
                     // Colado de outro lado com virgula, como o admin escreve.
                     'price' => '29,50',
@@ -144,6 +246,7 @@ class ProductCrudTest extends TestCase
                 'name' => 'Vaso ondulado',
                 'variants' => [
                     'color_ids' => $colors->modelKeys(),
+                    'material_ids' => [$this->material->id],
                     'sizes' => [],
                     'price' => '29.00',
                 ],
@@ -170,6 +273,7 @@ class ProductCrudTest extends TestCase
                 'name' => 'Vaso ondulado',
                 'variants' => [
                     'color_ids' => $colors->modelKeys(),
+                    'material_ids' => [$this->material->id],
                     'sizes' => [],
                     'price' => '29.00',
                 ],
@@ -209,6 +313,7 @@ class ProductCrudTest extends TestCase
                 ...$this->validPayload(),
                 'variants' => [
                     'color_ids' => [$color->id],
+                    'material_ids' => [$this->material->id],
                     'sizes' => [],
                     'price' => '',
                 ],
@@ -228,6 +333,7 @@ class ProductCrudTest extends TestCase
             ...$this->validPayload(),
             'variants' => [
                 'color_ids' => [$color->id],
+                'material_ids' => [$this->material->id],
                 'sizes' => [],
                 'price' => '29.00',
             ],

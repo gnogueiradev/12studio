@@ -82,13 +82,12 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         Route::patch('categorias/{category}/restaurar', [Admin\CategoryController::class, 'restore'])
             ->name('categorias.restaurar');
 
-        // Materiais e cores em recursos irmaos: cada linha de `colors` pertence
-        // a um material, mas a paleta gere-se toda de uma vez — aninhar as
-        // cores dentro do material daria URLs mais longos sem ganho nenhum.
+        // Materiais e cores em recursos irmaos, e irmaos mesmo: sao dois eixos
+        // independentes. Uma cor nao pertence a um material — quem os cruza e a
+        // variante, que aponta para os dois.
         //
         // Sem `create` nem `edit`: o material nasce e edita-se no mesmo modal da
-        // listagem, como as cores. As cores iniciais escolhem-se so na criacao
-        // (uma bobine tem uma cor so); depois disso mexem-se em /admin/cores.
+        // listagem, como as cores.
         Route::resource('materiais', Admin\MaterialController::class)
             ->parameters(['materiais' => 'material'])
             ->except(['show', 'create', 'edit']);
@@ -96,10 +95,8 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         Route::patch('materiais/{material}/restaurar', [Admin\MaterialController::class, 'restore'])
             ->name('materiais.restaurar');
 
-        // Sem `create` nem `edit`: a cor nasce e edita-se no mesmo modal da
-        // listagem, porque escolher os materiais onde existe faz parte de a
-        // definir. O `{color}` do update/destroy/restaurar e o representante do
-        // grupo — ver o docblock do ColorController.
+        // Sem `create` nem `edit`: uma cor sao dois campos — nome e tom —, e um
+        // modal na propria listagem chega para os dois.
         Route::resource('cores', Admin\ColorController::class)
             ->parameters(['cores' => 'color'])
             ->except(['show', 'create', 'edit']);
@@ -136,7 +133,8 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
             ->name('definicoes.precos');
 
         // Sem `create`: o produto novo nasce no modal da propria listagem, que
-        // e onde se escolhem as cores e os tamanhos que geram as variantes. O
+        // e onde se cruzam as cores, os materiais e os tamanhos que geram as
+        // variantes. O
         // resto do formulario (etiquetas, IVA, SEO, destaque) vive no `edit`.
         Route::resource('produtos', Admin\ProductController::class)
             ->parameters(['produtos' => 'product'])

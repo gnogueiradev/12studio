@@ -6,7 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Pricing\PricingPreviewRequest;
 use App\Models\PrinterProfile;
 use App\Services\PricingPreview;
-use App\Support\ColorGroups;
+use App\Support\MaterialOptions;
 use App\Support\PricingInput;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -41,7 +41,7 @@ class PricingCalculatorController extends Controller
             'hourlyRateCents' => $preview['hourlyRateCents'],
             'usingFallbackRate' => $preview['usingFallbackRate'],
             'printers' => $this->printerOptions(),
-            'colorGroups' => ColorGroups::all($request->colorId()),
+            'materials' => MaterialOptions::all($request->materialId()),
             'modes' => $this->modeOptions(),
         ]);
     }

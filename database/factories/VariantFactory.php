@@ -20,6 +20,7 @@ class VariantFactory extends Factory
             'product_id' => Product::factory(),
             'sku' => strtoupper(fake()->unique()->bothify('SKU-####-??')),
             'color_id' => null,
+            'material_id' => null,
             'size_label' => null,
             'price_cents' => fake()->numberBetween(500, 9900),
             'compare_at_cents' => null,

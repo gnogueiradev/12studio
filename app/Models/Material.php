@@ -79,9 +79,16 @@ class Material extends Model
         return $this->isLowStock() ? 'low_stock' : 'active';
     }
 
-    /** @return HasMany<Color, $this> */
-    public function colors(): HasMany
+    /**
+     * O que depende desta bobine. Substitui a antiga relacao com as cores: uma
+     * cor deixou de pertencer a um material, e o que agora prende um material
+     * ao catalogo sao as variantes que se imprimem nele — e o que sustenta a
+     * regra de nunca o apagar.
+     *
+     * @return HasMany<Variant, $this>
+     */
+    public function variants(): HasMany
     {
-        return $this->hasMany(Color::class);
+        return $this->hasMany(Variant::class);
     }
 }

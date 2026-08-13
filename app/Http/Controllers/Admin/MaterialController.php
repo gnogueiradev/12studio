@@ -5,18 +5,19 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Material\StoreMaterialRequest;
 use App\Http\Requests\Material\UpdateMaterialRequest;
-use App\Models\Color;
 use App\Models\Material;
 use App\Services\MaterialService;
-use App\Support\ColorPalette;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * Material = familia de filamento (PLA, PETG). O preco por kg daqui e a base
- * do custo de cada peca; cada cor pode fazer override do seu.
+ * Material = a bobine (PLA, PETG). E ele que tem preco por kg, fornecedor e
+ * stock, e e daqui que sai o custo de filamento de cada peca.
+ *
+ * Nao tem cores: a cor e um eixo a parte, e o mesmo "Preto" imprime-se em
+ * qualquer material.
  */
 class MaterialController extends Controller
 {
@@ -28,7 +29,7 @@ class MaterialController extends Controller
     {
         /** @var Collection<int, Material> $materials */
         $materials = Material::query()
-            ->with(['colors' => fn ($query) => $query->where('is_active', true)->orderBy('sort_order')->orderBy('name')])
+            ->withCount('variants')
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get();
@@ -45,21 +46,12 @@ class MaterialController extends Controller
                 'active' => $material->active,
                 'sortOrder' => $material->sort_order,
                 'state' => $material->state(),
-                // Vao todas; o corte nos primeiros swatches e o "+N" sao
-                // decisao de apresentacao e ficam do lado do React.
-                'colors' => $material->colors
-                    ->map(fn (Color $color): array => [
-                        'name' => $color->name,
-                        'hex' => $color->hex_color,
-                    ])
-                    ->values(),
+                // Quantas variantes dependem desta bobine. Substitui os
+                // swatches de cor que aqui estavam: e o numero acionavel — diz
+                // se o material esta a ser usado e porque nao se apaga.
+                'variantsCount' => (int) $material->variants_count,
             ]),
             'stats' => $this->stats($materials),
-            // As chips do modal sao a paleta que o admin construiu em
-            // /admin/cores, nao uma lista fixa. Nao se chama `palette` por isso
-            // mesmo: neste projeto "paleta" sao os presets do FilamentPalette,
-            // e o formulario de nova cor continua a receber esses.
-            'colorOptions' => ColorPalette::all(),
             'families' => Material::FAMILIES,
         ]);
     }

@@ -2,9 +2,10 @@
 
 namespace Tests\Feature\Admin;
 
-use App\Models\Color;
 use App\Models\Material;
+use App\Models\Product;
 use App\Models\User;
+use App\Models\Variant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
@@ -86,133 +87,41 @@ class MaterialIndexTest extends TestCase
                 ->where('stats.activeCount', 0));
     }
 
-    public function test_only_active_colours_become_swatches(): void
+    /**
+     * O numero acionavel que substituiu os swatches de cor: quantas variantes
+     * dependem desta bobine, e portanto porque e que ela nao se apaga.
+     */
+    public function test_each_material_carries_how_many_variants_depend_on_it(): void
     {
-        $material = Material::factory()->create();
-        Color::factory()->create(['material_id' => $material->id, 'name' => 'Preto', 'sort_order' => 0]);
-        Color::factory()->create(['material_id' => $material->id, 'name' => 'Branco', 'is_active' => false]);
+        $pla = Material::factory()->create(['name' => 'PLA', 'sort_order' => 1]);
+        Material::factory()->create(['name' => 'PETG', 'sort_order' => 2]);
+
+        $product = Product::factory()->create();
+        Variant::factory()->count(2)->create([
+            'product_id' => $product->id,
+            'material_id' => $pla->id,
+        ]);
 
         $this->actingAs($this->admin)
             ->get(route('admin.materiais.index'))
             ->assertInertia(fn (Assert $page) => $page
-                ->has('materials.0.colors', 1)
-                ->where('materials.0.colors.0.name', 'Preto'));
+                ->where('materials.0.name', 'PLA')
+                ->where('materials.0.variantsCount', 2)
+                ->where('materials.1.name', 'PETG')
+                ->where('materials.1.variantsCount', 0));
     }
 
     /**
-     * Instalacao nova: sem uma unica cor as chips seriam zero, e o modal exige
-     * pelo menos uma para criar o material. Os presets sao a rede.
+     * As cores sairam desta pagina com o desacoplamento — a prop `colorOptions`
+     * deixou de existir. As familias ficam.
      */
-    public function test_the_modal_falls_back_to_the_presets_without_colours(): void
+    public function test_the_listing_carries_the_families_and_no_colours(): void
     {
         $this->actingAs($this->admin)
             ->get(route('admin.materiais.index'))
             ->assertInertia(fn (Assert $page) => $page
-                ->has('colorOptions', 8)
-                ->where('colorOptions.0.name', 'Preto')
-                ->where('colorOptions.0.hex', '#1A1715')
-                ->where('families', Material::FAMILIES));
-    }
-
-    /**
-     * O que o modal oferece sao as cores que o admin criou, agrupadas pelo nome
-     * — a mesma camada que /admin/cores mostra.
-     */
-    public function test_the_modal_offers_the_colours_already_created(): void
-    {
-        $pla = Material::factory()->create(['name' => 'PLA']);
-        $petg = Material::factory()->create(['name' => 'PETG']);
-
-        Color::factory()->create(['material_id' => $pla->id, 'name' => 'Preto', 'hex_color' => '#1A1715']);
-        Color::factory()->create(['material_id' => $petg->id, 'name' => 'Preto', 'hex_color' => '#1A1715']);
-        Color::factory()->create(['material_id' => $pla->id, 'name' => 'Bege', 'hex_color' => '#C6A77B']);
-
-        $this->actingAs($this->admin)
-            ->get(route('admin.materiais.index'))
-            ->assertInertia(fn (Assert $page) => $page
-                // "Preto" existe em dois materiais e continua a ser uma entrada.
-                ->has('colorOptions', 2)
-                ->where('colorOptions.0.name', 'Bege')
-                ->where('colorOptions.0.hex', '#C6A77B')
-                ->where('colorOptions.1.name', 'Preto'));
-    }
-
-    /**
-     * O fallback e exclusivo, nao uma uniao: basta uma cor a serio para os
-     * presets sairem de cena.
-     */
-    public function test_the_presets_disappear_once_there_is_a_colour(): void
-    {
-        Color::factory()->create(['name' => 'Rosa neon']);
-
-        $this->actingAs($this->admin)
-            ->get(route('admin.materiais.index'))
-            ->assertInertia(fn (Assert $page) => $page
-                ->has('colorOptions', 1)
-                ->where('colorOptions.0.name', 'Rosa neon'));
-    }
-
-    /**
-     * Arquivada em todos os materiais e o que /admin/cores mostra como
-     * arquivada. Oferece-la no modal era ressuscita-la pela porta das traseiras.
-     */
-    public function test_a_colour_archived_everywhere_is_not_offered(): void
-    {
-        Color::factory()->archived()->create(['name' => 'Cinza pedra']);
-        Color::factory()->archived()->create(['name' => 'Cinza pedra']);
-        Color::factory()->create(['name' => 'Preto']);
-
-        $this->actingAs($this->admin)
-            ->get(route('admin.materiais.index'))
-            ->assertInertia(fn (Assert $page) => $page
-                ->has('colorOptions', 1)
-                ->where('colorOptions.0.name', 'Preto'));
-    }
-
-    /**
-     * Ja arquivada so nalguns materiais, o grupo continua vivo — o `is_active`
-     * e por par cor×material.
-     */
-    public function test_a_colour_archived_in_one_material_is_still_offered(): void
-    {
-        Color::factory()->create(['name' => 'Preto']);
-        Color::factory()->archived()->create(['name' => 'Preto']);
-
-        $this->actingAs($this->admin)
-            ->get(route('admin.materiais.index'))
-            ->assertInertia(fn (Assert $page) => $page->has('colorOptions', 1));
-    }
-
-    /**
-     * Divergencia deliberada face ao ColorGroups, que filtra materiais
-     * arquivados: aqui escolhem-se NOMES para um material que ainda nao existe,
-     * e /admin/cores tambem mostra esta cor como activa.
-     */
-    public function test_a_colour_of_an_archived_material_is_still_offered(): void
-    {
-        $material = Material::factory()->archived()->create();
-
-        Color::factory()->create(['material_id' => $material->id, 'name' => 'Preto']);
-
-        $this->actingAs($this->admin)
-            ->get(route('admin.materiais.index'))
-            ->assertInertia(fn (Assert $page) => $page->has('colorOptions', 1));
-    }
-
-    /**
-     * O indice unico e por material, por isso o mesmo nome pode ter hex
-     * diferentes. Ganha o da linha mais antiga: e o unico criterio que nao muda
-     * quando se acrescenta ou arquiva um material.
-     */
-    public function test_the_chip_uses_the_hex_of_the_oldest_row(): void
-    {
-        Color::factory()->create(['name' => 'Terracota', 'hex_color' => '#B0684A']);
-        Color::factory()->create(['name' => 'Terracota', 'hex_color' => '#B06A4C']);
-
-        $this->actingAs($this->admin)
-            ->get(route('admin.materiais.index'))
-            ->assertInertia(fn (Assert $page) => $page
-                ->where('colorOptions.0.hex', '#B0684A'));
+                ->where('families', Material::FAMILIES)
+                ->missing('colorOptions'));
     }
 
     public function test_non_admins_cannot_see_the_listing(): void

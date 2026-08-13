@@ -2,7 +2,7 @@
 
 namespace App\Http\Requests\Pricing;
 
-use App\Models\Color;
+use App\Models\Material;
 use App\Support\Money;
 use App\Support\PricingInput;
 use Illuminate\Foundation\Http\FormRequest;
@@ -57,7 +57,7 @@ class PricingPreviewRequest extends FormRequest
             'price_per_kg' => ['nullable', 'numeric', 'min:0', 'max:9999.99'],
             'extra_cost' => ['nullable', 'numeric', 'min:0', 'max:9999.99'],
             'quantity' => ['nullable', 'integer', 'min:1', 'max:9999'],
-            'color_id' => ['nullable', 'integer', Rule::exists('colors', 'id')],
+            'material_id' => ['nullable', 'integer', Rule::exists('materials', 'id')],
             'printer_profile_id' => ['nullable', 'integer', Rule::exists('printer_profiles', 'id')],
         ];
     }
@@ -75,7 +75,7 @@ class PricingPreviewRequest extends FormRequest
             'price_per_kg' => 'preço por kg',
             'extra_cost' => 'custos adicionais',
             'quantity' => 'quantidade',
-            'color_id' => 'cor',
+            'material_id' => 'material',
             'printer_profile_id' => 'impressora',
         ];
     }
@@ -112,9 +112,9 @@ class PricingPreviewRequest extends FormRequest
         return is_string($value) || is_numeric($value) ? Money::fromDecimal((string) $value) : 0;
     }
 
-    public function colorId(): ?int
+    public function materialId(): ?int
     {
-        $value = $this->input('color_id');
+        $value = $this->input('material_id');
 
         return is_numeric($value) ? (int) $value : null;
     }
@@ -129,21 +129,21 @@ class PricingPreviewRequest extends FormRequest
     /**
      * Preco por kg do filamento.
      *
-     * A COR manda quando ha uma escolhida: e ela que conhece o override sobre o
-     * material (Color::effectivePricePerKgCents), e deixar o cliente mandar o
-     * numero abria a porta a um preco de custo que nao corresponde a nenhum
-     * filamento que exista. Sem cor, vale o que o admin escreveu — a
-     * calculadora tambem serve para simular filamento que ainda nao se comprou.
+     * O MATERIAL manda quando ha um escolhido, porque e a bobine que tem preco
+     * — a cor e so um tom. Deixar o cliente mandar o numero abria a porta a um
+     * preco de custo que nao corresponde a filamento nenhum que exista. Sem
+     * material, vale o que o admin escreveu: a calculadora tambem serve para
+     * simular filamento que ainda nao se comprou.
      */
     public function pricePerKgCents(): int
     {
-        $colorId = $this->colorId();
+        $materialId = $this->materialId();
 
-        if ($colorId !== null) {
-            $color = Color::query()->with('material')->find($colorId);
+        if ($materialId !== null) {
+            $material = Material::query()->find($materialId);
 
-            if ($color !== null) {
-                return $color->effectivePricePerKgCents();
+            if ($material !== null) {
+                return $material->price_per_kg_cents;
             }
         }
 
@@ -173,7 +173,7 @@ class PricingPreviewRequest extends FormRequest
      *     price_per_kg: string,
      *     extra_cost: string,
      *     quantity: int,
-     *     color_id: int|null,
+     *     material_id: int|null,
      *     printer_profile_id: int|null,
      * }
      */
@@ -187,7 +187,7 @@ class PricingPreviewRequest extends FormRequest
             'price_per_kg' => Money::toDecimal($this->pricePerKgCents()),
             'extra_cost' => Money::toDecimal($this->extraCostCents()),
             'quantity' => $this->quantity(),
-            'color_id' => $this->colorId(),
+            'material_id' => $this->materialId(),
             'printer_profile_id' => $this->printerProfileId(),
         ];
     }

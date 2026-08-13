@@ -52,7 +52,6 @@ class PricingPreview
                 extraCostCents: $request->extraCostCents(),
                 quantity: $request->quantity(),
                 printerProfileId: $printer?->id,
-                colorId: $request->colorId(),
             ))->toArray()
             : null;
 

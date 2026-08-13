@@ -176,7 +176,8 @@ class ProductIndexTest extends TestCase
             ->get(route('admin.produtos.index'))
             ->assertInertia(fn (Assert $page) => $page
                 ->has('categories', 1)
-                ->has('colorGroups')
+                ->has('colors')
+                ->has('materials')
                 ->has('defaultVatRate'));
     }
 

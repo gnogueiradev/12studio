@@ -27,7 +27,8 @@ import { cn } from '@/lib/utils';
 import { store } from '@/routes/admin/produtos';
 import type {
     CategoryOption,
-    ColorGroup,
+    ColorOption,
+    MaterialOption,
     ProductQuickFormData,
 } from '@/types/catalog';
 import { FULFILLMENT_MODES } from '@/types/catalog';
@@ -37,7 +38,8 @@ type Props = {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     categories: CategoryOption[];
-    colorGroups: ColorGroup[];
+    colors: ColorOption[];
+    materials: MaterialOption[];
     defaultVatRate: number;
     /** Calculado no servidor, recarregado em `only: ['pricingPreview']`. */
     pricingPreview: { result: PricingBreakdown | null };
@@ -64,16 +66,21 @@ const MODE_HINTS: Record<string, string> = {
 /**
  * Criar um produto e as suas variantes de uma vez.
  *
- * O design cruza Material × Cor como dois eixos independentes, mas na base de
- * dados uma cor PERTENCE a um material — "TPU × Dourado" pode não existir. Por
- * isso as chips de material FILTRAM a paleta em vez de multiplicarem: a matriz
- * real é cores × tamanhos, e todas as combinações que ela gera são válidas.
+ * A matriz é Cor × Material × Tamanho — três eixos que se MULTIPLICAM. Nem
+ * sempre foi assim: enquanto uma cor pertenceu a um material, "TPU × Dourado"
+ * podia não existir, e as chips de material limitavam-se a filtrar a paleta. Com
+ * a ligação fora, qualquer cor imprime-se em qualquer bobine e todas as
+ * combinações que a matriz gera são válidas por construção.
+ *
+ * Cor e material são obrigatórios; o tamanho não. São eles que definem uma peça
+ * imprimível — que tom, e em que filamento.
  */
 export function ProductCreateDialog({
     open,
     onOpenChange,
     categories,
-    colorGroups,
+    colors,
+    materials,
     defaultVatRate,
     pricingPreview,
 }: Props) {
@@ -88,18 +95,13 @@ export function ProductCreateDialog({
             vat_rate: defaultVatRate,
             variants: {
                 color_ids: [],
+                material_ids: [],
                 sizes: [],
                 price: '',
                 filament_weight_grams: null,
                 printing_time_minutes: null,
             },
         });
-
-    /*
-     * Materiais escolhidos vivem fora do formulário: não são um campo, são a
-     * lente sobre a paleta. Vazio = mostrar tudo.
-     */
-    const [selectedMaterials, setSelectedMaterials] = useState<string[]>([]);
 
     /*
      * "Publicar" também não é um campo — é o que decide, no envio, se o
@@ -109,19 +111,16 @@ export function ProductCreateDialog({
     const [publish, setPublish] = useState(false);
 
     const colorsById = useMemo(
+        () => new Map(colors.map((color) => [color.id, color] as const)),
+        [colors],
+    );
+
+    const materialsById = useMemo(
         () =>
             new Map(
-                colorGroups.flatMap((group) =>
-                    group.colors.map(
-                        (color) =>
-                            [
-                                color.id,
-                                { ...color, material: group.material },
-                            ] as const,
-                    ),
-                ),
+                materials.map((material) => [material.id, material] as const),
             ),
-        [colorGroups],
+        [materials],
     );
 
     const setVariants = (changes: Partial<ProductQuickFormData['variants']>) =>
@@ -132,88 +131,57 @@ export function ProductCreateDialog({
             ? list.filter((item) => item !== value)
             : [...list, value];
 
-    const visibleColors = colorGroups
-        .filter(
-            (group) =>
-                selectedMaterials.length === 0 ||
-                selectedMaterials.includes(group.material),
-        )
-        .flatMap((group) => group.colors);
-
-    /**
-     * Desligar um material tira também as suas cores da seleção. Sem isto
-     * ficavam cores escolhidas fora de vista a gerar variantes que já ninguém
-     * via na matriz.
-     */
-    const toggleMaterial = (material: string) => {
-        const next = toggle(selectedMaterials, material);
-
-        setSelectedMaterials(next);
-
-        if (next.length > 0) {
-            setVariants({
-                color_ids: data.variants.color_ids.filter((id) =>
-                    next.includes(colorsById.get(id)?.material ?? ''),
-                ),
-            });
-        }
-    };
-
     /*
-     * A mesma ordem que o ProductService usa para gerar (cores por fora,
-     * tamanhos por dentro), para a pré-visualização não prometer uma coisa e
-     * as variantes saírem por outra.
-     *
-     * O material entra na etiqueta quando a seleção atravessa mais do que um:
-     * "Preto" existe em PLA e em PETG, e duas linhas iguais na matriz não
-     * diriam qual é qual.
+     * A mesma ordem que o ProductService usa para gerar (cor por fora, material
+     * no meio, tamanho por dentro), para a pré-visualização não prometer uma
+     * coisa e as variantes saírem por outra.
      */
     const combos = useMemo(() => {
         const sizes = data.variants.sizes.length ? data.variants.sizes : [null];
-        const mixedMaterials =
-            new Set(
-                data.variants.color_ids.map(
-                    (id) => colorsById.get(id)?.material,
-                ),
-            ).size > 1;
 
-        return data.variants.color_ids.flatMap((colorId) => {
-            const color = colorsById.get(colorId);
-
-            return sizes.map((size) => ({
-                key: `${colorId}-${size ?? ''}`,
-                label: [
-                    mixedMaterials
-                        ? `${color?.material} ${color?.name}`
-                        : color?.name,
-                    size,
-                ]
-                    .filter((part) => part !== null && part !== undefined)
-                    .join(' · '),
-            }));
-        });
-    }, [data.variants.color_ids, data.variants.sizes, colorsById]);
+        return data.variants.color_ids.flatMap((colorId) =>
+            data.variants.material_ids.flatMap((materialId) =>
+                sizes.map((size) => ({
+                    key: `${colorId}-${materialId}-${size ?? ''}`,
+                    label: [
+                        colorsById.get(colorId)?.name,
+                        materialsById.get(materialId)?.name,
+                        size,
+                    ]
+                        .filter((part) => part !== null && part !== undefined)
+                        .join(' · '),
+                })),
+            ),
+        );
+    }, [
+        data.variants.color_ids,
+        data.variants.material_ids,
+        data.variants.sizes,
+        colorsById,
+        materialsById,
+    ]);
 
     const priceCents = inputToCents(data.variants.price);
     const grams = data.variants.filament_weight_grams ?? 0;
     const minutes = data.variants.printing_time_minutes ?? 0;
 
     /*
-     * A cor mais cara das escolhidas: a matriz gera uma variante por cor, e o
-     * preço tem de cobrir a mais cara delas.
+     * O material mais caro dos escolhidos: a matriz gera uma variante por
+     * material, e o preço tem de cobrir o mais caro deles. A cor não entra na
+     * conta — não tem preço.
      */
-    const dearestColorId = data.variants.color_ids.reduce<number | null>(
+    const dearestMaterialId = data.variants.material_ids.reduce<number | null>(
         (dearest, id) =>
-            (colorsById.get(id)?.pricePerKgCents ?? 0) >
+            (materialsById.get(id)?.pricePerKgCents ?? 0) >
             (dearest === null
                 ? -1
-                : (colorsById.get(dearest)?.pricePerKgCents ?? 0))
+                : (materialsById.get(dearest)?.pricePerKgCents ?? 0))
                 ? id
                 : dearest,
         null,
     );
 
-    const canSuggest = grams > 0 && minutes > 0 && dearestColorId !== null;
+    const canSuggest = grams > 0 && minutes > 0 && dearestMaterialId !== null;
 
     /*
      * O preço sugerido vem do SERVIDOR, com o mesmo motor da calculadora — não
@@ -227,7 +195,7 @@ export function ProductCreateDialog({
                 weight_grams: grams,
                 hours: Math.floor(minutes / 60),
                 minutes: minutes % 60,
-                color_id: dearestColorId,
+                material_id: dearestMaterialId,
             },
         });
 
@@ -239,10 +207,12 @@ export function ProductCreateDialog({
             ? priceCents - suggestion.productionCostCents
             : null;
 
+    // Cor E material, a espelhar o ProductService::generateVariants().
     const canCreate =
         data.name.trim() !== '' &&
         priceCents > 0 &&
-        data.variants.color_ids.length > 0;
+        data.variants.color_ids.length > 0 &&
+        data.variants.material_ids.length > 0;
 
     const messages = errors as Record<string, string>;
     const variantsError = Object.entries(messages).find(([key]) =>
@@ -255,7 +225,6 @@ export function ProductCreateDialog({
         post(store().url, {
             onSuccess: () => {
                 reset();
-                setSelectedMaterials([]);
                 setPublish(false);
                 onOpenChange(false);
             },
@@ -268,7 +237,7 @@ export function ProductCreateDialog({
                 <DialogHeader className="border-b border-border/60 p-6">
                     <DialogTitle>Novo produto</DialogTitle>
                     <DialogDescription>
-                        Escolhe as cores e os tamanhos — as variantes são
+                        Cruza cores, materiais e tamanhos — as variantes são
                         criadas automaticamente.
                     </DialogDescription>
                 </DialogHeader>
@@ -500,8 +469,8 @@ export function ProductCreateDialog({
                                 </span>
                                 <span className="mt-0.5 block text-xs text-muted-foreground">
                                     {suggestion
-                                        ? 'Material, máquina, manuseamento e risco — a cor mais cara das escolhidas.'
-                                        : 'Preenche a gramagem, o tempo e uma cor para calcular.'}
+                                        ? 'Material, máquina, manuseamento e risco — o material mais caro dos escolhidos.'
+                                        : 'Preenche a gramagem, o tempo e um material para calcular.'}
                                 </span>
                             </span>
                             <span className="text-lg font-semibold tabular-nums">
@@ -598,45 +567,20 @@ export function ProductCreateDialog({
                             </p>
                         </div>
 
-                        {colorGroups.length === 0 ? (
+                        {colors.length === 0 || materials.length === 0 ? (
                             <p className="rounded-xl border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-                                Ainda não há cores ativas. Cria um material e
-                                uma cor antes de gerar variantes.
+                                {colors.length === 0
+                                    ? 'Ainda não há cores ativas. Cria uma antes de gerar variantes.'
+                                    : 'Ainda não há materiais ativos. Cria um antes de gerar variantes.'}
                             </p>
                         ) : (
                             <>
                                 <div className="grid gap-2">
                                     <span className="text-xs text-muted-foreground">
-                                        Material{' '}
-                                        <span className="opacity-70">
-                                            (filtra as cores)
-                                        </span>
-                                    </span>
-                                    <div className="flex flex-wrap gap-2">
-                                        {colorGroups.map((group) => (
-                                            <ToggleChip
-                                                key={group.material}
-                                                active={selectedMaterials.includes(
-                                                    group.material,
-                                                )}
-                                                onClick={() =>
-                                                    toggleMaterial(
-                                                        group.material,
-                                                    )
-                                                }
-                                            >
-                                                {group.material}
-                                            </ToggleChip>
-                                        ))}
-                                    </div>
-                                </div>
-
-                                <div className="grid gap-2">
-                                    <span className="text-xs text-muted-foreground">
                                         Cor
                                     </span>
                                     <div className="flex flex-wrap gap-2">
-                                        {visibleColors.map((color) => (
+                                        {colors.map((color) => (
                                             <ToggleChip
                                                 key={color.id}
                                                 active={data.variants.color_ids.includes(
@@ -659,6 +603,38 @@ export function ProductCreateDialog({
                                                     }}
                                                 />
                                                 {color.name}
+                                            </ToggleChip>
+                                        ))}
+                                    </div>
+                                </div>
+
+                                <div className="grid gap-2">
+                                    <span className="text-xs text-muted-foreground">
+                                        Material
+                                    </span>
+                                    <div className="flex flex-wrap gap-2">
+                                        {materials.map((material) => (
+                                            <ToggleChip
+                                                key={material.id}
+                                                active={data.variants.material_ids.includes(
+                                                    material.id,
+                                                )}
+                                                onClick={() =>
+                                                    setVariants({
+                                                        material_ids: toggle(
+                                                            data.variants
+                                                                .material_ids,
+                                                            material.id,
+                                                        ),
+                                                    })
+                                                }
+                                            >
+                                                {material.name}
+                                                <span className="text-muted-foreground tabular-nums">
+                                                    {formatCents(
+                                                        material.pricePerKgCents,
+                                                    )}
+                                                </span>
                                             </ToggleChip>
                                         ))}
                                     </div>
@@ -703,7 +679,7 @@ export function ProductCreateDialog({
                                     )}
                                 >
                                     {combos.length === 0
-                                        ? 'Escolhe pelo menos uma cor'
+                                        ? 'Escolhe pelo menos uma cor e um material'
                                         : combos.length === 1
                                           ? '1 variante vai ser criada'
                                           : `${combos.length} variantes vão ser criadas`}
@@ -712,6 +688,7 @@ export function ProductCreateDialog({
                                     <span className="text-xs text-muted-foreground">
                                         {[
                                             `${data.variants.color_ids.length} ${data.variants.color_ids.length === 1 ? 'cor' : 'cores'}`,
+                                            `${data.variants.material_ids.length} ${data.variants.material_ids.length === 1 ? 'material' : 'materiais'}`,
                                             data.variants.sizes.length === 0
                                                 ? null
                                                 : `${data.variants.sizes.length} ${data.variants.sizes.length === 1 ? 'tamanho' : 'tamanhos'}`,

@@ -5,7 +5,8 @@ import type { VariantPricingPreview } from '@/components/admin/variant-form';
 import { index } from '@/routes/admin/produtos';
 import { store } from '@/routes/admin/produtos/variantes';
 import type {
-    ColorGroup,
+    ColorOption,
+    MaterialOption,
     ProductSummary,
     VariantFormData,
 } from '@/types/catalog';
@@ -14,7 +15,8 @@ import type { PrinterProfileOption } from '@/types/pricing';
 type Props = {
     product: ProductSummary;
     suggestedSku: string;
-    colorGroups: ColorGroup[];
+    colors: ColorOption[];
+    materials: MaterialOption[];
     printers: PrinterProfileOption[];
     pricing: VariantPricingPreview;
 };
@@ -22,7 +24,8 @@ type Props = {
 export default function VariantsCreate({
     product,
     suggestedSku,
-    colorGroups,
+    colors,
+    materials,
     printers,
     pricing,
 }: Props) {
@@ -30,6 +33,7 @@ export default function VariantsCreate({
         useForm<VariantFormData>({
             sku: suggestedSku,
             color_id: null,
+            material_id: null,
             size_label: '',
             normal_price: '',
             sale_price: '',
@@ -64,7 +68,8 @@ export default function VariantsCreate({
                     processing={processing}
                     onSubmit={submit}
                     submitLabel="Criar variante"
-                    colorGroups={colorGroups}
+                    colors={colors}
+                    materials={materials}
                     printers={printers}
                     pricing={pricing}
                 />
