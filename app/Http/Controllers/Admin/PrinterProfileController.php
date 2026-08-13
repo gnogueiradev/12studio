@@ -7,7 +7,6 @@ use App\Http\Requests\Printer\StorePrinterProfileRequest;
 use App\Http\Requests\Printer\UpdatePrinterProfileRequest;
 use App\Models\PrinterProfile;
 use App\Services\PrinterProfileService;
-use App\Support\Money;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
@@ -64,21 +63,6 @@ class PrinterProfileController extends Controller
         return to_route('admin.impressoras.index');
     }
 
-    public function edit(PrinterProfile $printerProfile): Response
-    {
-        return Inertia::render('admin/impressoras/edit', [
-            'printer' => [
-                'id' => $printerProfile->id,
-                'name' => $printerProfile->name,
-                'hourlyRate' => Money::toDecimal($printerProfile->hourly_rate_cents),
-                'notes' => $printerProfile->notes,
-                'isDefault' => $printerProfile->is_default,
-                'active' => $printerProfile->active,
-                'sortOrder' => $printerProfile->sort_order,
-            ],
-        ]);
-    }
-
     public function update(UpdatePrinterProfileRequest $request, PrinterProfile $printerProfile): RedirectResponse
     {
         $this->profiles->update($printerProfile, $request->validated());
@@ -112,9 +96,10 @@ class PrinterProfileController extends Controller
     }
 
     /**
-     * Rota propria em vez de um campo do formulario de edicao: escolher a
-     * predefinida e um gesto de um clique na listagem, e obrigar a abrir a
-     * ficha da maquina para trocar um radio era ceremonia a mais.
+     * Rota propria em vez de um campo do formulario: escolher a predefinida e
+     * um gesto de um clique na listagem, e obrigar a abrir o modal da maquina
+     * para trocar uma caixa era ceremonia a mais. Por isso o `is_default` nao
+     * vai no payload do modal — quem manda nele e o botao da linha.
      */
     public function setDefault(PrinterProfile $printerProfile): RedirectResponse
     {

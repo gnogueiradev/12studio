@@ -108,11 +108,11 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
             ->name('cores.restaurar');
 
         // Perfis de impressora: o custo/hora de cada maquina, que e a parcela
-        // de tempo do preco de cada peca. Sem `create`: a impressora nova nasce
-        // no modal da propria listagem, como os materiais.
+        // de tempo do preco de cada peca. Sem `create` nem `edit`: a impressora
+        // nasce e edita-se no mesmo modal da listagem, como os materiais.
         Route::resource('impressoras', Admin\PrinterProfileController::class)
             ->parameters(['impressoras' => 'printer_profile'])
-            ->except(['show', 'create']);
+            ->except(['show', 'create', 'edit']);
 
         Route::patch('impressoras/{printer_profile}/restaurar', [Admin\PrinterProfileController::class, 'restore'])
             ->name('impressoras.restaurar');

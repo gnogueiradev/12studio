@@ -109,23 +109,18 @@ export type PrinterProfileStats = {
     averageRateCents: number;
 };
 
-export type PrinterProfileDetail = {
-    id: number;
-    name: string;
-    /** Decimais em euros ("0.50") — o formulário edita euros, a BD guarda cêntimos. */
-    hourlyRate: string;
-    notes: string | null;
-    isDefault: boolean;
-    active: boolean;
-    sortOrder: number;
-};
-
+/**
+ * O que o modal manda ao servidor, a criar e a editar.
+ *
+ * Sem `is_default` nem `active` de propósito: predefinir e arquivar são um
+ * clique na própria linha da listagem, e uma chave que não vai no pedido é uma
+ * coluna que o servidor não toca. Os euros do `hourly_rate` viram cêntimos no
+ * PrinterProfileService.
+ */
 export type PrinterProfileFormData = {
     name: string;
     hourly_rate: string;
     notes: string;
-    is_default: boolean;
-    active: boolean;
     sort_order: number;
 };
 
