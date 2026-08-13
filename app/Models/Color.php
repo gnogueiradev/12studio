@@ -6,24 +6,25 @@ use Database\Factories\ColorFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
 /**
+ * Uma cor e um nome e um tom. Nada mais.
+ *
+ * Nao tem material — o mesmo "Preto" imprime-se em PLA, PETG ou TPU — e nao tem
+ * preco: quem custa dinheiro e a bobine, e isso vive no Material.
+ *
  * @property int $id
- * @property int $material_id
  * @property string $name
  * @property string $hex_color
  * @property string|null $image
- * @property int|null $price_per_kg_cents
  * @property bool $is_active
  * @property int $sort_order
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
- * @property-read Material $material
  */
-#[Fillable(['material_id', 'name', 'hex_color', 'image', 'price_per_kg_cents', 'is_active', 'sort_order'])]
+#[Fillable(['name', 'hex_color', 'image', 'is_active', 'sort_order'])]
 class Color extends Model
 {
     /** @use HasFactory<ColorFactory> */
@@ -37,16 +38,9 @@ class Color extends Model
     protected function casts(): array
     {
         return [
-            'price_per_kg_cents' => 'integer',
             'is_active' => 'boolean',
             'sort_order' => 'integer',
         ];
-    }
-
-    /** @return BelongsTo<Material, $this> */
-    public function material(): BelongsTo
-    {
-        return $this->belongsTo(Material::class);
     }
 
     /** @return HasMany<Variant, $this> */
@@ -56,11 +50,15 @@ class Color extends Model
     }
 
     /**
-     * Preco por kg a usar no calculo de custo: o override da cor, se existir,
-     * senao o do material.
+     * Estado apresentavel da cor. Vive aqui e nao no controlador pelo mesmo
+     * motivo que o Material::state(): so ha um sitio a decidi-lo, e a listagem,
+     * a pastilha e os cartoes de topo leem todos por ele.
+     *
+     * Duas posicoes so: uma cor nao tem stock. Quem fica sem bobines e o
+     * material.
      */
-    public function effectivePricePerKgCents(): int
+    public function state(): string
     {
-        return $this->price_per_kg_cents ?? $this->material->price_per_kg_cents;
+        return $this->is_active ? 'active' : 'archived';
     }
 }

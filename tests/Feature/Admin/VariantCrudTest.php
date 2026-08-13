@@ -139,6 +139,22 @@ class VariantCrudTest extends TestCase
         $this->assertSame($color->id, Variant::query()->firstOrFail()->color_id);
     }
 
+    /**
+     * Cor e material sao eixos independentes: a variante aponta para os dois.
+     */
+    public function test_a_variant_can_be_given_a_material(): void
+    {
+        $material = Material::factory()->create();
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.produtos.variantes.store', $this->product), [
+                ...$this->validPayload(),
+                'material_id' => $material->id,
+            ]);
+
+        $this->assertSame($material->id, Variant::query()->firstOrFail()->material_id);
+    }
+
     public function test_initial_stock_is_recorded_as_a_movement(): void
     {
         $this->actingAs($this->admin)
@@ -234,21 +250,23 @@ class VariantCrudTest extends TestCase
     }
 
     /**
-     * O seletor de cor mostra as cores ativas agrupadas por material.
+     * Duas listas planas e independentes: as cores ativas de um lado, os
+     * materiais ativos do outro. Arquivados ficam de fora dos dois.
      */
-    public function test_the_create_page_groups_colours_by_material(): void
+    public function test_the_create_page_carries_active_colours_and_materials(): void
     {
-        $pla = Material::factory()->create(['name' => 'PLA']);
-        Color::factory()->count(2)->create(['material_id' => $pla->id]);
-        Color::factory()->archived()->create(['material_id' => $pla->id]);
+        Color::factory()->count(2)->create();
+        Color::factory()->archived()->create();
+        Material::factory()->create(['name' => 'PLA']);
+        Material::factory()->archived()->create();
 
         $this->actingAs($this->admin)
             ->get(route('admin.produtos.variantes.create', $this->product))
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
-                ->has('colorGroups', 1)
-                ->where('colorGroups.0.material', 'PLA')
-                ->has('colorGroups.0.colors', 2));
+                ->has('colors', 2)
+                ->has('materials', 1)
+                ->where('materials.0.name', 'PLA'));
     }
 
     /**
@@ -268,9 +286,27 @@ class VariantCrudTest extends TestCase
             ->get(route('admin.variantes.edit', $variant))
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
-                ->has('colorGroups', 1)
-                ->where('colorGroups.0.colors.0.id', $color->id)
+                ->has('colors', 1)
+                ->where('colors.0.id', $color->id)
                 ->where('variant.colorId', $color->id));
+    }
+
+    /** A mesma rede, do lado do material. */
+    public function test_editing_keeps_an_archived_material_in_the_options(): void
+    {
+        $material = Material::factory()->archived()->create();
+        $variant = Variant::factory()->create([
+            'product_id' => $this->product->id,
+            'material_id' => $material->id,
+        ]);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.variantes.edit', $variant))
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->has('materials', 1)
+                ->where('materials.0.id', $material->id)
+                ->where('variant.materialId', $material->id));
     }
 
     public function test_destroy_archives_instead_of_deleting(): void

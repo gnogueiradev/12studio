@@ -16,6 +16,7 @@ use Illuminate\Support\Carbon;
  * @property int $product_id
  * @property string $sku
  * @property int|null $color_id
+ * @property int|null $material_id
  * @property string|null $size_label
  * @property int $price_cents
  * @property int|null $compare_at_cents
@@ -39,10 +40,11 @@ use Illuminate\Support\Carbon;
  * @property-read int $available_stock
  * @property-read Product $product
  * @property-read Color|null $color
+ * @property-read Material|null $material
  * @property-read PrinterProfile|null $printerProfile
  */
 #[Fillable([
-    'product_id', 'sku', 'color_id', 'size_label', 'price_cents',
+    'product_id', 'sku', 'color_id', 'material_id', 'size_label', 'price_cents',
     'compare_at_cents', 'wholesale_price_cents', 'stock', 'reserved_stock',
     'low_stock_threshold',
     'is_default', 'active', 'filament_weight_grams', 'printing_time_minutes',
@@ -72,6 +74,7 @@ class Variant extends Model
             'is_default' => 'boolean',
             'active' => 'boolean',
             'color_id' => 'integer',
+            'material_id' => 'integer',
             'filament_weight_grams' => 'integer',
             // Entram todos na calculadora de precos: sem cast, um "90" vindo
             // do SQLite chegava ao PricingInput como string.
@@ -91,6 +94,18 @@ class Variant extends Model
     public function color(): BelongsTo
     {
         return $this->belongsTo(Color::class);
+    }
+
+    /**
+     * O filamento em que esta variante e feita. Cor e material sao eixos
+     * independentes: e daqui — e nao da cor — que sai o preco/kg do calculo de
+     * custo.
+     *
+     * @return BelongsTo<Material, $this>
+     */
+    public function material(): BelongsTo
+    {
+        return $this->belongsTo(Material::class);
     }
 
     /**
@@ -134,8 +149,8 @@ class Variant extends Model
      * promocional" — por isso o formulario le por estes dois metodos, e a
      * traducao vive so aqui e no VariantService.
      *
-     * Metodos e nao acessores, como Color::effectivePricePerKgCents(): sao
-     * derivados, nao atributos, e nao tem de aparecer no toArray().
+     * Metodos e nao acessores, como Material::isLowStock(): sao derivados, nao
+     * atributos, e nao tem de aparecer no toArray().
      */
     public function normalPriceCents(): int
     {

@@ -78,7 +78,7 @@ export default function ProductsEdit({
         },
         {
             key: 'variação',
-            header: 'Cor / tamanho',
+            header: 'Cor / material / tamanho',
             className: 'text-muted-foreground',
             cell: (variant) => (
                 <span className="flex items-center gap-2">
@@ -88,8 +88,12 @@ export default function ProductsEdit({
                             <span>{variant.color.name}</span>
                         </>
                     )}
+                    {variant.material && <span>{variant.material.name}</span>}
                     {variant.sizeLabel && <span>{variant.sizeLabel}</span>}
-                    {!variant.color && !variant.sizeLabel && '—'}
+                    {!variant.color &&
+                        !variant.material &&
+                        !variant.sizeLabel &&
+                        '—'}
                 </span>
             ),
         },

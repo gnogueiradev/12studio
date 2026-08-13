@@ -3,7 +3,6 @@
 namespace Database\Factories;
 
 use App\Models\Color;
-use App\Models\Material;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -17,12 +16,16 @@ class ColorFactory extends Factory
     public function definition(): array
     {
         return [
-            'material_id' => Material::factory(),
-            'name' => fake()->unique()->colorName(),
+            /*
+             * Duas palavras e nao fake()->colorName(): o nome da cor passou a
+             * ser unico GLOBAL, e o dicionario de nomes de cor do Faker tem
+             * poucas dezenas de entradas — um teste que criasse trinta cores
+             * batia no indice por azar do sorteio. O `unique` vai na segunda
+             * palavra, que e o que chega para o nome inteiro nao repetir.
+             */
+            'name' => ucfirst(fake()->word()).' '.ucfirst(fake()->unique()->word()),
             'hex_color' => fake()->hexColor(),
             'image' => null,
-            // Null = herda o preco/kg do material (o caso normal).
-            'price_per_kg_cents' => null,
             'is_active' => true,
             'sort_order' => 0,
         ];

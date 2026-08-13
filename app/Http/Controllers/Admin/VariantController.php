@@ -11,7 +11,8 @@ use App\Models\Product;
 use App\Models\Variant;
 use App\Services\PricingPreview;
 use App\Services\VariantService;
-use App\Support\ColorGroups;
+use App\Support\ColorOptions;
+use App\Support\MaterialOptions;
 use App\Support\Money;
 use App\Support\VariantSku;
 use Illuminate\Http\RedirectResponse;
@@ -24,10 +25,11 @@ use Inertia\Response;
  * /admin/variantes/{variant}/edit. A listagem e a seccao "Variantes" da
  * pagina de edicao do produto.
  *
- * O formulario tem cor, gramagem, tempo de impressao, impressora e custos
- * extra — os cinco campos de que a calculadora precisa. A pre-visualizacao do
- * preco chega na prop `pricing` e recarrega-se sozinha (`only: ['pricing']`),
- * com o MESMO motor que calcula o preco gravado.
+ * O formulario tem cor, material, gramagem, tempo de impressao, impressora e
+ * custos extra. Cor e material sao eixos independentes, e e o MATERIAL que
+ * alimenta o custo de filamento — a cor nao tem preco. A pre-visualizacao chega
+ * na prop `pricing` e recarrega-se sozinha (`only: ['pricing']`), com o MESMO
+ * motor que calcula o preco gravado.
  */
 class VariantController extends Controller
 {
@@ -41,7 +43,8 @@ class VariantController extends Controller
         return Inertia::render('admin/variantes/create', [
             'product' => $this->productSummary($product),
             'suggestedSku' => VariantSku::next($product),
-            'colorGroups' => ColorGroups::all(),
+            'colors' => ColorOptions::all(),
+            'materials' => MaterialOptions::all(),
             'printers' => $this->printerOptions(),
             'pricing' => $this->preview->fromRequest($request),
         ]);
@@ -64,13 +67,15 @@ class VariantController extends Controller
 
         return Inertia::render('admin/variantes/edit', [
             'product' => $this->productSummary($variant->product),
-            'colorGroups' => ColorGroups::all($variant->color_id),
+            'colors' => ColorOptions::all($variant->color_id),
+            'materials' => MaterialOptions::all($variant->material_id),
             'printers' => $this->printerOptions(),
             'pricing' => $this->preview->fromRequest($request),
             'variant' => [
                 'id' => $variant->id,
                 'sku' => $variant->sku,
                 'colorId' => $variant->color_id,
+                'materialId' => $variant->material_id,
                 'sizeLabel' => $variant->size_label,
                 // Desfaz a troca normal/promocional que o VariantService faz
                 // na escrita — o formulario nunca ve `price_cents` cru.
@@ -140,7 +145,7 @@ class VariantController extends Controller
      */
     private function seedPreviewFromVariant(PricingPreviewRequest $request, Variant $variant): void
     {
-        if ($request->hasAny(['weight_grams', 'hours', 'minutes', 'color_id', 'printer_profile_id', 'extra_cost'])) {
+        if ($request->hasAny(['weight_grams', 'hours', 'minutes', 'material_id', 'printer_profile_id', 'extra_cost'])) {
             return;
         }
 
@@ -150,7 +155,7 @@ class VariantController extends Controller
             'weight_grams' => $variant->filament_weight_grams ?? 0,
             'hours' => intdiv($minutes, 60),
             'minutes' => $minutes % 60,
-            'color_id' => $variant->color_id,
+            'material_id' => $variant->material_id,
             'printer_profile_id' => $variant->printer_profile_id,
             'extra_cost' => Money::toDecimal($variant->extra_cost_cents ?? 0),
         ]);

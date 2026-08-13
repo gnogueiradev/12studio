@@ -3,9 +3,8 @@
 namespace App\Http\Requests\Color;
 
 use App\Models\Color;
-use Illuminate\Contracts\Database\Query\Builder;
+use Closure;
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Rule;
 
 class StoreColorRequest extends FormRequest
 {
@@ -20,12 +19,6 @@ class StoreColorRequest extends FormRequest
 
     protected function prepareForValidation(): void
     {
-        $price = $this->input('price_per_kg');
-
-        if (is_string($price) && $price !== '') {
-            $this->merge(['price_per_kg' => str_replace(',', '.', $price)]);
-        }
-
         // O <input type="color"> devolve sempre minusculas com #, mas o admin
         // tambem cola "FF7A00" de um site de paletas.
         $hex = $this->input('hex_color');
@@ -41,35 +34,10 @@ class StoreColorRequest extends FormRequest
     public function rules(): array
     {
         return [
-            // A cor grava-se em leque: uma linha `colors` por material
-            // escolhido, todas com este nome e este hex.
-            'material_ids' => ['required', 'array', 'min:1'],
-            'material_ids.*' => ['integer', Rule::exists('materials', 'id')],
-            /*
-             * O nome tem de estar livre em CADA material escolhido — o indice
-             * colors_material_name_unique e por material, nao global.
-             *
-             * Duas excepcoes, e as duas sao o mesmo principio: so colide com o
-             * que esta VIVO noutra cor.
-             *   - As linhas do proprio grupo, porque sao elas que estao a ser
-             *     gravadas. Sem isto nenhuma cor se editava sem lhe mudar o
-             *     nome.
-             *   - As arquivadas, porque um nome arquivado nao esta ocupado —
-             *     esta a espera de voltar. O ColorService restaura essa linha
-             *     em vez de inserir uma nova, e recusar aqui era proibir
-             *     exactamente a operacao que ele sabe fazer.
-             */
-            'name' => [
-                'required', 'string', 'max:60',
-                Rule::unique('colors', 'name')
-                    ->whereIn('material_id', $this->materialIds())
-                    ->where(fn (Builder $query) => $query
-                        ->where('is_active', true)
-                        ->whereNotIn('id', $this->groupColorIds())),
-            ],
+            'name' => ['required', 'string', 'max:60', $this->nameIsFree(...)],
             // 6 digitos, ou 8 quando a cor tem alfa (a coluna aceita 9 chars).
             'hex_color' => ['required', 'string', 'regex:/^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/'],
-            'price_per_kg' => ['nullable', 'numeric', 'min:0', 'max:9999.99'],
+            'sort_order' => ['integer', 'min:0', 'max:65535'],
         ];
     }
 
@@ -80,9 +48,6 @@ class StoreColorRequest extends FormRequest
     {
         return [
             'hex_color.regex' => 'A cor tem de ser um hexadecimal como #1A2B3C.',
-            'name.unique' => 'Um dos materiais escolhidos já tem uma cor com este nome.',
-            'material_ids.required' => 'Escolhe pelo menos um material onde esta cor existe.',
-            'material_ids.min' => 'Escolhe pelo menos um material onde esta cor existe.',
         ];
     }
 
@@ -92,39 +57,51 @@ class StoreColorRequest extends FormRequest
     public function attributes(): array
     {
         return [
-            'material_ids' => 'materiais',
             'hex_color' => 'cor',
-            'price_per_kg' => 'preço por kg',
+            'sort_order' => 'ordem',
         ];
     }
 
     /**
-     * @return array<int, int>
+     * O nome e a identidade da cor e tem de estar livre em toda a tabela — o
+     * indice colors_name_unique e global e COLLATE NOCASE.
+     *
+     * Regra propria e nao `Rule::unique`: o `unique` acrescenta sempre um
+     * `name = <valor>` binario, e no SQLite isso deixava passar "preto" ao lado
+     * do "Preto" que ja la esta — para rebentar a seguir no INSERT, com um erro
+     * de base de dados no ecra de quem preencheu o formulario. Comparar em
+     * `lower()` e o que faz a validacao recusar exactamente o que o indice
+     * recusaria.
+     *
+     * Duas excepcoes, e as duas sao o mesmo principio: so colide com o que esta
+     * VIVO noutra cor.
+     *   - A propria cor em edicao, senao nenhuma se gravava sem lhe mudar o
+     *     nome.
+     *   - As arquivadas, porque um nome arquivado nao esta ocupado — esta a
+     *     espera de voltar. O ColorService restaura essa linha em vez de
+     *     inserir uma nova, e recusar aqui era proibir exactamente a operacao
+     *     que ele sabe fazer.
      */
-    protected function materialIds(): array
+    protected function nameIsFree(string $attribute, mixed $value, Closure $fail): void
     {
-        $ids = $this->input('material_ids');
+        $taken = Color::query()
+            ->where('is_active', true)
+            ->whereRaw('lower(name) = ?', [mb_strtolower(trim((string) $value))])
+            ->when($this->colorId() !== null, fn ($query) => $query->whereKeyNot($this->colorId()))
+            ->exists();
 
-        return is_array($ids) ? array_map('intval', array_values($ids)) : [];
+        if ($taken) {
+            $fail('Já existe uma cor com este nome.');
+        }
     }
 
     /**
-     * Linhas que ja pertencem a esta cor. Vazio no store; no update sai do
-     * representante que a rota vinculou, pelo nome — que e o que agrupa.
-     *
-     * @return array<int, int>
+     * Null no store; o id da cor em edicao no update.
      */
-    protected function groupColorIds(): array
+    protected function colorId(): ?int
     {
         $color = $this->route('color');
 
-        if (! $color instanceof Color) {
-            return [];
-        }
-
-        return Color::query()
-            ->where('name', $color->name)
-            ->pluck('id')
-            ->all();
+        return $color instanceof Color ? $color->id : null;
     }
 }

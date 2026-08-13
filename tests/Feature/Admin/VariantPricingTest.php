@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Admin;
 
-use App\Models\Color;
 use App\Models\Material;
 use App\Models\PrinterProfile;
 use App\Models\Product;
@@ -18,7 +17,7 @@ class VariantPricingTest extends TestCase
 
     private User $admin;
 
-    private Color $color;
+    private Material $material;
 
     protected function setUp(): void
     {
@@ -31,11 +30,7 @@ class VariantPricingTest extends TestCase
             'hourly_rate_cents' => 50,
         ]);
 
-        $material = Material::factory()->create(['price_per_kg_cents' => 1_700]);
-        $this->color = Color::factory()->create([
-            'material_id' => $material->id,
-            'price_per_kg_cents' => null,
-        ]);
+        $this->material = Material::factory()->create(['price_per_kg_cents' => 1_700]);
     }
 
     /**
@@ -46,7 +41,7 @@ class VariantPricingTest extends TestCase
     public function test_the_variant_form_shows_the_suggested_prices_on_first_open(): void
     {
         $variant = Variant::factory()->create([
-            'color_id' => $this->color->id,
+            'material_id' => $this->material->id,
             'filament_weight_grams' => 32,
             'printing_time_minutes' => 90,
         ]);
@@ -62,19 +57,16 @@ class VariantPricingTest extends TestCase
     }
 
     /**
-     * O preco por kg vem da cor da variante — e ela que conhece o override
-     * sobre o material. Um custo calculado com outro numero nao correspondia a
-     * filamento nenhum que exista em stock.
+     * O preco por kg vem do MATERIAL da variante: e a bobine que tem preco. Um
+     * custo calculado com outro numero nao correspondia a filamento nenhum que
+     * exista em stock.
      */
-    public function test_the_suggestion_uses_the_price_per_kg_of_the_chosen_colour(): void
+    public function test_the_suggestion_uses_the_price_per_kg_of_the_chosen_material(): void
     {
-        $expensive = Color::factory()->create([
-            'material_id' => Material::factory()->create(['price_per_kg_cents' => 1_700])->id,
-            'price_per_kg_cents' => 3_400,
-        ]);
+        $expensive = Material::factory()->create(['price_per_kg_cents' => 3_400]);
 
         $variant = Variant::factory()->create([
-            'color_id' => $expensive->id,
+            'material_id' => $expensive->id,
             'filament_weight_grams' => 32,
             'printing_time_minutes' => 90,
         ]);
@@ -92,7 +84,7 @@ class VariantPricingTest extends TestCase
         $fast = PrinterProfile::factory()->create(['hourly_rate_cents' => 100]);
 
         $variant = Variant::factory()->create([
-            'color_id' => $this->color->id,
+            'material_id' => $this->material->id,
             'filament_weight_grams' => 32,
             'printing_time_minutes' => 90,
             'printer_profile_id' => $fast->id,
@@ -115,7 +107,7 @@ class VariantPricingTest extends TestCase
     public function test_a_variant_without_a_print_time_gets_no_suggestion(): void
     {
         $variant = Variant::factory()->create([
-            'color_id' => $this->color->id,
+            'material_id' => $this->material->id,
             'filament_weight_grams' => 32,
             'printing_time_minutes' => null,
         ]);
@@ -132,7 +124,7 @@ class VariantPricingTest extends TestCase
     public function test_the_preview_recalculates_from_the_form_fields(): void
     {
         $variant = Variant::factory()->create([
-            'color_id' => $this->color->id,
+            'material_id' => $this->material->id,
             'filament_weight_grams' => 32,
             'printing_time_minutes' => 90,
         ]);
@@ -142,7 +134,7 @@ class VariantPricingTest extends TestCase
                 'weight_grams' => 32,
                 'hours' => 0,
                 'minutes' => 30,
-                'color_id' => $this->color->id,
+                'material_id' => $this->material->id,
             ]))
             ->assertInertia(fn (AssertableInertia $page) => $page
                 // Metade do tempo: o preco de revenda desce de 3,50 para 2,50.
@@ -158,7 +150,7 @@ class VariantPricingTest extends TestCase
         $this->actingAs($this->admin)
             ->post(route('admin.produtos.variantes.store', $product), [
                 'sku' => 'TEST-0001',
-                'color_id' => $this->color->id,
+                'material_id' => $this->material->id,
                 'normal_price' => '6.00',
                 'wholesale_price' => '3.50',
                 'filament_weight_grams' => 32,

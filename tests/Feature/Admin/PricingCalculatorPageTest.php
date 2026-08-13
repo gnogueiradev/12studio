@@ -2,7 +2,6 @@
 
 namespace Tests\Feature\Admin;
 
-use App\Models\Color;
 use App\Models\Material;
 use App\Models\PrinterProfile;
 use App\Models\User;
@@ -111,21 +110,20 @@ class PricingCalculatorPageTest extends TestCase
     }
 
     /**
-     * A cor manda no preco por kg quando ha uma escolhida: e ela que conhece o
-     * override sobre o material. Deixar o cliente mandar o numero abria a porta
-     * a um custo que nao corresponde a filamento nenhum que exista.
+     * O material manda no preco por kg quando ha um escolhido: e a bobine que
+     * tem preco. Deixar o cliente mandar o numero abria a porta a um custo que
+     * nao corresponde a filamento nenhum que exista.
      */
-    public function test_the_chosen_colour_overrides_the_typed_price_per_kg(): void
+    public function test_the_chosen_material_overrides_the_typed_price_per_kg(): void
     {
         $material = Material::factory()->create(['price_per_kg_cents' => 1_700]);
-        $color = Color::factory()->create(['material_id' => $material->id, 'price_per_kg_cents' => null]);
 
         $this->actingAs($this->admin)
             ->get(route('admin.calculadora', [
                 'weight_grams' => 32,
                 'hours' => 1,
                 'minutes' => 30,
-                'color_id' => $color->id,
+                'material_id' => $material->id,
                 'price_per_kg' => '99,00',
             ]))
             ->assertInertia(fn (AssertableInertia $page) => $page

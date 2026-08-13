@@ -13,7 +13,8 @@ use App\Models\Tag;
 use App\Models\Variant;
 use App\Services\PricingPreview;
 use App\Services\ProductService;
-use App\Support\ColorGroups;
+use App\Support\ColorOptions;
+use App\Support\MaterialOptions;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -102,7 +103,8 @@ class ProductController extends Controller
             'statusCounts' => $statusCounts,
             // Listas do modal de novo produto, que vive nesta pagina.
             'categories' => $this->categoryOptions(),
-            'colorGroups' => ColorGroups::all(),
+            'colors' => ColorOptions::all(),
+            'materials' => MaterialOptions::all(),
             'defaultVatRate' => (int) config('shop.default_vat_rate', 23),
             'pricingPreview' => $this->preview->fromRequest($pricing),
         ]);
@@ -185,7 +187,7 @@ class ProductController extends Controller
     private function variantRows(Product $product): array
     {
         return $product->variants()
-            ->with('color.material')
+            ->with(['color', 'material'])
             ->orderByDesc('is_default')
             ->orderBy('sku')
             ->get()
@@ -197,7 +199,13 @@ class ProductController extends Controller
                     'id' => $variant->color->id,
                     'name' => $variant->color->name,
                     'hex' => $variant->color->hex_color,
-                    'material' => $variant->color->material->name,
+                ],
+                // Ao lado da cor e nao dentro dela: sao dois eixos, e o
+                // material chegava aqui atraves da cor so porque a cor lhe
+                // pertencia.
+                'material' => $variant->material === null ? null : [
+                    'id' => $variant->material->id,
+                    'name' => $variant->material->name,
                 ],
                 'priceCents' => $variant->price_cents,
                 'compareAtCents' => $variant->compare_at_cents,

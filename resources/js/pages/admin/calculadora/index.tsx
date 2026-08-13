@@ -1,6 +1,5 @@
 import { Head, Link, router } from '@inertiajs/react';
 import { useEffect, useRef, useState } from 'react';
-import { ColorSwatch } from '@/components/admin/color-swatch';
 import { PageHeader } from '@/components/admin/page-header';
 import { Panel } from '@/components/admin/panel';
 import { PricingBreakdown } from '@/components/admin/pricing-breakdown';
@@ -9,9 +8,7 @@ import { Label } from '@/components/ui/label';
 import {
     Select,
     SelectContent,
-    SelectGroup,
     SelectItem,
-    SelectLabel,
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
@@ -20,7 +17,7 @@ import type { Option } from '@/lib/options';
 import { cn } from '@/lib/utils';
 import { calculadora } from '@/routes/admin';
 import { index as impressorasIndex } from '@/routes/admin/impressoras';
-import type { ColorGroup } from '@/types/catalog';
+import type { MaterialOption } from '@/types/catalog';
 import type {
     PricingBreakdown as Breakdown,
     PricingFormFields,
@@ -36,11 +33,11 @@ type Props = {
     hourlyRateCents: number;
     usingFallbackRate: boolean;
     printers: PrinterProfileOption[];
-    colorGroups: ColorGroup[];
+    materials: MaterialOption[];
     modes: Option[];
 };
 
-const NO_COLOR = 'none';
+const NO_MATERIAL = 'none';
 
 /**
  * Espera antes de pedir um novo cálculo. Curto o suficiente para parecer ao
@@ -66,7 +63,7 @@ export default function CalculadoraIndex({
     hourlyRateCents,
     usingFallbackRate,
     printers,
-    colorGroups,
+    materials,
     modes,
 }: Props) {
     const [fields, setFields] = useState<PricingFormFields>(inputs);
@@ -114,7 +111,7 @@ export default function CalculadoraIndex({
 
     const printer = printers.find((p) => p.id === fields.printer_profile_id);
     const isBatch = fields.mode === PRICING_MODES.batch;
-    const hasColors = colorGroups.length > 0;
+    const hasMaterials = materials.length > 0;
 
     return (
         <>
@@ -170,50 +167,51 @@ export default function CalculadoraIndex({
                                 </p>
                             </div>
 
+                            {/*
+                             * Material e não cor: é a bobine que tem preço/kg.
+                             * O €/kg de cada uma aparece à direita, que é
+                             * precisamente aquilo sobre que se está a decidir.
+                             */}
                             <div className="grid gap-2">
-                                <Label>Cor / filamento</Label>
+                                <Label>Material / filamento</Label>
                                 <Select
                                     value={
-                                        fields.color_id === null
-                                            ? NO_COLOR
-                                            : String(fields.color_id)
+                                        fields.material_id === null
+                                            ? NO_MATERIAL
+                                            : String(fields.material_id)
                                     }
                                     onValueChange={(value) =>
                                         patch({
-                                            color_id:
-                                                value === NO_COLOR
+                                            material_id:
+                                                value === NO_MATERIAL
                                                     ? null
                                                     : Number(value),
                                         })
                                     }
-                                    disabled={!hasColors}
+                                    disabled={!hasMaterials}
                                 >
-                                    <SelectTrigger aria-label="Cor">
+                                    <SelectTrigger aria-label="Material">
                                         <SelectValue placeholder="Preço à mão" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        <SelectItem value={NO_COLOR}>
+                                        <SelectItem value={NO_MATERIAL}>
                                             Preço à mão
                                         </SelectItem>
-                                        {colorGroups.map((group) => (
-                                            <SelectGroup key={group.material}>
-                                                <SelectLabel>
-                                                    {group.material}
-                                                </SelectLabel>
-                                                {group.colors.map((color) => (
-                                                    <SelectItem
-                                                        key={color.id}
-                                                        value={String(color.id)}
-                                                    >
-                                                        <span className="flex items-center gap-2">
-                                                            <ColorSwatch
-                                                                hex={color.hex}
-                                                            />
-                                                            {color.name}
-                                                        </span>
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectGroup>
+                                        {materials.map((material) => (
+                                            <SelectItem
+                                                key={material.id}
+                                                value={String(material.id)}
+                                            >
+                                                <span className="flex items-center gap-2">
+                                                    {material.name}
+                                                    <span className="text-muted-foreground tabular-nums">
+                                                        {formatCents(
+                                                            material.pricePerKgCents,
+                                                        )}
+                                                        /kg
+                                                    </span>
+                                                </span>
+                                            </SelectItem>
                                         ))}
                                     </SelectContent>
                                 </Select>
@@ -234,12 +232,12 @@ export default function CalculadoraIndex({
                                             price_per_kg: event.target.value,
                                         })
                                     }
-                                    disabled={fields.color_id !== null}
+                                    disabled={fields.material_id !== null}
                                 />
-                                {fields.color_id !== null && (
+                                {fields.material_id !== null && (
                                     <p className="text-xs text-muted-foreground">
-                                        Vem da cor escolhida — é ela que conhece
-                                        o preço real do rolo.
+                                        Vem do material escolhido — é a bobine
+                                        que tem preço.
                                     </p>
                                 )}
                             </div>

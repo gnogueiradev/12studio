@@ -89,13 +89,19 @@ class ProductService
     }
 
     /**
-     * Matriz do modal de novo produto: cada cor escolhida cruzada com cada
-     * tamanho da uma variante, todas com o mesmo preco e a mesma gramagem.
-     * Sao um molde — o que difere entre variantes (stock, promocao, revenda)
-     * edita-se depois, uma a uma.
+     * Matriz do modal de novo produto: cor x material x tamanho, tres eixos
+     * independentes. Cada combinacao da uma variante, todas com o mesmo preco e
+     * a mesma gramagem. Sao um molde — o que difere entre variantes (stock,
+     * promocao, revenda) edita-se depois, uma a uma.
      *
-     * Sem tamanhos ha uma variante por cor. O `[null]` e o que faz o produto
+     * Cor e material sao obrigatorios: sao os dois que definem uma peca
+     * imprimivel — que tom, e em que filamento. Sem um deles nao ha matriz
+     * nenhuma. O tamanho e opcional, e o `[null]` e o que faz o produto
      * cartesiano degenerar nesse caso sem precisar de um segundo ramo.
+     *
+     * A ordem dos ciclos (cor por fora, material no meio, tamanho por dentro) e
+     * a mesma da pre-visualizacao do modal, em product-create-dialog.tsx. Se uma
+     * mudar sem a outra, a matriz que o admin viu deixa de ser a que se gravou.
      *
      * O stock entra sempre a zero: a primeira contagem tem de passar pelo
      * StockService para ficar registada como movimento `initial`.
@@ -110,8 +116,10 @@ class ProductService
 
         /** @var array<int, int> $colorIds */
         $colorIds = $seed['color_ids'] ?? [];
+        /** @var array<int, int> $materialIds */
+        $materialIds = $seed['material_ids'] ?? [];
 
-        if ($colorIds === []) {
+        if ($colorIds === [] || $materialIds === []) {
             return;
         }
 
@@ -122,8 +130,14 @@ class ProductService
         $combos = [];
 
         foreach ($colorIds as $colorId) {
-            foreach ($sizes as $size) {
-                $combos[] = ['color_id' => $colorId, 'size_label' => $size];
+            foreach ($materialIds as $materialId) {
+                foreach ($sizes as $size) {
+                    $combos[] = [
+                        'color_id' => $colorId,
+                        'material_id' => $materialId,
+                        'size_label' => $size,
+                    ];
+                }
             }
         }
 
