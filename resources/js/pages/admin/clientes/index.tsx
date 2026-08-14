@@ -1,4 +1,4 @@
-import { Head, router } from '@inertiajs/react';
+import { Head, router, usePage } from '@inertiajs/react';
 import { Search } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { AdminTable } from '@/components/admin/admin-table';
@@ -20,11 +20,12 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { Spinner } from '@/components/ui/spinner';
 import { formatCents } from '@/lib/money';
 import { label } from '@/lib/options';
 import type { Option } from '@/lib/options';
-import { edit, index } from '@/routes/admin/clientes';
-import type { CustomerRow } from '@/types/customer';
+import { index } from '@/routes/admin/clientes';
+import type { CustomerEditing, CustomerRow } from '@/types/customer';
 import { CUSTOMER_TYPES, initials } from '@/types/customer';
 import { SALES_CHANNELS } from '@/types/order';
 import type { Paginated } from '@/types/pagination';
@@ -53,6 +54,8 @@ type Props = {
     tagSuggestions: string[];
     /** Só as que algum cliente usa — as outras dariam zero resultados. */
     tagOptions: Option[];
+    /** O cliente pedido por `?editar={id}`, ou null a criar. */
+    editing: CustomerEditing | null;
 };
 
 // O Radix Select não aceita value="" — sentinela para "sem filtro".
@@ -79,9 +82,42 @@ export default function CustomersIndex({
     stats,
     tagSuggestions,
     tagOptions,
+    editing,
 }: Props) {
     const [search, setSearch] = useState(filters.search);
     const [creating, setCreating] = useState(false);
+
+    /*
+     * `?editar={id}` põe o modal de edição no URL, e é isso que o faz reabrir no
+     * cliente certo depois de gravar e sobreviver a uma recarga da página.
+     * Lido do `usePage().url` e não do `window.location` para o SSR não ir
+     * abaixo à procura de um `window` que lá não existe.
+     *
+     * O id é estado local e o cliente é uma prop: separá-los é o que impede o
+     * modal de abrir com os dados do cliente anterior enquanto o recarregamento
+     * parcial do novo ainda vem a caminho.
+     */
+    const { url } = usePage();
+    const [editingId, setEditingId] = useState<number | null>(
+        () => Number(url.match(/[?&]editar=(\d+)/)?.[1]) || null,
+    );
+    const [loadingId, setLoadingId] = useState<number | null>(null);
+
+    const openEdit = (id: number) => {
+        if (editing?.customer.id === id) {
+            setEditingId(id);
+
+            return;
+        }
+
+        setLoadingId(id);
+        router.reload({
+            only: ['editing'],
+            data: { editar: id },
+            onSuccess: () => setEditingId(id),
+            onFinish: () => setLoadingId(null),
+        });
+    };
 
     const applyFilters = (changes: Partial<Filters>) =>
         visit({ ...filters, search, ...changes });
@@ -123,7 +159,13 @@ export default function CustomersIndex({
                         {initials(customer.name)}
                     </span>
                     <div>
-                        <div className="font-medium">{customer.name}</div>
+                        <button
+                            type="button"
+                            onClick={() => openEdit(customer.id)}
+                            className="text-left font-medium hover:underline"
+                        >
+                            {customer.name}
+                        </button>
                         <div className="text-xs text-muted-foreground">
                             {customer.email ?? 'Sem email'}
                         </div>
@@ -178,6 +220,22 @@ export default function CustomersIndex({
             header: 'Total gasto',
             className: 'text-right tabular-nums',
             cell: (customer) => formatCents(customer.paidTotalCents),
+        },
+        {
+            key: 'actions',
+            header: '',
+            className: 'text-right',
+            cell: (customer) => (
+                <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={loadingId === customer.id}
+                    onClick={() => openEdit(customer.id)}
+                >
+                    {loadingId === customer.id && <Spinner />}
+                    Editar
+                </Button>
+            ),
         },
     ];
 
@@ -292,16 +350,30 @@ export default function CustomersIndex({
                     columns={columns}
                     rows={customers.data}
                     rowKey={(customer) => customer.id}
-                    rowHref={(customer) => edit(customer.id).url}
                     empty="Nenhum cliente com estes filtros."
                 />
 
                 <Pagination page={customers} noun="clientes" />
             </div>
 
+            {/*
+             * A `key` muda com o alvo para o modal remontar e o `useForm` voltar
+             * a ler a semente — é o que evita um `useEffect` a competir com o
+             * que o admin está a escrever.
+             */}
             <CustomerDialog
-                open={creating}
-                onOpenChange={setCreating}
+                key={editingId ?? 'new'}
+                open={
+                    creating ||
+                    (editingId !== null && editing?.customer.id === editingId)
+                }
+                onOpenChange={(open) => {
+                    if (!open) {
+                        setCreating(false);
+                        setEditingId(null);
+                    }
+                }}
+                editing={editingId === null ? null : editing}
                 tagSuggestions={tagSuggestions}
             />
         </>

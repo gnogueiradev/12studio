@@ -108,13 +108,13 @@ class CustomerTagTest extends TestCase
         $this->assertDatabaseCount('tags', 2);
     }
 
-    public function test_suggestions_on_the_edit_page_are_customer_only(): void
+    public function test_suggestions_in_the_edit_modal_are_customer_only(): void
     {
         Tag::query()->create(['scope' => Tag::SCOPE_PRODUCT, 'name' => 'natal', 'slug' => 'natal']);
         Tag::query()->create(['scope' => Tag::SCOPE_CUSTOMER, 'name' => 'revendedor', 'slug' => 'revendedor']);
 
         $this->actingAs($this->admin)
-            ->get(route('admin.clientes.edit', $this->customer()))
+            ->get(route('admin.clientes.index', ['editar' => $this->customer()->id]))
             ->assertInertia(fn ($page) => $page->where('tagSuggestions', ['revendedor']));
     }
 
