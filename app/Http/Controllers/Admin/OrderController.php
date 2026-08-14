@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Order\StoreManualOrderRequest;
+use App\Http\Requests\Order\UpdateOrderAdjustmentRequest;
 use App\Http\Requests\Order\UpdateOrderDetailsRequest;
 use App\Http\Requests\Order\UpdateOrderPaymentRequest;
 use App\Http\Requests\Order\UpdateOrderStatusRequest;
@@ -14,6 +15,7 @@ use App\Models\Tag;
 use App\Services\OrderService;
 use App\Services\TagService;
 use App\Support\ManualOrderOptions;
+use App\Support\Money;
 use App\Support\OrderPresenter;
 use App\Support\ShortDate;
 use Illuminate\Http\RedirectResponse;
@@ -193,6 +195,26 @@ class OrderController extends Controller
         }
 
         $this->toast('Pagamento atualizado.');
+
+        return back();
+    }
+
+    public function updateAdjustment(UpdateOrderAdjustmentRequest $request, Order $order): RedirectResponse
+    {
+        try {
+            $this->orderService->setAdjustment(
+                $order,
+                Money::fromDecimal($request->string('adjustment_price')->value()),
+                $request->input('adjustment_reason'),
+                $request->user(),
+            );
+        } catch (RuntimeException $exception) {
+            $this->toast($exception->getMessage(), 'error');
+
+            return back();
+        }
+
+        $this->toast('Total atualizado.');
 
         return back();
     }

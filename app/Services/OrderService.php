@@ -297,6 +297,71 @@ class OrderService
     }
 
     /**
+     * Ajuste ao valor final: um desconto acordado a posteriori (negativo) ou
+     * um extra combinado a parte (positivo).
+     *
+     * O `total_cents` continua a ser SEMPRE calculado — subtotal + portes +
+     * ajuste — e nunca escrito a mao. E ele que o dashboard e a ficha de
+     * cliente somam em SQL; guardar o ajuste sem o refletir aqui era pôr
+     * quatro agregacoes a aprender a soma-lo, cada uma podendo ficar para
+     * tras.
+     */
+    public function setAdjustment(
+        Order $order,
+        int $adjustmentCents,
+        ?string $reason,
+        ?User $by = null,
+    ): Order {
+        if (in_array($order->status, self::TERMINAL, true)) {
+            throw new RuntimeException('Uma encomenda cancelada ou reembolsada nao muda de valor.');
+        }
+
+        // Zero nao tem motivo: repor o ajuste apaga a justificacao com ele.
+        // Um motivo orfao, a explicar um desconto que ja nao existe, e pior
+        // do que motivo nenhum.
+        $reason = $adjustmentCents === 0 ? null : $reason;
+
+        if ($adjustmentCents === $order->adjustment_cents && $reason === $order->adjustment_reason) {
+            return $order;
+        }
+
+        $previousTotal = $order->total_cents;
+        $total = $order->subtotal_cents + $order->shipping_cents + $adjustmentCents;
+
+        if ($total < 0) {
+            throw new RuntimeException('O ajuste nao pode deixar o total negativo.');
+        }
+
+        DB::transaction(function () use ($order, $adjustmentCents, $reason, $previousTotal, $total, $by): void {
+            $order->update([
+                'adjustment_cents' => $adjustmentCents,
+                'adjustment_reason' => $reason,
+                'total_cents' => $total,
+            ]);
+
+            // `from === to`: isto nao e uma transicao de pipeline, e um
+            // evento a registar na mesma timeline — o setPaymentStatus usa
+            // exatamente o mesmo truque.
+            $this->recordOrderHistory(
+                $order,
+                $order->status,
+                $order->status,
+                $by,
+                trim(sprintf(
+                    'Total ajustado: %s -> %s (%s%s). %s',
+                    Money::toDecimal($previousTotal),
+                    Money::toDecimal($total),
+                    $adjustmentCents > 0 ? '+' : '',
+                    Money::toDecimal($adjustmentCents),
+                    $reason ?? '',
+                )),
+            );
+        });
+
+        return $order->refresh();
+    }
+
+    /**
      * Producao ao nivel do item. Quando o ultimo item fica pronto, a
      * encomenda avanca sozinha para ready_to_ship — e quando um item recua,
      * volta atras sozinha pelo mesmo motivo.
