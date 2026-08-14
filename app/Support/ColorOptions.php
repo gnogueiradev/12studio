@@ -19,20 +19,31 @@ use Illuminate\Database\Eloquent\Builder;
 class ColorOptions
 {
     /**
-     * As arquivadas ficam de fora — excepto a que a variante ja usa
-     * (`$keepColorId`), senao o seletor abria vazio e uma gravacao inocente
-     * perdia a cor.
+     * As arquivadas ficam de fora — excepto as que as variantes ja usam
+     * (`$keep`), senao o seletor abria vazio e uma gravacao inocente perdia a
+     * cor.
      *
+     * `$keep` aceita uma lista e nao so um id porque a listagem de produtos
+     * serve o modal inteiro de uma vez: as variantes que ele mostra podem usar
+     * varias cores arquivadas, e nao ha "a" variante em edicao quando a pagina
+     * e construida.
+     *
+     * @param  int|array<int, int|null>|null  $keep
      * @return array<int, array{id: int, name: string, hex: string}>
      */
-    public static function all(?int $keepColorId = null): array
+    public static function all(int|array|null $keep = null): array
     {
+        $keepIds = array_values(array_filter(
+            is_array($keep) ? $keep : [$keep],
+            fn (?int $id): bool => $id !== null,
+        ));
+
         return Color::query()
-            ->where(function (Builder $query) use ($keepColorId): void {
+            ->where(function (Builder $query) use ($keepIds): void {
                 $query->where('is_active', true);
 
-                if ($keepColorId !== null) {
-                    $query->orWhere('id', $keepColorId);
+                if ($keepIds !== []) {
+                    $query->orWhereIn('id', $keepIds);
                 }
             })
             ->orderBy('sort_order')

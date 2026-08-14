@@ -1,5 +1,5 @@
 import { router } from '@inertiajs/react';
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { ColorSwatchGrid } from '@/components/admin/color-swatch-grid';
 import { PricingBreakdown } from '@/components/admin/pricing-breakdown';
 import InputError from '@/components/input-error';
@@ -89,11 +89,14 @@ export default function VariantForm({
      * motor que calcula esta pré-visualização e o preço que fica gravado, por
      * isso não há duas versões a divergir.
      *
-     * `only: ['pricing']` recarrega só esta prop: o resto do formulário (o que
-     * o admin já escreveu nos outros campos) fica intacto.
+     * `only: ['pricing']` recarrega só esta prop: o resto da página (a listagem
+     * de produtos por trás, o produto que o modal está a editar, e o que o
+     * admin já escreveu nos outros campos) fica intacto.
      */
+    const debounced = useRef(false);
+
     useEffect(() => {
-        const timer = setTimeout(() => {
+        const request = () =>
             router.reload({
                 only: ['pricing'],
                 data: {
@@ -108,7 +111,27 @@ export default function VariantForm({
                     extra_cost: data.extra_cost,
                 },
             });
-        }, DEBOUNCE_MS);
+
+        /*
+         * A PRIMEIRA vez não espera. A ficha vive dentro do modal do produto, e
+         * a página que a serve não sabe qual das variantes vai ser aberta — o
+         * `pricing` que veio com ela está vazio. Esperar aqui era abrir uma
+         * variante já preenchida com o painel de custo em branco.
+         *
+         * Numa variante nova não há sequer pedido: sem peso e sem tempo o
+         * servidor devolveria o mesmo "sem resultado" que já está na página.
+         */
+        if (!debounced.current) {
+            debounced.current = true;
+
+            if (printMinutes > 0 && (data.filament_weight_grams ?? 0) > 0) {
+                request();
+            }
+
+            return;
+        }
+
+        const timer = setTimeout(request, DEBOUNCE_MS);
 
         return () => clearTimeout(timer);
     }, [
@@ -147,8 +170,10 @@ export default function VariantForm({
     const hasColors = colors.length > 0;
     const hasMaterials = materials.length > 0;
 
+    // Largura cheia: o único sítio onde este formulário aparece é o modal do
+    // produto, e é ele que já dá a medida.
     return (
-        <form onSubmit={onSubmit} className="flex max-w-xl flex-col gap-6">
+        <form onSubmit={onSubmit} className="flex flex-col gap-6">
             <div className="grid grid-cols-2 gap-4">
                 <div className="grid gap-2">
                     <Label htmlFor="sku">SKU</Label>
@@ -576,7 +601,11 @@ export default function VariantForm({
             </div>
 
             <div>
-                <Button type="submit" disabled={processing}>
+                <Button
+                    type="submit"
+                    className="rounded-full"
+                    disabled={processing}
+                >
                     {processing && <Spinner />}
                     {submitLabel}
                 </Button>

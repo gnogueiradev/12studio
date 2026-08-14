@@ -4,10 +4,10 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Pricing\PricingPreviewRequest;
-use App\Models\PrinterProfile;
 use App\Services\PricingPreview;
 use App\Support\MaterialOptions;
 use App\Support\PricingInput;
+use App\Support\PrinterOptions;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -49,30 +49,10 @@ class PricingCalculatorController extends Controller
             'result' => $request->materialId() === null ? null : $preview['result'],
             'hourlyRateCents' => $preview['hourlyRateCents'],
             'usingFallbackRate' => $preview['usingFallbackRate'],
-            'printers' => $this->printerOptions(),
+            'printers' => PrinterOptions::all(),
             'materials' => MaterialOptions::all($request->materialId()),
             'modes' => $this->modeOptions(),
         ]);
-    }
-
-    /**
-     * @return array<int, array{id: int, name: string, hourlyRateCents: int, isDefault: bool}>
-     */
-    private function printerOptions(): array
-    {
-        return PrinterProfile::query()
-            ->where('active', true)
-            ->orderByDesc('is_default')
-            ->orderBy('sort_order')
-            ->orderBy('name')
-            ->get()
-            ->map(fn (PrinterProfile $profile): array => [
-                'id' => $profile->id,
-                'name' => $profile->name,
-                'hourlyRateCents' => $profile->hourly_rate_cents,
-                'isDefault' => $profile->is_default,
-            ])
-            ->all();
     }
 
     /**

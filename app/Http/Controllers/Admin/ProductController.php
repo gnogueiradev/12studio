@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Pricing\PricingPreviewRequest;
 use App\Http\Requests\Product\StoreProductRequest;
 use App\Http\Requests\Product\UpdateProductRequest;
 use App\Models\Category;
@@ -10,10 +11,14 @@ use App\Models\Product;
 use App\Models\ProductImage;
 use App\Models\Tag;
 use App\Models\Variant;
+use App\Services\PricingPreview;
 use App\Services\ProductService;
 use App\Services\TagService;
 use App\Support\ColorOptions;
 use App\Support\MaterialOptions;
+use App\Support\Money;
+use App\Support\PrinterOptions;
+use App\Support\VariantSku;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -25,9 +30,19 @@ class ProductController extends Controller
     public function __construct(
         private ProductService $productService,
         private TagService $tagService,
+        private PricingPreview $preview,
     ) {}
 
-    public function index(Request $request): Response
+    /**
+     * A listagem, e com ela o modal do produto — que desde que as variantes
+     * deixaram de ter pagina propria e tambem a ficha da variante.
+     *
+     * Daí o `PricingPreviewRequest` num `index`: o painel de custo do
+     * formulario da variante nao espelha a formula em TypeScript, recarrega a
+     * prop `pricing` (`only: ['pricing']`) e deixa o servidor responder. Os
+     * campos do calculo viajam no URL, como na calculadora.
+     */
+    public function index(PricingPreviewRequest $request): Response
     {
         $filters = [
             'search' => trim((string) $request->query('search', '')),
@@ -99,21 +114,30 @@ class ProductController extends Controller
                 'readyStock' => (int) $product->ready_stock,
             ]);
 
+        // Antes das listas de propósito: sao as variantes do produto aberto que
+        // dizem que cores e materiais arquivados tem de continuar a aparecer.
+        $editing = $this->editingProduct($request);
+
         return Inertia::render('admin/produtos/index', [
             'products' => $products,
             'filters' => $filters,
             'statusCounts' => $statusCounts,
             // Listas do modal de produto, que vive nesta pagina.
             'categories' => $this->categoryOptions(),
-            'colors' => ColorOptions::all(),
-            'materials' => MaterialOptions::all(),
+            'colors' => ColorOptions::all(array_column($editing['variants'] ?? [], 'colorId')),
+            'materials' => MaterialOptions::all(array_column($editing['variants'] ?? [], 'materialId')),
+            'printers' => PrinterOptions::all(),
             // Do ambito `product` e so dele: desde que as etiquetas deixaram de
             // ser exclusivas do catalogo, sugerir todas era oferecer
             // "revendedor" e "urgente" ao classificar um vaso.
             'tagSuggestions' => $this->tagService->suggestions(Tag::SCOPE_PRODUCT),
             'tagOptions' => $this->tagService->optionsFor(Tag::SCOPE_PRODUCT),
             'defaultVatRate' => (int) config('shop.default_vat_rate', 23),
-            'editing' => $this->editingProduct($request),
+            'editing' => $editing,
+            // Sem peso nem tempo no URL o `isCalculable()` diz que nao, e isto
+            // sai a `result: null` — que e exatamente como o painel de custo
+            // tem de abrir numa variante nova.
+            'pricing' => $this->preview->fromRequest($request),
         ]);
     }
 
@@ -166,6 +190,9 @@ class ProductController extends Controller
             ],
             'images' => $this->imageRows($product),
             'variants' => $this->variantRows($product),
+            // A semente do campo SKU quando se cria uma variante nova dentro
+            // do modal. A mesma numeracao da matriz — ver VariantSku.
+            'suggestedSku' => VariantSku::next($product),
         ];
     }
 
@@ -214,6 +241,12 @@ class ProductController extends Controller
     /**
      * Variantes do produto para a seccao "Variantes" do modal de edicao.
      *
+     * Traz duas coisas ao mesmo tempo: o que a LINHA mostra (a cor e o material
+     * com nome e tom, o preco efetivo, o stock disponivel) e o que o
+     * FORMULARIO edita (os ids, os precos em euros, o tempo de impressao). Sao
+     * poucas variantes por produto, e uma segunda viagem ao servidor so para
+     * abrir a ficha de uma delas dava um modal a piscar.
+     *
      * @return array<int, array<string, mixed>>
      */
     private function variantRows(Product $product): array
@@ -227,6 +260,7 @@ class ProductController extends Controller
                 'id' => $variant->id,
                 'sku' => $variant->sku,
                 'sizeLabel' => $variant->size_label,
+                'colorId' => $variant->color_id,
                 'color' => $variant->color === null ? null : [
                     'id' => $variant->color->id,
                     'name' => $variant->color->name,
@@ -235,6 +269,7 @@ class ProductController extends Controller
                 // Ao lado da cor e nao dentro dela: sao dois eixos, e o
                 // material chegava aqui atraves da cor so porque a cor lhe
                 // pertencia.
+                'materialId' => $variant->material_id,
                 'material' => $variant->material === null ? null : [
                     'id' => $variant->material->id,
                     'name' => $variant->material->name,
@@ -242,10 +277,25 @@ class ProductController extends Controller
                 'priceCents' => $variant->price_cents,
                 'compareAtCents' => $variant->compare_at_cents,
                 'wholesalePriceCents' => $variant->wholesale_price_cents,
+                // Desfaz a troca normal/promocional que o VariantService faz na
+                // escrita — o formulario nunca ve `price_cents` cru.
+                'normalPrice' => Money::toDecimal($variant->normalPriceCents()),
+                'salePrice' => $variant->salePriceCents() === null
+                    ? null
+                    : Money::toDecimal((int) $variant->salePriceCents()),
+                'wholesalePrice' => $variant->wholesale_price_cents === null
+                    ? null
+                    : Money::toDecimal($variant->wholesale_price_cents),
                 'filamentWeightGrams' => $variant->filament_weight_grams,
+                'printingTimeMinutes' => $variant->printing_time_minutes,
+                'printerProfileId' => $variant->printer_profile_id,
+                'extraCost' => $variant->extra_cost_cents === null
+                    ? null
+                    : Money::toDecimal($variant->extra_cost_cents),
                 'stock' => $variant->stock,
                 'reservedStock' => $variant->reserved_stock,
                 'availableStock' => $variant->available_stock,
+                'lowStockThreshold' => $variant->low_stock_threshold,
                 'lowStock' => $variant->isLowStock(),
                 'isDefault' => $variant->is_default,
                 'active' => $variant->active,

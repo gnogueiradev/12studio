@@ -255,6 +255,8 @@ export type ProductEditing = {
     product: ProductDetail;
     images: ProductImageRow[];
     variants: VariantRow[];
+    /** Semente do campo SKU ao criar uma variante nova. */
+    suggestedSku: string;
 };
 
 export type ProductImageRow = {
@@ -269,33 +271,29 @@ export type ProductSummary = {
     name: string;
 };
 
+/**
+ * Uma variante do produto aberto no modal.
+ *
+ * Serve os dois papéis ao mesmo tempo: o que a LINHA da secção "Variantes"
+ * mostra (a cor e o material com nome e tom, o preço efetivo, o stock
+ * disponível) e o que o FORMULÁRIO edita quando se abre a ficha dela (os ids,
+ * os preços em euros, o tempo de impressão). São poucas por produto, e ir
+ * buscar a ficha ao servidor só ao abri-la dava um modal a piscar.
+ */
 export type VariantRow = {
     id: number;
     sku: string;
     sizeLabel: string | null;
+    colorId: number | null;
     color: ColorSummary | null;
     /** Ao lado da cor, não dentro dela: são dois eixos independentes. */
+    materialId: number | null;
     material: MaterialSummary | null;
     /** Preço efetivo — o que o cliente paga. Já é o promocional quando há promoção. */
     priceCents: number;
     /** Preço riscado. Só existe quando a variante está em promoção. */
     compareAtCents: number | null;
     wholesalePriceCents: number | null;
-    filamentWeightGrams: number | null;
-    stock: number;
-    reservedStock: number;
-    availableStock: number;
-    lowStock: boolean;
-    isDefault: boolean;
-    active: boolean;
-};
-
-export type VariantDetail = {
-    id: number;
-    sku: string;
-    colorId: number | null;
-    materialId: number | null;
-    sizeLabel: string | null;
     /** Decimais em euros ("12.50") — o formulário edita euros, a BD guarda cêntimos. */
     normalPrice: string;
     salePrice: string | null;
@@ -309,7 +307,9 @@ export type VariantDetail = {
     extraCost: string | null;
     stock: number;
     reservedStock: number;
+    availableStock: number;
     lowStockThreshold: number;
+    lowStock: boolean;
     isDefault: boolean;
     active: boolean;
 };

@@ -11,6 +11,7 @@ import { ProductCreateDialog } from '@/components/admin/product-create-dialog';
 import { StatusBadge, StatusText } from '@/components/admin/status-badge';
 import { TagChips } from '@/components/admin/tag-chips';
 import { TagFilter } from '@/components/admin/tag-filter';
+import type { VariantPricingPreview } from '@/components/admin/variant-form';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -35,6 +36,7 @@ import type {
 } from '@/types/catalog';
 import { FULFILLMENT_MODES, PRODUCT_STATUSES } from '@/types/catalog';
 import type { Paginated } from '@/types/pagination';
+import type { PrinterProfileOption } from '@/types/pricing';
 
 type Filters = {
     search: string;
@@ -53,12 +55,19 @@ type Props = {
     categories: CategoryOption[];
     colors: ColorOption[];
     materials: MaterialOption[];
+    printers: PrinterProfileOption[];
     tagSuggestions: string[];
     /** Só as que algum produto usa — as outras dariam zero resultados. */
     tagOptions: Option[];
     defaultVatRate: number;
     /** O produto a editar, carregado por `?editar={id}`. Null a criar. */
     editing: ProductEditing | null;
+    /**
+     * O painel de custo da ficha de variante, que vive no modal desta página.
+     * Recarrega-se sozinha com `only: ['pricing']` enquanto o admin escreve —
+     * ver VariantForm.
+     */
+    pricing: VariantPricingPreview;
 };
 
 // O Radix Select não aceita value="" — sentinela para "sem filtro".
@@ -120,10 +129,12 @@ export default function ProductsIndex({
     categories,
     colors,
     materials,
+    printers,
     tagSuggestions,
     tagOptions,
     defaultVatRate,
     editing,
+    pricing,
 }: Props) {
     const [search, setSearch] = useState(filters.search);
     /*
@@ -478,6 +489,8 @@ export default function ProductsIndex({
                 categories={categories}
                 colors={colors}
                 materials={materials}
+                printers={printers}
+                pricing={pricing}
                 tagSuggestions={tagSuggestions}
                 defaultVatRate={defaultVatRate}
             />

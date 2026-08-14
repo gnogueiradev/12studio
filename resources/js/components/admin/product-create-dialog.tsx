@@ -1,4 +1,4 @@
-import { Link, router, useForm } from '@inertiajs/react';
+import { router, useForm } from '@inertiajs/react';
 import { Archive, Upload, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ColorSwatch } from '@/components/admin/color-swatch';
@@ -8,6 +8,8 @@ import { ProductImages } from '@/components/admin/product-images';
 import { RichTextEditor } from '@/components/admin/rich-text-editor';
 import { TagInput } from '@/components/admin/tag-input';
 import { ToggleChip } from '@/components/admin/toggle-chip';
+import type { VariantPricingPreview } from '@/components/admin/variant-form';
+import { VariantPanel } from '@/components/admin/variant-panel';
 import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -32,11 +34,7 @@ import {
 import { formatCents, inputToCents } from '@/lib/money';
 import { cn } from '@/lib/utils';
 import { store, update } from '@/routes/admin/produtos';
-import { create as createVariant } from '@/routes/admin/produtos/variantes';
-import {
-    destroy as destroyVariant,
-    edit as editVariant,
-} from '@/routes/admin/variantes';
+import { destroy as destroyVariant } from '@/routes/admin/variantes';
 import type {
     CategoryOption,
     ColorOption,
@@ -46,6 +44,7 @@ import type {
     VariantRow,
 } from '@/types/catalog';
 import { FULFILLMENT_MODES, PRODUCT_STATUSES } from '@/types/catalog';
+import type { PrinterProfileOption } from '@/types/pricing';
 
 type Props = {
     open: boolean;
@@ -55,9 +54,15 @@ type Props = {
     categories: CategoryOption[];
     colors: ColorOption[];
     materials: MaterialOption[];
+    printers: PrinterProfileOption[];
+    /** Para o painel de custo da ficha de variante. Recarrega-se sozinha. */
+    pricing: VariantPricingPreview;
     tagSuggestions: string[];
     defaultVatRate: number;
 };
+
+/** O alvo da ficha de variante: uma que existe, uma nova, ou nenhuma. */
+type VariantTarget = VariantRow | 'new' | null;
 
 const NO_CATEGORY = 'none';
 
@@ -108,6 +113,8 @@ export function ProductCreateDialog({
     categories,
     colors,
     materials,
+    printers,
+    pricing,
     tagSuggestions,
     defaultVatRate,
 }: Props) {
@@ -145,6 +152,13 @@ export function ProductCreateDialog({
      * arquivar também tem de caber nele.
      */
     const [publish, setPublish] = useState(false);
+
+    /*
+     * A ficha de variante aberta, se alguma. O modal troca de face em vez de
+     * abrir um segundo por cima: o `useForm` do produto fica montado por baixo
+     * com o que o admin já lá escreveu, e volta-se a ele pela seta.
+     */
+    const [variantTarget, setVariantTarget] = useState<VariantTarget>(null);
 
     const colorsById = useMemo(
         () => new Map(colors.map((color) => [color.id, color] as const)),
@@ -269,6 +283,32 @@ export function ProductCreateDialog({
         // a ser o JSON de sempre.
         post(store().url, options);
     };
+
+    /*
+     * O mesmo `DialogContent` com outro conteúdo lá dentro — o React reconcilia
+     * e o modal não pisca. Só existe a editar: a criar ainda não há produto a
+     * que a variante possa pertencer, e a matriz de cores × materiais × tamanhos
+     * é que faz esse trabalho.
+     */
+    if (editing !== null && variantTarget !== null) {
+        return (
+            <Dialog open={open} onOpenChange={onOpenChange}>
+                <DialogContent className="max-h-[88vh] gap-0 overflow-y-auto p-0 sm:max-w-2xl">
+                    <VariantPanel
+                        productId={editing.product.id}
+                        productName={editing.product.name}
+                        variant={variantTarget === 'new' ? null : variantTarget}
+                        suggestedSku={editing.suggestedSku}
+                        colors={colors}
+                        materials={materials}
+                        printers={printers}
+                        pricing={pricing}
+                        onBack={() => setVariantTarget(null)}
+                    />
+                </DialogContent>
+            </Dialog>
+        );
+    }
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -709,7 +749,7 @@ export function ProductCreateDialog({
                         ) : (
                             <ExistingVariants
                                 editing={editing}
-                                onClose={() => onOpenChange(false)}
+                                onOpenVariant={setVariantTarget}
                             />
                         )}
                     </div>
@@ -1103,20 +1143,23 @@ function StagedPhotos({ files, onChange, error }: StagedProps) {
 
 type ExistingProps = {
     editing: ProductEditing;
-    onClose: () => void;
+    /** `'new'` abre a ficha em branco; uma linha abre a ficha dessa variante. */
+    onOpenVariant: (target: VariantTarget) => void;
 };
 
 /**
- * As variantes que já existem. Criar e editar uma variante continuam a ser
- * ecrãs próprios — são formulários com preço promocional, revenda, perfil de
- * impressora e stock, e não cabiam aqui dentro. Daí o `onClose` antes de
- * navegar: sair para outra página com o modal por fechar deixava-o a reabrir
- * ao voltar atrás.
+ * As variantes que já existem.
  *
- * Arquivar, esse, fica: é a única porta que a variante tem para sair de
- * circulação, e não existe no formulário de edição dela.
+ * As três acções ficam todas aqui dentro. Criar e editar já foram páginas
+ * próprias — o formulário é grande, com preço promocional, revenda, perfil de
+ * impressora e painel de custo — mas sair do modal para lhes chegar era perder
+ * o produto, a pesquisa e os filtros a cada variante mexida. Agora é o modal
+ * que troca de face, e por isso não há `Link` nenhum: nada navega.
+ *
+ * Arquivar continua a ser a única porta para uma variante sair de circulação,
+ * e não existe na ficha dela.
  */
-function ExistingVariants({ editing, onClose }: ExistingProps) {
+function ExistingVariants({ editing, onOpenVariant }: ExistingProps) {
     const [archiving, setArchiving] = useState<VariantRow | null>(null);
 
     return (
@@ -1189,12 +1232,9 @@ function ExistingVariants({ editing, onClose }: ExistingProps) {
                                 <Button
                                     variant="ghost"
                                     size="sm"
-                                    asChild
-                                    onClick={onClose}
+                                    onClick={() => onOpenVariant(variant)}
                                 >
-                                    <Link href={editVariant(variant.id)}>
-                                        Editar
-                                    </Link>
+                                    Editar
                                 </Button>
                                 {variant.active && (
                                     <Button
@@ -1215,10 +1255,12 @@ function ExistingVariants({ editing, onClose }: ExistingProps) {
             )}
 
             <div>
-                <Button variant="outline" size="sm" asChild onClick={onClose}>
-                    <Link href={createVariant(editing.product.id)}>
-                        Nova variante
-                    </Link>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => onOpenVariant('new')}
+                >
+                    Nova variante
                 </Button>
             </div>
 
