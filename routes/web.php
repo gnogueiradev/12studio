@@ -59,6 +59,8 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
             ->name('encomendas.estado');
         Route::patch('encomendas/{order}/pagamento', [Admin\OrderController::class, 'updatePayment'])
             ->name('encomendas.pagamento');
+        Route::patch('encomendas/{order}/ajuste', [Admin\OrderController::class, 'updateAdjustment'])
+            ->name('encomendas.ajuste');
         Route::patch('encomendas/{order}/detalhes', [Admin\OrderController::class, 'updateDetails'])
             ->name('encomendas.detalhes');
 

@@ -177,6 +177,10 @@ export type OrderDetail = {
     createdBy: string | null;
     subtotalCents: number;
     shippingCents: number;
+    /** Com sinal: negativo é desconto, positivo é acréscimo. */
+    adjustmentCents: number;
+    /** Obrigatório sempre que o ajuste não é zero; nulo quando é. */
+    adjustmentReason: string | null;
     totalCents: number;
     shippingAddress: OrderAddress | null;
     billingAddress: OrderAddress | null;

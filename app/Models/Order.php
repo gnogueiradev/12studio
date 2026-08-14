@@ -30,6 +30,8 @@ use Illuminate\Support\Carbon;
  * @property string|null $stripe_payment_intent_id
  * @property int $subtotal_cents
  * @property int $shipping_cents
+ * @property int $adjustment_cents
+ * @property string|null $adjustment_reason
  * @property int $total_cents
  * @property string $currency
  * @property array<string, mixed>|null $shipping_address
@@ -57,6 +59,7 @@ use Illuminate\Support\Carbon;
     'status', 'payment_method', 'payment_status', 'sales_channel',
     'external_order_reference', 'created_by_user_id', 'stripe_session_id',
     'stripe_payment_intent_id', 'subtotal_cents', 'shipping_cents',
+    'adjustment_cents', 'adjustment_reason',
     'total_cents', 'currency', 'shipping_address', 'billing_address',
     'shipping_method_name', 'tracking_number', 'tracking_url', 'paid_at',
     'shipped_at', 'delivered_at', 'cancelled_at', 'admin_note', 'stock_issue',
@@ -104,6 +107,7 @@ class Order extends Model
         return [
             'subtotal_cents' => 'integer',
             'shipping_cents' => 'integer',
+            'adjustment_cents' => 'integer',
             'total_cents' => 'integer',
             'shipping_address' => 'array',
             'billing_address' => 'array',

@@ -42,6 +42,8 @@ class OrderPresenter
             'createdBy' => $order->createdBy?->name,
             'subtotalCents' => $order->subtotal_cents,
             'shippingCents' => $order->shipping_cents,
+            'adjustmentCents' => $order->adjustment_cents,
+            'adjustmentReason' => $order->adjustment_reason,
             'totalCents' => $order->total_cents,
             'shippingAddress' => $order->shipping_address,
             'billingAddress' => $order->billing_address,

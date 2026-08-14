@@ -18,10 +18,16 @@ import {
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
-import { formatCents } from '@/lib/money';
+import { centsToInput, formatCents, inputToCents } from '@/lib/money';
 import { label } from '@/lib/options';
 import { index as clientes } from '@/routes/admin/clientes';
-import { detalhes, estado, index, pagamento } from '@/routes/admin/encomendas';
+import {
+    ajuste,
+    detalhes,
+    estado,
+    index,
+    pagamento,
+} from '@/routes/admin/encomendas';
 import { producao } from '@/routes/admin/itens';
 import type { OrderDetail, OrderItemRow } from '@/types/order';
 import {
@@ -57,6 +63,11 @@ export default function OrdersShow({ order, tagSuggestions }: Props) {
         note: '',
     });
 
+    const adjustmentForm = useForm({
+        adjustment_price: centsToInput(order.adjustmentCents),
+        adjustment_reason: order.adjustmentReason ?? '',
+    });
+
     const detailsForm = useForm({
         admin_note: order.adminNote ?? '',
         tracking_number: order.trackingNumber ?? '',
@@ -64,6 +75,20 @@ export default function OrdersShow({ order, tagSuggestions }: Props) {
         shipping_method_name: order.shippingMethodName ?? '',
         tags: order.tags,
     });
+
+    // Cancelada ou reembolsada não muda de valor. Espelha a guarda do
+    // OrderService::setAdjustment — quem recusa continua a ser o servidor;
+    // isto só evita mostrar um formulário que ia rebentar.
+    const isClosed =
+        order.status === 'cancelled' || order.status === 'refunded';
+
+    // Total ao vivo enquanto se escreve, como no formulário de criação. O
+    // servidor é que manda: isto é só para o admin ver onde vai parar antes
+    // de gravar.
+    const adjustedTotalCents =
+        order.subtotalCents +
+        order.shippingCents +
+        inputToCents(adjustmentForm.data.adjustment_price);
 
     const [advancing, setAdvancing] = useState<number | null>(null);
 
@@ -243,6 +268,31 @@ export default function OrdersShow({ order, tagSuggestions }: Props) {
                                     </dt>
                                     <dd>{formatCents(order.shippingCents)}</dd>
                                 </div>
+                                {/*
+                                 * Só aparece quando existe. Uma linha "Ajuste
+                                 * 0,00 €" em todas as encomendas seria ruído a
+                                 * fingir de informação — e o total já bate
+                                 * certo com o subtotal mais os portes.
+                                 */}
+                                {order.adjustmentCents !== 0 && (
+                                    <div className="flex flex-col gap-0.5">
+                                        <div className="flex justify-between">
+                                            <dt className="text-muted-foreground">
+                                                Ajuste
+                                            </dt>
+                                            <dd>
+                                                {formatCents(
+                                                    order.adjustmentCents,
+                                                )}
+                                            </dd>
+                                        </div>
+                                        {order.adjustmentReason !== null && (
+                                            <dd className="text-xs text-muted-foreground">
+                                                {order.adjustmentReason}
+                                            </dd>
+                                        )}
+                                    </div>
+                                )}
                                 <div className="flex justify-between border-t border-border/60 pt-1 font-medium">
                                     <dt>Total</dt>
                                     <dd>{formatCents(order.totalCents)}</dd>
@@ -520,6 +570,100 @@ export default function OrdersShow({ order, tagSuggestions }: Props) {
                                 </Button>
                             </form>
                         </section>
+
+                        {!isClosed && (
+                            <section className="flex flex-col gap-3 border-t border-border/60 pt-8">
+                                <h2 className="text-lg font-semibold">
+                                    Ajuste ao total
+                                </h2>
+                                <p className="text-sm text-muted-foreground">
+                                    Negativo desconta, positivo acrescenta. O
+                                    total é sempre subtotal + portes + ajuste.
+                                </p>
+                                <form
+                                    onSubmit={(event) => {
+                                        event.preventDefault();
+                                        adjustmentForm.patch(
+                                            ajuste(order.id).url,
+                                            { preserveScroll: true },
+                                        );
+                                    }}
+                                    className="flex flex-col gap-3"
+                                >
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="adjustment_price">
+                                            Ajuste (€)
+                                        </Label>
+                                        <Input
+                                            id="adjustment_price"
+                                            inputMode="decimal"
+                                            value={
+                                                adjustmentForm.data
+                                                    .adjustment_price
+                                            }
+                                            onChange={(event) =>
+                                                adjustmentForm.setData(
+                                                    'adjustment_price',
+                                                    event.target.value,
+                                                )
+                                            }
+                                            placeholder="-5,00"
+                                        />
+                                        <InputError
+                                            message={
+                                                adjustmentForm.errors
+                                                    .adjustment_price
+                                            }
+                                        />
+                                        <p className="text-sm text-muted-foreground">
+                                            Total:{' '}
+                                            <span className="font-medium text-foreground">
+                                                {formatCents(
+                                                    adjustedTotalCents,
+                                                )}
+                                            </span>
+                                        </p>
+                                    </div>
+
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="adjustment_reason">
+                                            Motivo
+                                        </Label>
+                                        <Input
+                                            id="adjustment_reason"
+                                            value={
+                                                adjustmentForm.data
+                                                    .adjustment_reason
+                                            }
+                                            onChange={(event) =>
+                                                adjustmentForm.setData(
+                                                    'adjustment_reason',
+                                                    event.target.value,
+                                                )
+                                            }
+                                            placeholder="Desconto acordado"
+                                        />
+                                        <InputError
+                                            message={
+                                                adjustmentForm.errors
+                                                    .adjustment_reason
+                                            }
+                                        />
+                                    </div>
+
+                                    <Button
+                                        type="submit"
+                                        variant="outline"
+                                        disabled={adjustmentForm.processing}
+                                    >
+                                        {adjustmentForm.processing && (
+                                            <Spinner />
+                                        )}
+                                        Guardar ajuste
+                                    </Button>
+                                </form>
+                            </section>
+                        )}
 
                         <section className="flex flex-col gap-3 border-t border-border/60 pt-8">
                             <h2 className="text-lg font-semibold">
