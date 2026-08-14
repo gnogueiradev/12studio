@@ -102,7 +102,8 @@ export type OrderRow = {
     id: number;
     orderNumber: string;
     customerName: string;
-    email: string;
+    /** Nulo nas vendas em mão — o canal `manual` só pede o nome. */
+    email: string | null;
     status: string;
     paymentStatus: string;
     salesChannel: string;
@@ -163,7 +164,8 @@ export type OrderDetail = {
     id: number;
     orderNumber: string;
     customerName: string;
-    email: string;
+    /** Nulo nas vendas em mão — o canal `manual` só pede o nome. */
+    email: string | null;
     phone: string | null;
     nif: string | null;
     customerId: number | null;
