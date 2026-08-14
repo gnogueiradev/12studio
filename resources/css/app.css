@@ -319,6 +319,31 @@
     body {
         @apply bg-background text-foreground;
     }
+
+    /*
+     * Cursor de mão em tudo o que se clica. O preflight do Tailwind v3 fazia
+     * isto por nós; o v4 deixou de o fazer para seguir o browser, que dá
+     * `default` aos botões. Sem esta regra a interface parece inerte — nada
+     * indica que um botão é botão.
+     *
+     * Fica na camada `base` de propósito: qualquer utility (`cursor-crosshair`
+     * na área de saturação do seletor de cor, `cursor-grab` nos cartões de
+     * produção, `cursor-w-resize` na barra da sidebar) continua a ganhar.
+     */
+    button:not(:disabled),
+    [role='button'],
+    [role='menuitem'],
+    [role='menuitemcheckbox'],
+    [role='menuitemradio'],
+    [role='option'],
+    [role='tab'],
+    [role='switch'],
+    [role='checkbox'],
+    summary,
+    label[for],
+    select:not(:disabled) {
+        cursor: pointer;
+    }
 }
 
 /*
