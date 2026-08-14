@@ -2,6 +2,7 @@ import { Link, router, useForm } from '@inertiajs/react';
 import { Archive, Upload, X } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ColorSwatch } from '@/components/admin/color-swatch';
+import { ColorSwatchGrid } from '@/components/admin/color-swatch-grid';
 import { ConfirmDialog } from '@/components/admin/confirm-dialog';
 import { ProductImages } from '@/components/admin/product-images';
 import { RichTextEditor } from '@/components/admin/rich-text-editor';
@@ -565,36 +566,14 @@ export function ProductCreateDialog({
                                             <span className="text-xs text-muted-foreground">
                                                 Cor
                                             </span>
-                                            <div className="flex flex-wrap gap-2">
-                                                {colors.map((color) => (
-                                                    <ToggleChip
-                                                        key={color.id}
-                                                        active={data.variants.color_ids.includes(
-                                                            color.id,
-                                                        )}
-                                                        onClick={() =>
-                                                            setVariants({
-                                                                color_ids:
-                                                                    toggle(
-                                                                        data
-                                                                            .variants
-                                                                            .color_ids,
-                                                                        color.id,
-                                                                    ),
-                                                            })
-                                                        }
-                                                    >
-                                                        <span
-                                                            className="size-3 rounded-full border border-border"
-                                                            style={{
-                                                                background:
-                                                                    color.hex,
-                                                            }}
-                                                        />
-                                                        {color.name}
-                                                    </ToggleChip>
-                                                ))}
-                                            </div>
+                                            <ColorSwatchGrid
+                                                colors={colors}
+                                                multiple
+                                                value={data.variants.color_ids}
+                                                onChange={(color_ids) =>
+                                                    setVariants({ color_ids })
+                                                }
+                                            />
                                         </div>
 
                                         <div className="grid gap-2">

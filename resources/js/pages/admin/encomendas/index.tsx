@@ -158,7 +158,7 @@ export default function OrdersIndex({
                 <>
                     <div>{order.customerName}</div>
                     <div className="text-xs text-muted-foreground">
-                        {order.email}
+                        {order.email ?? 'Venda em mão'}
                     </div>
                 </>
             ),

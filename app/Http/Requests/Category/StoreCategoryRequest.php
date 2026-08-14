@@ -3,7 +3,6 @@
 namespace App\Http\Requests\Category;
 
 use App\Models\Category;
-use App\Support\CategoryColors;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -27,9 +26,12 @@ class StoreCategoryRequest extends FormRequest
             'name' => ['required', 'string', 'max:120'],
             'description' => ['nullable', 'string', 'max:2000'],
             'status' => ['required', Rule::in(Category::STATUSES)],
-            // Paleta fechada e nao um hex livre: a cor tem de ler nos dois
-            // temas, e isso nao se valida com um regex de hex.
-            'color' => ['nullable', Rule::in(CategoryColors::hexes())],
+            // Hex livre com os sete tons do design como atalhos. Foi paleta
+            // fechada enquanto a cor pintava texto e um tom qualquer podia
+            // deixar de se ler; agora vive numa bolinha decorativa, sem minimo
+            // de contraste, e o seletor avisa quando o tom se perde no fundo.
+            // A coluna e varchar(7), por isso so #rrggbb — sem alfa.
+            'color' => ['nullable', 'string', 'regex:/^#[0-9a-fA-F]{6}$/'],
             'sort_order' => ['integer', 'min:0', 'max:65535'],
         ];
     }

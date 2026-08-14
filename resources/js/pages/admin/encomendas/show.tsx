@@ -20,7 +20,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
 import { formatCents } from '@/lib/money';
 import { label } from '@/lib/options';
-import { edit as editCustomer } from '@/routes/admin/clientes';
+import { index as clientes } from '@/routes/admin/clientes';
 import { detalhes, estado, index, pagamento } from '@/routes/admin/encomendas';
 import { producao } from '@/routes/admin/itens';
 import type { OrderDetail, OrderItemRow } from '@/types/order';
@@ -300,8 +300,15 @@ export default function OrdersShow({ order, tagSuggestions }: Props) {
                             <h2 className="text-lg font-semibold">Cliente</h2>
                             <div>
                                 {order.customerId !== null ? (
+                                    /*
+                                     * A ficha do cliente já não é uma página: o
+                                     * `?editar` leva à listagem com o modal
+                                     * aberto no cliente certo.
+                                     */
                                     <Link
-                                        href={editCustomer(order.customerId)}
+                                        href={clientes({
+                                            query: { editar: order.customerId },
+                                        })}
                                         className="font-medium hover:underline"
                                     >
                                         {order.customerName}
@@ -313,7 +320,7 @@ export default function OrdersShow({ order, tagSuggestions }: Props) {
                                 )}
                             </div>
                             <div className="text-muted-foreground">
-                                {order.email}
+                                {order.email ?? 'Sem email — venda em mão'}
                             </div>
                             {order.phone && (
                                 <div className="text-muted-foreground">

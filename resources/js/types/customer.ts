@@ -46,6 +46,30 @@ export type CustomerDetail = {
     canDelete: boolean;
 };
 
+/** Uma encomenda do cliente, no separador "Encomendas" do modal. */
+export type CustomerOrderRow = {
+    id: number;
+    orderNumber: string;
+    status: string;
+    paymentStatus: string;
+    salesChannel: string;
+    totalCents: number;
+    createdAt: string | null;
+};
+
+/**
+ * O cliente que o modal está a editar, ou null quando está a criar.
+ *
+ * Vem por `?editar={id}` e não da linha da listagem: a linha não traz morada,
+ * nota interna nem histórico, e alargá-la para os trazer era carregar vinte
+ * moradas e vinte históricos em cada render da tabela para servir o único que
+ * se abre. Mesmo mecanismo dos produtos.
+ */
+export type CustomerEditing = {
+    customer: CustomerDetail;
+    orders: CustomerOrderRow[];
+};
+
 export type CustomerFormData = {
     name: string;
     email: string;

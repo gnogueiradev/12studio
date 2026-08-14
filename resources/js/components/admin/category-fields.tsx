@@ -1,3 +1,4 @@
+import { ColorPicker } from '@/components/admin/color-picker';
 import { cn } from '@/lib/utils';
 import { CATEGORY_COLORS, CATEGORY_STATUSES } from '@/types/catalog';
 
@@ -16,58 +17,23 @@ type ColorPickerProps = {
 /**
  * Seletor da cor da categoria.
  *
- * Carregar na cor já escolhida limpa-a: sem isso, a primeira cor escolhida
- * ficava para sempre — não há nenhum outro sítio onde voltar a "sem cor".
+ * Hex livre, com os sete tons do design como atalhos. Foi paleta fechada
+ * enquanto a cor pintava texto e um tom qualquer podia deixar de se ler; agora
+ * a cor vive numa bolinha decorativa, e o seletor avisa quando o contraste cai
+ * — a decisão fica de quem escolhe, que é quem conhece a categoria.
+ *
+ * "Sem cor" é um botão e não o carregar-outra-vez: aqui há um espectro inteiro,
+ * e acertar no mesmo hex ao pixel para voltar a limpar não era um caminho.
  */
 export function CategoryColorPicker({ value, onChange }: ColorPickerProps) {
-    const selected = CATEGORY_COLORS.find((color) => color.hex === value);
-
     return (
-        <div className="flex flex-wrap items-center gap-3">
-            <div className="flex flex-wrap gap-2">
-                {CATEGORY_COLORS.map((color) => (
-                    <button
-                        key={color.hex}
-                        type="button"
-                        onClick={() =>
-                            onChange(color.hex === value ? null : color.hex)
-                        }
-                        aria-pressed={color.hex === value}
-                        aria-label={color.name}
-                        title={color.name}
-                        className={cn(
-                            'size-8 rounded-lg border-2 transition-colors',
-                            color.hex === value
-                                ? 'border-foreground'
-                                : 'border-transparent hover:border-border',
-                        )}
-                        /*
-                         * A cor vai em `style` e não numa classe: é um valor da
-                         * base de dados, e uma classe de cor arbitrária (um
-                         * `bg-` com o hex entre parênteses rectos) é uma cor
-                         * solta fora da paleta da marca — o DesignTokensTest
-                         * rejeita-as. Mesmo padrão do ColorSwatch.
-                         */
-                        style={{ backgroundColor: color.hex }}
-                    />
-                ))}
-            </div>
-
-            {/*
-             * O design pinta o NOME da cor na própria cor. No tema claro esses
-             * pastéis ficam abaixo dos 4.5:1 contra o bege do fundo, por isso a
-             * cor vive na bolinha — que é decorativa e não tem mínimo de
-             * contraste — e o nome fica no token de texto.
-             */}
-            <span className="inline-flex items-center gap-2 rounded-full border border-border bg-secondary px-3 py-1 text-xs">
-                <span
-                    aria-hidden
-                    className="size-3 rounded-full border border-border"
-                    style={{ backgroundColor: selected?.hex ?? 'transparent' }}
-                />
-                {selected?.name ?? 'Sem cor'}
-            </span>
-        </div>
+        <ColorPicker
+            value={value ?? ''}
+            onChange={onChange}
+            presets={[...CATEGORY_COLORS]}
+            onClear={() => onChange(null)}
+            idPrefix="category-color"
+        />
     );
 }
 

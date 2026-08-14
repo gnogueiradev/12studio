@@ -250,6 +250,91 @@ class ManualOrderTest extends TestCase
                 ->where('variants.0.sku', $this->variant->sku));
     }
 
+    /**
+     * O cliente de balcao: nome, um artigo, e mais nada. E o unico canal em que
+     * o email nao e obrigatorio — a peca vai na mao, nao ha nada para enviar.
+     */
+    public function test_a_manual_channel_order_needs_only_a_name(): void
+    {
+        $payload = $this->payload();
+        $payload['sales_channel'] = 'manual';
+        $payload['payment_method'] = 'cash';
+
+        foreach (['email', 'phone', 'nif', 'line1', 'line2', 'postal_code', 'city'] as $field) {
+            $payload[$field] = '';
+        }
+
+        $payload['shipping_price'] = '0';
+        $payload['shipping_method_name'] = '';
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.encomendas.store'), $payload)
+            ->assertSessionHasNoErrors();
+
+        $order = Order::query()->firstOrFail();
+
+        $this->assertSame('Júlia Marques', $order->customer_name);
+        // Nulo e nao string vazia: os dois a dizerem "sem email" obrigavam cada
+        // envio de mail a testar os dois.
+        $this->assertNull($order->email);
+        $this->assertNull($order->shipping_address);
+    }
+
+    public function test_the_other_channels_still_need_an_email(): void
+    {
+        foreach (['vinted', 'instagram', 'website'] as $channel) {
+            $payload = $this->payload();
+            $payload['sales_channel'] = $channel;
+            $payload['email'] = '';
+
+            $this->actingAs($this->admin)
+                ->post(route('admin.encomendas.store'), $payload)
+                ->assertSessionHasErrors('email');
+        }
+
+        $this->assertDatabaseCount('orders', 0);
+    }
+
+    public function test_an_order_without_an_email_sends_nothing(): void
+    {
+        $payload = $this->payload();
+        $payload['sales_channel'] = 'manual';
+        $payload['email'] = '';
+        // A checkbox nao aparece sem email, mas o pedido vem de fora: a guarda
+        // tem de estar no servidor.
+        $payload['send_confirmation'] = true;
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.encomendas.store'), $payload);
+
+        Mail::assertNothingQueued();
+    }
+
+    /**
+     * Uma venda em maos ainda pode ser expedida (o admin muda de ideias e vai
+     * pelos CTT). Sem destinatario nao ha aviso, mas a encomenda avanca na
+     * mesma: e o estado dela que manda no pipeline.
+     */
+    public function test_shipping_an_order_without_an_email_does_not_blow_up(): void
+    {
+        $payload = $this->payload();
+        $payload['sales_channel'] = 'manual';
+        $payload['email'] = '';
+        $payload['payment_status'] = 'paid';
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.encomendas.store'), $payload);
+
+        $order = Order::query()->firstOrFail();
+
+        $this->actingAs($this->admin)
+            ->patch(route('admin.encomendas.estado', $order), ['status' => 'shipped'])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame('shipped', $order->refresh()->status);
+        Mail::assertNothingQueued();
+    }
+
     public function test_non_admins_cannot_create_orders(): void
     {
         $user = User::factory()->create();

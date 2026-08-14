@@ -19,9 +19,11 @@ use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * Cliente = User com is_admin = false. A pagina `edit` acumula os dois
- * papeis (formulario + historico de encomendas), seguindo a convencao do
- * backoffice de nao ter rotas `show`.
+ * Cliente = User com is_admin = false.
+ *
+ * Nao ha paginas de formulario: criar e editar acontecem os dois no modal da
+ * listagem, como nos produtos. O formulario e o historico de encomendas, que
+ * antes partilhavam a pagina `edit`, sao agora os dois separadores do modal.
  */
 class CustomerController extends Controller
 {
@@ -112,43 +114,46 @@ class CustomerController extends Controller
             'stats' => $this->stats(),
             'tagSuggestions' => $this->tagService->suggestions(Tag::SCOPE_CUSTOMER),
             'tagOptions' => $this->tagService->optionsFor(Tag::SCOPE_CUSTOMER),
+            'editing' => $this->editingCustomer($request),
         ]);
     }
 
-    public function create(): Response
+    /**
+     * O cliente que o modal esta a editar, ou null quando esta a criar.
+     *
+     * Vem por `?editar={id}` e nao pela linha da listagem: a linha nao traz
+     * morada, nota interna nem historico, e alargar o `->through()` para os
+     * trazer era carregar vinte moradas e vinte historicos de encomendas em
+     * cada render da listagem para servir o unico que se abre.
+     *
+     * O modal pede-o com um recarregamento parcial (`only: ['editing']`). O
+     * parametro fica no URL de proposito: e o que faz o modal reabrir no
+     * cliente certo depois de gravar, e o que torna `/admin/clientes?editar=7`
+     * um endereco que se pode partilhar. Mesmo mecanismo dos produtos.
+     *
+     * @return array<string, mixed>|null
+     */
+    private function editingCustomer(Request $request): ?array
     {
-        return Inertia::render('admin/clientes/create', [
-            'tagSuggestions' => $this->tagService->suggestions(Tag::SCOPE_CUSTOMER),
-        ]);
-    }
+        $id = $request->query('editar');
 
-    public function store(StoreCustomerRequest $request): RedirectResponse
-    {
-        $customer = $this->customerService->store($request->validated());
+        if ($id === null || ! ctype_digit((string) $id)) {
+            return null;
+        }
 
-        $this->toast('Cliente criado.');
+        $customer = User::query()
+            ->where('is_admin', false)
+            ->with(['addresses', 'tags'])
+            ->find((int) $id);
 
-        // Para onde o admin quer ir a seguir. Fica fora do validated() porque
-        // nao e um campo do cliente: e de quem submeteu. O modal da listagem
-        // manda 'list' (fica onde estava, a ver o cliente novo na tabela) ou
-        // 'order' (a checkbox "Criar encomenda a seguir" — a encomenda manual
-        // tem o seu proprio seletor de cliente). A pagina /create nao manda
-        // nada e mantem a convencao do backoffice: cai no formulario de edicao.
-        return match ((string) $request->input('after')) {
-            'order' => to_route('admin.encomendas.create'),
-            'list' => to_route('admin.clientes.index'),
-            default => to_route('admin.clientes.edit', $customer),
-        };
-    }
-
-    public function edit(User $customer): Response
-    {
-        $this->ensureIsCustomer($customer);
+        if ($customer === null) {
+            return null;
+        }
 
         // Da coleccao, nao do builder: um cliente pode nao ter morada.
         $address = $customer->addresses->first();
 
-        return Inertia::render('admin/clientes/edit', [
+        return [
             'customer' => [
                 'id' => $customer->id,
                 'name' => $customer->name,
@@ -165,7 +170,6 @@ class CustomerController extends Controller
                 'createdAt' => $customer->created_at?->format('Y-m-d'),
                 'canDelete' => ! $customer->orders()->exists(),
             ],
-            'tagSuggestions' => $this->tagService->suggestions(Tag::SCOPE_CUSTOMER),
             'orders' => $customer->orders()
                 ->orderByDesc('created_at')
                 ->get()
@@ -177,8 +181,28 @@ class CustomerController extends Controller
                     'salesChannel' => $order->sales_channel,
                     'totalCents' => $order->total_cents,
                     'createdAt' => $order->created_at?->format('Y-m-d'),
-                ]),
-        ]);
+                ])
+                ->all(),
+        ];
+    }
+
+    public function store(StoreCustomerRequest $request): RedirectResponse
+    {
+        $customer = $this->customerService->store($request->validated());
+
+        $this->toast('Cliente criado.');
+
+        // Para onde o admin quer ir a seguir. Fica fora do validated() porque
+        // nao e um campo do cliente: e de quem submeteu. O modal manda 'list'
+        // (fica onde estava, a ver o cliente novo na tabela) ou 'order' (a
+        // checkbox "Criar encomenda a seguir" — a encomenda manual tem o seu
+        // proprio seletor de cliente). Sem indicacao nenhuma, reabre o modal no
+        // cliente acabado de criar, para lhe acabar a ficha.
+        return match ((string) $request->input('after')) {
+            'order' => to_route('admin.encomendas.create'),
+            'list' => to_route('admin.clientes.index'),
+            default => to_route('admin.clientes.index', ['editar' => $customer->id]),
+        };
     }
 
     public function update(UpdateCustomerRequest $request, User $customer): RedirectResponse
@@ -189,7 +213,7 @@ class CustomerController extends Controller
 
         $this->toast('Cliente atualizado.');
 
-        return to_route('admin.clientes.edit', $customer);
+        return to_route('admin.clientes.index');
     }
 
     /**

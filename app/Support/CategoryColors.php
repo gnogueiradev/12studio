@@ -3,19 +3,21 @@
 namespace App\Support;
 
 /**
- * Paleta fixa das categorias.
+ * Atalhos de cor das categorias.
  *
- * Sete tons e nao um seletor de hex livre: a cor pinta a etiqueta da categoria
- * no backoffice e o menu da loja, e uma cor escolhida a mao entrava sem
- * ninguem verificar se ainda se le sobre o fundo claro E sobre o escuro. Estes
- * sete sao os do design, ja verificados nos dois temas.
+ * NAO e a lista branca da validacao: a cor da categoria e hex livre, e estes
+ * sete sao so os tons do design, oferecidos como atalhos no seletor. Foram a
+ * unica escolha possivel enquanto a cor pintava texto e um tom qualquer podia
+ * deixar de se ler; hoje pinta uma bolinha decorativa, sem minimo de contraste,
+ * e o proprio seletor avisa quando o tom se perde no fundo de algum dos temas.
+ * Mesmo papel que o FilamentPalette faz para as cores de filamento.
  *
- * Vive em Support porque duas camadas a pedem: a validacao dos Form Requests e
- * o teste-guarda que a compara com a lista gemea do frontend
- * (CATEGORY_COLORS em resources/js/types/catalog.ts). Esse teste-guarda e o
- * tests/Unit/CategoryColorsTest.php — referido em texto e nao num @see para
- * nao obrigar uma classe de app a importar uma classe de teste, que so existe
- * no autoload-dev.
+ * Vive em Support porque duas camadas a pedem: o seletor, atraves da lista
+ * gemea do frontend (CATEGORY_COLORS em resources/js/types/catalog.ts), e o
+ * teste-guarda que obriga as duas a concordarem —
+ * tests/Unit/CategoryColorsTest.php, referido em texto e nao num @see para nao
+ * obrigar uma classe de app a importar uma classe de teste, que so existe no
+ * autoload-dev.
  */
 class CategoryColors
 {
@@ -33,7 +35,8 @@ class CategoryColors
     ];
 
     /**
-     * Os hexes soltos, para o Rule::in dos Form Requests.
+     * Os hexes soltos, para o teste-guarda verificar que nao ha dois iguais —
+     * dois atalhos com o mesmo tom eram um deles impossivel de escolher.
      *
      * @return array<int, string>
      */

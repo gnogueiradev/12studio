@@ -133,7 +133,9 @@ class OrderController extends Controller
                 ->delete();
         }
 
-        if ($request->boolean('send_confirmation')) {
+        // A checkbox so aparece quando ha email, mas o pedido vem de fora e a
+        // guarda tem de estar aqui: uma venda em maos nao tem para onde enviar.
+        if ($request->boolean('send_confirmation') && $order->email !== null) {
             Mail::to($order->email)->send(new OrderConfirmationMail($order));
         }
 

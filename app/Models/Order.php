@@ -17,7 +17,7 @@ use Illuminate\Support\Carbon;
  * @property string $order_number
  * @property int|null $user_id
  * @property string $customer_name
- * @property string $email
+ * @property string|null $email
  * @property string|null $phone
  * @property string|null $nif
  * @property string $status

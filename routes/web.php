@@ -67,11 +67,12 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         Route::patch('itens/{item}/producao', [Admin\OrderItemController::class, 'updateProduction'])
             ->name('itens.producao');
 
-        // Cliente = User com is_admin = false; o `edit` acumula formulario
-        // e historico de encomendas (o backoffice nao tem rotas `show`).
+        // Cliente = User com is_admin = false. Sem `create` nem `edit`: os dois
+        // acontecem no modal da listagem, que chega ao cliente certo por
+        // `?editar={id}` — como nos produtos.
         Route::resource('clientes', Admin\CustomerController::class)
             ->parameters(['clientes' => 'customer'])
-            ->except(['show']);
+            ->except(['show', 'create', 'edit']);
 
         // Sem `create`: a categoria nova nasce no modal da propria listagem,
         // como nos produtos. O `edit` fica para a ordem e para arquivar.

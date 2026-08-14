@@ -49,7 +49,10 @@ class StoreManualOrderRequest extends FormRequest
             // gente sem conta. customer_name, esse, e sempre obrigatorio.
             'user_id' => ['nullable', 'integer', Rule::exists('users', 'id')],
             'customer_name' => ['required', 'string', 'max:120'],
-            'email' => ['required', 'email', 'max:255'],
+            // O canal `manual` e a venda em maos: o cliente esta a frente, leva
+            // a peca e nao ha nada para lhe enviar. Nos outros canais o email e
+            // como se acompanha a encomenda, e por isso continua obrigatorio.
+            'email' => ['nullable', 'email', 'max:255', 'required_unless:sales_channel,manual'],
             'phone' => ['nullable', 'string', 'max:30'],
             'nif' => ['nullable', 'string', 'max:20'],
 
@@ -134,6 +137,7 @@ class StoreManualOrderRequest extends FormRequest
             'items.required' => 'A encomenda precisa de pelo menos um artigo.',
             'items.min' => 'A encomenda precisa de pelo menos um artigo.',
             'postal_code.regex' => 'O código postal tem de ter o formato 1234-567.',
+            'email.required_unless' => 'Fora das vendas em mão, o email é como se acompanha a encomenda.',
         ];
     }
 }

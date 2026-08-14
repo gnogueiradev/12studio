@@ -104,7 +104,10 @@ class OrderService
                 'order_number' => $this->nextOrderNumber(),
                 'user_id' => $data['user_id'] ?? null,
                 'customer_name' => $data['customer_name'],
-                'email' => $data['email'],
+                // `?:` e nao `??`: o formulario manda string vazia quando o
+                // campo fica por preencher, e "sem email" tem de ter um valor
+                // so — senao cada envio de mail passava a testar os dois.
+                'email' => ($data['email'] ?? '') ?: null,
                 'phone' => $data['phone'] ?? null,
                 'nif' => $data['nif'] ?? null,
                 'status' => 'pending_payment',
@@ -233,7 +236,11 @@ class OrderService
 
         // Fora da transacao: nada de I/O externo dentro de uma escrita ao
         // SQLite (o Mailable e queued e ja usa afterCommit).
-        if ($to === 'shipped') {
+        //
+        // Sem email nao ha aviso de expedicao — e o caso da venda em maos, que
+        // nem morada tem. A encomenda avanca na mesma: e o estado dela que
+        // manda no pipeline, nao a existencia de um destinatario.
+        if ($to === 'shipped' && $order->email !== null) {
             Mail::to($order->email)->send(new OrderShippedMail($order));
         }
 

@@ -207,19 +207,44 @@ class CustomerCrudTest extends TestCase
         ]);
     }
 
-    public function test_the_detail_page_lists_the_customer_orders(): void
+    public function test_the_edit_modal_lists_the_customer_orders(): void
     {
         $customer = User::factory()->create();
         Address::factory()->create(['user_id' => $customer->id]);
         Order::factory()->count(2)->create(['user_id' => $customer->id]);
 
         $this->actingAs($this->admin)
-            ->get(route('admin.clientes.edit', $customer))
+            ->get(route('admin.clientes.index', ['editar' => $customer->id]))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->component('admin/clientes/edit')
-                ->has('orders', 2)
-                ->where('customer.canDelete', false));
+                ->component('admin/clientes/index')
+                ->where('editing.customer.id', $customer->id)
+                ->has('editing.orders', 2)
+                ->where('editing.customer.canDelete', false));
+    }
+
+    public function test_the_listing_carries_no_customer_without_the_parameter(): void
+    {
+        User::factory()->create();
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.clientes.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page->where('editing', null));
+    }
+
+    /**
+     * O parametro vem do URL, e um URL escreve-se a mao. Nenhum destes casos
+     * pode rebentar a listagem: o modal simplesmente nao abre.
+     */
+    public function test_an_unusable_editar_parameter_opens_no_modal(): void
+    {
+        foreach (['abc', '0', '-1', '99999', ''] as $value) {
+            $this->actingAs($this->admin)
+                ->get(route('admin.clientes.index', ['editar' => $value]))
+                ->assertOk()
+                ->assertInertia(fn (Assert $page) => $page->where('editing', null));
+        }
     }
 
     public function test_a_customer_without_orders_can_be_deleted(): void
@@ -250,8 +275,15 @@ class CustomerCrudTest extends TestCase
     {
         $otherAdmin = User::factory()->admin()->create();
 
+        // O modal nao abre num administrador: a listagem responde, mas sem
+        // `editing`. O `update` continua a dar 404, que e onde isto importa.
         $this->actingAs($this->admin)
-            ->get(route('admin.clientes.edit', $otherAdmin))
+            ->get(route('admin.clientes.index', ['editar' => $otherAdmin->id]))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page->where('editing', null));
+
+        $this->actingAs($this->admin)
+            ->patch(route('admin.clientes.update', $otherAdmin), $this->validPayload())
             ->assertNotFound();
     }
 

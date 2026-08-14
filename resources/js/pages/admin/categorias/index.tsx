@@ -87,6 +87,13 @@ export default function CategoriesIndex({
                      * Ícone decorativo: a cor da categoria é uma pista, não a
                      * informação — essa está no nome, logo ao lado. Por isso
                      * fica `aria-hidden` e não precisa de mínimo de contraste.
+                     *
+                     * A cor pinta o FUNDO e não o traço do ícone. Enquanto a
+                     * paleta era fechada, o traço num dos sete tons lia-se
+                     * sempre; com hex livre, um tom claro apagava o ícone no
+                     * tema claro e um escuro apagava-o no escuro. Como fundo com
+                     * contorno — o padrão do ColorSwatch — vê-se sempre, seja
+                     * qual for o tom.
                      */}
                     <span
                         aria-hidden
@@ -94,15 +101,12 @@ export default function CategoriesIndex({
                         style={
                             category.color === null
                                 ? undefined
-                                : { color: category.color }
+                                : { backgroundColor: category.color }
                         }
                     >
-                        <Tag
-                            className={cn(
-                                'size-4',
-                                category.color === null && 'text-gold',
-                            )}
-                        />
+                        {category.color === null && (
+                            <Tag className="size-4 text-gold" />
+                        )}
                     </span>
                     <div className="min-w-0">
                         <span className="block font-medium">

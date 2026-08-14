@@ -41,7 +41,12 @@ return [
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),
-            'url' => rtrim((string) env('APP_URL', 'http://localhost'), '/').'/storage',
+            // Relativo e nao absoluto: as fotografias sao servidas pelo mesmo
+            // host que serviu a pagina. Preso ao APP_URL, cada imagem apontava
+            // para o `localhost:8000` do `artisan serve` mesmo com a app a ser
+            // servida pelo Herd em `12studio.test` — a pagina desenhava e as
+            // fotografias davam 404, na listagem e na galeria ao mesmo tempo.
+            'url' => '/storage',
             'visibility' => 'public',
             'throw' => false,
             'report' => false,

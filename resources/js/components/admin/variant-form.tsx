@@ -1,6 +1,6 @@
 import { router } from '@inertiajs/react';
 import { useEffect } from 'react';
-import { ColorSwatch } from '@/components/admin/color-swatch';
+import { ColorSwatchGrid } from '@/components/admin/color-swatch-grid';
 import { PricingBreakdown } from '@/components/admin/pricing-breakdown';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
@@ -52,8 +52,6 @@ type Props = {
     /** Unidades presas a pagamentos pendentes — só existem a partir da Fase 3. */
     reservedStock?: number;
 };
-
-const NO_COLOR = 'none';
 
 const NO_MATERIAL = 'none';
 
@@ -184,41 +182,20 @@ export default function VariantForm({
              * Cor e material lado a lado, duas listas planas: são dois eixos
              * independentes. Só o material influencia o preço — a cor é o tom.
              */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-4">
                 <div className="grid gap-2">
                     <Label>Cor</Label>
-                    <Select
-                        value={
-                            data.color_id === null
-                                ? NO_COLOR
-                                : String(data.color_id)
-                        }
-                        onValueChange={(value) =>
-                            setData(
-                                'color_id',
-                                value === NO_COLOR ? null : Number(value),
-                            )
-                        }
-                        disabled={!hasColors}
-                    >
-                        <SelectTrigger>
-                            <SelectValue placeholder="Sem cor" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value={NO_COLOR}>Sem cor</SelectItem>
-                            {colors.map((color) => (
-                                <SelectItem
-                                    key={color.id}
-                                    value={String(color.id)}
-                                >
-                                    <span className="flex items-center gap-2">
-                                        <ColorSwatch hex={color.hex} />
-                                        {color.name}
-                                    </span>
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                    {/*
+                     * Amostras e não um seletor fechado: uma cor reconhece-se
+                     * pelo tom antes de se ler o nome, e escolher entre dois
+                     * verdes obrigava a abrir a lista e comparar duas bolinhas.
+                     */}
+                    <ColorSwatchGrid
+                        colors={colors}
+                        value={data.color_id}
+                        onChange={(id) => setData('color_id', id)}
+                        emptyLabel="Sem cor"
+                    />
                     {!hasColors && (
                         <p className="text-xs text-muted-foreground">
                             Ainda não há cores. Cria-as em Cores para as poderes
@@ -228,7 +205,7 @@ export default function VariantForm({
                     <InputError message={errors.color_id} />
                 </div>
 
-                <div className="grid gap-2">
+                <div className="grid gap-2 sm:max-w-sm">
                     <Label>Material</Label>
                     <Select
                         value={
