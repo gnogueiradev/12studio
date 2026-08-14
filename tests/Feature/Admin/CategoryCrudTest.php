@@ -82,20 +82,43 @@ class CategoryCrudTest extends TestCase
     }
 
     /**
-     * A paleta e fechada: um hex qualquer entrava sem ninguem verificar se
-     * ainda se le no tema claro E no escuro.
+     * A paleta deixou de ser fechada: os sete tons do design sao atalhos do
+     * seletor, nao a lista do que pode entrar. Um tom apanhado no espectro e
+     * uma escolha legitima — o seletor avisa se o contraste cair, e a cor vive
+     * numa bolinha decorativa que nao tem minimo nenhum a cumprir.
      */
-    public function test_store_rejects_a_colour_outside_the_palette(): void
+    public function test_store_accepts_a_colour_outside_the_palette(): void
     {
-        $this->actingAs($this->admin)
-            ->from(route('admin.categorias.index'))
-            ->post(route('admin.categorias.store'), [
-                'name' => 'Fluorescente',
-                'status' => 'visible',
-                'color' => '#00FF00',
-                'sort_order' => 0,
-            ])
-            ->assertSessionHasErrors('color');
+        $this->actingAs($this->admin)->post(route('admin.categorias.store'), [
+            'name' => 'Fluorescente',
+            'status' => 'visible',
+            'color' => '#00FF00',
+            'sort_order' => 0,
+        ]);
+
+        $this->assertDatabaseHas('categories', [
+            'name' => 'Fluorescente',
+            'color' => '#00FF00',
+        ]);
+    }
+
+    /**
+     * O que continua a nao entrar e o que nao e um hex: a coluna e varchar(7) e
+     * o frontend pinta-a directamente num `style`.
+     */
+    public function test_store_rejects_anything_that_is_not_a_plain_hex(): void
+    {
+        foreach (['verde', '#GG0000', '#FFF', '#FF7A00CC', 'rgb(0,0,0)'] as $value) {
+            $this->actingAs($this->admin)
+                ->from(route('admin.categorias.index'))
+                ->post(route('admin.categorias.store'), [
+                    'name' => 'Fluorescente',
+                    'status' => 'visible',
+                    'color' => $value,
+                    'sort_order' => 0,
+                ])
+                ->assertSessionHasErrors('color');
+        }
 
         $this->assertDatabaseMissing('categories', ['name' => 'Fluorescente']);
     }
