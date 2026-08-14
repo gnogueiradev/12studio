@@ -4,9 +4,11 @@ namespace Tests\Feature\Admin;
 
 use App\Models\Color;
 use App\Models\Material;
+use App\Models\PrinterProfile;
 use App\Models\Product;
 use App\Models\User;
 use App\Models\Variant;
+use App\Support\VariantSku;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
@@ -47,14 +49,18 @@ class VariantCrudTest extends TestCase
 
     public function test_store_converts_euros_to_cents(): void
     {
+        // Criar dispara-se de dentro do modal, e por isso responde com um
+        // `back()` — voltar ao endereco de onde se veio guarda a pagina, os
+        // filtros e a pesquisa, e o `?editar={id}` reabre o produto certo.
+        $modal = route('admin.produtos.index', ['editar' => $this->product->id]);
+
         $this->actingAs($this->admin)
+            ->from($modal)
             ->post(route('admin.produtos.variantes.store', $this->product), [
                 ...$this->validPayload(),
                 'normal_price' => '24,90',
             ])
-            // O produto ja nao tem pagina de edicao: volta-se a listagem com o
-            // modal aberto no produto, que e onde as variantes se veem.
-            ->assertRedirect(route('admin.produtos.index', ['editar' => $this->product->id]));
+            ->assertRedirect($modal);
 
         $this->assertDatabaseHas('variants', [
             'sku' => 'VASO-PLA-20',
@@ -252,63 +258,96 @@ class VariantCrudTest extends TestCase
     }
 
     /**
-     * Duas listas planas e independentes: as cores ativas de um lado, os
-     * materiais ativos do outro. Arquivados ficam de fora dos dois.
+     * A ficha da variante vive no modal do produto, e por isso e a listagem que
+     * carrega o que ela precisa: duas listas planas e independentes — as cores
+     * ativas de um lado, os materiais ativos do outro, arquivados de fora dos
+     * dois — e a referencia sugerida para a variante seguinte.
      */
-    public function test_the_create_page_carries_active_colours_and_materials(): void
+    public function test_the_listing_carries_what_the_variant_form_needs(): void
     {
         Color::factory()->count(2)->create();
         Color::factory()->archived()->create();
         Material::factory()->create(['name' => 'PLA']);
         Material::factory()->archived()->create();
+        PrinterProfile::factory()->isDefault()->create();
 
         $this->actingAs($this->admin)
-            ->get(route('admin.produtos.variantes.create', $this->product))
+            ->get(route('admin.produtos.index', ['editar' => $this->product->id]))
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->has('colors', 2)
                 ->has('materials', 1)
-                ->where('materials.0.name', 'PLA'));
+                ->where('materials.0.name', 'PLA')
+                ->has('printers', 1)
+                // A semente do campo SKU, com a mesma numeracao da matriz.
+                ->where('editing.suggestedSku', VariantSku::next($this->product)));
     }
 
     /**
      * Editar uma variante cuja cor foi entretanto arquivada tem de continuar
      * a mostra-la — senao o seletor abria vazio e uma gravacao inocente
      * perdia a cor.
+     *
+     * Quem abre a listagem nao sabe qual das variantes vai ser aberta, por isso
+     * as cores que ficam sao as de TODAS as variantes do produto.
      */
-    public function test_editing_keeps_an_archived_colour_in_the_options(): void
+    public function test_the_listing_keeps_an_archived_colour_in_the_options(): void
     {
         $color = Color::factory()->archived()->create();
-        $variant = Variant::factory()->create([
+        Variant::factory()->create([
             'product_id' => $this->product->id,
             'color_id' => $color->id,
         ]);
 
         $this->actingAs($this->admin)
-            ->get(route('admin.variantes.edit', $variant))
+            ->get(route('admin.produtos.index', ['editar' => $this->product->id]))
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->has('colors', 1)
                 ->where('colors.0.id', $color->id)
-                ->where('variant.colorId', $color->id));
+                ->where('editing.variants.0.colorId', $color->id));
     }
 
     /** A mesma rede, do lado do material. */
-    public function test_editing_keeps_an_archived_material_in_the_options(): void
+    public function test_the_listing_keeps_an_archived_material_in_the_options(): void
     {
         $material = Material::factory()->archived()->create();
-        $variant = Variant::factory()->create([
+        Variant::factory()->create([
             'product_id' => $this->product->id,
             'material_id' => $material->id,
         ]);
 
         $this->actingAs($this->admin)
-            ->get(route('admin.variantes.edit', $variant))
+            ->get(route('admin.produtos.index', ['editar' => $this->product->id]))
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->has('materials', 1)
                 ->where('materials.0.id', $material->id)
-                ->where('variant.materialId', $material->id));
+                ->where('editing.variants.0.materialId', $material->id));
+    }
+
+    /**
+     * O formulario nunca ve `price_cents` cru: a linha da variante ja traz os
+     * precos em euros e com a troca normal/promocional desfeita, para a ficha
+     * abrir sem uma segunda viagem ao servidor.
+     */
+    public function test_the_listing_carries_the_variant_ready_for_the_form(): void
+    {
+        Variant::factory()->create([
+            'product_id' => $this->product->id,
+            'price_cents' => 1990,
+            'compare_at_cents' => 2490,
+            'printing_time_minutes' => 90,
+            'extra_cost_cents' => 65,
+        ]);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.produtos.index', ['editar' => $this->product->id]))
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('editing.variants.0.normalPrice', '24.90')
+                ->where('editing.variants.0.salePrice', '19.90')
+                ->where('editing.variants.0.printingTimeMinutes', 90)
+                ->where('editing.variants.0.extraCost', '0.65'));
     }
 
     public function test_destroy_archives_instead_of_deleting(): void

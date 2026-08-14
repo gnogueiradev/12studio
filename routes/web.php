@@ -174,11 +174,14 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         Route::delete('imagens/{image}', [Admin\ProductImageController::class, 'destroy'])
             ->name('imagens.destroy');
 
-        // Shallow: criar dentro do produto, editar/apagar por /admin/variantes/{variant}.
-        // A listagem e a seccao "Variantes" da pagina de edicao do produto.
+        // Shallow: criar dentro do produto, editar/arquivar por
+        // /admin/variantes/{variant}. Sem `create` nem `edit`, como no proprio
+        // produto: a ficha da variante vive dentro do modal, na seccao
+        // "Variantes", e o painel de custo dela vem da prop `pricing` que o
+        // ProductController::index serve.
         Route::resource('produtos.variantes', Admin\VariantController::class)
             ->parameters(['produtos' => 'product', 'variantes' => 'variant'])
-            ->except(['show', 'index'])
+            ->except(['show', 'index', 'create', 'edit'])
             ->shallow();
     });
 });

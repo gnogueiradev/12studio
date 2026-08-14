@@ -16,20 +16,26 @@ use Illuminate\Database\Eloquent\Builder;
 class MaterialOptions
 {
     /**
-     * Os arquivados ficam de fora — excepto o que a variante ja usa
-     * (`$keepMaterialId`), senao o seletor abria vazio e uma gravacao inocente
-     * perdia o material.
+     * Os arquivados ficam de fora — excepto os que as variantes ja usam
+     * (`$keep`), senao o seletor abria vazio e uma gravacao inocente perdia o
+     * material. Aceita uma lista pela mesma razao que o ColorOptions.
      *
+     * @param  int|array<int, int|null>|null  $keep
      * @return array<int, array{id: int, name: string, family: string|null, pricePerKgCents: int}>
      */
-    public static function all(?int $keepMaterialId = null): array
+    public static function all(int|array|null $keep = null): array
     {
+        $keepIds = array_values(array_filter(
+            is_array($keep) ? $keep : [$keep],
+            fn (?int $id): bool => $id !== null,
+        ));
+
         return Material::query()
-            ->where(function (Builder $query) use ($keepMaterialId): void {
+            ->where(function (Builder $query) use ($keepIds): void {
                 $query->where('active', true);
 
-                if ($keepMaterialId !== null) {
-                    $query->orWhere('id', $keepMaterialId);
+                if ($keepIds !== []) {
+                    $query->orWhereIn('id', $keepIds);
                 }
             })
             ->orderBy('sort_order')

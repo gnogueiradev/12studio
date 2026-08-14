@@ -6,11 +6,20 @@ use App\Models\Material;
 use App\Models\PrinterProfile;
 use App\Models\Product;
 use App\Models\User;
-use App\Models\Variant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Testing\TestResponse;
 use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
 
+/**
+ * O painel de custo da ficha de variante.
+ *
+ * A ficha vive dentro do modal do produto, e por isso e a LISTAGEM de produtos
+ * que serve a prop `pricing` — calculada pelo mesmo motor que calcula o preco
+ * gravado, a partir dos campos que o formulario manda no URL
+ * (`only: ['pricing']`). E a mesma prop que a calculadora usa; o que muda e so
+ * a pagina que a hospeda.
+ */
 class VariantPricingTest extends TestCase
 {
     use RefreshDatabase;
@@ -34,86 +43,107 @@ class VariantPricingTest extends TestCase
     }
 
     /**
-     * A ficha da variante abre com o preco da variante como ela esta gravada —
-     * sem parametros no URL. Sem isto, quem abre uma variante ja completa via
-     * um painel vazio ate mexer nalgum campo.
+     * @param  array<string, mixed>  $fields
      */
-    public function test_the_variant_form_shows_the_suggested_prices_on_first_open(): void
+    private function preview(array $fields): TestResponse
     {
-        $variant = Variant::factory()->create([
-            'material_id' => $this->material->id,
-            'filament_weight_grams' => 32,
-            'printing_time_minutes' => 90,
-        ]);
-
-        $this->actingAs($this->admin)
-            ->get(route('admin.variantes.edit', $variant))
-            ->assertInertia(fn (AssertableInertia $page) => $page
-                ->where('pricing.result.productionCostMicros', 1_647_520)
-                ->where('pricing.result.resalePriceCents', 350)
-                ->where('pricing.result.retailPriceCents', 600)
-                ->where('pricing.usingFallbackRate', false)
-            );
+        return $this->actingAs($this->admin)
+            ->get(route('admin.produtos.index', $fields));
     }
 
     /**
-     * O preco por kg vem do MATERIAL da variante: e a bobine que tem preco. Um
-     * custo calculado com outro numero nao correspondia a filamento nenhum que
-     * exista em stock.
+     * O caso base, com o produto aberto no modal ao lado dos campos do calculo
+     * — que e exatamente o URL que o formulario produz enquanto se escreve.
+     */
+    public function test_the_listing_prices_the_fields_the_form_sends(): void
+    {
+        $product = Product::factory()->create();
+
+        $this->preview([
+            'editar' => $product->id,
+            'weight_grams' => 32,
+            'hours' => 1,
+            'minutes' => 30,
+            'material_id' => $this->material->id,
+        ])->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('pricing.result.productionCostMicros', 1_647_520)
+            ->where('pricing.result.resalePriceCents', 350)
+            ->where('pricing.result.retailPriceCents', 600)
+            ->where('pricing.usingFallbackRate', false)
+        );
+    }
+
+    /**
+     * Mexer num campo mexe no preco. E a mesma resposta com outros parametros —
+     * o painel nao guarda estado nenhum entre pedidos.
+     */
+    public function test_halving_the_print_time_halves_the_machine_share(): void
+    {
+        $this->preview([
+            'weight_grams' => 32,
+            'hours' => 0,
+            'minutes' => 30,
+            'material_id' => $this->material->id,
+        ])->assertInertia(fn (AssertableInertia $page) => $page
+            ->where('pricing.result.productionCostMicros', 1_107_520)
+            ->where('pricing.result.resalePriceCents', 250)
+        );
+    }
+
+    /**
+     * O preco por kg vem do MATERIAL: e a bobine que tem preco. Um custo
+     * calculado com outro numero nao correspondia a filamento nenhum que exista
+     * em stock.
      */
     public function test_the_suggestion_uses_the_price_per_kg_of_the_chosen_material(): void
     {
         $expensive = Material::factory()->create(['price_per_kg_cents' => 3_400]);
 
-        $variant = Variant::factory()->create([
+        $this->preview([
+            'weight_grams' => 32,
+            'hours' => 1,
+            'minutes' => 30,
             'material_id' => $expensive->id,
-            'filament_weight_grams' => 32,
-            'printing_time_minutes' => 90,
-        ]);
-
-        $this->actingAs($this->admin)
-            ->get(route('admin.variantes.edit', $variant))
-            ->assertInertia(fn (AssertableInertia $page) => $page
-                // 32 g x 0,034 EUR/g = 1,088 EUR, o dobro do PLA a 17 EUR/kg.
-                ->where('pricing.result.filamentCostMicros', 1_088_000)
-            );
+        ])->assertInertia(fn (AssertableInertia $page) => $page
+            // 32 g x 0,034 EUR/g = 1,088 EUR, o dobro do PLA a 17 EUR/kg.
+            ->where('pricing.result.filamentCostMicros', 1_088_000)
+        );
     }
 
-    public function test_the_suggestion_uses_the_printer_profile_of_the_variant(): void
+    public function test_the_suggestion_uses_the_chosen_printer_profile(): void
     {
         $fast = PrinterProfile::factory()->create(['hourly_rate_cents' => 100]);
 
-        $variant = Variant::factory()->create([
+        $this->preview([
+            'weight_grams' => 32,
+            'hours' => 1,
+            'minutes' => 30,
             'material_id' => $this->material->id,
-            'filament_weight_grams' => 32,
-            'printing_time_minutes' => 90,
             'printer_profile_id' => $fast->id,
-        ]);
-
-        $this->actingAs($this->admin)
-            ->get(route('admin.variantes.edit', $variant))
-            ->assertInertia(fn (AssertableInertia $page) => $page
-                // 1,5 h x 1,00 EUR/h, o dobro da A1.
-                ->where('pricing.result.machineCostMicros', 1_500_000)
-                ->where('pricing.hourlyRateCents', 100)
-            );
+        ])->assertInertia(fn (AssertableInertia $page) => $page
+            // 1,5 h x 1,00 EUR/h, o dobro da A1.
+            ->where('pricing.result.machineCostMicros', 1_500_000)
+            ->where('pricing.hourlyRateCents', 100)
+        );
     }
 
     /**
      * Sem tempo de impressao nao ha preco sugerido nenhum, e esta certo: e a
-     * regra fundamental desta versao. As variantes que ja existem entram todas
-     * neste caso ate alguem lhes preencher o tempo.
+     * regra fundamental desta versao. E tambem o estado em que a ficha de uma
+     * variante nova abre — sem campos no URL, a listagem devolve o mesmo.
      */
-    public function test_a_variant_without_a_print_time_gets_no_suggestion(): void
+    public function test_without_a_print_time_there_is_no_suggestion(): void
     {
-        $variant = Variant::factory()->create([
+        $this->preview([
+            'weight_grams' => 32,
             'material_id' => $this->material->id,
-            'filament_weight_grams' => 32,
-            'printing_time_minutes' => null,
-        ]);
+        ])->assertInertia(fn (AssertableInertia $page) => $page->where('pricing.result', null));
+    }
 
-        $this->actingAs($this->admin)
-            ->get(route('admin.variantes.edit', $variant))
+    public function test_the_bare_listing_has_nothing_to_suggest(): void
+    {
+        $this->preview([])
+            ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page->where('pricing.result', null));
     }
 
@@ -128,55 +158,27 @@ class VariantPricingTest extends TestCase
      * Se alguem "simplificar" a regra para dentro do PricingPreviewRequest — que
      * as duas paginas partilham — este teste cai. E o aviso.
      */
-    public function test_a_variant_without_a_material_still_gets_a_suggestion(): void
+    public function test_without_a_material_there_is_still_a_suggestion(): void
     {
-        $variant = Variant::factory()->create([
-            'material_id' => null,
-            'filament_weight_grams' => 32,
-            'printing_time_minutes' => 90,
-        ]);
-
-        $this->actingAs($this->admin)
-            ->get(route('admin.variantes.edit', $variant))
-            ->assertInertia(fn (AssertableInertia $page) => $page
-                // Sem bobine nao ha plastico a pagar, mas a maquina andou:
-                // 1,5 h x 0,50 EUR/h.
-                ->where('pricing.result.filamentCostMicros', 0)
-                ->where('pricing.result.machineCostMicros', 750_000)
-            );
-    }
-
-    /**
-     * O painel recarrega-se sozinho com `only: ['pricing']` enquanto o admin
-     * escreve — sem gravar nada e sem perder o resto do formulario.
-     */
-    public function test_the_preview_recalculates_from_the_form_fields(): void
-    {
-        $variant = Variant::factory()->create([
-            'material_id' => $this->material->id,
-            'filament_weight_grams' => 32,
-            'printing_time_minutes' => 90,
-        ]);
-
-        $this->actingAs($this->admin)
-            ->get(route('admin.variantes.edit', $variant).'?'.http_build_query([
-                'weight_grams' => 32,
-                'hours' => 0,
-                'minutes' => 30,
-                'material_id' => $this->material->id,
-            ]))
-            ->assertInertia(fn (AssertableInertia $page) => $page
-                // Metade do tempo: o preco de revenda desce de 3,50 para 2,50.
-                ->where('pricing.result.productionCostMicros', 1_107_520)
-                ->where('pricing.result.resalePriceCents', 250)
-            );
+        $this->preview([
+            'weight_grams' => 32,
+            'hours' => 1,
+            'minutes' => 30,
+        ])->assertInertia(fn (AssertableInertia $page) => $page
+            // Sem bobine nao ha plastico a pagar, mas a maquina andou:
+            // 1,5 h x 0,50 EUR/h.
+            ->where('pricing.result.filamentCostMicros', 0)
+            ->where('pricing.result.machineCostMicros', 750_000)
+        );
     }
 
     public function test_the_print_time_and_extra_cost_are_stored(): void
     {
         $product = Product::factory()->create();
+        $modal = route('admin.produtos.index', ['editar' => $product->id]);
 
         $this->actingAs($this->admin)
+            ->from($modal)
             ->post(route('admin.produtos.variantes.store', $product), [
                 'sku' => 'TEST-0001',
                 'material_id' => $this->material->id,
@@ -190,7 +192,7 @@ class VariantPricingTest extends TestCase
                 'is_default' => false,
                 'active' => true,
             ])
-            ->assertRedirect(route('admin.produtos.index', ['editar' => $product->id]));
+            ->assertRedirect($modal);
 
         $this->assertDatabaseHas('variants', [
             'sku' => 'TEST-0001',
