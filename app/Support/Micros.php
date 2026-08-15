@@ -7,10 +7,10 @@ namespace App\Support;
  *
  * A regra do projeto e "centimos inteiros, nunca floats" (App\Support\Money),
  * mas a formula de custo encadeia cinco multiplicacoes antes de haver um preco
- * para mostrar: 0,544 EUR de filamento e 0,10352 EUR de reserva de falha nao
+ * para mostrar: 0,765 EUR de filamento e 0,06325 EUR de reserva de falha nao
  * cabem num centimo, e arredondar cada passo desviava o preco final. O micro
  * tem quatro casas a mais do que o centimo e continua a ser inteiro — o custo
- * de referencia, 1,64752 EUR, e exatamente 1647520.
+ * de referencia, 1,47825 EUR, e exatamente 1478250.
  *
  * Todos os metodos assumem valores NAO NEGATIVOS. A validacao dos formularios
  * garante min:0 nos custos e min:1 nos multiplicadores; com negativos o

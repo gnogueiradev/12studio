@@ -27,15 +27,16 @@ class DatabaseSeeder extends Seeder
      * mudar a taxa sem um deploy.
      *
      * Idempotente pelo nome, como o admin: o deploy corre este seeder sempre, e
-     * uma taxa que o dono ja ajustou nao pode voltar aos 0,50 EUR a cada
-     * lancamento.
+     * uma taxa que o dono ja ajustou nao pode voltar aos 0,20 EUR a cada
+     * lancamento. Por isso quem moveu as impressoras ja existentes para a taxa
+     * nova foi uma migracao, e nao este seeder.
      */
     private function seedPrinterProfiles(): void
     {
         PrinterProfile::query()->firstOrCreate(
             ['name' => 'Bambu Lab A1'],
             [
-                'hourly_rate_cents' => 50,
+                'hourly_rate_cents' => 20,
                 'notes' => 'Inclui energia, desgaste, manutencao e depreciacao.',
                 'is_default' => true,
                 'active' => true,

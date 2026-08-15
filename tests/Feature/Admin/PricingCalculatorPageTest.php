@@ -27,7 +27,7 @@ class PricingCalculatorPageTest extends TestCase
         parent::setUp();
 
         $this->admin = User::factory()->admin()->create();
-        PrinterProfile::factory()->isDefault()->create(['name' => 'Bambu Lab A1', 'hourly_rate_cents' => 50]);
+        PrinterProfile::factory()->isDefault()->create(['name' => 'Bambu Lab A1', 'hourly_rate_cents' => 20]);
         $this->material = Material::factory()->create(['price_per_kg_cents' => 1_700]);
     }
 
@@ -44,7 +44,7 @@ class PricingCalculatorPageTest extends TestCase
                 ->component('admin/calculadora/index')
                 ->where('result', null)
                 ->where('usingFallbackRate', false)
-                ->where('hourlyRateCents', 50)
+                ->where('hourlyRateCents', 20)
             );
     }
 
@@ -57,43 +57,43 @@ class PricingCalculatorPageTest extends TestCase
     {
         $this->actingAs($this->admin)
             ->get(route('admin.calculadora', [
-                'weight_grams' => 32,
-                'hours' => 1,
+                'weight_grams' => 45,
+                'hours' => 2,
                 'minutes' => 30,
                 'material_id' => $this->material->id,
             ]))
             ->assertInertia(fn (AssertableInertia $page) => $page
-                ->where('result.filamentCostMicros', 544_000)
-                ->where('result.machineCostMicros', 750_000)
-                ->where('result.handlingCostMicros', 250_000)
-                ->where('result.failureReserveMicros', 103_520)
-                ->where('result.productionCostMicros', 1_647_520)
-                ->where('result.productionCostCents', 165)
-                ->where('result.resalePriceCents', 350)
-                ->where('result.retailPriceCents', 600)
-                ->where('result.producerMarginBp', 5_293)
-                ->where('result.resellerMarginBp', 4_167)
+                ->where('result.filamentCostMicros', 765_000)
+                ->where('result.machineCostMicros', 500_000)
+                ->where('result.handlingCostMicros', 150_000)
+                ->where('result.failureReserveMicros', 63_250)
+                ->where('result.productionCostMicros', 1_478_250)
+                ->where('result.productionCostCents', 148)
+                ->where('result.resalePriceCents', 300)
+                ->where('result.retailPriceCents', 550)
+                ->where('result.producerMarginBp', 5_073)
+                ->where('result.resellerMarginBp', 4_545)
                 ->where('result.retailBumped', false)
             );
     }
 
     /**
-     * "1h30" sao 90 minutos e nao 1,30 horas. Os dois campos separados existem
+     * "2h30" sao 150 minutos e nao 2,30 horas. Os dois campos separados existem
      * para nao haver leitura ambigua nenhuma; este teste fixa a conversao.
      */
     public function test_hours_and_minutes_become_a_single_minute_count(): void
     {
         $this->actingAs($this->admin)
             ->get(route('admin.calculadora', [
-                'weight_grams' => 32,
-                'hours' => 1,
+                'weight_grams' => 45,
+                'hours' => 2,
                 'minutes' => 30,
                 'material_id' => $this->material->id,
             ]))
             ->assertInertia(fn (AssertableInertia $page) => $page
-                // 90 min x 0,50 EUR/h = 0,75 EUR. Com 1,30 h dariam 0,65 EUR.
-                ->where('result.machineCostMicros', 750_000)
-                ->where('inputs.hours', 1)
+                // 150 min x 0,20 EUR/h = 0,50 EUR. Com 2,30 h dariam 0,46 EUR.
+                ->where('result.machineCostMicros', 500_000)
+                ->where('inputs.hours', 2)
                 ->where('inputs.minutes', 30)
             );
     }
@@ -111,9 +111,9 @@ class PricingCalculatorPageTest extends TestCase
             ]))
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('result.mode', 'batch')
-                ->where('result.productionCostMicros', 927_253)
-                ->where('result.resalePriceCents', 200)
-                ->where('result.job.resalePriceCents', 1_200)
+                ->where('result.productionCostMicros', 677_700)
+                ->where('result.resalePriceCents', 150)
+                ->where('result.job.resalePriceCents', 900)
             );
     }
 
@@ -127,15 +127,15 @@ class PricingCalculatorPageTest extends TestCase
     {
         $this->actingAs($this->admin)
             ->get(route('admin.calculadora', [
-                'weight_grams' => 32,
-                'hours' => 1,
+                'weight_grams' => 45,
+                'hours' => 2,
                 'minutes' => 30,
                 'material_id' => $this->material->id,
                 'price_per_kg' => '99,00',
             ]))
             ->assertInertia(fn (AssertableInertia $page) => $page
-                // 32 g x 0,017 EUR/g. A 99,00 EUR/kg dariam 3 168 000.
-                ->where('result.filamentCostMicros', 544_000)
+                // 45 g x 0,017 EUR/g. A 99,00 EUR/kg dariam 4 455 000.
+                ->where('result.filamentCostMicros', 765_000)
                 ->missing('inputs.price_per_kg')
             );
     }
@@ -150,8 +150,8 @@ class PricingCalculatorPageTest extends TestCase
     {
         $this->actingAs($this->admin)
             ->get(route('admin.calculadora', [
-                'weight_grams' => 32,
-                'hours' => 1,
+                'weight_grams' => 45,
+                'hours' => 2,
                 'minutes' => 30,
             ]))
             ->assertInertia(fn (AssertableInertia $page) => $page
@@ -186,15 +186,15 @@ class PricingCalculatorPageTest extends TestCase
 
         $this->actingAs($this->admin)
             ->get(route('admin.calculadora', [
-                'weight_grams' => 32,
-                'hours' => 1,
+                'weight_grams' => 45,
+                'hours' => 2,
                 'minutes' => 30,
                 'material_id' => $this->material->id,
             ]))
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('usingFallbackRate', true)
-                ->where('hourlyRateCents', 50)
-                ->where('result.machineCostMicros', 750_000)
+                ->where('hourlyRateCents', 20)
+                ->where('result.machineCostMicros', 500_000)
             );
     }
 
@@ -210,15 +210,15 @@ class PricingCalculatorPageTest extends TestCase
 
         $this->actingAs($this->admin)
             ->get(route('admin.calculadora', [
-                'weight_grams' => 32,
-                'hours' => 1,
+                'weight_grams' => 45,
+                'hours' => 2,
                 'minutes' => 30,
                 'material_id' => $this->material->id,
                 'printer_profile_id' => $archived->id,
             ]))
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('inputs.printer_profile_id', $default->id)
-                ->where('result.machineCostMicros', 750_000)
+                ->where('result.machineCostMicros', 500_000)
             );
     }
 

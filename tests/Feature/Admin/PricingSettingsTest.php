@@ -29,25 +29,14 @@ class PricingSettingsTest extends TestCase
     private function validPayload(): array
     {
         return [
-            'failure_reserve_percent' => '8',
+            'failure_reserve_percent' => '5',
             'minimum_resale_price' => '1.50',
+            'resale_multiplier' => '1.70',
             'retail_multiplier' => '1.75',
             'minimum_retail_multiplier' => '1.60',
+            'handling_cost' => '0.15',
             'batch_job_handling' => '0.20',
             'batch_unit_handling' => '0.10',
-            'resale_multipliers' => [
-                ['up_to' => '2.00', 'value' => '2.00'],
-                ['up_to' => '5.00', 'value' => '1.90'],
-                ['up_to' => '10.00', 'value' => '1.80'],
-                ['up_to' => null, 'value' => '1.70'],
-            ],
-            'handling_tiers' => [
-                ['up_to_grams' => 50, 'value' => '0.25'],
-                ['up_to_grams' => 150, 'value' => '0.35'],
-                ['up_to_grams' => 300, 'value' => '0.50'],
-                ['up_to_grams' => 500, 'value' => '0.75'],
-                ['up_to_grams' => null, 'value' => '1.00'],
-            ],
         ];
     }
 
@@ -56,11 +45,11 @@ class PricingSettingsTest extends TestCase
         $this->actingAs($this->admin)
             ->get(route('admin.definicoes.index'))
             ->assertInertia(fn (AssertableInertia $page) => $page
-                ->where('pricing.failure_reserve_percent', '8.00')
+                ->where('pricing.failure_reserve_percent', '5.00')
+                ->where('pricing.resale_multiplier', '1.70')
                 ->where('pricing.retail_multiplier', '1.75')
                 ->where('pricing.minimum_resale_price', '1.50')
-                ->has('pricing.resale_multipliers', 4)
-                ->has('pricing.handling_tiers', 5)
+                ->where('pricing.handling_cost', '0.15')
             );
     }
 
@@ -82,12 +71,12 @@ class PricingSettingsTest extends TestCase
      */
     public function test_saving_the_pricing_settings_changes_the_calculated_price(): void
     {
-        PrinterProfile::factory()->isDefault()->create(['hourly_rate_cents' => 50]);
+        PrinterProfile::factory()->isDefault()->create(['hourly_rate_cents' => 20]);
         $material = Material::factory()->create(['price_per_kg_cents' => 1_700]);
 
         $query = [
-            'weight_grams' => 32,
-            'hours' => 1,
+            'weight_grams' => 45,
+            'hours' => 2,
             'minutes' => 30,
             'material_id' => $material->id,
         ];
@@ -95,8 +84,8 @@ class PricingSettingsTest extends TestCase
         $this->actingAs($this->admin)
             ->get(route('admin.calculadora', $query))
             ->assertInertia(fn (AssertableInertia $page) => $page
-                ->where('result.failureReserveMicros', 103_520)
-                ->where('result.productionCostMicros', 1_647_520)
+                ->where('result.failureReserveMicros', 63_250)
+                ->where('result.productionCostMicros', 1_478_250)
             );
 
         $this->actingAs($this->admin)
@@ -108,46 +97,31 @@ class PricingSettingsTest extends TestCase
         $this->actingAs($this->admin)
             ->get(route('admin.calculadora', $query))
             ->assertInertia(fn (AssertableInertia $page) => $page
-                // (0,544 + 0,75) x 12% = 0,15528 EUR
-                ->where('result.failureReserveMicros', 155_280)
-                ->where('result.productionCostMicros', 1_699_280)
+                // (0,765 + 0,50) x 12% = 0,1518 EUR
+                ->where('result.failureReserveMicros', 151_800)
+                ->where('result.productionCostMicros', 1_566_800)
             );
     }
 
     /**
-     * Uma tabela de faixas so funciona lida de cima para baixo. Sem a ordem, a
-     * primeira faixa apanhava tudo e as outras eram codigo morto — sem erro
-     * nenhum a dize-lo.
+     * Os dois parametros que substituiram as tabelas de faixas. Vao com virgula
+     * de proposito: e a unica cobertura de que entraram na lista do
+     * prepareForValidation — sem isso, "1,90" chegava ao validador como texto.
      */
-    public function test_the_handling_tiers_must_be_in_ascending_order(): void
+    public function test_the_admin_can_change_the_resale_multiplier_and_the_handling_cost(): void
     {
-        $payload = $this->validPayload();
-        $payload['handling_tiers'][1]['up_to_grams'] = 20;
-
         $this->actingAs($this->admin)
-            ->patch(route('admin.definicoes.precos'), $payload)
-            ->assertSessionHasErrors('handling_tiers.1.up_to_grams');
-    }
+            ->patch(route('admin.definicoes.precos'), [
+                ...$this->validPayload(),
+                'resale_multiplier' => '1,90',
+                'handling_cost' => '0,25',
+            ])
+            ->assertRedirect(route('admin.definicoes.index'));
 
-    /**
-     * A ultima faixa apanha tudo o que passa das anteriores. Com tecto, uma
-     * peca mais pesada do que o maior limiar saia sem manuseamento nenhum.
-     */
-    public function test_only_the_last_tier_may_be_open_ended(): void
-    {
-        $payload = $this->validPayload();
-        $payload['handling_tiers'][4]['up_to_grams'] = 900;
+        $pricing = app(PricingSettings::class);
 
-        $this->actingAs($this->admin)
-            ->patch(route('admin.definicoes.precos'), $payload)
-            ->assertSessionHasErrors('handling_tiers.4.up_to_grams');
-
-        $payload = $this->validPayload();
-        $payload['handling_tiers'][2]['up_to_grams'] = null;
-
-        $this->actingAs($this->admin)
-            ->patch(route('admin.definicoes.precos'), $payload)
-            ->assertSessionHasErrors('handling_tiers.2.up_to_grams');
+        $this->assertSame(19_000, $pricing->resaleMultiplierBp());
+        $this->assertSame(25, $pricing->handlingCostCents());
     }
 
     /**
@@ -177,6 +151,13 @@ class PricingSettingsTest extends TestCase
                 'retail_multiplier' => '0.9',
             ])
             ->assertSessionHasErrors('retail_multiplier');
+
+        $this->actingAs($this->admin)
+            ->patch(route('admin.definicoes.precos'), [
+                ...$this->validPayload(),
+                'resale_multiplier' => '0.9',
+            ])
+            ->assertSessionHasErrors('resale_multiplier');
     }
 
     /**
@@ -191,7 +172,7 @@ class PricingSettingsTest extends TestCase
             ->assertRedirect(route('admin.definicoes.index'));
 
         $this->assertDatabaseHas('settings', ['key' => 'currency']);
-        $this->assertSame(800, app(PricingSettings::class)->failureReserveBp());
+        $this->assertSame(500, app(PricingSettings::class)->failureReserveBp());
     }
 
     public function test_non_admins_cannot_change_the_pricing(): void

@@ -29,7 +29,7 @@ class PricingBatchTest extends TestCase
             weightGrams: $grams,
             minutes: $minutes,
             pricePerKgCents: 1_700,
-            hourlyRateCents: 50,
+            hourlyRateCents: 20,
             quantity: $quantity,
         ));
     }
@@ -46,18 +46,19 @@ class PricingBatchTest extends TestCase
         $result = $this->calculate(PricingInput::MODE_PER_UNIT, grams: 20, minutes: 300);
 
         $this->assertSame(340_000, $result->filamentCostMicros, '0,34 EUR de plastico');
-        $this->assertSame(2_500_000, $result->machineCostMicros, '5 h x 0,50 EUR/h');
-        $this->assertSame(250_000, $result->handlingCostMicros);
-        $this->assertSame(227_200, $result->failureReserveMicros, '(0,34 + 2,50) x 8%');
-        $this->assertSame(3_317_200, $result->productionCostMicros, 'custo real = 3,3172 EUR');
+        $this->assertSame(1_000_000, $result->machineCostMicros, '5 h x 0,20 EUR/h');
+        $this->assertSame(150_000, $result->handlingCostMicros);
+        $this->assertSame(67_000, $result->failureReserveMicros, '(0,34 + 1,00) x 5%');
+        $this->assertSame(1_557_000, $result->productionCostMicros, 'custo real = 1,557 EUR');
 
-        $this->assertSame(19_000, $result->resaleMultiplierBp, 'custo entre 2 e 5 EUR -> 1,90x');
-        $this->assertSame(6_302_680, $result->rawResalePriceMicros);
-        $this->assertSame(650, Micros::toCents($result->resalePriceMicros), '6,50 EUR de revenda');
+        $this->assertSame(2_646_900, $result->rawResalePriceMicros);
+        $this->assertSame(300, Micros::toCents($result->resalePriceMicros), '3,00 EUR de revenda');
 
-        // A leitura que interessa: 0,34 EUR de plastico a valer 6,50 EUR.
+        // A leitura que interessa: 0,34 EUR de plastico a valer 3,00 EUR. O
+        // racio caiu de 19x para 8,8x com a formula nova — o tempo continua a
+        // dominar, so que sem exagero.
         $this->assertGreaterThan(
-            $result->filamentCostMicros * 15,
+            $result->filamentCostMicros * 8,
             $result->resalePriceMicros,
             'o tempo tem de dominar o preco',
         );
@@ -74,11 +75,15 @@ class PricingBatchTest extends TestCase
 
         // As parcelas apresentadas ja vem por unidade.
         $this->assertSame(374_000, $batch->filamentCostMicros, '2,244 EUR de material / 6');
-        $this->assertSame(361_111, $batch->machineCostMicros, '2,166667 EUR de maquina / 6');
-        $this->assertSame(927_253, $batch->productionCostMicros, '5,56352 EUR de custo / 6');
+        $this->assertSame(144_445, $batch->machineCostMicros, '0,866667 EUR de maquina / 6');
+        $this->assertSame(677_700, $batch->productionCostMicros, '4,0662 EUR de custo / 6');
 
-        $this->assertSame(200, Micros::toCents($batch->resalePriceMicros));
-        $this->assertSame(1_200, $batch->toArray()['job']['resalePriceCents'], '6 x 2,00 = 12,00 EUR');
+        // Com a formula nova este caso sai pelo CHAO e nao pelo multiplicador:
+        // 0,6777 x 1,70 = 1,152 EUR, abaixo do minimo de 1,50. O que o teste
+        // prova continua a ser a divisao do trabalho pelas seis.
+        $this->assertSame(1_500_000, $batch->rawResalePriceMicros, 'o chao de 1,50 EUR');
+        $this->assertSame(150, Micros::toCents($batch->resalePriceMicros));
+        $this->assertSame(900, $batch->toArray()['job']['resalePriceCents'], '6 x 1,50 = 9,00 EUR');
     }
 
     /**
@@ -107,71 +112,83 @@ class PricingBatchTest extends TestCase
     }
 
     /**
-     * A tabela por peso e calibrada por PECA. Aplicada ao peso de uma mesa
-     * inteira, a economia inverte-se: 10 porta-chaves de 30 g cairiam na faixa
-     * dos 300 g — 0,50 EUR no trabalho todo, 0,05 EUR por peca — menos do que
-     * uma unica peca de 30 g pagaria sozinha. Por isso em lote nao se usa.
+     * O lote tem manuseamento PROPRIO, e nao o custo fixo por peca. A razao
+     * sobreviveu ao fim da tabela por peso: numa mesa, o trabalho que se faz uma
+     * vez (montar, tirar a placa) dilui-se por todas as pecas, e um valor por
+     * peca nao sabe exprimir essa diluicao.
+     *
+     * Quantidade 5 de proposito: a 4 unidades o manuseamento do lote daria
+     * (0,20 + 0,40) / 4 = 0,15 EUR, exatamente igual ao custo fixo unitario — e
+     * o teste passava sem conseguir distinguir os dois caminhos de codigo.
      */
-    public function test_the_weight_tier_is_never_used_in_a_batch(): void
+    public function test_the_batch_handling_ignores_the_weight_of_the_plate(): void
     {
-        $light = $this->calculate(PricingInput::MODE_BATCH, grams: 60, minutes: 200, quantity: 4);
-        $heavy = $this->calculate(PricingInput::MODE_BATCH, grams: 900, minutes: 200, quantity: 4);
+        $light = $this->calculate(PricingInput::MODE_BATCH, grams: 60, minutes: 200, quantity: 5);
+        $heavy = $this->calculate(PricingInput::MODE_BATCH, grams: 900, minutes: 200, quantity: 5);
 
         $this->assertSame(
             $light->handlingCostMicros,
             $heavy->handlingCostMicros,
             'o peso da mesa nao pode mexer no manuseamento em lote',
         );
-        $this->assertSame(150_000, $light->handlingCostMicros, '(0,20 + 4 x 0,10) / 4');
+        $this->assertSame(140_000, $light->handlingCostMicros, '(0,20 + 5 x 0,10) / 5');
+        $this->assertNotSame(150_000, $light->handlingCostMicros, 'e nao o custo fixo unitario');
     }
 
     /**
      * Consequencia assumida da regra acima: um lote de uma peca paga mais
-     * manuseamento (0,30 EUR) do que a mesma peca em modo unitario (0,25 EUR).
+     * manuseamento (0,30 EUR) do que a mesma peca em modo unitario (0,15 EUR).
      * Esta certo — um lote de um ainda paga uma montagem de mesa.
      */
     public function test_a_batch_of_one_pays_more_handling_than_the_same_part_alone(): void
     {
-        $alone = $this->calculate(PricingInput::MODE_PER_UNIT, grams: 32, minutes: 90);
-        $batchOfOne = $this->calculate(PricingInput::MODE_BATCH, grams: 32, minutes: 90, quantity: 1);
+        $alone = $this->calculate(PricingInput::MODE_PER_UNIT, grams: 45, minutes: 150);
+        $batchOfOne = $this->calculate(PricingInput::MODE_BATCH, grams: 45, minutes: 150, quantity: 1);
 
-        $this->assertSame(250_000, $alone->handlingCostMicros);
+        $this->assertSame(150_000, $alone->handlingCostMicros);
         $this->assertSame(300_000, $batchOfOne->handlingCostMicros);
 
         $this->assertSame($alone->filamentCostMicros, $batchOfOne->filamentCostMicros);
         $this->assertSame($alone->machineCostMicros, $batchOfOne->machineCostMicros);
-        $this->assertSame(50_000, $batchOfOne->productionCostMicros - $alone->productionCostMicros);
+        $this->assertSame(150_000, $batchOfOne->productionCostMicros - $alone->productionCostMicros);
     }
 
     /**
      * Em modo unitario o utilizador descreve UMA peca e a quantidade so
-     * multiplica os totais. O contrario — somar o peso e o tempo primeiro —
-     * empurrava seis pecas de 32 g para a faixa dos 192 g e encarecia cada uma
-     * sem razao nenhuma.
+     * multiplica os totais: nunca entra no calculo da unidade. O contrario —
+     * somar o peso e o tempo primeiro — encarecia cada peca sem razao nenhuma.
      */
     public function test_per_unit_mode_multiplies_the_job_totals_by_the_quantity(): void
     {
-        $six = $this->calculate(PricingInput::MODE_PER_UNIT, grams: 32, minutes: 90, quantity: 6);
+        $six = $this->calculate(PricingInput::MODE_PER_UNIT, grams: 45, minutes: 150, quantity: 6);
+        $one = $this->calculate(PricingInput::MODE_PER_UNIT, grams: 45, minutes: 150);
 
-        $this->assertSame(250_000, $six->handlingCostMicros, 'a faixa e a de 32 g, nao a de 192 g');
-        $this->assertSame(1_647_520, $six->productionCostMicros);
+        $this->assertSame(150_000, $six->handlingCostMicros);
+        $this->assertSame($one->productionCostMicros, $six->productionCostMicros, 'a quantidade nao toca na unidade');
+        $this->assertSame(1_478_250, $six->productionCostMicros);
 
         $job = $six->toArray()['job'];
-        $this->assertSame(989, $job['productionCostCents'], '6 x 1,64752 = 9,88512 EUR');
-        $this->assertSame(2_100, $job['resalePriceCents']);
-        $this->assertSame(3_600, $job['retailPriceCents']);
+        $this->assertSame(887, $job['productionCostCents'], '6 x 1,47825 = 8,8695 EUR');
+        $this->assertSame(1_800, $job['resalePriceCents']);
+        $this->assertSame(3_300, $job['retailPriceCents']);
     }
 
     /**
-     * As faixas (multiplicador de revenda, arredondamento comercial) aplicam-se
-     * ao custo da UNIDADE, nunca ao do trabalho. Uma mesa de 12 peritos baratos
-     * nao pode saltar para o multiplicador dos artigos caros so por ser grande.
+     * O chao e o arredondamento aplicam-se ao custo da UNIDADE, nunca ao do
+     * trabalho. Uma mesa grande de pecas baratas nao pode ser tratada como uma
+     * peca cara so por ser grande.
+     *
+     * Aqui da para ver a diferenca em numeros: o trabalho custa 7,86 EUR e a
+     * unidade 0,6552. Passar o trabalho pela formula daria ceil(7,86 x 1,70) =
+     * 13,50 EUR, ou seja 1,125 EUR por peca — e nao os 1,50 EUR que o chao
+     * garante a cada uma.
      */
-    public function test_the_tiers_are_applied_to_the_unit_cost_never_to_the_job_cost(): void
+    public function test_the_floor_applies_to_the_unit_cost_never_to_the_job_cost(): void
     {
         $batch = $this->calculate(PricingInput::MODE_BATCH, grams: 264, minutes: 500, quantity: 12);
 
+        $this->assertSame(655_200, $batch->productionCostMicros, 'custo unitario = 0,6552 EUR');
         $this->assertLessThanOrEqual(200 * Micros::PER_CENT, $batch->productionCostMicros);
-        $this->assertSame(20_000, $batch->resaleMultiplierBp, 'custo unitario <= 2 EUR -> 2,00x');
+        $this->assertSame(1_500_000, $batch->resalePriceMicros, 'o chao aplicado a UNIDADE');
     }
 }

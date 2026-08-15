@@ -3,7 +3,6 @@
 namespace App\Http\Requests\Setting;
 
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Support\Arr;
 use Illuminate\Validation\Validator;
 
 /**
@@ -11,9 +10,7 @@ use Illuminate\Validation\Validator;
  *
  * O formulario fala em percentagem, euros e "1,75"; a conversao para pontos
  * base e centimos e do PricingSettings::fromForm(). Aqui so se garante que os
- * numeros fazem sentido — e que as duas tabelas de faixas continuam a ser
- * tabelas de faixas, porque uma delas mal ordenada da precos silenciosamente
- * errados em vez de um erro.
+ * numeros fazem sentido.
  */
 class UpdatePricingSettingsRequest extends FormRequest
 {
@@ -27,16 +24,18 @@ class UpdatePricingSettingsRequest extends FormRequest
     }
 
     /**
-     * Virgula -> ponto em todos os decimais, incluindo os de dentro das duas
-     * tabelas. Mesmo remendo do StoreMaterialRequest, aqui aplicado a arvore.
+     * Virgula -> ponto em todos os decimais. Mesmo remendo do
+     * StoreMaterialRequest: quem escreve precos escreve "0,15", nao "0.15".
      */
     protected function prepareForValidation(): void
     {
         foreach ([
             'failure_reserve_percent',
             'minimum_resale_price',
+            'resale_multiplier',
             'retail_multiplier',
             'minimum_retail_multiplier',
+            'handling_cost',
             'batch_job_handling',
             'batch_unit_handling',
         ] as $field) {
@@ -44,14 +43,6 @@ class UpdatePricingSettingsRequest extends FormRequest
 
             if (is_string($value) && $value !== '') {
                 $this->merge([$field => str_replace(',', '.', $value)]);
-            }
-        }
-
-        foreach (['resale_multipliers', 'handling_tiers'] as $table) {
-            $rows = $this->input($table);
-
-            if (is_array($rows)) {
-                $this->merge([$table => array_map($this->commaToDot(...), $rows)]);
             }
         }
     }
@@ -72,19 +63,13 @@ class UpdatePricingSettingsRequest extends FormRequest
              * comercial: com um multiplicador menor que 1 o lucro fica negativo
              * e o Micros::divRound sai do dominio nao negativo que documenta.
              */
+            'resale_multiplier' => ['required', 'numeric', 'min:1', 'max:10'],
             'retail_multiplier' => ['required', 'numeric', 'min:1', 'max:10'],
             'minimum_retail_multiplier' => ['required', 'numeric', 'min:1', 'max:10'],
 
+            'handling_cost' => ['required', 'numeric', 'min:0', 'max:99.99'],
             'batch_job_handling' => ['required', 'numeric', 'min:0', 'max:99.99'],
             'batch_unit_handling' => ['required', 'numeric', 'min:0', 'max:99.99'],
-
-            'resale_multipliers' => ['required', 'array', 'min:2', 'max:8'],
-            'resale_multipliers.*.up_to' => ['nullable', 'numeric', 'min:0.01', 'max:9999.99'],
-            'resale_multipliers.*.value' => ['required', 'numeric', 'min:1', 'max:10'],
-
-            'handling_tiers' => ['required', 'array', 'min:2', 'max:8'],
-            'handling_tiers.*.up_to_grams' => ['nullable', 'integer', 'min:1', 'max:100000'],
-            'handling_tiers.*.value' => ['required', 'numeric', 'min:0', 'max:99.99'],
         ];
     }
 
@@ -94,8 +79,6 @@ class UpdatePricingSettingsRequest extends FormRequest
     public function after(): array
     {
         return [
-            fn (Validator $validator) => $this->validateTable($validator, 'resale_multipliers', 'up_to'),
-            fn (Validator $validator) => $this->validateTable($validator, 'handling_tiers', 'up_to_grams'),
             $this->validateMultiplierOrder(...),
         ];
     }
@@ -108,70 +91,13 @@ class UpdatePricingSettingsRequest extends FormRequest
         return [
             'failure_reserve_percent' => 'reserva para falhas',
             'minimum_resale_price' => 'preço mínimo de revenda',
+            'resale_multiplier' => 'multiplicador de revenda',
             'retail_multiplier' => 'multiplicador do cliente final',
             'minimum_retail_multiplier' => 'multiplicador mínimo do revendedor',
+            'handling_cost' => 'custo de manuseamento',
             'batch_job_handling' => 'manuseamento por impressão',
             'batch_unit_handling' => 'manuseamento por unidade',
-            'resale_multipliers' => 'multiplicadores de revenda',
-            'handling_tiers' => 'faixas de manuseamento',
         ];
-    }
-
-    /**
-     * Uma tabela de faixas so funciona se for lida de cima para baixo: limiares
-     * a subir, e a ultima aberta.
-     *
-     * Sem a ordem, a primeira faixa apanhava tudo e as outras eram codigo morto.
-     * Sem a faixa aberta no fim, uma peca acima do maior limiar nao encontrava
-     * faixa nenhuma — e o preco saia sem manuseamento, sem erro nenhum a dize-lo.
-     */
-    private function validateTable(Validator $validator, string $table, string $thresholdKey): void
-    {
-        $rows = $this->input($table);
-
-        if (! is_array($rows) || $rows === []) {
-            return;
-        }
-
-        $rows = array_values($rows);
-        $last = count($rows) - 1;
-        $previous = null;
-
-        foreach ($rows as $index => $row) {
-            $threshold = Arr::get($row, $thresholdKey);
-            $isOpen = $threshold === null || $threshold === '';
-
-            if ($isOpen && $index !== $last) {
-                $validator->errors()->add(
-                    "{$table}.{$index}.{$thresholdKey}",
-                    'Só a última faixa pode ficar sem limite.',
-                );
-
-                continue;
-            }
-
-            if ($index === $last) {
-                if (! $isOpen) {
-                    $validator->errors()->add(
-                        "{$table}.{$index}.{$thresholdKey}",
-                        'A última faixa tem de ficar sem limite, para apanhar tudo o que passa das anteriores.',
-                    );
-                }
-
-                continue;
-            }
-
-            $value = (float) $threshold;
-
-            if ($previous !== null && $value <= $previous) {
-                $validator->errors()->add(
-                    "{$table}.{$index}.{$thresholdKey}",
-                    'Os limites têm de ir sempre a subir.',
-                );
-            }
-
-            $previous = $value;
-        }
     }
 
     /**
@@ -194,14 +120,5 @@ class UpdatePricingSettingsRequest extends FormRequest
                 'O mínimo do revendedor não pode ser maior do que o multiplicador do cliente final.',
             );
         }
-    }
-
-    private function commaToDot(mixed $row): mixed
-    {
-        if (! is_array($row) || ! isset($row['value']) || ! is_string($row['value'])) {
-            return $row;
-        }
-
-        return [...$row, 'value' => str_replace(',', '.', $row['value'])];
     }
 }

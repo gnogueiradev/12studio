@@ -58,7 +58,7 @@ export type PricingBreakdown = {
     extraCostMicros: number;
     productionCostMicros: number;
 
-    /** Pontos base: 20000 = 2,00×. */
+    /** Pontos base: 17000 = 1,70×. Único — deixou de variar com o custo. */
     resaleMultiplierBp: number;
     rawResalePriceMicros: number;
     rawRetailPriceMicros: number;
@@ -134,25 +134,18 @@ export const PRINTER_STATES: (Option & { chipLabel: string })[] = [
     { value: 'archived', label: 'Arquivada', chipLabel: 'Arquivadas' },
 ];
 
-/** Uma linha de faixa no formulário de definições de preços. */
-export type PricingTierField = {
-    /** Vazio/null = faixa aberta, a última. */
-    up_to: string | null;
-    value: string;
-};
-
-export type PricingHandlingTierField = {
-    up_to_grams: number | null;
-    value: string;
-};
-
+/**
+ * Os parâmetros da calculadora, em unidades humanas. Tudo escalar: aqui já
+ * viveram duas tabelas de faixas (multiplicador por custo, manuseamento por
+ * peso) e saíram com a fórmula que as usava.
+ */
 export type PricingSettingsForm = {
     failure_reserve_percent: string;
     minimum_resale_price: string;
+    resale_multiplier: string;
     retail_multiplier: string;
     minimum_retail_multiplier: string;
+    handling_cost: string;
     batch_job_handling: string;
     batch_unit_handling: string;
-    resale_multipliers: PricingTierField[];
-    handling_tiers: PricingHandlingTierField[];
 };

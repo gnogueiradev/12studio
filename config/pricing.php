@@ -25,29 +25,33 @@ return [
     // nozzle, mesa, manutencao, consumiveis, depreciacao e o simples facto de
     // a impressora estar ocupada. Por isso energia e desgaste NAO se somam
     // outra vez noutra parcela.
-    'machine_hourly_rate_cents' => 50,
+    //
+    // E uma estimativa deliberadamente baixa: a hora de maquina nao e mao de
+    // obra, e cobra-la cara castigava exatamente as pecas pequenas que demoram
+    // muito tempo — o oposto do que este negocio precisa de vender.
+    'machine_hourly_rate_cents' => 20,
 
-    // Reserva estatistica para impressoes falhadas, em pontos base (800 = 8%).
+    // Reserva estatistica para impressoes falhadas, em pontos base (500 = 5%).
     // Aplica-se so sobre filamento + maquina; ver o PricingCalculator.
-    'failure_reserve_bp' => 800,
+    'failure_reserve_bp' => 500,
 
     // Chao do preco de revenda, para objetos muito pequenos nao irem a zero.
+    // E ELE que protege as pecas baratas — abaixo de ~0,88 EUR de custo real e
+    // este numero, e nao o multiplicador, que decide o preco.
     'minimum_resale_price_cents' => 150,
 
     /*
-     * Margem progressiva: quanto menor o custo de producao, maior a margem
-     * relativa. Sem isto, uma peca de 0,80 EUR de custo vendia-se com um lucro
-     * que nao paga o tempo de a embalar.
+     * Margem do produtor: um multiplicador unico sobre o custo real.
      *
-     * A faixa aberta (up_to_cents = null) e SEMPRE a ultima — o
-     * UpdatePricingSettingsRequest valida essa ordem.
+     * Aqui houve uma tabela progressiva (2,00x ate 2 EUR de custo, 1,90x ate 5
+     * EUR, e por ai fora). Saiu por duas razoes: fazia o preco saltar de forma
+     * descontinua ao atravessar um limiar — dois centimos de custo a mais
+     * podiam BAIXAR o preco de venda — e empilhava-se sobre um custo de maquina
+     * que ja era alto, dando precos de revenda que nao competiam com ninguem.
+     *
+     * As pecas pequenas ficam protegidas pelo minimum_resale_price_cents.
      */
-    'resale_multipliers' => [
-        ['up_to_cents' => 200, 'bp' => 20_000],
-        ['up_to_cents' => 500, 'bp' => 19_000],
-        ['up_to_cents' => 1_000, 'bp' => 18_000],
-        ['up_to_cents' => null, 'bp' => 17_000],
-    ],
+    'resale_multiplier_bp' => 17_000,
 
     // Margem do revendedor sobre o preco de revenda.
     'retail_multiplier_bp' => 17_500,
@@ -62,18 +66,15 @@ return [
      * verificar, limpar defeitos, separar brim e suportes, embalar. Trabalho
      * que existe independentemente das horas da maquina.
      *
-     * Faixa aberta (up_to_grams = null) SEMPRE em ultimo.
+     * Valor unico, e nao uma tabela por peso: o que cresce com o tamanho da
+     * peca e o tempo de impressao, que ja se paga a parte. Tirar da mesa e
+     * ensacar uma peca de 400 g nao demora quatro vezes o que demora uma de
+     * 100 g.
      */
-    'handling_tiers' => [
-        ['up_to_grams' => 50, 'cents' => 25],
-        ['up_to_grams' => 150, 'cents' => 35],
-        ['up_to_grams' => 300, 'cents' => 50],
-        ['up_to_grams' => 500, 'cents' => 75],
-        ['up_to_grams' => null, 'cents' => 100],
-    ],
+    'handling_cost_cents' => 15,
 
-    // Em lote a tabela por peso nao se usa: o trabalho decompoe-se no que se
-    // faz UMA vez (montar a mesa, tirar a placa) e no que se faz a CADA peca
+    // Em lote o custo fixo por peca nao se usa: o trabalho decompoe-se no que
+    // se faz UMA vez (montar a mesa, tirar a placa) e no que se faz a CADA peca
     // (rebarbar, ensacar). Ver PricingCalculator::handling().
     'batch_job_handling_cents' => 20,
     'batch_unit_handling_cents' => 10,

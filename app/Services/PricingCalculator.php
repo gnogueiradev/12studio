@@ -17,8 +17,13 @@ use App\Support\PricingResult;
  *     MATERIAL + TEMPO DE MAQUINA + MANUSEAMENTO + RISCO + EXTRAS + MARGEM
  *
  * Toda a aritmetica corre em micro-euros inteiros (App\Support\Micros): as
- * parcelas intermedias — 0,544 EUR de filamento, 0,10352 EUR de reserva — nao
+ * parcelas intermedias — 0,765 EUR de filamento, 0,06325 EUR de reserva — nao
  * cabem num centimo, e arredonda-las desviava o preco final.
+ *
+ * A MARGEM e um multiplicador so, aplicado ao custo real. Ja aqui houve uma
+ * tabela progressiva por faixa de custo; saiu porque fazia o preco saltar ao
+ * atravessar um limiar (dois centimos de custo a mais podiam BAIXAR o preco) e
+ * porque, somada a um custo de maquina alto, dava precos que nao competiam.
  *
  * Os parametros vem do PricingSettings (config/pricing.php + tabela settings);
  * o custo/hora vem do perfil de impressora e entra por argumento.
@@ -48,7 +53,7 @@ class PricingCalculator
         // Exato por construcao: um centimo sao 10.000 micros e um kg sao 1000 g,
         // por isso o /1000 do preco por kg dissolve-se na constante (10000/1000
         // = 10) e este passo — o mais sensivel de todos — nao tem divisao
-        // nenhuma. E daqui que sai o 0,544 EUR do caso de referencia.
+        // nenhuma. E daqui que sai o 0,765 EUR do caso de referencia.
         $filament = $input->weightGrams * $input->pricePerKgCents * 10;
 
         $machine = Micros::divRound(
@@ -70,7 +75,7 @@ class PricingCalculator
         $divisor = $input->costDivisor();
         $unitCost = Micros::divRound($jobCost, $divisor);
 
-        $multiplierBp = $this->resaleMultiplierBp($unitCost);
+        $multiplierBp = $this->settings->resaleMultiplierBp();
 
         $rawResale = max(
             Micros::applyBp($unitCost, $multiplierBp),
@@ -117,11 +122,13 @@ class PricingCalculator
      * maquina — preparar o ficheiro, tirar a peca da mesa, verificar, limpar,
      * separar suportes, embalar.
      *
-     * Em LOTE a tabela por peso nao se usa de todo. Ela e calibrada por PECA, e
-     * o peso total de uma mesa nao diz nada sobre o trabalho de a limpar: 10
-     * porta-chaves de 30 g cairiam na faixa dos 300 g (0,50 EUR no trabalho
-     * todo, 0,05 EUR por peca) — menos do que uma unica peca de 30 g. Em lote o
-     * custo decompoe-se no que se faz UMA vez e no que se faz a CADA peca.
+     * Fora de lote e um custo FIXO, e nao uma tabela por peso. O que cresce com
+     * o tamanho da peca e o tempo de impressao, que ja se cobra a parte —
+     * cobrar tambem manuseamento a subir era pagar duas vezes pela mesma coisa.
+     *
+     * Em lote nao se usa esse custo fixo: o trabalho decompoe-se no que se faz
+     * UMA vez (montar a mesa, tirar a placa) e no que se faz a CADA peca
+     * (rebarbar, ensacar) — uma diluicao que um valor por peca nao exprime.
      *
      * Consequencia assumida: um lote de uma peca paga mais do que a mesma peca
      * em modo unitario. Esta certo — um lote de um ainda paga uma montagem.
@@ -135,29 +142,7 @@ class PricingCalculator
             );
         }
 
-        foreach ($this->settings->handlingTiers() as $tier) {
-            if ($tier['threshold'] === null || $input->weightGrams <= $tier['threshold']) {
-                return Micros::fromCents($tier['value']);
-            }
-        }
-
-        return 0; // inalcancavel: a ultima faixa e sempre aberta (PricingSettings valida)
-    }
-
-    /**
-     * Margem progressiva: quanto menor o custo, maior o multiplicador. Sem
-     * isto, objetos pequenos vendiam-se com um lucro que nao paga o tempo de os
-     * embalar.
-     */
-    private function resaleMultiplierBp(int $costMicros): int
-    {
-        foreach ($this->settings->resaleMultipliers() as $tier) {
-            if ($tier['threshold'] === null || $costMicros <= Micros::fromCents($tier['threshold'])) {
-                return $tier['value'];
-            }
-        }
-
-        return 10_000; // inalcancavel: a ultima faixa e sempre aberta
+        return Micros::fromCents($this->settings->handlingCostCents());
     }
 
     /**

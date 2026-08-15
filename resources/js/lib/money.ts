@@ -159,7 +159,7 @@ export function formatPercentBp(bp: number): string {
     return percentFormatter.format(bp / 10_000);
 }
 
-/** Pontos base → multiplicador ("20000" → "2,00×"). */
+/** Pontos base → multiplicador ("17000" → "1,70×"). */
 export function formatMultiplierBp(bp: number): string {
     return `${multiplierFormatter.format(bp / 10_000)}×`;
 }

@@ -37,8 +37,7 @@ export function PricingSettingsPanel({ pricing }: Props) {
 
     /*
      * Atualiza pelo objeto inteiro e não por chave: o `setData(key, value)` do
-     * Inertia tem um tipo condicional que não sobrevive a um wrapper genérico,
-     * e as duas tabelas de faixas são arrays.
+     * Inertia tem um tipo condicional que não sobrevive a um wrapper genérico.
      */
     const change = <K extends keyof PricingSettingsForm>(
         key: K,
@@ -79,6 +78,24 @@ export function PricingSettingsPanel({ pricing }: Props) {
                             }
                         />
                         <Field
+                            id="handling_cost"
+                            label="Manuseamento por peça (€)"
+                            hint="Preparar o ficheiro, tirar da mesa, limpar, separar suportes, embalar. Trabalho que existe independentemente das horas da máquina."
+                            value={data.handling_cost}
+                            error={errors.handling_cost}
+                            onChange={(value) => change('handling_cost', value)}
+                        />
+                        <Field
+                            id="resale_multiplier"
+                            label="Multiplicador de revenda (×)"
+                            hint="Sobre o custo real. É a tua margem — 1,70× são 70% em cima do que a peça custou a fazer."
+                            value={data.resale_multiplier}
+                            error={errors.resale_multiplier}
+                            onChange={(value) =>
+                                change('resale_multiplier', value)
+                            }
+                        />
+                        <Field
                             id="minimum_resale_price"
                             label="Preço mínimo de revenda (€)"
                             hint="O chão para peças muito pequenas — nem que seja pelo saco, a etiqueta e o tempo de atender."
@@ -112,125 +129,11 @@ export function PricingSettingsPanel({ pricing }: Props) {
 
                     <fieldset className="border-t border-border/60 pt-6">
                         <legend className="text-sm font-medium">
-                            Multiplicadores de revenda
-                        </legend>
-                        <p className="mt-1 mb-3 text-sm text-muted-foreground">
-                            Margem progressiva: quanto mais barata a peça, maior
-                            a margem relativa. Sem isto, um porta-chaves
-                            vendia-se com um lucro que não paga o saco.
-                        </p>
-                        <TierTable
-                            rows={data.resale_multipliers.map(
-                                (tier, index) => ({
-                                    key: index,
-                                    thresholdLabel: 'Custo até (€)',
-                                    threshold: tier.up_to ?? '',
-                                    thresholdError:
-                                        errors[
-                                            `resale_multipliers.${index}.up_to` as keyof PricingSettingsForm
-                                        ],
-                                    valueLabel: 'Multiplicador (×)',
-                                    value: tier.value,
-                                    valueError:
-                                        errors[
-                                            `resale_multipliers.${index}.value` as keyof PricingSettingsForm
-                                        ],
-                                    isLast:
-                                        index ===
-                                        data.resale_multipliers.length - 1,
-                                }),
-                            )}
-                            onThresholdChange={(index, value) =>
-                                change(
-                                    'resale_multipliers',
-                                    data.resale_multipliers.map((tier, i) =>
-                                        i === index
-                                            ? {
-                                                  ...tier,
-                                                  up_to:
-                                                      value === ''
-                                                          ? null
-                                                          : value,
-                                              }
-                                            : tier,
-                                    ),
-                                )
-                            }
-                            onValueChange={(index, value) =>
-                                change(
-                                    'resale_multipliers',
-                                    data.resale_multipliers.map((tier, i) =>
-                                        i === index ? { ...tier, value } : tier,
-                                    ),
-                                )
-                            }
-                        />
-                    </fieldset>
-
-                    <fieldset className="border-t border-border/60 pt-6">
-                        <legend className="text-sm font-medium">
-                            Manuseamento por peso
-                        </legend>
-                        <p className="mt-1 mb-3 text-sm text-muted-foreground">
-                            Preparar o ficheiro, tirar da mesa, limpar, separar
-                            suportes, embalar. Trabalho que existe independente
-                            das horas da máquina.
-                        </p>
-                        <TierTable
-                            rows={data.handling_tiers.map((tier, index) => ({
-                                key: index,
-                                thresholdLabel: 'Peso até (g)',
-                                threshold:
-                                    tier.up_to_grams === null
-                                        ? ''
-                                        : String(tier.up_to_grams),
-                                thresholdError:
-                                    errors[
-                                        `handling_tiers.${index}.up_to_grams` as keyof PricingSettingsForm
-                                    ],
-                                valueLabel: 'Custo (€)',
-                                value: tier.value,
-                                valueError:
-                                    errors[
-                                        `handling_tiers.${index}.value` as keyof PricingSettingsForm
-                                    ],
-                                isLast:
-                                    index === data.handling_tiers.length - 1,
-                            }))}
-                            onThresholdChange={(index, value) =>
-                                change(
-                                    'handling_tiers',
-                                    data.handling_tiers.map((tier, i) =>
-                                        i === index
-                                            ? {
-                                                  ...tier,
-                                                  up_to_grams:
-                                                      value === ''
-                                                          ? null
-                                                          : Number(value),
-                                              }
-                                            : tier,
-                                    ),
-                                )
-                            }
-                            onValueChange={(index, value) =>
-                                change(
-                                    'handling_tiers',
-                                    data.handling_tiers.map((tier, i) =>
-                                        i === index ? { ...tier, value } : tier,
-                                    ),
-                                )
-                            }
-                        />
-                    </fieldset>
-
-                    <fieldset className="border-t border-border/60 pt-6">
-                        <legend className="text-sm font-medium">
                             Manuseamento em lote
                         </legend>
                         <p className="mt-1 mb-3 text-sm text-muted-foreground">
-                            Numa mesa com várias peças a tabela por peso não se
-                            usa: o trabalho decompõe-se no que se faz uma vez
+                            Numa mesa com várias peças o custo fixo por peça não
+                            se usa: o trabalho decompõe-se no que se faz uma vez
                             (montar, tirar a placa) e no que se faz a cada peça
                             (rebarbar, ensacar).
                         </p>
@@ -301,90 +204,6 @@ function Field({
             />
             {hint && <p className="text-xs text-muted-foreground">{hint}</p>}
             <InputError message={error} />
-        </div>
-    );
-}
-
-type TierRow = {
-    key: number;
-    thresholdLabel: string;
-    threshold: string;
-    thresholdError?: string;
-    valueLabel: string;
-    value: string;
-    valueError?: string;
-    isLast: boolean;
-};
-
-/**
- * Uma tabela de faixas, lida de cima para baixo. A última linha não tem limite
- * — é ela que apanha tudo o que passa das anteriores, e por isso o campo fica
- * desativado em vez de apenas vazio: um limite escrito lá deixava as peças mais
- * pesadas sem faixa nenhuma.
- */
-function TierTable({
-    rows,
-    onThresholdChange,
-    onValueChange,
-}: {
-    rows: TierRow[];
-    onThresholdChange: (index: number, value: string) => void;
-    onValueChange: (index: number, value: string) => void;
-}) {
-    return (
-        <div className="flex flex-col gap-2">
-            {rows.map((row, index) => (
-                <div
-                    key={row.key}
-                    className="grid grid-cols-2 items-start gap-3"
-                >
-                    <div className="grid gap-1">
-                        <Label
-                            htmlFor={`tier-${row.thresholdLabel}-${row.key}`}
-                            className="text-xs font-normal text-muted-foreground"
-                        >
-                            {index === 0 ? row.thresholdLabel : ''}
-                        </Label>
-                        {row.isLast ? (
-                            <p className="flex h-9 items-center text-sm text-muted-foreground">
-                                Acima disso
-                            </p>
-                        ) : (
-                            <Input
-                                id={`tier-${row.thresholdLabel}-${row.key}`}
-                                type="number"
-                                min={0}
-                                step="0.01"
-                                value={row.threshold}
-                                onChange={(event) =>
-                                    onThresholdChange(index, event.target.value)
-                                }
-                            />
-                        )}
-                        <InputError message={row.thresholdError} />
-                    </div>
-                    <div className="grid gap-1">
-                        <Label
-                            htmlFor={`tier-${row.valueLabel}-${row.key}`}
-                            className="text-xs font-normal text-muted-foreground"
-                        >
-                            {index === 0 ? row.valueLabel : ''}
-                        </Label>
-                        <Input
-                            id={`tier-${row.valueLabel}-${row.key}`}
-                            type="number"
-                            min={0}
-                            step="0.01"
-                            value={row.value}
-                            onChange={(event) =>
-                                onValueChange(index, event.target.value)
-                            }
-                            required
-                        />
-                        <InputError message={row.valueError} />
-                    </div>
-                </div>
-            ))}
         </div>
     );
 }
