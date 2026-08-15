@@ -36,7 +36,7 @@ class VariantPricingTest extends TestCase
 
         PrinterProfile::factory()->isDefault()->create([
             'name' => 'Bambu Lab A1',
-            'hourly_rate_cents' => 50,
+            'hourly_rate_cents' => 20,
         ]);
 
         $this->material = Material::factory()->create(['price_per_kg_cents' => 1_700]);
@@ -61,14 +61,14 @@ class VariantPricingTest extends TestCase
 
         $this->preview([
             'editar' => $product->id,
-            'weight_grams' => 32,
-            'hours' => 1,
+            'weight_grams' => 45,
+            'hours' => 2,
             'minutes' => 30,
             'material_id' => $this->material->id,
         ])->assertInertia(fn (AssertableInertia $page) => $page
-            ->where('pricing.result.productionCostMicros', 1_647_520)
-            ->where('pricing.result.resalePriceCents', 350)
-            ->where('pricing.result.retailPriceCents', 600)
+            ->where('pricing.result.productionCostMicros', 1_478_250)
+            ->where('pricing.result.resalePriceCents', 300)
+            ->where('pricing.result.retailPriceCents', 550)
             ->where('pricing.usingFallbackRate', false)
         );
     }
@@ -76,16 +76,21 @@ class VariantPricingTest extends TestCase
     /**
      * Mexer num campo mexe no preco. E a mesma resposta com outros parametros —
      * o painel nao guarda estado nenhum entre pedidos.
+     *
+     * Metade do tempo do caso base (1h15 contra 2h30), e nao uma peca mais
+     * pequena: uma peca pequena de mais cai no chao de 1,50 EUR e o teste
+     * deixava de conseguir provar que o tempo mexeu no preco.
      */
     public function test_halving_the_print_time_halves_the_machine_share(): void
     {
         $this->preview([
-            'weight_grams' => 32,
-            'hours' => 0,
-            'minutes' => 30,
+            'weight_grams' => 45,
+            'hours' => 1,
+            'minutes' => 15,
             'material_id' => $this->material->id,
         ])->assertInertia(fn (AssertableInertia $page) => $page
-            ->where('pricing.result.productionCostMicros', 1_107_520)
+            ->where('pricing.result.machineCostMicros', 250_000)
+            ->where('pricing.result.productionCostMicros', 1_215_750)
             ->where('pricing.result.resalePriceCents', 250)
         );
     }
@@ -100,30 +105,30 @@ class VariantPricingTest extends TestCase
         $expensive = Material::factory()->create(['price_per_kg_cents' => 3_400]);
 
         $this->preview([
-            'weight_grams' => 32,
-            'hours' => 1,
+            'weight_grams' => 45,
+            'hours' => 2,
             'minutes' => 30,
             'material_id' => $expensive->id,
         ])->assertInertia(fn (AssertableInertia $page) => $page
-            // 32 g x 0,034 EUR/g = 1,088 EUR, o dobro do PLA a 17 EUR/kg.
-            ->where('pricing.result.filamentCostMicros', 1_088_000)
+            // 45 g x 0,034 EUR/g = 1,53 EUR, o dobro do PLA a 17 EUR/kg.
+            ->where('pricing.result.filamentCostMicros', 1_530_000)
         );
     }
 
     public function test_the_suggestion_uses_the_chosen_printer_profile(): void
     {
-        $fast = PrinterProfile::factory()->create(['hourly_rate_cents' => 100]);
+        $expensive = PrinterProfile::factory()->create(['hourly_rate_cents' => 40]);
 
         $this->preview([
-            'weight_grams' => 32,
-            'hours' => 1,
+            'weight_grams' => 45,
+            'hours' => 2,
             'minutes' => 30,
             'material_id' => $this->material->id,
-            'printer_profile_id' => $fast->id,
+            'printer_profile_id' => $expensive->id,
         ])->assertInertia(fn (AssertableInertia $page) => $page
-            // 1,5 h x 1,00 EUR/h, o dobro da A1.
-            ->where('pricing.result.machineCostMicros', 1_500_000)
-            ->where('pricing.hourlyRateCents', 100)
+            // 2,5 h x 0,40 EUR/h, o dobro da A1.
+            ->where('pricing.result.machineCostMicros', 1_000_000)
+            ->where('pricing.hourlyRateCents', 40)
         );
     }
 
@@ -161,14 +166,14 @@ class VariantPricingTest extends TestCase
     public function test_without_a_material_there_is_still_a_suggestion(): void
     {
         $this->preview([
-            'weight_grams' => 32,
-            'hours' => 1,
+            'weight_grams' => 45,
+            'hours' => 2,
             'minutes' => 30,
         ])->assertInertia(fn (AssertableInertia $page) => $page
             // Sem bobine nao ha plastico a pagar, mas a maquina andou:
-            // 1,5 h x 0,50 EUR/h.
+            // 2,5 h x 0,20 EUR/h.
             ->where('pricing.result.filamentCostMicros', 0)
-            ->where('pricing.result.machineCostMicros', 750_000)
+            ->where('pricing.result.machineCostMicros', 500_000)
         );
     }
 

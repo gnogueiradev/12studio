@@ -179,8 +179,8 @@ export default function SettingsIndex({
 
                 {/*
                  * Formulário próprio, com rota própria. Quem vem trocar o
-                 * símbolo da moeda não pode levar com um erro de validação numa
-                 * faixa de manuseamento em que não tocou — e um endpoint único
+                 * símbolo da moeda não pode levar com um erro de validação no
+                 * custo de manuseamento em que não tocou — e um endpoint único
                  * obrigava todas as regras de preço a `sometimes`, o que fazia
                  * uma gravação parcial saltar a validação em silêncio.
                  */}
