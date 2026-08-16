@@ -20,11 +20,15 @@ class PrinterProfileFactory extends Factory
             // curta demais para sortear sem colidir — mesmo raciocinio do
             // MaterialFactory. Quem precisa de "Bambu Lab A1" passa-o no create().
             'name' => str(fake()->unique()->word())->title()->value(),
-            // A volta dos 0,20 EUR/h da impressora da casa. O intervalo importa:
-            // uma fabrica calibrada para o mundo antigo (0,40-0,90 EUR/h) dava
-            // a qualquer teste futuro escrito com o valor por omissao precos
-            // varias vezes acima dos reais, sem nada a dize-lo.
-            'hourly_rate_cents' => fake()->numberBetween(15, 35),
+            // Os quatro numeros a volta de uma maquina de consumo real (uma A1
+            // e 145 W, 400 EUR, 4000 h, 0,04 EUR/h). Os intervalos importam:
+            // uma fabrica calibrada para maquinas industriais dava a qualquer
+            // teste futuro escrito com o valor por omissao precos varias vezes
+            // acima dos reais, sem nada a dize-lo.
+            'average_power_watts' => fake()->numberBetween(80, 200),
+            'purchase_price_cents' => fake()->numberBetween(20_000, 120_000),
+            'lifetime_hours' => fake()->numberBetween(3_000, 6_000),
+            'maintenance_micros_per_hour' => fake()->numberBetween(20_000, 80_000),
             'notes' => null,
             // Predefinida NAO por omissao: o indice unico parcial so deixa
             // existir uma, e uma fabrica que a marcasse rebentava ao segundo

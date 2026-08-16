@@ -338,7 +338,9 @@ class VariantCrudTest extends TestCase
             'price_cents' => 1990,
             'compare_at_cents' => 2490,
             'printing_time_minutes' => 90,
-            'extra_cost_cents' => 65,
+            'packaging_cost_cents' => 25,
+            'components_cost_cents' => 65,
+            'active_labor_minutes' => 12,
         ]);
 
         $this->actingAs($this->admin)
@@ -347,7 +349,9 @@ class VariantCrudTest extends TestCase
                 ->where('editing.variants.0.normalPrice', '24.90')
                 ->where('editing.variants.0.salePrice', '19.90')
                 ->where('editing.variants.0.printingTimeMinutes', 90)
-                ->where('editing.variants.0.extraCost', '0.65'));
+                ->where('editing.variants.0.packagingCost', '0.25')
+                ->where('editing.variants.0.componentsCost', '0.65')
+                ->where('editing.variants.0.activeLaborMinutes', 12));
     }
 
     public function test_destroy_archives_instead_of_deleting(): void

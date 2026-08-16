@@ -68,6 +68,7 @@ type Props = {
      * ver VariantForm.
      */
     pricing: VariantPricingPreview;
+    defaultActiveLaborMinutes: number;
 };
 
 // O Radix Select não aceita value="" — sentinela para "sem filtro".
@@ -135,6 +136,7 @@ export default function ProductsIndex({
     defaultVatRate,
     editing,
     pricing,
+    defaultActiveLaborMinutes,
 }: Props) {
     const [search, setSearch] = useState(filters.search);
     /*
@@ -491,6 +493,7 @@ export default function ProductsIndex({
                 materials={materials}
                 printers={printers}
                 pricing={pricing}
+                defaultActiveLaborMinutes={defaultActiveLaborMinutes}
                 tagSuggestions={tagSuggestions}
                 defaultVatRate={defaultVatRate}
             />

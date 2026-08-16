@@ -57,6 +57,7 @@ type Props = {
     printers: PrinterProfileOption[];
     /** Para o painel de custo da ficha de variante. Recarrega-se sozinha. */
     pricing: VariantPricingPreview;
+    defaultActiveLaborMinutes: number;
     tagSuggestions: string[];
     defaultVatRate: number;
 };
@@ -121,6 +122,7 @@ export function ProductCreateDialog({
     materials,
     printers,
     pricing,
+    defaultActiveLaborMinutes,
     tagSuggestions,
     defaultVatRate,
 }: Props) {
@@ -441,6 +443,7 @@ export function ProductCreateDialog({
                         materials={materials}
                         printers={printers}
                         pricing={pricing}
+                        defaultActiveLaborMinutes={defaultActiveLaborMinutes}
                         onBack={() => setVariantTarget(null)}
                     />
                 </DialogContent>

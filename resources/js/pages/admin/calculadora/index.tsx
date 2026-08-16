@@ -12,7 +12,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { formatCents } from '@/lib/money';
+import { formatCents, formatMicros } from '@/lib/money';
 import type { Option } from '@/lib/options';
 import { cn } from '@/lib/utils';
 import { calculadora } from '@/routes/admin';
@@ -31,11 +31,13 @@ type Props = {
     inputs: PricingFormFields;
     /** Null enquanto faltar peso ou tempo. */
     result: Breakdown | null;
-    hourlyRateCents: number;
+    hourlyCostMicros: number;
     usingFallbackRate: boolean;
     printers: PrinterProfileOption[];
     materials: MaterialOption[];
     modes: Option[];
+    /** O que acontece se o campo do trabalho ativo ficar vazio. */
+    defaultActiveLaborMinutes: number;
 };
 
 /**
@@ -59,11 +61,12 @@ const DEBOUNCE_MS = 300;
 export default function CalculadoraIndex({
     inputs,
     result,
-    hourlyRateCents,
+    hourlyCostMicros,
     usingFallbackRate,
     printers,
     materials,
     modes,
+    defaultActiveLaborMinutes,
 }: Props) {
     const [fields, setFields] = useState<PricingFormFields>(inputs);
 
@@ -89,7 +92,7 @@ export default function CalculadoraIndex({
                     only: [
                         'inputs',
                         'result',
-                        'hourlyRateCents',
+                        'hourlyCostMicros',
                         'usingFallbackRate',
                     ],
                     preserveState: true,
@@ -334,8 +337,8 @@ export default function CalculadoraIndex({
                                                 value={String(option.id)}
                                             >
                                                 {option.name} —{' '}
-                                                {formatCents(
-                                                    option.hourlyRateCents,
+                                                {formatMicros(
+                                                    option.hourlyCostMicros,
                                                 )}
                                                 /h
                                             </SelectItem>
@@ -343,8 +346,9 @@ export default function CalculadoraIndex({
                                     </SelectContent>
                                 </Select>
                                 <p className="text-xs text-muted-foreground">
-                                    O custo/hora cobre energia, desgaste e
-                                    manutenção.{' '}
+                                    O €/h é derivado da potência, do preço de
+                                    compra a amortizar e da manutenção de cada
+                                    máquina.{' '}
                                     <Link
                                         href={impressorasIndex()}
                                         className="underline underline-offset-2"
@@ -375,27 +379,85 @@ export default function CalculadoraIndex({
                                     />
                                 </div>
                                 <div className="grid gap-2">
-                                    <Label htmlFor="extra_cost">
-                                        Custos extra (€)
+                                    <Label htmlFor="active_labor_minutes">
+                                        Trabalho ativo (min)
                                     </Label>
                                     <Input
-                                        id="extra_cost"
+                                        id="active_labor_minutes"
                                         type="number"
-                                        step="0.01"
                                         min={0}
-                                        value={fields.extra_cost}
+                                        max={600}
+                                        placeholder={String(
+                                            defaultActiveLaborMinutes,
+                                        )}
+                                        value={
+                                            fields.active_labor_minutes ?? ''
+                                        }
                                         onChange={(event) =>
                                             patch({
-                                                extra_cost: event.target.value,
+                                                active_labor_minutes:
+                                                    event.target.value === ''
+                                                        ? null
+                                                        : Number(
+                                                              event.target
+                                                                  .value,
+                                                          ),
                                             })
                                         }
                                     />
                                 </div>
                             </div>
                             <p className="-mt-2 text-xs text-muted-foreground">
-                                Ímanes, feltro, argolas, caixa. Entram a cru:
-                                não pagam reserva de falha, porque só se juntam
-                                depois de a peça estar feita.
+                                Só o tempo em que estás mesmo a mexer na peça —
+                                preparar, tirar da mesa, rebarbar, embalar. As
+                                horas em que a máquina trabalha sozinha não
+                                contam. Em branco usa os{' '}
+                                {defaultActiveLaborMinutes} min das definições.
+                            </p>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <div className="grid gap-2">
+                                    <Label htmlFor="packaging_cost">
+                                        Embalagem (€)
+                                    </Label>
+                                    <Input
+                                        id="packaging_cost"
+                                        type="number"
+                                        step="0.01"
+                                        min={0}
+                                        value={fields.packaging_cost}
+                                        onChange={(event) =>
+                                            patch({
+                                                packaging_cost:
+                                                    event.target.value,
+                                            })
+                                        }
+                                    />
+                                </div>
+                                <div className="grid gap-2">
+                                    <Label htmlFor="components_cost">
+                                        Componentes (€)
+                                    </Label>
+                                    <Input
+                                        id="components_cost"
+                                        type="number"
+                                        step="0.01"
+                                        min={0}
+                                        value={fields.components_cost}
+                                        onChange={(event) =>
+                                            patch({
+                                                components_cost:
+                                                    event.target.value,
+                                            })
+                                        }
+                                    />
+                                </div>
+                            </div>
+                            <p className="-mt-2 text-xs text-muted-foreground">
+                                Saco, caixa e etiqueta de um lado; ímanes,
+                                argolas e feltro do outro. Ambos pagam o risco
+                                de falhas — quando uma impressão falha, o que já
+                                lá estava perde-se com ela.
                             </p>
                         </div>
                     </Panel>
@@ -406,7 +468,7 @@ export default function CalculadoraIndex({
                             printTimeMinutes={
                                 fields.hours * 60 + fields.minutes
                             }
-                            hourlyRateCents={hourlyRateCents}
+                            hourlyCostMicros={hourlyCostMicros}
                             printerName={printer?.name ?? null}
                             usingFallbackRate={usingFallbackRate}
                             emptyHint="Escolhe o filamento e preenche o peso e o tempo de impressão para ver o preço."
@@ -420,7 +482,7 @@ export default function CalculadoraIndex({
                         <p role="status" className="sr-only">
                             {result === null
                                 ? 'Sem cálculo: falta o filamento, o peso ou o tempo.'
-                                : `Custo ${formatCents(result.productionCostCents)}, revenda ${formatCents(result.resalePriceCents)}, cliente ${formatCents(result.retailPriceCents)}.`}
+                                : `Custo ${formatCents(result.productionCostCents)}, revenda ${formatCents(result.wholesalePriceCents)}, cliente ${formatCents(result.retailPriceCents)}.`}
                         </p>
                     </div>
                 </div>

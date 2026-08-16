@@ -29,14 +29,16 @@ class PricingSettingsTest extends TestCase
     private function validPayload(): array
     {
         return [
-            'failure_reserve_percent' => '5',
-            'minimum_resale_price' => '1.50',
-            'resale_multiplier' => '1.70',
-            'retail_multiplier' => '1.75',
-            'minimum_retail_multiplier' => '1.60',
-            'handling_cost' => '0.15',
-            'batch_job_handling' => '0.20',
-            'batch_unit_handling' => '0.10',
+            'electricity_price' => '0.1420',
+            'labor_rate' => '8.00',
+            'active_labor_minutes' => 5,
+            'setup_labor_minutes' => 5,
+            'failure_rate_percent' => '5',
+            'wholesale_margin_percent' => '40',
+            'reseller_margin_percent' => '40',
+            'minimum_wholesale_price' => '1.50',
+            'channel_fixed_fee' => '0.00',
+            'channel_percentage_fee' => '0',
         ];
     }
 
@@ -45,119 +47,144 @@ class PricingSettingsTest extends TestCase
         $this->actingAs($this->admin)
             ->get(route('admin.definicoes.index'))
             ->assertInertia(fn (AssertableInertia $page) => $page
-                ->where('pricing.failure_reserve_percent', '5.00')
-                ->where('pricing.resale_multiplier', '1.70')
-                ->where('pricing.retail_multiplier', '1.75')
-                ->where('pricing.minimum_resale_price', '1.50')
-                ->where('pricing.handling_cost', '0.15')
+                ->where('pricing.electricity_price', '0.1420')
+                ->where('pricing.labor_rate', '8.00')
+                ->where('pricing.active_labor_minutes', 5)
+                ->where('pricing.failure_rate_percent', '5.00')
+                ->where('pricing.wholesale_margin_percent', '40.00')
+                ->where('pricing.reseller_margin_percent', '40.00')
+                ->where('pricing.minimum_wholesale_price', '1.50')
             );
     }
 
-    public function test_the_admin_can_change_the_failure_reserve(): void
+    public function test_the_admin_can_change_the_failure_rate(): void
     {
         $this->actingAs($this->admin)
             ->patch(route('admin.definicoes.precos'), [
                 ...$this->validPayload(),
-                'failure_reserve_percent' => '12,5',
+                'failure_rate_percent' => '12,5',
             ])
             ->assertRedirect(route('admin.definicoes.index'));
 
-        $this->assertSame(1_250, app(PricingSettings::class)->failureReserveBp());
+        $this->assertSame(1_250, app(PricingSettings::class)->failureRateBp());
     }
 
     /**
      * A prova de que as definicoes sao mesmo lidas pelo calculador, e nao so
-     * gravadas: com 12% de reserva a mesma peca de referencia fica mais cara.
+     * gravadas: com a tarifa da luz a dobrar, a mesma peca de referencia fica
+     * mais cara.
      */
     public function test_saving_the_pricing_settings_changes_the_calculated_price(): void
     {
-        PrinterProfile::factory()->isDefault()->create(['hourly_rate_cents' => 20]);
+        PrinterProfile::factory()->isDefault()->create([
+            'average_power_watts' => 145,
+            'purchase_price_cents' => 40_000,
+            'lifetime_hours' => 4_000,
+            'maintenance_micros_per_hour' => 40_000,
+        ]);
         $material = Material::factory()->create(['price_per_kg_cents' => 1_700]);
 
         $query = [
-            'weight_grams' => 45,
-            'hours' => 2,
-            'minutes' => 30,
+            'weight_grams' => 50,
+            'hours' => 3,
+            'minutes' => 0,
             'material_id' => $material->id,
         ];
 
         $this->actingAs($this->admin)
             ->get(route('admin.calculadora', $query))
             ->assertInertia(fn (AssertableInertia $page) => $page
-                ->where('result.failureReserveMicros', 63_250)
-                ->where('result.productionCostMicros', 1_478_250)
+                ->where('result.electricityCostMicros', 61_770)
+                ->where('result.productionCostMicros', 2_103_618)
             );
 
         $this->actingAs($this->admin)
             ->patch(route('admin.definicoes.precos'), [
                 ...$this->validPayload(),
-                'failure_reserve_percent' => '12',
+                'electricity_price' => '0,2840',
             ]);
 
         $this->actingAs($this->admin)
             ->get(route('admin.calculadora', $query))
             ->assertInertia(fn (AssertableInertia $page) => $page
-                // (0,765 + 0,50) x 12% = 0,1518 EUR
-                ->where('result.failureReserveMicros', 151_800)
-                ->where('result.productionCostMicros', 1_566_800)
+                ->where('result.electricityCostMicros', 123_540)
+                ->where('result.productionCostMicros', 2_168_639)
             );
     }
 
     /**
-     * Os dois parametros que substituiram as tabelas de faixas. Vao com virgula
-     * de proposito: e a unica cobertura de que entraram na lista do
-     * prepareForValidation — sem isso, "1,90" chegava ao validador como texto.
+     * Vao com virgula de proposito: e a unica cobertura de que entraram na
+     * lista do prepareForValidation — sem isso, "0,1735" chegava ao validador
+     * como texto e o `numeric` rejeitava-o.
      */
-    public function test_the_admin_can_change_the_resale_multiplier_and_the_handling_cost(): void
+    public function test_the_decimal_fields_accept_a_comma(): void
     {
         $this->actingAs($this->admin)
             ->patch(route('admin.definicoes.precos'), [
                 ...$this->validPayload(),
-                'resale_multiplier' => '1,90',
-                'handling_cost' => '0,25',
+                'electricity_price' => '0,1735',
+                'labor_rate' => '12,50',
+                'minimum_wholesale_price' => '2,00',
             ])
             ->assertRedirect(route('admin.definicoes.index'));
 
         $pricing = app(PricingSettings::class);
 
-        $this->assertSame(19_000, $pricing->resaleMultiplierBp());
-        $this->assertSame(25, $pricing->handlingCostCents());
+        $this->assertSame(173_500, $pricing->electricityPriceMicrosPerKwh());
+        $this->assertSame(12_500_000, $pricing->laborRateMicrosPerHour());
+        $this->assertSame(200, $pricing->minimumWholesalePriceCents());
     }
 
     /**
-     * Com o minimo acima do multiplicador normal, o arredondamento comercial
-     * deixava de ter efeito nenhum e TODOS os precos passavam pela rede de
-     * seguranca.
+     * O preco sai de custo / (1 - margem). A 100% isso era uma divisao por
+     * zero, e o formulario e a primeira linha de defesa contra ela.
      */
-    public function test_the_minimum_retail_multiplier_cannot_exceed_the_retail_multiplier(): void
+    public function test_a_margin_of_one_hundred_percent_is_rejected(): void
     {
         $this->actingAs($this->admin)
             ->patch(route('admin.definicoes.precos'), [
                 ...$this->validPayload(),
-                'minimum_retail_multiplier' => '2.00',
+                'wholesale_margin_percent' => '100',
             ])
-            ->assertSessionHasErrors('minimum_retail_multiplier');
+            ->assertSessionHasErrors('wholesale_margin_percent');
+
+        $this->actingAs($this->admin)
+            ->patch(route('admin.definicoes.precos'), [
+                ...$this->validPayload(),
+                'reseller_margin_percent' => '100',
+            ])
+            ->assertSessionHasErrors('reseller_margin_percent');
     }
 
-    /**
-     * Um multiplicador abaixo de 1,00x da lucro negativo e tira o
-     * Micros::divRound do dominio nao negativo que ele documenta.
-     */
-    public function test_a_multiplier_below_one_is_rejected(): void
+    /** Pelo mesmo motivo: o custo divide-se por (1 - taxa de falhas). */
+    public function test_an_absurd_failure_rate_is_rejected(): void
     {
         $this->actingAs($this->admin)
             ->patch(route('admin.definicoes.precos'), [
                 ...$this->validPayload(),
-                'retail_multiplier' => '0.9',
+                'failure_rate_percent' => '80',
             ])
-            ->assertSessionHasErrors('retail_multiplier');
+            ->assertSessionHasErrors('failure_rate_percent');
+    }
 
+    /**
+     * As comissoes do canal sao definicoes normais, mas com um efeito
+     * diferente: nao mexem no preco, so no que sobra dele.
+     */
+    public function test_the_channel_fees_are_saved_without_moving_the_price(): void
+    {
         $this->actingAs($this->admin)
             ->patch(route('admin.definicoes.precos'), [
                 ...$this->validPayload(),
-                'resale_multiplier' => '0.9',
+                'channel_fixed_fee' => '0,35',
+                'channel_percentage_fee' => '10',
             ])
-            ->assertSessionHasErrors('resale_multiplier');
+            ->assertRedirect(route('admin.definicoes.index'));
+
+        $pricing = app(PricingSettings::class);
+
+        $this->assertSame(35, $pricing->salesChannelFixedFeeCents());
+        $this->assertSame(1_000, $pricing->salesChannelPercentageFeeBp());
     }
 
     /**
@@ -172,7 +199,7 @@ class PricingSettingsTest extends TestCase
             ->assertRedirect(route('admin.definicoes.index'));
 
         $this->assertDatabaseHas('settings', ['key' => 'currency']);
-        $this->assertSame(500, app(PricingSettings::class)->failureReserveBp());
+        $this->assertSame(500, app(PricingSettings::class)->failureRateBp());
     }
 
     public function test_non_admins_cannot_change_the_pricing(): void

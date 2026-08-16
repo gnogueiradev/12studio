@@ -28,6 +28,7 @@ type Props = {
     materials: MaterialOption[];
     printers: PrinterProfileOption[];
     pricing: VariantPricingPreview;
+    defaultActiveLaborMinutes: number;
     onBack: () => void;
 };
 
@@ -60,6 +61,7 @@ export function VariantPanel({
     materials,
     printers,
     pricing,
+    defaultActiveLaborMinutes,
     onBack,
 }: Props) {
     const { data, setData, post, patch, processing, errors } =
@@ -76,7 +78,9 @@ export function VariantPanel({
                       filament_weight_grams: null,
                       printing_time_minutes: null,
                       printer_profile_id: null,
-                      extra_cost: '',
+                      packaging_cost: '',
+                      components_cost: '',
+                      active_labor_minutes: null,
                       stock: NEW_VARIANT.stock,
                       low_stock_threshold: NEW_VARIANT.low_stock_threshold,
                       is_default: false,
@@ -93,7 +97,9 @@ export function VariantPanel({
                       filament_weight_grams: variant.filamentWeightGrams,
                       printing_time_minutes: variant.printingTimeMinutes,
                       printer_profile_id: variant.printerProfileId,
-                      extra_cost: variant.extraCost ?? '',
+                      packaging_cost: variant.packagingCost ?? '',
+                      components_cost: variant.componentsCost ?? '',
+                      active_labor_minutes: variant.activeLaborMinutes,
                       stock: variant.stock,
                       low_stock_threshold: variant.lowStockThreshold,
                       is_default: variant.isDefault,
@@ -156,6 +162,7 @@ export function VariantPanel({
                     materials={materials}
                     printers={printers}
                     pricing={pricing}
+                    defaultActiveLaborMinutes={defaultActiveLaborMinutes}
                     reservedStock={variant?.reservedStock}
                 />
             </div>

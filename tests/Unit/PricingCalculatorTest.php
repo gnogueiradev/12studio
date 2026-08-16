@@ -8,6 +8,7 @@ use App\Services\SettingService;
 use App\Support\Micros;
 use App\Support\PricingInput;
 use App\Support\PricingResult;
+use App\Support\Rate;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -25,321 +26,383 @@ class PricingCalculatorTest extends TestCase
     }
 
     /**
-     * Uma peca em modo unitario, com os parametros por omissao: 17 EUR/kg e a
-     * Bambu Lab A1 a 0,20 EUR/h.
+     * Uma peca em modo unitario, com os parametros por omissao: 17 EUR/kg e uma
+     * Bambu Lab A1 (145 W, 400 EUR, 4000 h de vida, 0,04 EUR/h de manutencao).
      */
-    private function part(int $grams, int $minutes, int $extraCents = 0, int $quantity = 1): PricingResult
-    {
+    private function part(
+        int $grams,
+        int $minutes,
+        int $packagingCents = 0,
+        int $componentsCents = 0,
+        ?int $activeLaborMinutes = null,
+        int $quantity = 1,
+        string $mode = PricingInput::MODE_PER_UNIT,
+    ): PricingResult {
         return $this->calculator->calculate(new PricingInput(
-            mode: PricingInput::MODE_PER_UNIT,
+            mode: $mode,
             weightGrams: $grams,
             minutes: $minutes,
             pricePerKgCents: 1_700,
-            hourlyRateCents: 20,
-            extraCostCents: $extraCents,
+            printerPowerWatts: 145,
+            printerPurchasePriceCents: 40_000,
+            printerLifetimeHours: 4_000,
+            printerMaintenanceMicrosPerHour: 40_000,
+            packagingCostCents: $packagingCents,
+            componentsCostCents: $componentsCents,
+            activeLaborMinutes: $activeLaborMinutes,
             quantity: $quantity,
         ));
     }
 
     /**
      * O CASO DE REFERENCIA. E o preco que o dono calculou a mao para uma peca
-     * real — 17 EUR/kg, 45 g, 2h30 na A1 — e e ele que define o comportamento
-     * oficial da calculadora. Cada decisao de arredondamento no App\Support\
-     * Micros existe para reproduzir estes numeros exatamente; se este teste
-     * ficar vermelho, e a formula que mudou, nao o teste.
+     * real — 50 g de filamento a 17 EUR/kg, 3 horas na A1 — e e ele que define
+     * o comportamento oficial da calculadora. Cada decisao de arredondamento no
+     * App\Support\Micros existe para reproduzir estes numeros exatamente; se
+     * este teste ficar vermelho, e a formula que mudou, nao o teste.
      *
-     * Nao ha um unico arredondamento perdido: todos os passos caem em inteiros
-     * exatos. Com floats o 2,513025 seria 2,5130249... e o ceil dava 2,50 EUR
-     * em vez de 3,00.
+     * Nao ha um unico arredondamento perdido no caminho: as unicas divisoes que
+     * nao dao inteiro exato sao a mao de obra (5/60 de hora) e as duas do
+     * gross-up, e essas o divRound resolve ao micro.
      */
-    public function test_the_reference_part_prices_at_three_euros_of_resale_and_five_fifty_of_retail(): void
+    public function test_the_reference_part_reproduces_the_hand_calculated_price(): void
     {
-        $result = $this->part(grams: 45, minutes: 150);
+        $result = $this->part(grams: 50, minutes: 180);
 
-        $this->assertSame(765_000, $result->filamentCostMicros, '45 g x 0,017 EUR/g = 0,765 EUR');
-        $this->assertSame(500_000, $result->machineCostMicros, '2,5 h x 0,20 EUR/h = 0,50 EUR');
-        $this->assertSame(150_000, $result->handlingCostMicros, 'custo fixo por peca = 0,15 EUR');
-        $this->assertSame(63_250, $result->failureReserveMicros, '(0,765 + 0,50) x 5% = 0,06325 EUR');
-        $this->assertSame(0, $result->extraCostMicros);
-        $this->assertSame(1_478_250, $result->productionCostMicros, 'custo real = 1,47825 EUR');
+        $this->assertSame(850_000, $result->filamentCostMicros, '50 g x 0,017 EUR/g');
+        $this->assertSame(61_770, $result->electricityCostMicros, '3 h x 145 W x 0,1420 EUR/kWh');
+        $this->assertSame(300_000, $result->depreciationCostMicros, '3 h x (400 EUR / 4000 h)');
+        $this->assertSame(120_000, $result->maintenanceCostMicros, '3 h x 0,04 EUR/h');
+        $this->assertSame(666_667, $result->laborCostMicros, '5 min x 8 EUR/h');
+        $this->assertSame(0, $result->packagingCostMicros);
+        $this->assertSame(0, $result->componentsCostMicros);
 
-        $this->assertSame(17_000, $result->resaleMultiplierBp, '1,70x, unico');
-        $this->assertSame(2_513_025, $result->rawResalePriceMicros, '1,47825 x 1,70 = 2,513025 EUR');
-        $this->assertSame(3_000_000, $result->resalePriceMicros, 'para cima aos 0,50 -> 3,00 EUR');
+        $this->assertSame(1_998_437, $result->baseProductionCostMicros, 'a soma das sete parcelas');
+        $this->assertSame(105_181, $result->failureCostMicros(), 'o que o risco acrescentou');
+        $this->assertSame(2_103_618, $result->productionCostMicros, 'subtotal / 0,95');
 
-        $this->assertSame(5_250_000, $result->rawRetailPriceMicros, '3,00 x 1,75 = 5,25 EUR');
-        $this->assertSame(5_500_000, $result->retailPriceMicros, 'ao 0,50 mais proximo -> 5,50 EUR');
-        $this->assertFalse($result->retailBumped, '5,50 >= 3,00 x 1,60 = 4,80');
+        $this->assertSame(3_506_030, $result->rawWholesalePriceMicros, 'custo / 0,60');
+        $this->assertSame(4_000_000, $result->wholesalePriceMicros, 'para cima, ao proximo 0,50 EUR');
 
-        $this->assertSame(148, Micros::toCents($result->productionCostMicros));
-        $this->assertSame(300, Micros::toCents($result->resalePriceMicros));
-        $this->assertSame(550, Micros::toCents($result->retailPriceMicros));
+        $this->assertSame(6_666_667, $result->rawRetailPriceMicros, 'revenda / 0,60');
+        $this->assertSame(7_000_000, $result->retailPriceMicros, 'para cima, ao proximo 0,50 EUR');
+
+        // O meu lucro, nas duas vendas.
+        $this->assertSame(1_896_382, $result->wholesaleProfitMicros());
+        $this->assertSame(4_741, $result->wholesaleMarginBp(), '47,41% — acima dos 40% pedidos, por causa do arredondamento');
+        $this->assertSame(4_896_382, $result->directProfitMicros());
+        $this->assertSame(6_995, $result->directMarginBp(), '69,95%');
+
+        // O lucro de quem revende: compra a 4, vende a 7.
+        $this->assertSame(3_000_000, $result->resellerProfitMicros());
+        $this->assertSame(4_286, $result->resellerMarginBp(), '42,86%');
+        $this->assertSame(7_500, $result->resellerMarkupBp(), '75% sobre o que pagou');
     }
 
     /**
-     * O irmao do teste de referencia, e o que apanha um toCents() prematuro.
-     * Se alguem arredondar o filamento a 0,76 EUR "porque e o que se mostra", o
-     * custo desvia-se e o preco de revenda continua a dar 3,00 — o erro so
-     * aparece meses depois, numa peca onde o degrau calha ao contrario.
+     * A guarda de regressao mais importante das duas mudancas estruturais.
+     *
+     * Somar 5% (custo x 1,05) recupera MENOS do que se perdeu: a peca falhada
+     * tambem gastou filamento, luz e horas de maquina. Com 100 pecas e 5
+     * falhadas, sao 95 a pagar o custo de 100 — logo /0,95.
      */
-    public function test_no_intermediate_value_is_rounded_down_to_the_cent(): void
+    public function test_the_failure_rate_divides_the_cost_it_does_not_multiply_it(): void
     {
-        $result = $this->part(grams: 45, minutes: 150);
+        $result = $this->part(grams: 50, minutes: 180);
 
-        $this->assertNotSame(0, $result->filamentCostMicros % Micros::PER_CENT, '0,765 nao e um numero redondo de centimos');
-        $this->assertSame(1_478_250, $result->productionCostMicros);
-        $this->assertSame(2_513_025, $result->rawResalePriceMicros);
-    }
+        $naive = Micros::applyBp($result->baseProductionCostMicros, Rate::PER_UNIT + $result->failureRateBp);
 
-    /**
-     * A razao de ser desta versao inteira. Mesmo filamento, mesmo peso, metade
-     * do tempo: o preco TEM de descer. Na formula antiga, baseada na gramagem,
-     * estas duas pecas custavam o mesmo.
-     */
-    public function test_halving_the_print_time_drops_the_resale_price_to_two_fifty(): void
-    {
-        $fast = $this->part(grams: 45, minutes: 75);
-        $slow = $this->part(grams: 45, minutes: 150);
+        $this->assertNotSame($naive, $result->productionCostMicros);
+        $this->assertGreaterThan($naive, $result->productionCostMicros, 'dividir recupera mais do que somar');
 
-        $this->assertSame($fast->filamentCostMicros, $slow->filamentCostMicros, 'o material e o mesmo');
-
-        $this->assertSame(250_000, $fast->machineCostMicros, '1,25 h x 0,20 EUR/h');
-        $this->assertSame(50_750, $fast->failureReserveMicros);
-        $this->assertSame(1_215_750, $fast->productionCostMicros, 'custo real = 1,21575 EUR');
-        $this->assertSame(2_066_775, $fast->rawResalePriceMicros);
-
-        $this->assertSame(250, Micros::toCents($fast->resalePriceMicros), '1h15 -> 2,50 EUR');
-        $this->assertSame(300, Micros::toCents($slow->resalePriceMicros), '2h30 -> 3,00 EUR');
-    }
-
-    /**
-     * Um ima ou uma caixa entram DEPOIS da impressao. Uma impressao falhada nao
-     * os consome, logo nao pagam seguro de falha — so filamento e maquina
-     * pagam.
-     */
-    public function test_the_extra_cost_does_not_pay_the_failure_reserve(): void
-    {
-        $bare = $this->part(grams: 45, minutes: 150);
-        $withExtras = $this->part(grams: 45, minutes: 150, extraCents: 65);
-
-        $this->assertSame($bare->failureReserveMicros, $withExtras->failureReserveMicros);
-        $this->assertSame(650_000, $withExtras->extraCostMicros);
-        $this->assertSame(
-            $bare->productionCostMicros + 650_000,
-            $withExtras->productionCostMicros,
-            'os extras entram a cru, sem reserva por cima',
+        // E o inverso fecha: custo real x (1 - taxa) volta ao subtotal.
+        $this->assertEqualsWithDelta(
+            $result->baseProductionCostMicros,
+            Micros::applyBp($result->productionCostMicros, Rate::PER_UNIT - $result->failureRateBp),
+            1,
+            'a divisao e reversivel ao micro',
         );
     }
 
     /**
-     * O manuseamento e um custo FIXO, e nao uma tabela por peso.
-     *
-     * Aqui houve faixas (0,25 EUR ate 50 g, 1,00 EUR acima de 500 g). Sairam
-     * porque o que cresce com o tamanho da peca e o tempo de impressao, que ja
-     * se cobra a parte: tirar da mesa e ensacar uma peca de 500 g nao demora
-     * quatro vezes o que demora uma de 50 g, e cobrar as duas coisas era pagar
-     * duas vezes pelo mesmo.
+     * O subtotal tem de ser exatamente a soma das linhas que o painel mostra
+     * por cima dele. Um subtotal que nao bate certo com as parcelas faz duvidar
+     * do resto do ecra — e foi por isso que a soma passou a ser feita sobre as
+     * parcelas JA divididas pelo lote, e nao sobre o total do trabalho.
      */
-    public function test_the_handling_cost_is_the_same_whatever_the_part_weighs(): void
+    public function test_the_subtotal_is_exactly_the_sum_of_the_lines_shown_above_it(): void
     {
-        foreach ([1, 50, 51, 150, 300, 500, 501, 2_000] as $grams) {
+        foreach ([[50, 180, 1], [45, 150, 1], [120, 400, 7], [8, 25, 3]] as [$grams, $minutes, $quantity]) {
+            $result = $this->part(
+                grams: $grams,
+                minutes: $minutes,
+                packagingCents: 12,
+                componentsCents: 35,
+                quantity: $quantity,
+                mode: PricingInput::MODE_BATCH,
+            );
+
             $this->assertSame(
-                150_000,
-                $this->part($grams, minutes: 10)->handlingCostMicros,
-                "{$grams} g pagou um manuseamento diferente do fixo",
+                $result->filamentCostMicros
+                    + $result->electricityCostMicros
+                    + $result->depreciationCostMicros
+                    + $result->maintenanceCostMicros
+                    + $result->laborCostMicros
+                    + $result->packagingCostMicros
+                    + $result->componentsCostMicros,
+                $result->baseProductionCostMicros,
+                "a conta nao fecha com {$grams} g / {$minutes} min / {$quantity} un",
             );
         }
     }
 
     /**
-     * O multiplicador de revenda e UNICO, e nao uma tabela por faixa de custo.
-     *
-     * A tabela progressiva (2,00x ate 2 EUR de custo, 1,90x ate 5 EUR, ...) fazia
-     * o preco saltar de forma descontinua ao atravessar um limiar: um custo de
-     * 2,00 EUR dava 4,00 EUR de revenda e um de 2,02 EUR dava 3,84 — a peca mais
-     * cara vendia-se mais barato. Quem protege as pecas pequenas passou a ser o
-     * chao de 1,50 EUR, que nao tem essa inversao.
+     * O preco ao cliente arredonda SEMPRE para cima. Ja arredondou ao mais
+     * proximo, e uma descida comia a margem que se acabou de pedir — a ponto de
+     * ter sido preciso uma rede de seguranca para a apanhar.
      */
-    public function test_the_resale_multiplier_is_the_same_at_every_production_cost(): void
+    public function test_the_retail_price_is_always_rounded_up_never_down(): void
     {
-        foreach ([[1, 1], [45, 150], [100, 300], [200, 400], [300, 900]] as [$grams, $minutes]) {
-            $this->assertSame(
-                17_000,
-                $this->part($grams, $minutes)->resaleMultiplierBp,
-                "{$grams} g / {$minutes} min saiu com outro multiplicador",
+        for ($minutes = 10; $minutes <= 3_000; $minutes += 37) {
+            $result = $this->part(grams: (int) ($minutes / 3), minutes: $minutes);
+
+            $this->assertGreaterThanOrEqual(
+                $result->rawRetailPriceMicros,
+                $result->retailPriceMicros,
+                "o preco desceu abaixo do bruto aos {$minutes} min",
             );
-        }
-    }
 
-    /**
-     * O preco de revenda vive numa lista comercial (1,50 / 2,00 / 2,50 ...) e
-     * arredonda sempre para CIMA. Para baixo, o multiplicador de margem que
-     * acabamos de aplicar era parcialmente devolvido ao cliente.
-     */
-    public function test_the_resale_price_is_always_rounded_up_to_the_next_fifty_cents(): void
-    {
-        foreach ([[45, 150, 300], [45, 75, 250], [45, 250, 350]] as [$grams, $minutes, $expected]) {
-            $resale = Micros::toCents($this->part($grams, $minutes)->resalePriceMicros);
-
-            $this->assertSame($expected, $resale);
-            $this->assertSame(0, $resale % 50, "{$resale} nao e um degrau de 0,50 EUR");
-        }
-    }
-
-    /**
-     * Uma peca minuscula e rapida da um preco bruto abaixo do chao. O chao
-     * ganha — nem que seja so para o saco, a etiqueta e o tempo de atender.
-     */
-    public function test_a_cheap_part_never_sells_below_the_minimum_resale_price(): void
-    {
-        $tiny = $this->part(grams: 1, minutes: 1);
-
-        $this->assertSame(171_350, $tiny->productionCostMicros, 'custo real = 0,17135 EUR');
-        $this->assertLessThan(1_500_000, Micros::applyBp($tiny->productionCostMicros, 17_000));
-        $this->assertSame(1_500_000, $tiny->rawResalePriceMicros, 'o chao de 1,50 EUR');
-        $this->assertSame(150, Micros::toCents($tiny->resalePriceMicros));
-    }
-
-    public function test_the_retail_price_rounds_to_the_euro_between_twenty_and_fifty(): void
-    {
-        $result = $this->part(grams: 250, minutes: 900);
-
-        $this->assertGreaterThanOrEqual(20 * Micros::PER_EURO, $result->rawRetailPriceMicros);
-        $this->assertLessThanOrEqual(50 * Micros::PER_EURO, $result->rawRetailPriceMicros);
-        $this->assertSame(0, Micros::toCents($result->retailPriceMicros) % 100, 'euro redondo');
-    }
-
-    public function test_the_retail_price_rounds_to_five_euros_above_fifty(): void
-    {
-        $result = $this->part(grams: 900, minutes: 2_400);
-
-        $this->assertGreaterThan(50 * Micros::PER_EURO, $result->rawRetailPriceMicros);
-        $this->assertSame(0, Micros::toCents($result->retailPriceMicros) % 500, 'multiplo de 5 EUR');
-    }
-
-    /**
-     * O arredondamento comercial do preco ao cliente tanto sobe como DESCE, e
-     * uma descida pode deixar o revendedor abaixo do markup que justifica ele
-     * pegar no produto. Quando isso acontece, sobe-se — nunca se baixa o preco
-     * de revenda para compensar.
-     *
-     * Com o minimo apertado a 1,72x, uma peca de revenda 3,50 EUR cai na rede:
-     * 3,50 x 1,75 = 6,125 arredonda para 6,00, e 6,00 < 3,50 x 1,72 = 6,02.
-     *
-     * A revenda tem de NAO ser multipla de 2,00 EUR para o arredondamento ter
-     * para onde descer — num 3,00 EUR o 5,25 sobe, e nao ha nada a proteger.
-     */
-    public function test_the_retail_price_is_bumped_when_it_would_leave_the_reseller_under_the_minimum(): void
-    {
-        app(SettingService::class)->set(PricingSettings::KEY_MINIMUM_RETAIL_MULTIPLIER_BP, 17_200);
-
-        $result = app(PricingCalculator::class)->calculate(new PricingInput(
-            mode: PricingInput::MODE_PER_UNIT,
-            weightGrams: 45,
-            minutes: 250,
-            pricePerKgCents: 1_700,
-            hourlyRateCents: 20,
-        ));
-
-        $this->assertTrue($result->retailBumped);
-        $this->assertSame(6_020_000, $result->minimumRetailPriceMicros);
-        $this->assertSame(6_125_000, $result->rawRetailPriceMicros);
-        $this->assertSame(650, Micros::toCents($result->retailPriceMicros), 'sobe ao proximo degrau: 6,50 EUR');
-        $this->assertGreaterThanOrEqual($result->minimumRetailPriceMicros, $result->retailPriceMicros);
-    }
-
-    /**
-     * Subir para proteger a margem nao pode produzir um preco fora da lista
-     * comercial — 6,02 EUR de minimo tem de virar 6,50 e nao 6,02. Varre-se a
-     * gama toda porque o degrau valido muda de faixa para faixa.
-     */
-    public function test_the_bumped_price_is_still_a_valid_commercial_price(): void
-    {
-        // Multiplicador minimo colado ao normal: forca a rede a disparar quase
-        // sempre, que e o unico regime onde este invariante e testavel.
-        app(SettingService::class)->set(PricingSettings::KEY_MINIMUM_RETAIL_MULTIPLIER_BP, 17_499);
-
-        $bumps = 0;
-
-        for ($minutes = 10; $minutes <= 3_000; $minutes += 10) {
-            $result = $this->part(grams: 40, minutes: $minutes);
-
-            if (! $result->retailBumped) {
-                continue;
-            }
-
-            $bumps++;
-            $cents = Micros::toCents($result->retailPriceMicros);
             $step = match (true) {
-                $cents < 2_000 => 50,
-                $cents <= 5_000 => 100,
-                default => 500,
+                $result->rawRetailPriceMicros < 20 * Micros::PER_EURO => 500_000,
+                $result->rawRetailPriceMicros <= 50 * Micros::PER_EURO => 1_000_000,
+                default => 5_000_000,
             };
 
-            $this->assertSame(0, $cents % $step, "{$cents} nao e um preco comercial valido");
-            $this->assertGreaterThanOrEqual($result->minimumRetailPriceMicros, $result->retailPriceMicros);
+            $this->assertSame(0, $result->retailPriceMicros % $step, "nao e um preco comercial aos {$minutes} min");
         }
-
-        $this->assertGreaterThan(0, $bumps, 'a varredura tem de acionar a protecao pelo menos uma vez');
     }
 
     /**
-     * Com os multiplicadores por omissao a rede NUNCA dispara, e isso e uma
-     * propriedade e nao um acaso: a folga entre 1,75x e 1,60x e 0,15 x revenda,
-     * e a descida maxima de um arredondamento e metade do degrau da sua faixa —
-     * a folga cresce com o preco, o degrau nao.
+     * A prova de que a rede de seguranca apagada era mesmo redundante.
      *
-     * Vale a pena fixar isto: quer dizer que o preco recomendado ao cliente sai
-     * do arredondamento comercial limpo, sem ninguem lhe mexer por cima. Se um
-     * dia este teste ficar vermelho, alguem desequilibrou os dois
-     * multiplicadores por omissao no config/pricing.php.
+     * Antes, o multiplicador minimo do revendedor existia porque o
+     * arredondamento tanto subia como descia. Com o `ceil`, o preco ao cliente
+     * nunca fica abaixo de revenda / (1 - margem), e por isso a margem do
+     * revendedor e um chao garantido por construcao.
      */
-    public function test_the_default_multipliers_never_need_the_safety_net(): void
+    public function test_the_reseller_margin_is_never_below_the_target(): void
     {
-        for ($minutes = 10; $minutes <= 3_000; $minutes += 10) {
-            foreach ([5, 40, 200, 600] as $grams) {
-                $this->assertFalse(
-                    $this->part($grams, $minutes)->retailBumped,
-                    "{$grams} g / {$minutes} min acionou a protecao com os valores por omissao",
-                );
-            }
+        for ($minutes = 10; $minutes <= 3_000; $minutes += 37) {
+            $result = $this->part(grams: (int) ($minutes / 3), minutes: $minutes);
+
+            $this->assertGreaterThanOrEqual(
+                $result->targetResellerMarginBp,
+                $result->resellerMarginBp(),
+                "o revendedor ficou abaixo do alvo aos {$minutes} min",
+            );
+        }
+    }
+
+    /** O mesmo do lado de ca: a minha margem tambem nunca fica abaixo do alvo. */
+    public function test_my_wholesale_margin_is_never_below_the_target(): void
+    {
+        for ($minutes = 10; $minutes <= 3_000; $minutes += 37) {
+            $result = $this->part(grams: (int) ($minutes / 3), minutes: $minutes);
+
+            $this->assertGreaterThanOrEqual(
+                $result->targetWholesaleMarginBp,
+                $result->wholesaleMarginBp(),
+                "a minha margem ficou abaixo do alvo aos {$minutes} min",
+            );
         }
     }
 
     /**
-     * As margens sao a leitura que interessa ao dono, e a definicao oficial do
-     * plano e margem SOBRE A VENDA (lucro / preco), nao sobre o custo. O markup
-     * do revendedor e que se le sobre o custo dele.
+     * A tarifa da luz nao cabe num centimo, e o custo de energia de uma peca
+     * tambem nao. Guardar isto em centimos fazia 0,1420 EUR/kWh virar 0,14 e o
+     * custo de energia sair 1,4% ao lado — num numero que se multiplica pelas
+     * horas todas do ano.
      */
-    public function test_the_margins_are_reported_in_basis_points(): void
+    public function test_the_electricity_cost_keeps_its_sub_cent_precision(): void
     {
-        $result = $this->part(grams: 45, minutes: 150);
+        $result = $this->part(grams: 50, minutes: 180);
 
-        $this->assertSame(1_521_750, $result->producerProfitMicros(), '3,00 - 1,47825 = 1,52175 EUR');
-        // 5072,5 bp exatos: o unico caso em todo o sistema que exercita o
-        // desempate ao meio para CIMA do Micros::divRound. Um intdiv puro
-        // devolvia 5072 e ninguem dava por isso.
-        $this->assertSame(5_073, $result->producerMarginBp(), '50,73%');
-
-        $this->assertSame(2_500_000, $result->resellerProfitMicros(), '5,50 - 3,00 = 2,50 EUR');
-        $this->assertSame(4_545, $result->resellerMarginBp(), '45,45%');
-        $this->assertSame(8_333, $result->resellerMarkupBp(), '83,33%');
+        $this->assertSame(61_770, $result->electricityCostMicros);
+        $this->assertNotSame(0, $result->electricityCostMicros % Micros::PER_CENT, 'nao e um numero redondo de centimos');
+        $this->assertSame(6, Micros::toCents($result->electricityCostMicros), 'e mostra-se como 0,06 EUR');
     }
 
     /**
-     * Em modo unitario a quantidade so multiplica os totais do trabalho: nunca
-     * entra no calculo da unidade, nem no arredondamento. Seis pecas iguais
-     * valem seis vezes uma, e nao uma peca seis vezes maior.
+     * A vida util e um DIVISOR. O formulario poe min:1, mas uma definicao
+     * escrita a mao por fora nao passa por validacao nenhuma — e um erro de
+     * digitacao nao pode derrubar o backoffice inteiro.
      */
-    public function test_the_quantity_only_multiplies_the_job_totals_in_per_unit_mode(): void
+    public function test_a_printer_with_no_lifetime_does_not_divide_by_zero(): void
     {
-        $one = $this->part(grams: 45, minutes: 150);
-        $six = $this->part(grams: 45, minutes: 150, quantity: 6);
+        $result = $this->calculator->calculate(new PricingInput(
+            mode: PricingInput::MODE_PER_UNIT,
+            weightGrams: 50,
+            minutes: 180,
+            pricePerKgCents: 1_700,
+            printerPowerWatts: 145,
+            printerPurchasePriceCents: 40_000,
+            printerLifetimeHours: 0,
+            printerMaintenanceMicrosPerHour: 40_000,
+        ));
 
-        $this->assertSame($one->productionCostMicros, $six->productionCostMicros);
-        $this->assertSame($one->resalePriceMicros, $six->resalePriceMicros);
+        $this->assertSame(0, $result->depreciationCostMicros, 'sem vida util nao ha amortizacao');
+        $this->assertGreaterThan(0, $result->productionCostMicros);
+    }
 
-        $this->assertSame(1_800, $six->toArray()['job']['resalePriceCents'], '6 x 3,00 = 18,00 EUR');
-        $this->assertSame(3_300, $six->toArray()['job']['retailPriceCents'], '6 x 5,50 = 33,00 EUR');
+    /**
+     * O chao protege as pecas pequenas, e e ELE que decide o preco delas — nao
+     * a margem. Uma peca de 5 g e 10 minutos custa cerca de 0,82 EUR a
+     * produzir, o que a 40% de margem dava 1,37 EUR de revenda.
+     */
+    public function test_a_tiny_fast_part_is_saved_by_the_wholesale_floor(): void
+    {
+        $result = $this->part(grams: 5, minutes: 10);
+
+        $this->assertLessThan(900_000, $result->productionCostMicros);
+        $this->assertSame(1_500_000, $result->rawWholesalePriceMicros, 'o chao ganhou a margem');
+        $this->assertSame(1_500_000, $result->wholesalePriceMicros, 'e ja e um degrau exato de 0,50');
+    }
+
+    /**
+     * O tempo ativo e por peca, e uma peca que leve mais acabamento tem de
+     * poder dize-lo. Null quer dizer "usa a definicao global" — e diferente de
+     * zero, que quer dizer "esta peca nao leva trabalho nenhum".
+     */
+    public function test_a_part_can_override_the_active_labor_minutes(): void
+    {
+        $standard = $this->part(grams: 50, minutes: 180);
+        $fiddly = $this->part(grams: 50, minutes: 180, activeLaborMinutes: 20);
+        $none = $this->part(grams: 50, minutes: 180, activeLaborMinutes: 0);
+
+        $this->assertSame(666_667, $standard->laborCostMicros, 'null cai nos 5 min globais');
+        $this->assertSame(2_666_667, $fiddly->laborCostMicros, '20 min x 8 EUR/h');
+        $this->assertSame(0, $none->laborCostMicros, 'zero e mesmo zero, nao "por omissao"');
+
+        $this->assertGreaterThan($standard->wholesalePriceMicros, $fiddly->wholesalePriceMicros);
+        $this->assertLessThan($standard->wholesalePriceMicros, $none->wholesalePriceMicros);
+    }
+
+    /**
+     * A embalagem e os componentes PAGAM o risco de falhas, ao contrario do que
+     * acontecia na formula antiga (onde os "custos extra" entravam depois da
+     * reserva). E a leitura certa: quando uma impressao falha, o saco e o iman
+     * que ja la estavam perdem-se com ela.
+     */
+    public function test_the_packaging_and_components_pay_the_failure_gross_up(): void
+    {
+        $bare = $this->part(grams: 50, minutes: 180);
+        $kitted = $this->part(grams: 50, minutes: 180, packagingCents: 20, componentsCents: 30);
+
+        $addedToBase = $kitted->baseProductionCostMicros - $bare->baseProductionCostMicros;
+        $addedToCost = $kitted->productionCostMicros - $bare->productionCostMicros;
+
+        $this->assertSame(500_000, $addedToBase, '0,50 EUR de extras');
+        $this->assertGreaterThan($addedToBase, $addedToCost, 'e tambem eles se perdem quando a peca falha');
+    }
+
+    /**
+     * O tempo de maquina e a segunda maior parcela e a unica que cresce com as
+     * horas. Metade do tempo tem de dar um preco visivelmente mais baixo — foi
+     * para isto que o tempo passou a ser input da formula.
+     */
+    public function test_halving_the_print_time_lowers_the_price(): void
+    {
+        $long = $this->part(grams: 50, minutes: 360);
+        $short = $this->part(grams: 50, minutes: 180);
+
+        $this->assertSame($long->filamentCostMicros, $short->filamentCostMicros, 'o filamento e o mesmo');
+        $this->assertSame($long->electricityCostMicros, 2 * $short->electricityCostMicros);
+        $this->assertSame($long->depreciationCostMicros, 2 * $short->depreciationCostMicros);
+        $this->assertLessThan($long->wholesalePriceMicros, $short->wholesalePriceMicros);
+    }
+
+    /** As tres faixas comerciais, cada uma com o seu degrau. */
+    public function test_the_retail_price_uses_the_euro_band_between_twenty_and_fifty(): void
+    {
+        $result = $this->part(grams: 500, minutes: 600);
+
+        $this->assertSame(31_666_667, $result->rawRetailPriceMicros);
+        $this->assertSame(32_000_000, $result->retailPriceMicros, 'entre 20 e 50 EUR sobe ao euro');
+    }
+
+    public function test_the_retail_price_uses_the_five_euro_band_above_fifty(): void
+    {
+        $result = $this->part(grams: 1_000, minutes: 1_200);
+
+        $this->assertSame(61_666_667, $result->rawRetailPriceMicros);
+        $this->assertSame(65_000_000, $result->retailPriceMicros, 'acima de 50 EUR sobe aos 5 EUR');
+    }
+
+    /**
+     * As comissoes do canal ficam FORA do custo industrial: nao custam nada
+     * produzir, e metidas no custo contaminavam o preco de revenda de pecas
+     * vendidas por outros canais. O preco nao se mexe — o que se mexe e o que
+     * sobra.
+     */
+    public function test_the_channel_fees_cut_the_net_profit_without_moving_the_price(): void
+    {
+        $free = $this->part(grams: 50, minutes: 180);
+
+        $settings = app(SettingService::class);
+        $settings->set(PricingSettings::KEY_SALES_CHANNEL_FIXED_FEE_CENTS, 35);
+        $settings->set(PricingSettings::KEY_SALES_CHANNEL_PERCENTAGE_FEE_BP, 1_000);
+
+        $marketplace = $this->part(grams: 50, minutes: 180);
+
+        $this->assertSame($free->retailPriceMicros, $marketplace->retailPriceMicros, 'o preco publico e o mesmo');
+        $this->assertSame($free->productionCostMicros, $marketplace->productionCostMicros, 'e o custo tambem');
+
+        // 0,35 EUR fixos + 10% de 7,00 EUR.
+        $this->assertSame(1_050_000, $marketplace->channelFeeMicros);
+        $this->assertSame(
+            $marketplace->directProfitMicros() - 1_050_000,
+            $marketplace->netDirectProfitMicros(),
+        );
+    }
+
+    public function test_with_no_channel_fees_the_net_profit_equals_the_direct_profit(): void
+    {
+        $result = $this->part(grams: 50, minutes: 180);
+
+        $this->assertSame(0, $result->channelFeeMicros);
+        $this->assertSame($result->directProfitMicros(), $result->netDirectProfitMicros());
+        $this->assertSame($result->directMarginBp(), $result->netDirectMarginBp());
+    }
+
+    /**
+     * Uma margem a 100% era uma divisao por zero. O formulario poe um tecto de
+     * 95%, mas uma chave escrita a mao na tabela `settings` nao passa por
+     * validacao nenhuma.
+     */
+    public function test_an_impossible_margin_is_clamped_instead_of_dividing_by_zero(): void
+    {
+        app(SettingService::class)->set(PricingSettings::KEY_TARGET_WHOLESALE_MARGIN_BP, 10_000);
+
+        $result = $this->part(grams: 50, minutes: 180);
+
+        $this->assertSame(9_999, $result->targetWholesaleMarginBp);
+        $this->assertGreaterThan(0, $result->wholesalePriceMicros);
+    }
+
+    /**
+     * Uma definicao guardada nao pode ficar so no ficheiro de config: mudar a
+     * tarifa da luz tem de mexer no preco, ou a area de definicoes e decorativa.
+     */
+    public function test_a_saved_setting_really_moves_the_price(): void
+    {
+        $before = $this->part(grams: 50, minutes: 180);
+
+        // Tarifa a dobrar.
+        app(SettingService::class)->set(PricingSettings::KEY_ELECTRICITY_PRICE_MICROS_PER_KWH, 284_000);
+
+        $after = $this->part(grams: 50, minutes: 180);
+
+        $this->assertSame(123_540, $after->electricityCostMicros, 'o dobro de 61_770');
+        $this->assertGreaterThan($before->productionCostMicros, $after->productionCostMicros);
     }
 }

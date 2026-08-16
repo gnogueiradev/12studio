@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Pricing\PricingPreviewRequest;
 use App\Services\PricingPreview;
+use App\Services\PricingSettings;
 use App\Support\MaterialOptions;
 use App\Support\PricingInput;
 use App\Support\PrinterOptions;
@@ -24,6 +25,7 @@ class PricingCalculatorController extends Controller
 {
     public function __construct(
         private PricingPreview $preview,
+        private PricingSettings $settings,
     ) {}
 
     public function __invoke(PricingPreviewRequest $request): Response
@@ -47,9 +49,12 @@ class PricingCalculatorController extends Controller
             // exigi-lo la apagava em silencio a sugestao de todas as variantes
             // que ainda nao tem material.
             'result' => $request->materialId() === null ? null : $preview['result'],
-            'hourlyRateCents' => $preview['hourlyRateCents'],
+            'hourlyCostMicros' => $preview['hourlyCostMicros'],
             'usingFallbackRate' => $preview['usingFallbackRate'],
-            'printers' => PrinterOptions::all(),
+            'printers' => PrinterOptions::all($this->settings->electricityPriceMicrosPerKwh()),
+            // O valor por omissao serve de placeholder ao campo do trabalho
+            // ativo: um campo vazio tem de dizer o que acontece se ficar vazio.
+            'defaultActiveLaborMinutes' => $this->settings->activeLaborMinutes(),
             'materials' => MaterialOptions::all($request->materialId()),
             'modes' => $this->modeOptions(),
         ]);

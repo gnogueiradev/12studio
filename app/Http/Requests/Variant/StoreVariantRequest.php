@@ -26,7 +26,7 @@ class StoreVariantRequest extends FormRequest
      */
     protected function prepareForValidation(): void
     {
-        foreach (['normal_price', 'sale_price', 'wholesale_price', 'extra_cost'] as $field) {
+        foreach (['normal_price', 'sale_price', 'wholesale_price', 'packaging_cost', 'components_cost'] as $field) {
             $value = $this->input($field);
 
             if (is_string($value) && $value !== '') {
@@ -62,7 +62,11 @@ class StoreVariantRequest extends FormRequest
              */
             'printing_time_minutes' => ['nullable', 'integer', 'min:0', 'max:59999'],
             'printer_profile_id' => ['nullable', 'integer', Rule::exists('printer_profiles', 'id')],
-            'extra_cost' => ['nullable', 'numeric', 'min:0', 'max:9999.99'],
+            'packaging_cost' => ['nullable', 'numeric', 'min:0', 'max:9999.99'],
+            'components_cost' => ['nullable', 'numeric', 'min:0', 'max:9999.99'],
+            // Vazio = usa a definicao global; zero = esta peca nao leva
+            // trabalho nenhum. Sao coisas diferentes, e por isso e nullable.
+            'active_labor_minutes' => ['nullable', 'integer', 'min:0', 'max:600'],
             'stock' => ['required', 'integer', 'min:0', 'max:99999'],
             'low_stock_threshold' => ['required', 'integer', 'min:0', 'max:9999'],
             'is_default' => ['boolean'],
@@ -170,7 +174,9 @@ class StoreVariantRequest extends FormRequest
             'filament_weight_grams' => 'gramagem',
             'printing_time_minutes' => 'tempo de impressão',
             'printer_profile_id' => 'impressora',
-            'extra_cost' => 'custos adicionais',
+            'packaging_cost' => 'embalagem',
+            'components_cost' => 'componentes',
+            'active_labor_minutes' => 'trabalho ativo',
             'size_label' => 'tamanho',
             'low_stock_threshold' => 'limiar de stock baixo',
         ];

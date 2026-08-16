@@ -27,7 +27,13 @@ class PricingCalculatorPageTest extends TestCase
         parent::setUp();
 
         $this->admin = User::factory()->admin()->create();
-        PrinterProfile::factory()->isDefault()->create(['name' => 'Bambu Lab A1', 'hourly_rate_cents' => 20]);
+        PrinterProfile::factory()->isDefault()->create([
+            'name' => 'Bambu Lab A1',
+            'average_power_watts' => 145,
+            'purchase_price_cents' => 40_000,
+            'lifetime_hours' => 4_000,
+            'maintenance_micros_per_hour' => 40_000,
+        ]);
         $this->material = Material::factory()->create(['price_per_kg_cents' => 1_700]);
     }
 
@@ -44,36 +50,43 @@ class PricingCalculatorPageTest extends TestCase
                 ->component('admin/calculadora/index')
                 ->where('result', null)
                 ->where('usingFallbackRate', false)
-                ->where('hourlyRateCents', 20)
+                // 145 W x 0,1420 + 400/4000 + 0,04 = 0,16059 EUR/h
+                ->where('hourlyCostMicros', 160_590)
+                ->where('defaultActiveLaborMinutes', 5)
             );
     }
 
     /**
      * O caso de referencia, agora atraves do HTTP: os mesmos numeros que o
      * PricingCalculatorTest fixa tem de chegar intactos ao Inertia. E aqui que
-     * se apanha uma serializacao que arredonde pelo caminho.
+     * se apanha uma serializacao que arredonde pelo caminho — 0,06177 EUR de
+     * eletricidade nao sobrevive a um `round()` distraido.
      */
     public function test_the_page_returns_the_full_breakdown_for_the_reference_part(): void
     {
         $this->actingAs($this->admin)
             ->get(route('admin.calculadora', [
-                'weight_grams' => 45,
-                'hours' => 2,
-                'minutes' => 30,
+                'weight_grams' => 50,
+                'hours' => 3,
+                'minutes' => 0,
                 'material_id' => $this->material->id,
             ]))
             ->assertInertia(fn (AssertableInertia $page) => $page
-                ->where('result.filamentCostMicros', 765_000)
-                ->where('result.machineCostMicros', 500_000)
-                ->where('result.handlingCostMicros', 150_000)
-                ->where('result.failureReserveMicros', 63_250)
-                ->where('result.productionCostMicros', 1_478_250)
-                ->where('result.productionCostCents', 148)
-                ->where('result.resalePriceCents', 300)
-                ->where('result.retailPriceCents', 550)
-                ->where('result.producerMarginBp', 5_073)
-                ->where('result.resellerMarginBp', 4_545)
-                ->where('result.retailBumped', false)
+                ->where('result.filamentCostMicros', 850_000)
+                ->where('result.electricityCostMicros', 61_770)
+                ->where('result.depreciationCostMicros', 300_000)
+                ->where('result.maintenanceCostMicros', 120_000)
+                ->where('result.laborCostMicros', 666_667)
+                ->where('result.baseProductionCostMicros', 1_998_437)
+                ->where('result.failureCostMicros', 105_181)
+                ->where('result.productionCostMicros', 2_103_618)
+                ->where('result.productionCostCents', 210)
+                ->where('result.wholesalePriceCents', 400)
+                ->where('result.retailPriceCents', 700)
+                ->where('result.wholesaleMarginBp', 4_741)
+                ->where('result.directMarginBp', 6_995)
+                ->where('result.resellerMarginBp', 4_286)
+                ->where('result.resellerMarkupBp', 7_500)
             );
     }
 
@@ -91,8 +104,8 @@ class PricingCalculatorPageTest extends TestCase
                 'material_id' => $this->material->id,
             ]))
             ->assertInertia(fn (AssertableInertia $page) => $page
-                // 150 min x 0,20 EUR/h = 0,50 EUR. Com 2,30 h dariam 0,46 EUR.
-                ->where('result.machineCostMicros', 500_000)
+                // 150 min x 0,10 EUR/h = 0,25 EUR. Com 2,30 h dariam 0,23 EUR.
+                ->where('result.depreciationCostMicros', 250_000)
                 ->where('inputs.hours', 2)
                 ->where('inputs.minutes', 30)
             );
@@ -111,9 +124,64 @@ class PricingCalculatorPageTest extends TestCase
             ]))
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('result.mode', 'batch')
-                ->where('result.productionCostMicros', 677_700)
-                ->where('result.resalePriceCents', 150)
-                ->where('result.job.resalePriceCents', 900)
+                ->where('result.filamentCostMicros', 374_000)
+                ->where('result.productionCostMicros', 1_334_484)
+                ->where('result.wholesalePriceCents', 250)
+                ->where('result.job.wholesalePriceCents', 1_500)
+            );
+    }
+
+    /**
+     * Os dois campos de custo que substituiram o saco unico, e o tempo de
+     * trabalho por peca. Vao com virgula de proposito: sem entrarem na lista do
+     * prepareForValidation, "0,20" chegava ao validador como texto.
+     */
+    public function test_the_packaging_components_and_labor_reach_the_calculation(): void
+    {
+        $this->actingAs($this->admin)
+            ->get(route('admin.calculadora', [
+                'weight_grams' => 50,
+                'hours' => 3,
+                'minutes' => 0,
+                'material_id' => $this->material->id,
+                'packaging_cost' => '0,20',
+                'components_cost' => '0,30',
+                'active_labor_minutes' => 20,
+            ]))
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('result.packagingCostMicros', 200_000)
+                ->where('result.componentsCostMicros', 300_000)
+                ->where('result.laborCostMicros', 2_666_667)
+                ->where('result.laborMinutes', 20)
+            );
+    }
+
+    /**
+     * Um campo de trabalho vazio quer dizer "usa a definicao global", e nao
+     * zero. Zero e uma afirmacao — "esta peca nao leva trabalho nenhum" — e tem
+     * de continuar a poder ser escrita.
+     */
+    public function test_an_empty_active_labor_falls_back_to_the_global_default(): void
+    {
+        $query = [
+            'weight_grams' => 50,
+            'hours' => 3,
+            'minutes' => 0,
+            'material_id' => $this->material->id,
+        ];
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.calculadora', $query))
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('result.laborMinutes', 5)
+                ->where('inputs.active_labor_minutes', null)
+            );
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.calculadora', [...$query, 'active_labor_minutes' => 0]))
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('result.laborMinutes', 0)
+                ->where('result.laborCostMicros', 0)
             );
     }
 
@@ -176,25 +244,26 @@ class PricingCalculatorPageTest extends TestCase
     }
 
     /**
-     * Sem impressora ativa nenhuma o calculo continua a sair — com o custo/hora
-     * do config e um aviso. Uma calculadora que se recusasse a funcionar por
-     * falta de configuracao era pior do que uma que explica no que caiu.
+     * Sem impressora ativa nenhuma o calculo continua a sair — com os valores
+     * de recurso do config e um aviso. Uma calculadora que se recusasse a
+     * funcionar por falta de configuracao era pior do que uma que explica no
+     * que caiu.
      */
-    public function test_the_calculator_warns_when_it_falls_back_to_the_config_rate(): void
+    public function test_the_calculator_warns_when_it_falls_back_to_the_config_machine(): void
     {
         PrinterProfile::query()->update(['active' => false, 'is_default' => false]);
 
         $this->actingAs($this->admin)
             ->get(route('admin.calculadora', [
-                'weight_grams' => 45,
-                'hours' => 2,
-                'minutes' => 30,
+                'weight_grams' => 50,
+                'hours' => 3,
+                'minutes' => 0,
                 'material_id' => $this->material->id,
             ]))
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('usingFallbackRate', true)
-                ->where('hourlyRateCents', 20)
-                ->where('result.machineCostMicros', 500_000)
+                ->where('hourlyCostMicros', 160_590)
+                ->where('result.depreciationCostMicros', 300_000)
             );
     }
 
@@ -205,20 +274,24 @@ class PricingCalculatorPageTest extends TestCase
      */
     public function test_an_archived_printer_falls_back_to_the_default(): void
     {
-        $archived = PrinterProfile::factory()->archived()->create(['hourly_rate_cents' => 200]);
+        $archived = PrinterProfile::factory()->archived()->create([
+            'average_power_watts' => 900,
+            'purchase_price_cents' => 400_000,
+        ]);
         $default = PrinterProfile::query()->where('is_default', true)->firstOrFail();
 
         $this->actingAs($this->admin)
             ->get(route('admin.calculadora', [
-                'weight_grams' => 45,
-                'hours' => 2,
-                'minutes' => 30,
+                'weight_grams' => 50,
+                'hours' => 3,
+                'minutes' => 0,
                 'material_id' => $this->material->id,
                 'printer_profile_id' => $archived->id,
             ]))
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('inputs.printer_profile_id', $default->id)
-                ->where('result.machineCostMicros', 500_000)
+                ->where('result.depreciationCostMicros', 300_000)
+                ->where('result.electricityCostMicros', 61_770)
             );
     }
 

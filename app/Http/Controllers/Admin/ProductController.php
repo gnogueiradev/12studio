@@ -12,6 +12,7 @@ use App\Models\ProductImage;
 use App\Models\Tag;
 use App\Models\Variant;
 use App\Services\PricingPreview;
+use App\Services\PricingSettings;
 use App\Services\ProductService;
 use App\Services\TagService;
 use App\Support\ColorOptions;
@@ -31,6 +32,7 @@ class ProductController extends Controller
         private ProductService $productService,
         private TagService $tagService,
         private PricingPreview $preview,
+        private PricingSettings $pricingSettings,
     ) {}
 
     /**
@@ -126,7 +128,8 @@ class ProductController extends Controller
             'categories' => $this->categoryOptions(),
             'colors' => ColorOptions::all(array_column($editing['variants'] ?? [], 'colorId')),
             'materials' => MaterialOptions::all(array_column($editing['variants'] ?? [], 'materialId')),
-            'printers' => PrinterOptions::all(),
+            'printers' => PrinterOptions::all($this->pricingSettings->electricityPriceMicrosPerKwh()),
+            'defaultActiveLaborMinutes' => $this->pricingSettings->activeLaborMinutes(),
             // Do ambito `product` e so dele: desde que as etiquetas deixaram de
             // ser exclusivas do catalogo, sugerir todas era oferecer
             // "revendedor" e "urgente" ao classificar um vaso.
@@ -289,9 +292,13 @@ class ProductController extends Controller
                 'filamentWeightGrams' => $variant->filament_weight_grams,
                 'printingTimeMinutes' => $variant->printing_time_minutes,
                 'printerProfileId' => $variant->printer_profile_id,
-                'extraCost' => $variant->extra_cost_cents === null
+                'packagingCost' => $variant->packaging_cost_cents === null
                     ? null
-                    : Money::toDecimal($variant->extra_cost_cents),
+                    : Money::toDecimal($variant->packaging_cost_cents),
+                'componentsCost' => $variant->components_cost_cents === null
+                    ? null
+                    : Money::toDecimal($variant->components_cost_cents),
+                'activeLaborMinutes' => $variant->active_labor_minutes,
                 'stock' => $variant->stock,
                 'reservedStock' => $variant->reserved_stock,
                 'availableStock' => $variant->available_stock,

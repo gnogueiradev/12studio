@@ -9,7 +9,7 @@ import { PrinterCreateDialog } from '@/components/admin/printer-create-dialog';
 import { StatCard } from '@/components/admin/stat-card';
 import { StatusBadge } from '@/components/admin/status-badge';
 import { Button } from '@/components/ui/button';
-import { formatCents } from '@/lib/money';
+import { formatCents, formatMicros } from '@/lib/money';
 import { label } from '@/lib/options';
 import { calculadora } from '@/routes/admin';
 import {
@@ -24,6 +24,8 @@ import { PRINTER_STATES } from '@/types/pricing';
 type Props = {
     printers: PrinterProfileRow[];
     stats: PrinterProfileStats;
+    /** A tarifa global, só para o modal pré-visualizar o €/h enquanto se escreve. */
+    electricityPriceMicrosPerKwh: number;
 };
 
 const ALL = 'all';
@@ -37,7 +39,11 @@ const MATCHERS: Record<string, (printer: PrinterProfileRow) => boolean> = {
     archived: (printer) => !printer.active,
 };
 
-export default function PrintersIndex({ printers, stats }: Props) {
+export default function PrintersIndex({
+    printers,
+    stats,
+    electricityPriceMicrosPerKwh,
+}: Props) {
     const [state, setState] = useState<string>(ALL);
     const [creating, setCreating] = useState(false);
     const [editing, setEditing] = useState<PrinterProfileRow | null>(null);
@@ -82,19 +88,41 @@ export default function PrintersIndex({ printers, stats }: Props) {
             ),
         },
         {
+            key: 'power',
+            header: 'Potência',
+            className: 'text-right tabular-nums text-muted-foreground',
+            cell: (printer) => `${printer.averagePowerWatts} W`,
+        },
+        {
+            key: 'amortisation',
+            header: 'Compra / vida útil',
+            className: 'text-right tabular-nums text-muted-foreground',
+            cell: (printer) =>
+                `${formatCents(printer.purchasePriceCents)} / ${printer.lifetimeHours} h`,
+        },
+        {
+            key: 'maintenance',
+            header: 'Manutenção',
+            className: 'text-right tabular-nums text-muted-foreground',
+            cell: (printer) =>
+                `${formatMicros(printer.maintenanceMicrosPerHour)}/h`,
+        },
+        {
+            // Derivado das três colunas anteriores mais a tarifa da luz — não é
+            // um número que alguém escreva.
             key: 'rate',
             header: 'Custo / hora',
             className: 'text-right tabular-nums',
-            cell: (printer) => formatCents(printer.hourlyRateCents),
+            cell: (printer) => formatMicros(printer.hourlyCostMicros),
         },
         {
             key: 'example',
             header: 'Peça de 1h30',
             className: 'text-right tabular-nums text-muted-foreground',
             cell: (printer) =>
-                formatCents(
+                formatMicros(
                     Math.round(
-                        (printer.hourlyRateCents * EXAMPLE_MINUTES) / 60,
+                        (printer.hourlyCostMicros * EXAMPLE_MINUTES) / 60,
                     ),
                 ),
         },
@@ -199,13 +227,13 @@ export default function PrintersIndex({ printers, stats }: Props) {
                     <StatCard
                         label="Predefinida"
                         value={
-                            stats.defaultRateCents === null
+                            stats.defaultHourlyCostMicros === null
                                 ? '—'
-                                : `${formatCents(stats.defaultRateCents)}/h`
+                                : `${formatMicros(stats.defaultHourlyCostMicros)}/h`
                         }
                         hint={
                             stats.defaultName ??
-                            'Sem impressora: a calculadora usa o valor do ficheiro de configuração.'
+                            'Sem impressora: a calculadora usa a máquina por omissão do ficheiro de configuração.'
                         }
                         tone={
                             stats.defaultName === null ? 'warning' : 'default'
@@ -213,7 +241,7 @@ export default function PrintersIndex({ printers, stats }: Props) {
                     />
                     <StatCard
                         label="Custo médio por hora"
-                        value={formatCents(stats.averageRateCents)}
+                        value={formatMicros(stats.averageHourlyCostMicros)}
                     />
                 </div>
 
@@ -273,6 +301,7 @@ export default function PrintersIndex({ printers, stats }: Props) {
                 }}
                 editing={editing}
                 isFirst={printers.length === 0}
+                electricityPriceMicrosPerKwh={electricityPriceMicrosPerKwh}
             />
 
             <ConfirmDialog

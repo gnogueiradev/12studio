@@ -27,11 +27,6 @@ const percentFormatter = new Intl.NumberFormat('pt-PT', {
     maximumFractionDigits: 1,
 });
 
-const multiplierFormatter = new Intl.NumberFormat('pt-PT', {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-});
-
 let currency = DEFAULT_CURRENCY;
 let formatter = new Intl.NumberFormat('pt-PT', {
     style: 'currency',
@@ -159,11 +154,6 @@ export function formatPercentBp(bp: number): string {
     return percentFormatter.format(bp / 10_000);
 }
 
-/** Pontos base → multiplicador ("17000" → "1,70×"). */
-export function formatMultiplierBp(bp: number): string {
-    return `${multiplierFormatter.format(bp / 10_000)}×`;
-}
-
 /** Cêntimos → string para inputs de texto ("1250" → "12.50"). */
 export function centsToInput(cents: number | null): string {
     return cents === null ? '' : (cents / 100).toFixed(2);
@@ -179,4 +169,23 @@ export function inputToCents(value: string): number {
     const parsed = Number.parseFloat(clean);
 
     return Number.isNaN(parsed) ? 0 : Math.round(parsed * 100);
+}
+
+/**
+ * Micro-euros → string para inputs de texto ("40000" → "0.0400").
+ *
+ * Gémeo do centsToInput, com quatro casas em vez de duas. Existe para os dois
+ * campos que não cabem num cêntimo: a manutenção por hora (0,0400 €/h) e a
+ * tarifa da eletricidade. Ver App\Support\Micros::toDecimal.
+ */
+export function microsToInput(micros: number | null): string {
+    return micros === null ? '' : (micros / 1_000_000).toFixed(4);
+}
+
+/** O caminho inverso. Espelha App\Support\Micros::fromDecimal. */
+export function inputToMicros(value: string): number {
+    const clean = value.replace(/[^0-9,.-]/g, '').replace(',', '.');
+    const parsed = Number.parseFloat(clean);
+
+    return Number.isNaN(parsed) ? 0 : Math.round(parsed * 1_000_000);
 }

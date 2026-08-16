@@ -3,14 +3,19 @@
 namespace App\Http\Requests\Setting;
 
 use Illuminate\Foundation\Http\FormRequest;
-use Illuminate\Validation\Validator;
 
 /**
  * Os parametros da calculadora de precos, em unidades humanas.
  *
- * O formulario fala em percentagem, euros e "1,75"; a conversao para pontos
- * base e centimos e do PricingSettings::fromForm(). Aqui so se garante que os
- * numeros fazem sentido.
+ * O formulario fala em percentagem, euros e minutos; a conversao para pontos
+ * base, centimos e micros e do PricingSettings::fromForm(). Aqui so se garante
+ * que os numeros fazem sentido.
+ *
+ * Ja aqui viveu uma regra de ORDEM entre dois multiplicadores (o minimo do
+ * revendedor nao podia passar o normal). Saiu com eles: as margens sao agora
+ * declaradas em vez de derivadas de um multiplicador, e o preco ao cliente
+ * arredonda sempre PARA CIMA — a margem do revendedor passou a estar garantida
+ * por construcao e nao ha rede de seguranca nenhuma para ordenar.
  */
 class UpdatePricingSettingsRequest extends FormRequest
 {
@@ -26,18 +31,19 @@ class UpdatePricingSettingsRequest extends FormRequest
     /**
      * Virgula -> ponto em todos os decimais. Mesmo remendo do
      * StoreMaterialRequest: quem escreve precos escreve "0,15", nao "0.15".
+     * Os dois campos de minutos ficam de fora — sao inteiros.
      */
     protected function prepareForValidation(): void
     {
         foreach ([
-            'failure_reserve_percent',
-            'minimum_resale_price',
-            'resale_multiplier',
-            'retail_multiplier',
-            'minimum_retail_multiplier',
-            'handling_cost',
-            'batch_job_handling',
-            'batch_unit_handling',
+            'electricity_price',
+            'labor_rate',
+            'failure_rate_percent',
+            'wholesale_margin_percent',
+            'reseller_margin_percent',
+            'minimum_wholesale_price',
+            'channel_fixed_fee',
+            'channel_percentage_fee',
         ] as $field) {
             $value = $this->input($field);
 
@@ -53,33 +59,35 @@ class UpdatePricingSettingsRequest extends FormRequest
     public function rules(): array
     {
         return [
-            // Tecto de 50%: uma reserva acima disso quer dizer que o problema e
-            // a impressora, nao o preco.
-            'failure_reserve_percent' => ['required', 'numeric', 'min:0', 'max:50'],
-            'minimum_resale_price' => ['required', 'numeric', 'min:0', 'max:999.99'],
+            // Tecto de 9,9999 EUR/kWh: acima disso e engano de unidade (o preco
+            // do MWh escrito no campo do kWh), nao uma tarifa.
+            'electricity_price' => ['required', 'numeric', 'min:0', 'max:9.9999'],
+            'labor_rate' => ['required', 'numeric', 'min:0', 'max:999.99'],
+
+            // Dez horas de tecto: acima disso ja nao e trabalho ativo numa
+            // peca, e o tempo da maquina outra vez a ser contado como humano.
+            'active_labor_minutes' => ['required', 'integer', 'min:0', 'max:600'],
+            'setup_labor_minutes' => ['required', 'integer', 'min:0', 'max:600'],
+
+            // Tecto de 50%: uma taxa de falhas acima disso quer dizer que o
+            // problema e a impressora, nao o preco. E, mais abaixo na formula,
+            // o custo divide-se por (1 - taxa) — a 100% era divisao por zero.
+            'failure_rate_percent' => ['required', 'numeric', 'min:0', 'max:50'],
 
             /*
-             * Multiplicadores nunca abaixo de 1,00x. Nao e so bom senso
-             * comercial: com um multiplicador menor que 1 o lucro fica negativo
-             * e o Micros::divRound sai do dominio nao negativo que documenta.
+             * Margens nunca a 100%. Nao e so bom senso comercial: o preco sai
+             * de custo / (1 - margem), e a 100% isso e uma divisao por zero.
+             * O tecto de 95% deixa espaco a qualquer estrategia real e mantem
+             * o denominador longe do zero.
              */
-            'resale_multiplier' => ['required', 'numeric', 'min:1', 'max:10'],
-            'retail_multiplier' => ['required', 'numeric', 'min:1', 'max:10'],
-            'minimum_retail_multiplier' => ['required', 'numeric', 'min:1', 'max:10'],
+            'wholesale_margin_percent' => ['required', 'numeric', 'min:0', 'max:95'],
+            'reseller_margin_percent' => ['required', 'numeric', 'min:0', 'max:95'],
 
-            'handling_cost' => ['required', 'numeric', 'min:0', 'max:99.99'],
-            'batch_job_handling' => ['required', 'numeric', 'min:0', 'max:99.99'],
-            'batch_unit_handling' => ['required', 'numeric', 'min:0', 'max:99.99'],
-        ];
-    }
+            'minimum_wholesale_price' => ['required', 'numeric', 'min:0', 'max:999.99'],
 
-    /**
-     * @return array<int, callable(Validator): void>
-     */
-    public function after(): array
-    {
-        return [
-            $this->validateMultiplierOrder(...),
+            'channel_fixed_fee' => ['required', 'numeric', 'min:0', 'max:999.99'],
+            // Uma comissao acima de metade da venda nao e um canal, e um socio.
+            'channel_percentage_fee' => ['required', 'numeric', 'min:0', 'max:50'],
         ];
     }
 
@@ -89,36 +97,16 @@ class UpdatePricingSettingsRequest extends FormRequest
     public function attributes(): array
     {
         return [
-            'failure_reserve_percent' => 'reserva para falhas',
-            'minimum_resale_price' => 'preço mínimo de revenda',
-            'resale_multiplier' => 'multiplicador de revenda',
-            'retail_multiplier' => 'multiplicador do cliente final',
-            'minimum_retail_multiplier' => 'multiplicador mínimo do revendedor',
-            'handling_cost' => 'custo de manuseamento',
-            'batch_job_handling' => 'manuseamento por impressão',
-            'batch_unit_handling' => 'manuseamento por unidade',
+            'electricity_price' => 'preço da eletricidade',
+            'labor_rate' => 'valor do meu trabalho',
+            'active_labor_minutes' => 'trabalho ativo por peça',
+            'setup_labor_minutes' => 'preparação por impressão',
+            'failure_rate_percent' => 'taxa de falhas',
+            'wholesale_margin_percent' => 'margem de revenda',
+            'reseller_margin_percent' => 'margem do revendedor',
+            'minimum_wholesale_price' => 'preço mínimo de revenda',
+            'channel_fixed_fee' => 'taxa fixa do canal',
+            'channel_percentage_fee' => 'comissão do canal',
         ];
-    }
-
-    /**
-     * O minimo do revendedor tem de caber por baixo do multiplicador normal.
-     * Ao contrario: o arredondamento comercial deixava de ter efeito nenhum e
-     * TODOS os precos passavam pela rede de seguranca.
-     */
-    private function validateMultiplierOrder(Validator $validator): void
-    {
-        $retail = $this->input('retail_multiplier');
-        $minimum = $this->input('minimum_retail_multiplier');
-
-        if (! is_numeric($retail) || ! is_numeric($minimum)) {
-            return;
-        }
-
-        if ((float) $minimum > (float) $retail) {
-            $validator->errors()->add(
-                'minimum_retail_multiplier',
-                'O mínimo do revendedor não pode ser maior do que o multiplicador do cliente final.',
-            );
-        }
     }
 }

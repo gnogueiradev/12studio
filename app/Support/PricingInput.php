@@ -14,6 +14,11 @@ namespace App\Support;
  * modos tem de diferente:
  *   PER_UNIT  -> por unidade (o utilizador diz quanto pesa e quanto demora UMA)
  *   BATCH     -> do trabalho todo (o que o slicer diz para a mesa inteira)
+ *
+ * O que esta AQUI sao os factos: desta peca, deste filamento, desta maquina. O
+ * que e politica da casa — tarifa da luz, valor da hora de trabalho, taxa de
+ * falhas, margens — vive no PricingSettings e o calculador vai la busca-lo. A
+ * divisao e essa: se muda de peca para peca, entra por aqui.
  */
 final readonly class PricingInput
 {
@@ -31,8 +36,18 @@ final readonly class PricingInput
         public int $weightGrams,
         public int $minutes,
         public int $pricePerKgCents,
-        public int $hourlyRateCents,
-        public int $extraCostCents = 0,
+        // A maquina, em quatro numeros em vez de um custo/hora. Vem do perfil
+        // de impressora escolhido, ou dos valores de recurso do config quando
+        // nao ha nenhuma ativa. A tarifa da luz NAO esta aqui: e global.
+        public int $printerPowerWatts,
+        public int $printerPurchasePriceCents,
+        public int $printerLifetimeHours,
+        public int $printerMaintenanceMicrosPerHour,
+        // Por peca, sempre — nunca se dividem pela mesa.
+        public int $packagingCostCents = 0,
+        public int $componentsCostCents = 0,
+        /** Null = usa a definicao global. Zero e diferente: e "nao leva trabalho". */
+        public ?int $activeLaborMinutes = null,
         public int $quantity = 1,
         public ?int $printerProfileId = null,
     ) {}
@@ -47,7 +62,7 @@ final readonly class PricingInput
      *
      * E este numero que faz os dois modos colapsarem no mesmo codigo: em lote o
      * pipeline corre sobre a mesa e divide-se aqui; por unidade corre sobre a
-     * peca e nao se divide nada. Dai para a frente — faixas, multiplicadores,
+     * peca e nao se divide nada. Dai para a frente — risco, margens,
      * arredondamentos — e tudo igual.
      */
     public function costDivisor(): int

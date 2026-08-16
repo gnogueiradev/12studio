@@ -30,7 +30,9 @@ use Illuminate\Support\Carbon;
  * @property int|null $filament_weight_grams
  * @property int|null $printing_time_minutes
  * @property int|null $printer_profile_id
- * @property int|null $extra_cost_cents
+ * @property int|null $active_labor_minutes
+ * @property int|null $components_cost_cents
+ * @property int|null $packaging_cost_cents
  * @property int|null $product_weight_grams
  * @property int|null $package_weight_grams
  * @property int|null $length_mm
@@ -49,8 +51,8 @@ use Illuminate\Support\Carbon;
     'compare_at_cents', 'wholesale_price_cents', 'stock', 'reserved_stock',
     'low_stock_threshold',
     'is_default', 'active', 'hidden_by_palette',
-    'filament_weight_grams', 'printing_time_minutes',
-    'printer_profile_id', 'extra_cost_cents',
+    'filament_weight_grams', 'printing_time_minutes', 'active_labor_minutes',
+    'printer_profile_id', 'components_cost_cents', 'packaging_cost_cents',
     'product_weight_grams', 'package_weight_grams',
     'length_mm', 'width_mm', 'height_mm',
 ])]
@@ -84,8 +86,10 @@ class Variant extends Model
             // Entram todos na calculadora de precos: sem cast, um "90" vindo
             // do SQLite chegava ao PricingInput como string.
             'printing_time_minutes' => 'integer',
+            'active_labor_minutes' => 'integer',
             'printer_profile_id' => 'integer',
-            'extra_cost_cents' => 'integer',
+            'components_cost_cents' => 'integer',
+            'packaging_cost_cents' => 'integer',
         ];
     }
 
