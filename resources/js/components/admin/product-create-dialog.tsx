@@ -88,11 +88,17 @@ const MODE_HINTS: Record<string, string> = {
 /**
  * Criar e editar um produto, no mesmo modal.
  *
- * Ao criar, a matriz é Cor × Material × Tamanho — três eixos que se
- * MULTIPLICAM. Nem sempre foi assim: enquanto uma cor pertenceu a um material,
- * "TPU × Dourado" podia não existir, e as chips de material limitavam-se a
- * filtrar a paleta. Com a ligação fora, qualquer cor imprime-se em qualquer
- * bobine e todas as combinações que a matriz gera são válidas por construção.
+ * Ao criar, a matriz é Cor × Material × Tamanho — mas é uma INTERSECÇÃO, não um
+ * produto cartesiano. Cada cor declara em que filamentos existe (`materialIds`),
+ * e o par que o dono não tem cai fora: escolher Rosa+Preto em PLA+Silk gera três
+ * variantes e não quatro, porque não há rosa silk.
+ *
+ * Isto já foi das duas maneiras. Enquanto uma cor pertenceu a um material, as
+ * chips de material limitavam-se a filtrar a paleta; depois a ligação saiu e
+ * tudo passou a poder cruzar-se com tudo — o que gerava variantes impossíveis de
+ * imprimir. O que voltou não foi o acoplamento 1:N, foi o facto de nem todas as
+ * cores existirem em todos os filamentos.
+ *
  * Cor e material são obrigatórios; o tamanho não. São eles que definem uma peça
  * imprimível — que tom, e em que filamento.
  *
@@ -184,24 +190,34 @@ export function ProductCreateDialog({
     /*
      * A mesma ordem que o ProductService usa para gerar (cor por fora, material
      * no meio, tamanho por dentro), para a pré-visualização não prometer uma
-     * coisa e as variantes saírem por outra.
+     * coisa e as variantes saírem por outra — e o mesmo filtro: o par que o
+     * dono não tem não aparece aqui porque não vai nascer lá.
      */
     const combos = useMemo(() => {
         const sizes = data.variants.sizes.length ? data.variants.sizes : [null];
 
         return data.variants.color_ids.flatMap((colorId) =>
-            data.variants.material_ids.flatMap((materialId) =>
-                sizes.map((size) => ({
-                    key: `${colorId}-${materialId}-${size ?? ''}`,
-                    label: [
-                        colorsById.get(colorId)?.name,
-                        materialsById.get(materialId)?.name,
-                        size,
-                    ]
-                        .filter((part) => part !== null && part !== undefined)
-                        .join(' · '),
-                })),
-            ),
+            data.variants.material_ids
+                .filter(
+                    (materialId) =>
+                        colorsById
+                            .get(colorId)
+                            ?.materialIds.includes(materialId) ?? false,
+                )
+                .flatMap((materialId) =>
+                    sizes.map((size) => ({
+                        key: `${colorId}-${materialId}-${size ?? ''}`,
+                        label: [
+                            colorsById.get(colorId)?.name,
+                            materialsById.get(materialId)?.name,
+                            size,
+                        ]
+                            .filter(
+                                (part) => part !== null && part !== undefined,
+                            )
+                            .join(' · '),
+                    })),
+                ),
         );
     }, [
         data.variants.color_ids,
@@ -211,11 +227,132 @@ export function ProductCreateDialog({
         materialsById,
     ]);
 
+    /*
+     * Quantos pares o catálogo deixou cair. Não é um erro — escolher eixos e
+     * receber a intersecção é a funcionalidade —, mas tem de se dizer em voz
+     * alta: uma matriz que promete oito variantes e entrega seis, em silêncio,
+     * é a mesma surpresa que isto veio resolver, ao contrário.
+     */
+    const skipped = useMemo(() => {
+        const sizeCount = Math.max(data.variants.sizes.length, 1);
+        const crossed =
+            data.variants.color_ids.length *
+            data.variants.material_ids.length *
+            sizeCount;
+
+        return crossed - combos.length;
+    }, [
+        data.variants.color_ids,
+        data.variants.material_ids,
+        data.variants.sizes,
+        combos,
+    ]);
+
+    /** Nomes dos filamentos, na ordem em que vieram. */
+    const materialNames = (ids: number[]) =>
+        ids
+            .map((id) => materialsById.get(id)?.name)
+            .filter((name): name is string => name !== undefined);
+
+    /*
+     * Uma cor só se bloqueia quando é impossível em TODOS os materiais
+     * escolhidos.
+     *
+     * Se escolheste PLA e Silk e o rosa só existe em PLA, tu CONSEGUES fazer a
+     * peça em rosa — bloquear o rosa por causa do Silk era recusar uma venda
+     * que sabes fazer. O que se faz é gerar só o par que existe e dizê-lo, na
+     * nota logo abaixo da grelha.
+     */
+    const impossibleColorIds = useMemo(() => {
+        if (data.variants.material_ids.length === 0) {
+            return [];
+        }
+
+        return colors
+            .filter(
+                (color) =>
+                    !data.variants.material_ids.some((materialId) =>
+                        color.materialIds.includes(materialId),
+                    ),
+            )
+            .map((color) => color.id);
+    }, [colors, data.variants.material_ids]);
+
+    const colorReason = (colorId: number) => {
+        const color = colorsById.get(colorId);
+
+        if (color === undefined) {
+            return '';
+        }
+
+        if (color.materialIds.length === 0) {
+            return `Ainda não disseste em que filamentos tens ${color.name}.`;
+        }
+
+        const names = materialNames(color.materialIds);
+
+        return names.length === 0
+            ? `Não tens ${color.name} em nenhum destes filamentos.`
+            : `Só tens ${color.name} em ${names.join(', ')}.`;
+    };
+
+    /*
+     * O que cada cor ESCOLHIDA vai dar, quando não dá tudo.
+     *
+     * Uma cor escolhida nunca fica esbatida — senão, mudar de material deixava-a
+     * presa na selecção sem forma de a tirar —, por isso é aqui que ela tem de
+     * dizer o que lhe falta. Sem esta nota, quem escolheu duas cores e dois
+     * materiais conta quatro variantes de cabeça e recebe três sem saber qual
+     * caiu.
+     */
+    const partialColors = useMemo(() => {
+        if (data.variants.material_ids.length === 0) {
+            return [];
+        }
+
+        return data.variants.color_ids.flatMap((colorId) => {
+            const color = colorsById.get(colorId);
+
+            if (color === undefined) {
+                return [];
+            }
+
+            const possible = data.variants.material_ids.filter((materialId) =>
+                color.materialIds.includes(materialId),
+            );
+
+            if (possible.length === data.variants.material_ids.length) {
+                return [];
+            }
+
+            const names = possible
+                .map((id) => materialsById.get(id)?.name)
+                .filter((name): name is string => name !== undefined);
+
+            return [
+                names.length === 0
+                    ? `${color.name}: não tens em nenhum destes filamentos`
+                    : `${color.name}: só em ${names.join(' e ')}`,
+            ];
+        });
+    }, [
+        data.variants.color_ids,
+        data.variants.material_ids,
+        colorsById,
+        materialsById,
+    ]);
+
     const normalCents = inputToCents(data.variants.normal_price);
     const wholesaleCents = inputToCents(data.variants.wholesale_price);
 
-    // Cor E material, a espelhar o ProductService::generateVariants(). A editar
-    // não há matriz nenhuma para validar — as variantes já existem.
+    /*
+     * Cor E material E pelo menos um par possível, a espelhar o
+     * ProductService::generateVariants(). O terceiro é o que impede gravar um
+     * produto cuja matriz o catálogo esvaziou por inteiro — o servidor recusa-o
+     * na mesma, mas depois de o formulário já ter sido submetido.
+     *
+     * A editar não há matriz nenhuma para validar: as variantes já existem.
+     */
     const named = data.name.trim() !== '';
     const canSubmit =
         editing !== null ||
@@ -223,7 +360,8 @@ export function ProductCreateDialog({
             normalCents > 0 &&
             wholesaleCents > 0 &&
             data.variants.color_ids.length > 0 &&
-            data.variants.material_ids.length > 0);
+            data.variants.material_ids.length > 0 &&
+            combos.length > 0);
 
     const messages = errors as Record<string, string>;
 
@@ -613,7 +751,14 @@ export function ProductCreateDialog({
                                                 onChange={(color_ids) =>
                                                     setVariants({ color_ids })
                                                 }
+                                                disabledIds={impossibleColorIds}
+                                                disabledReason={colorReason}
                                             />
+                                            {partialColors.length > 0 && (
+                                                <p className="text-xs text-muted-foreground">
+                                                    {partialColors.join(' · ')}
+                                                </p>
+                                            )}
                                         </div>
 
                                         <div className="grid gap-2">
@@ -691,25 +836,18 @@ export function ProductCreateDialog({
                                             )}
                                         >
                                             {combos.length === 0
-                                                ? 'Escolhe pelo menos uma cor e um material'
+                                                ? skipped > 0
+                                                    ? 'Não tens nenhuma destas cores nestes filamentos'
+                                                    : 'Escolhe pelo menos uma cor e um material'
                                                 : combos.length === 1
                                                   ? '1 variante vai ser criada'
                                                   : `${combos.length} variantes vão ser criadas`}
                                         </span>
-                                        {combos.length > 0 && (
+                                        {combos.length > 0 && skipped > 0 && (
                                             <span className="text-xs text-muted-foreground">
-                                                {[
-                                                    `${data.variants.color_ids.length} ${data.variants.color_ids.length === 1 ? 'cor' : 'cores'}`,
-                                                    `${data.variants.material_ids.length} ${data.variants.material_ids.length === 1 ? 'material' : 'materiais'}`,
-                                                    data.variants.sizes
-                                                        .length === 0
-                                                        ? null
-                                                        : `${data.variants.sizes.length} ${data.variants.sizes.length === 1 ? 'tamanho' : 'tamanhos'}`,
-                                                ]
-                                                    .filter(
-                                                        (part) => part !== null,
-                                                    )
-                                                    .join(' × ')}
+                                                {skipped === 1
+                                                    ? '1 combinação que não tens ficou de fora'
+                                                    : `${skipped} combinações que não tens ficaram de fora`}
                                             </span>
                                         )}
                                     </div>

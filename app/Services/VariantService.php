@@ -57,6 +57,16 @@ class VariantService
             $stock = array_key_exists('stock', $data) ? (int) $data['stock'] : null;
             unset($data['stock']);
 
+            /*
+             * Mexer no `active` a mao passa a decisao para o dono. A flag existe
+             * so para o ColorService saber o que PODE ressuscitar quando um
+             * material volta a cor; a partir do momento em que alguem escolheu
+             * este interruptor, o catalogo deixa de mandar nele.
+             */
+            if (array_key_exists('active', $data)) {
+                $data['hidden_by_palette'] = false;
+            }
+
             $variant->update($this->normalizePrices($data));
 
             if ($stock !== null) {
@@ -90,7 +100,9 @@ class VariantService
      */
     public function archive(Variant $variant): void
     {
-        $variant->update(['active' => false]);
+        // Escondida a mao, e nao pelo catalogo: nao volta sozinha quando a cor
+        // recuperar o material (ver ColorService::syncMaterials).
+        $variant->update(['active' => false, 'hidden_by_palette' => false]);
     }
 
     /**

@@ -369,6 +369,50 @@ class VariantCrudTest extends TestCase
         ]);
     }
 
+    /**
+     * Aqui o par e unico e explicito — alguem escolheu "rosa" e escolheu
+     * "silk" —, por isso e erro duro e nao filtro silencioso. E o contrario da
+     * matriz do modal, onde se escolhem EIXOS e deixar cair um par e a
+     * funcionalidade; nesta ficha, seria engolir a escolha de quem a fez.
+     */
+    public function test_a_pair_the_owner_does_not_have_is_rejected(): void
+    {
+        $pla = Material::factory()->create(['name' => 'PLA']);
+        $silk = Material::factory()->create(['name' => 'PLA Silk']);
+        $rosa = Color::factory()->withMaterials($pla)->create(['name' => 'Rosa']);
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.produtos.variantes.store', $this->product), [
+                ...$this->validPayload(),
+                'color_id' => $rosa->id,
+                'material_id' => $silk->id,
+            ])
+            ->assertSessionHasErrors('material_id');
+
+        $this->assertDatabaseMissing('variants', ['sku' => 'VASO-PLA-20']);
+    }
+
+    /**
+     * Uma cor por declarar nao recusa nada. Enquanto o catalogo estiver por
+     * preencher — e comeca todo vazio — ninguem pode ficar sem conseguir
+     * editar as variantes que ja tem.
+     */
+    public function test_a_colour_with_no_declared_filament_blocks_nothing(): void
+    {
+        $silk = Material::factory()->create(['name' => 'PLA Silk']);
+        $porDeclarar = Color::factory()->create(['name' => 'Rosa']);
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.produtos.variantes.store', $this->product), [
+                ...$this->validPayload(),
+                'color_id' => $porDeclarar->id,
+                'material_id' => $silk->id,
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('variants', ['sku' => 'VASO-PLA-20']);
+    }
+
     public function test_non_admins_cannot_touch_variants(): void
     {
         $user = User::factory()->create();

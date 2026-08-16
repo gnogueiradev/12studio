@@ -15,13 +15,19 @@ import { label } from '@/lib/options';
 import { fold } from '@/lib/text';
 import { destroy, index, restaurar } from '@/routes/admin/cores';
 import { index as materiaisIndex } from '@/routes/admin/materiais';
-import type { ColorRow, ColorStats, PaletteColor } from '@/types/catalog';
+import type {
+    ColorRow,
+    ColorStats,
+    MaterialOption,
+    PaletteColor,
+} from '@/types/catalog';
 import { COLOR_STATES } from '@/types/catalog';
 
 type Props = {
     colors: ColorRow[];
     stats: ColorStats;
     palette: PaletteColor[];
+    materials: MaterialOption[];
 };
 
 const ALL = 'all';
@@ -30,10 +36,16 @@ const ALL = 'all';
 const MATCHERS: Record<string, (color: ColorRow) => boolean> = {
     [ALL]: () => true,
     active: (color) => color.state !== 'archived',
+    no_material: (color) => color.state === 'no_material',
     archived: (color) => color.state === 'archived',
 };
 
-export default function ColorsIndex({ colors, stats, palette }: Props) {
+export default function ColorsIndex({
+    colors,
+    stats,
+    palette,
+    materials,
+}: Props) {
     /*
      * Filtros no cliente, como nos materiais: esta listagem não pagina e são
      * meia dúzia de linhas que a página já trouxe inteiras.
@@ -100,6 +112,22 @@ export default function ColorsIndex({ colors, stats, palette }: Props) {
                     </span>
                 </span>
             ),
+        },
+        {
+            key: 'materials',
+            header: 'Filamentos',
+            cell: (color) =>
+                color.materials.length === 0 ? (
+                    <span className="text-sm text-muted-foreground italic">
+                        por declarar
+                    </span>
+                ) : (
+                    <span className="text-sm">
+                        {color.materials
+                            .map((material) => material.name)
+                            .join(', ')}
+                    </span>
+                ),
         },
         {
             key: 'sortOrder',
@@ -170,7 +198,7 @@ export default function ColorsIndex({ colors, stats, palette }: Props) {
             <div className="flex h-full flex-1 flex-col gap-4 p-4">
                 <PageHeader
                     title="Cores"
-                    description="Uma cor é um nome e um tom, e imprime-se em qualquer material. O preço por quilo é da bobine — está em Materiais."
+                    description="Uma cor é um nome, um tom e os filamentos em que a tens. Só as combinações declaradas aqui podem virar variantes de produto."
                 >
                     <Button variant="outline" asChild>
                         <Link href={materiaisIndex()}>Materiais</Link>
@@ -235,7 +263,7 @@ export default function ColorsIndex({ colors, stats, palette }: Props) {
                     }
                     empty={
                         colors.length === 0
-                            ? 'Ainda não há cores. Cria a primeira e depois cruza-a com um material ao criar um produto.'
+                            ? 'Ainda não há cores. Cria a primeira e diz em que filamentos a tens.'
                             : 'Nenhuma cor com estes filtros.'
                     }
                 />
@@ -258,6 +286,7 @@ export default function ColorsIndex({ colors, stats, palette }: Props) {
                 }}
                 editing={editing}
                 palette={palette}
+                materials={materials}
             />
 
             <ConfirmDialog

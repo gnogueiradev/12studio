@@ -85,6 +85,56 @@ export default function VariantForm({
         defaultPrinter;
 
     /*
+     * O filtro cruzado entre os dois eixos.
+     *
+     * Uma cor sem filamentos declarados não bloqueia nada, nem é bloqueada:
+     * enquanto o catálogo estiver por preencher — e começa todo vazio — ninguém
+     * pode ficar sem conseguir editar as variantes que já tem. É a mesma regra
+     * do StoreVariantRequest::pairExists, e por isso o formulário nunca esbate
+     * uma escolha que o servidor aceitaria.
+     */
+    const chosenColor = colors.find((color) => color.id === data.color_id);
+
+    const chosenMaterialId = data.material_id;
+
+    const impossibleColorIds =
+        chosenMaterialId === null
+            ? []
+            : colors
+                  .filter(
+                      (color) =>
+                          color.materialIds.length > 0 &&
+                          !color.materialIds.includes(chosenMaterialId),
+                  )
+                  .map((color) => color.id);
+
+    const impossibleMaterialIds =
+        chosenColor === undefined || chosenColor.materialIds.length === 0
+            ? []
+            : materials
+                  .filter(
+                      (material) =>
+                          !chosenColor.materialIds.includes(material.id),
+                  )
+                  .map((material) => material.id);
+
+    const colorReason = (colorId: number) => {
+        const color = colors.find((current) => current.id === colorId);
+
+        if (color === undefined) {
+            return '';
+        }
+
+        const names = color.materialIds
+            .map((id) => materials.find((material) => material.id === id)?.name)
+            .filter((name): name is string => name !== undefined);
+
+        return names.length === 0
+            ? `Não tens ${color.name} neste filamento.`
+            : `Só tens ${color.name} em ${names.join(', ')}.`;
+    };
+
+    /*
      * O preço vem do SERVIDOR — o formulário não espelha a fórmula. É o mesmo
      * motor que calcula esta pré-visualização e o preço que fica gravado, por
      * isso não há duas versões a divergir.
@@ -204,8 +254,13 @@ export default function VariantForm({
             </div>
 
             {/*
-             * Cor e material lado a lado, duas listas planas: são dois eixos
-             * independentes. Só o material influencia o preço — a cor é o tom.
+             * Cor e material lado a lado, e um filtra o outro: escolher Silk
+             * esbate as cores que não existem em Silk, escolher rosa esbate os
+             * filamentos em que não há rosa. Como os dois são de escolha única,
+             * o bloqueio é exacto — ao contrário da matriz do produto, onde se
+             * escolhem eixos e só se bloqueia o que é impossível em todos.
+             *
+             * Só o material influencia o preço — a cor é o tom.
              */}
             <div className="grid gap-4">
                 <div className="grid gap-2">
@@ -220,6 +275,8 @@ export default function VariantForm({
                         value={data.color_id}
                         onChange={(id) => setData('color_id', id)}
                         emptyLabel="Sem cor"
+                        disabledIds={impossibleColorIds}
+                        disabledReason={colorReason}
                     />
                     {!hasColors && (
                         <p className="text-xs text-muted-foreground">
@@ -253,22 +310,35 @@ export default function VariantForm({
                             <SelectItem value={NO_MATERIAL}>
                                 Sem material
                             </SelectItem>
-                            {materials.map((material) => (
-                                <SelectItem
-                                    key={material.id}
-                                    value={String(material.id)}
-                                >
-                                    <span className="flex items-center gap-2">
-                                        {material.name}
-                                        <span className="text-muted-foreground tabular-nums">
-                                            {formatCents(
-                                                material.pricePerKgCents,
+                            {materials.map((material) => {
+                                const blocked = impossibleMaterialIds.includes(
+                                    material.id,
+                                );
+
+                                return (
+                                    <SelectItem
+                                        key={material.id}
+                                        value={String(material.id)}
+                                        disabled={blocked}
+                                    >
+                                        <span className="flex items-center gap-2">
+                                            {material.name}
+                                            {blocked ? (
+                                                <span className="text-muted-foreground">
+                                                    não tens esta cor
+                                                </span>
+                                            ) : (
+                                                <span className="text-muted-foreground tabular-nums">
+                                                    {formatCents(
+                                                        material.pricePerKgCents,
+                                                    )}
+                                                    /kg
+                                                </span>
                                             )}
-                                            /kg
                                         </span>
-                                    </span>
-                                </SelectItem>
-                            ))}
+                                    </SelectItem>
+                                );
+                            })}
                         </SelectContent>
                     </Select>
                     {!hasMaterials && (

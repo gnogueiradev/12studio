@@ -93,12 +93,13 @@ export type MaterialFormData = {
 };
 
 /**
- * Duas posições só. Uma cor não tem stock — quem fica sem bobines é o material,
- * e isso vive no MaterialState.
+ * Continua sem stock — quem fica sem bobines é o material, e isso vive no
+ * MaterialState. O `no_material` é outra coisa: a cor ainda não diz em que
+ * filamentos existe, e por isso não gera variante nenhuma.
  */
-export type ColorState = 'active' | 'archived';
+export type ColorState = 'active' | 'no_material' | 'archived';
 
-/** Uma cor: um nome e um tom. */
+/** Uma cor: um nome, um tom, e os filamentos em que existe. */
 export type ColorRow = {
     id: number;
     name: string;
@@ -107,6 +108,8 @@ export type ColorRow = {
     sortOrder: number;
     variantsCount: number;
     state: ColorState;
+    /** Vazio = por declarar, e é o que põe a pastilha em `no_material`. */
+    materials: MaterialSummary[];
 };
 
 export type ColorStats = {
@@ -124,11 +127,18 @@ export type ColorFormData = {
     name: string;
     hex_color: string;
     sort_order: number;
+    /** Em que filamentos esta cor existe. Vazio é um estado legítimo. */
+    material_ids: number[];
 };
 
 /** Mesma convenção do MATERIAL_STATES: singular na pastilha, plural na chip. */
 export const COLOR_STATES = [
     { value: 'active', label: 'Disponível', chipLabel: 'Disponíveis' },
+    {
+        value: 'no_material',
+        label: 'Sem filamento',
+        chipLabel: 'Sem filamento',
+    },
     { value: 'archived', label: 'Arquivada', chipLabel: 'Arquivadas' },
 ] as const;
 
@@ -148,6 +158,16 @@ export type ColorOption = {
     id: number;
     name: string;
     hex: string;
+    /**
+     * Os filamentos em que esta cor existe. É com isto que os selectores
+     * esbatem as cores impossíveis para o material escolhido, em vez de deixar
+     * escolher e só recusar no servidor.
+     *
+     * Vazio não é "não existe em nada" — é "ainda não foi declarado". As cores
+     * arquivadas que o `$keep` do ColorOptions mantém chegam quase sempre
+     * assim, e uma cor por declarar não gera variante nenhuma.
+     */
+    materialIds: number[];
 };
 
 /**

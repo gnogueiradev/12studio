@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\Product;
 use App\Models\Tag;
+use App\Support\ColorMaterialMatrix;
 use App\Support\Slug;
 use App\Support\VariantSku;
 use Illuminate\Http\UploadedFile;
@@ -100,19 +101,25 @@ class ProductService
     }
 
     /**
-     * Matriz do modal de novo produto: cor x material x tamanho, tres eixos
-     * independentes. Cada combinacao da uma variante, todas com os mesmos tres
+     * Matriz do modal de novo produto: cor x material x tamanho.
+     *
+     * Nao e um produto cartesiano — e uma INTERSECCAO. Os eixos escolhidos
+     * cruzam-se com o catalogo de bobines (`color_material`), e o par que o dono
+     * nao tem cai fora: escolher Rosa+Preto em PLA+Silk gera tres variantes e
+     * nao quatro, porque nao ha rosa silk. Sem este filtro nascia uma variante
+     * com referencia, preco e stock que ninguem consegue imprimir.
+     *
+     * Cada combinacao sobrevivente da uma variante, todas com os mesmos tres
      * precos. Sao um molde — o que difere entre variantes (stock, gramagem,
      * tempo de impressao) edita-se depois, uma a uma.
      *
      * Cor e material sao obrigatorios: sao os dois que definem uma peca
-     * imprimivel — que tom, e em que filamento. Sem um deles nao ha matriz
-     * nenhuma. O tamanho e opcional, e o `[null]` e o que faz o produto
-     * cartesiano degenerar nesse caso sem precisar de um segundo ramo.
+     * imprimivel — que tom, e em que filamento. O tamanho e opcional.
      *
-     * A ordem dos ciclos (cor por fora, material no meio, tamanho por dentro) e
-     * a mesma da pre-visualizacao do modal, em product-create-dialog.tsx. Se uma
-     * mudar sem a outra, a matriz que o admin viu deixa de ser a que se gravou.
+     * A ordem dos ciclos (cor por fora, material no meio, tamanho por dentro)
+     * vive agora no ColorMaterialMatrix::combos() e e a mesma da
+     * pre-visualizacao do modal, em product-create-dialog.tsx. Se uma mudar sem
+     * a outra, a matriz que o admin viu deixa de ser a que se gravou.
      *
      * O stock entra sempre a zero: a primeira contagem tem de passar pelo
      * StockService para ficar registada como movimento `initial`.
@@ -130,30 +137,31 @@ class ProductService
         /** @var array<int, int> $materialIds */
         $materialIds = $seed['material_ids'] ?? [];
 
-        if ($colorIds === [] || $materialIds === []) {
-            return;
-        }
-
         /** @var array<int, string> $sizes */
         $sizes = $seed['sizes'] ?? [];
-        $sizes = $sizes === [] ? [null] : $sizes;
 
-        $combos = [];
+        $combos = ColorMaterialMatrix::combos(
+            $colorIds,
+            $materialIds,
+            $sizes,
+            ColorMaterialMatrix::availableFor($colorIds),
+        );
 
-        foreach ($colorIds as $colorId) {
-            foreach ($materialIds as $materialId) {
-                foreach ($sizes as $size) {
-                    $combos[] = [
-                        'color_id' => $colorId,
-                        'material_id' => $materialId,
-                        'size_label' => $size,
-                    ];
-                }
-            }
+        /*
+         * Nada sobreviveu ao catalogo. O StoreProductRequest ja recusa este
+         * caso — isto e a rede por baixo, e tem de estar ANTES do series():
+         * com zero, o range() la dentro conta ao contrario e devolvia duas
+         * referencias para combinacao nenhuma.
+         */
+        if ($combos === []) {
+            return;
         }
 
         // Todas as referencias de uma vez: geradas em ciclo, cada uma via as
         // anteriores ja inseridas nesta transacao e a numeracao saltava.
+        //
+        // Depois do filtro, nunca antes: pedir a serie sobre a matriz por
+        // filtrar deixava referencias por atribuir e buracos na numeracao.
         $skus = VariantSku::series($product, count($combos));
 
         foreach ($combos as $index => $combo) {

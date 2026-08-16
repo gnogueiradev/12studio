@@ -3,6 +3,7 @@
 namespace Tests\Feature\Admin;
 
 use App\Models\Color;
+use App\Models\Material;
 use App\Models\Product;
 use App\Models\User;
 use App\Models\Variant;
@@ -10,8 +11,8 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
 /**
- * Uma cor e uma linha: um nome unico global e um tom. Nao tem material nem
- * preco — quem tem os dois e a bobine.
+ * Uma cor e uma linha: um nome unico global, um tom, e os filamentos em que
+ * existe. Nao tem preco — quem custa dinheiro e a bobine.
  */
 class ColorCrudTest extends TestCase
 {
@@ -194,6 +195,140 @@ class ColorCrudTest extends TestCase
             ->assertRedirect();
 
         $this->assertDatabaseHas('colors', ['id' => $color->id, 'is_active' => true]);
+    }
+
+    /**
+     * Desmarcar um filamento esconde as variantes que o usavam — nunca as
+     * apaga. As encomendas antigas ainda lhes apontam, e a `variants.color_id`
+     * e restrictOnDelete por isso mesmo.
+     */
+    public function test_unmarking_a_filament_hides_the_variants_that_used_it(): void
+    {
+        [$pla, $silk] = $this->twoFilaments();
+        $rosa = Color::factory()->withMaterials([$pla, $silk])->create(['name' => 'Rosa']);
+
+        $emSilk = $this->variantOf($rosa, $silk);
+        $emPla = $this->variantOf($rosa, $pla);
+
+        $this->actingAs($this->admin)
+            ->patch(route('admin.cores.update', $rosa), [
+                'name' => 'Rosa',
+                'hex_color' => '#ff88aa',
+                'material_ids' => [$pla->id],
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertFalse($emSilk->refresh()->active);
+        $this->assertTrue($emSilk->hidden_by_palette);
+        $this->assertTrue($emPla->refresh()->active);
+    }
+
+    /** Comprar rosa silk outra vez traz de volta o que o catalogo escondeu. */
+    public function test_remarking_a_filament_brings_those_variants_back(): void
+    {
+        [$pla, $silk] = $this->twoFilaments();
+        $rosa = Color::factory()->withMaterials([$pla])->create(['name' => 'Rosa']);
+
+        $emSilk = $this->variantOf($rosa, $silk, ['active' => false, 'hidden_by_palette' => true]);
+
+        $this->actingAs($this->admin)
+            ->patch(route('admin.cores.update', $rosa), [
+                'name' => 'Rosa',
+                'hex_color' => '#ff88aa',
+                'material_ids' => [$pla->id, $silk->id],
+            ]);
+
+        $this->assertTrue($emSilk->refresh()->active);
+        $this->assertFalse($emSilk->hidden_by_palette);
+    }
+
+    /**
+     * A distincao que justifica a coluna `hidden_by_palette`: uma variante que
+     * o dono desligou a mao nao ressuscita quando o filamento volta. Sem ela,
+     * remarcar o Silk repunha a venda exactamente o que ele tinha tirado.
+     */
+    public function test_a_variant_hidden_by_hand_is_not_resurrected(): void
+    {
+        [$pla, $silk] = $this->twoFilaments();
+        $rosa = Color::factory()->withMaterials([$pla])->create(['name' => 'Rosa']);
+
+        $aMao = $this->variantOf($rosa, $silk, ['active' => false, 'hidden_by_palette' => false]);
+
+        $this->actingAs($this->admin)
+            ->patch(route('admin.cores.update', $rosa), [
+                'name' => 'Rosa',
+                'hex_color' => '#ff88aa',
+                'material_ids' => [$pla->id, $silk->id],
+            ]);
+
+        $this->assertFalse($aMao->refresh()->active);
+    }
+
+    /**
+     * Conjunto vazio e "ainda nao disse em que filamentos existe", nao "nao
+     * existe em nenhum". Nao ter declarado nao autoriza a esconder o que ja se
+     * vendia — e a diferenca que torna seguro comecar com a pivo vazia.
+     */
+    public function test_declaring_no_filament_touches_nothing(): void
+    {
+        [$pla, $silk] = $this->twoFilaments();
+        $rosa = Color::factory()->withMaterials([$pla, $silk])->create(['name' => 'Rosa']);
+
+        $emSilk = $this->variantOf($rosa, $silk);
+
+        $this->actingAs($this->admin)
+            ->patch(route('admin.cores.update', $rosa), [
+                'name' => 'Rosa',
+                'hex_color' => '#ff88aa',
+                'material_ids' => [],
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertTrue($emSilk->refresh()->active);
+        $this->assertSame(0, $rosa->materials()->count());
+    }
+
+    /**
+     * `material_ids` vem no mesmo payload mas nao e coluna de `colors`. Deixa-lo
+     * chegar ao update rebentava com "column not found" a meio de uma gravacao
+     * inocente.
+     */
+    public function test_the_filaments_do_not_leak_into_the_colours_table(): void
+    {
+        [$pla] = $this->twoFilaments();
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.cores.store'), [
+                ...$this->validPayload(),
+                'material_ids' => [$pla->id],
+            ])
+            ->assertSessionHasNoErrors();
+
+        $color = Color::query()->where('name', 'Preto mate')->sole();
+
+        $this->assertSame([$pla->id], $color->materials()->pluck('materials.id')->all());
+    }
+
+    /** @return array{0: Material, 1: Material} */
+    private function twoFilaments(): array
+    {
+        return [
+            Material::factory()->create(['name' => 'PLA']),
+            Material::factory()->create(['name' => 'PLA Silk']),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $overrides
+     */
+    private function variantOf(Color $color, Material $material, array $overrides = []): Variant
+    {
+        return Variant::factory()->create([
+            'product_id' => Product::factory(),
+            'color_id' => $color->id,
+            'material_id' => $material->id,
+            ...$overrides,
+        ]);
     }
 
     public function test_non_admins_cannot_touch_colours(): void
