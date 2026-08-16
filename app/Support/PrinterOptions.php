@@ -22,9 +22,15 @@ class PrinterOptions
      * nada ao ve-la desaparecer do seletor: o PrinterProfileService::resolve()
      * cai na predefinida e o painel de custo diz qual usou.
      *
-     * @return array<int, array{id: int, name: string, hourlyRateCents: int, isDefault: bool}>
+     * O custo/hora vai JA DERIVADO (energia + depreciacao + manutencao) e nao
+     * as quatro colunas: o seletor so quer um numero para por ao lado do nome,
+     * e a tarifa — que e global — nao tem de viajar ate ao browser para la ser
+     * multiplicada. O calculo a serio nao passa por este valor; ver
+     * PrinterProfile::hourlyCostMicros().
+     *
+     * @return array<int, array{id: int, name: string, hourlyCostMicros: int, isDefault: bool}>
      */
-    public static function all(): array
+    public static function all(int $electricityPriceMicrosPerKwh): array
     {
         return PrinterProfile::query()
             ->where('active', true)
@@ -35,7 +41,7 @@ class PrinterOptions
             ->map(fn (PrinterProfile $profile): array => [
                 'id' => $profile->id,
                 'name' => $profile->name,
-                'hourlyRateCents' => $profile->hourly_rate_cents,
+                'hourlyCostMicros' => $profile->hourlyCostMicros($electricityPriceMicrosPerKwh),
                 'isDefault' => $profile->is_default,
             ])
             ->all();

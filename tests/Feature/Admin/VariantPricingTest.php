@@ -36,7 +36,10 @@ class VariantPricingTest extends TestCase
 
         PrinterProfile::factory()->isDefault()->create([
             'name' => 'Bambu Lab A1',
-            'hourly_rate_cents' => 20,
+            'average_power_watts' => 145,
+            'purchase_price_cents' => 40_000,
+            'lifetime_hours' => 4_000,
+            'maintenance_micros_per_hour' => 40_000,
         ]);
 
         $this->material = Material::factory()->create(['price_per_kg_cents' => 1_700]);
@@ -66,9 +69,9 @@ class VariantPricingTest extends TestCase
             'minutes' => 30,
             'material_id' => $this->material->id,
         ])->assertInertia(fn (AssertableInertia $page) => $page
-            ->where('pricing.result.productionCostMicros', 1_478_250)
-            ->where('pricing.result.resalePriceCents', 300)
-            ->where('pricing.result.retailPriceCents', 550)
+            ->where('pricing.result.productionCostMicros', 1_929_623)
+            ->where('pricing.result.wholesalePriceCents', 350)
+            ->where('pricing.result.retailPriceCents', 600)
             ->where('pricing.usingFallbackRate', false)
         );
     }
@@ -89,9 +92,9 @@ class VariantPricingTest extends TestCase
             'minutes' => 15,
             'material_id' => $this->material->id,
         ])->assertInertia(fn (AssertableInertia $page) => $page
-            ->where('pricing.result.machineCostMicros', 250_000)
-            ->where('pricing.result.productionCostMicros', 1_215_750)
-            ->where('pricing.result.resalePriceCents', 250)
+            ->where('pricing.result.depreciationCostMicros', 125_000)
+            ->where('pricing.result.productionCostMicros', 1_718_321)
+            ->where('pricing.result.wholesalePriceCents', 300)
         );
     }
 
@@ -115,9 +118,19 @@ class VariantPricingTest extends TestCase
         );
     }
 
+    /**
+     * Cada maquina traz os seus quatro numeros, e as tres parcelas de maquina
+     * saem deles. Aqui uma impressora com o dobro de tudo — potencia, preco de
+     * compra e manutencao — para as tres parcelas duplicarem juntas.
+     */
     public function test_the_suggestion_uses_the_chosen_printer_profile(): void
     {
-        $expensive = PrinterProfile::factory()->create(['hourly_rate_cents' => 40]);
+        $expensive = PrinterProfile::factory()->create([
+            'average_power_watts' => 290,
+            'purchase_price_cents' => 80_000,
+            'lifetime_hours' => 4_000,
+            'maintenance_micros_per_hour' => 80_000,
+        ]);
 
         $this->preview([
             'weight_grams' => 45,
@@ -126,9 +139,11 @@ class VariantPricingTest extends TestCase
             'material_id' => $this->material->id,
             'printer_profile_id' => $expensive->id,
         ])->assertInertia(fn (AssertableInertia $page) => $page
-            // 2,5 h x 0,40 EUR/h, o dobro da A1.
-            ->where('pricing.result.machineCostMicros', 1_000_000)
-            ->where('pricing.hourlyRateCents', 40)
+            ->where('pricing.result.electricityCostMicros', 102_950)
+            ->where('pricing.result.depreciationCostMicros', 500_000)
+            ->where('pricing.result.maintenanceCostMicros', 200_000)
+            // 0,32118 EUR/h, o dobro dos 0,16059 da A1.
+            ->where('pricing.hourlyCostMicros', 321_180)
         );
     }
 
@@ -157,7 +172,7 @@ class VariantPricingTest extends TestCase
      *
      * A calculadora recusa mostrar preco sem filamento escolhido, mas essa regra
      * e DELA e vive no PricingCalculatorController. Aqui o material e opcional:
-     * uma variante sem material ainda tem tempo de maquina e manuseamento a
+     * uma variante sem material ainda tem tempo de maquina e mao de obra a
      * contar, e o painel tem de continuar a mostra-los.
      *
      * Se alguem "simplificar" a regra para dentro do PricingPreviewRequest — que
@@ -170,14 +185,13 @@ class VariantPricingTest extends TestCase
             'hours' => 2,
             'minutes' => 30,
         ])->assertInertia(fn (AssertableInertia $page) => $page
-            // Sem bobine nao ha plastico a pagar, mas a maquina andou:
-            // 2,5 h x 0,20 EUR/h.
+            // Sem bobine nao ha plastico a pagar, mas a maquina andou.
             ->where('pricing.result.filamentCostMicros', 0)
-            ->where('pricing.result.machineCostMicros', 500_000)
+            ->where('pricing.result.depreciationCostMicros', 250_000)
         );
     }
 
-    public function test_the_print_time_and_extra_cost_are_stored(): void
+    public function test_the_print_time_and_the_two_costs_are_stored(): void
     {
         $product = Product::factory()->create();
         $modal = route('admin.produtos.index', ['editar' => $product->id]);
@@ -191,7 +205,9 @@ class VariantPricingTest extends TestCase
                 'wholesale_price' => '3.50',
                 'filament_weight_grams' => 32,
                 'printing_time_minutes' => 90,
-                'extra_cost' => '0,65',
+                'packaging_cost' => '0,25',
+                'components_cost' => '0,65',
+                'active_labor_minutes' => 12,
                 'stock' => 0,
                 'low_stock_threshold' => 3,
                 'is_default' => false,
@@ -202,7 +218,34 @@ class VariantPricingTest extends TestCase
         $this->assertDatabaseHas('variants', [
             'sku' => 'TEST-0001',
             'printing_time_minutes' => 90,
-            'extra_cost_cents' => 65,
+            'packaging_cost_cents' => 25,
+            'components_cost_cents' => 65,
+            'active_labor_minutes' => 12,
+        ]);
+    }
+
+    /**
+     * O trabalho ativo em branco fica a null, e nao a zero: null quer dizer
+     * "usa a definicao global" e sobe sozinho quando o dono decidir que cada
+     * peca leva mais tempo. Zero era uma afirmacao que ninguem fez.
+     */
+    public function test_an_empty_active_labor_is_stored_as_null(): void
+    {
+        $product = Product::factory()->create();
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.produtos.variantes.store', $product), [
+                'sku' => 'TEST-0003',
+                'normal_price' => '6.00',
+                'filament_weight_grams' => 32,
+                'printing_time_minutes' => 90,
+                'stock' => 0,
+                'low_stock_threshold' => 3,
+            ]);
+
+        $this->assertDatabaseHas('variants', [
+            'sku' => 'TEST-0003',
+            'active_labor_minutes' => null,
         ]);
     }
 

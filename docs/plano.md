@@ -70,8 +70,8 @@ Cêntimos inteiros; IDs auto-increment (`$table->id()`, convenção qrcode); `ti
 - **variants** — product_id, sku único, color_id?, **material_id?**, size_label?, price_cents (IVA incl.), compare_at_cents?, **wholesale_price_cents?** (revenda — só backoffice, aplicável numa encomenda manual), **stock**, **reserved_stock**, low_stock_threshold, is_default, active, **hidden_by_palette**
   - `hidden_by_palette` diz QUEM escondeu a variante: o catálogo (desmarcaste o Silk na cor rosa) ou o dono (desligou-a à mão). Só a primeira volta sozinha quando o filamento é remarcado — sem esta distinção, repor o Silk ressuscitava o que o dono tinha tirado de propósito. Escrita só em `ColorService::syncMaterials()` e limpa em qualquer mexida manual no `active`
   - O formulário fala **preço normal + preço promocional**; a BD guarda `price_cents` = preço EFETIVO e `compare_at_cents` = preço riscado, invertidos em promoção. A tradução vive só no `VariantService::normalizePrices()` (escrita) e em `Variant::normalPriceCents()`/`salePriceCents()` (leitura) — tudo a jusante (carrinho, order_items, Stripe) continua a ler `price_cents` como o valor cobrado
-  - **Custos:** filament_weight_grams?, **printing_time_minutes?**, **printer_profile_id?** (null = a predefinida), **extra_cost_cents?** (ímanes, feltro, caixa)
-- **printer_profiles** — name único, **hourly_rate_cents** (energia + desgaste + manutenção + depreciação num número só), notes?, is_default, active, sort_order. Unicidade da predefinida por **índice único parcial** (`unique WHERE is_default = 1`), escrita só via `PrinterProfileService::setDefault()` transacional
+  - **Custos:** filament_weight_grams?, **printing_time_minutes?**, **printer_profile_id?** (null = a predefinida), **packaging_cost_cents?** (saco, caixa, etiqueta), **components_cost_cents?** (ímanes, argolas, feltro), **active_labor_minutes?** (null = a definição global; zero é "não leva trabalho")
+- **printer_profiles** — name único, **average_power_watts**, **purchase_price_cents**, **lifetime_hours**, **maintenance_micros_per_hour**, notes?, is_default, active, sort_order. O custo/hora é **derivado** destes quatro mais a tarifa global (`PrinterProfile::hourlyCostMicros()`); já foi um `hourly_rate_cents` agregado, que calculava bem e explicava mal — não dizia quanto é que cada coisa pesava. Unicidade da predefinida por **índice único parcial** (`unique WHERE is_default = 1`), escrita só via `PrinterProfileService::setDefault()` transacional
   - **Envio/dimensões:** product_weight_grams?, package_weight_grams?, length_mm?, width_mm?, height_mm? (v1 só armazena/mostra; portes por peso e transportadoras ficam para depois)
   - `availableStock = stock - reserved_stock` (accessor, nunca persistido)
 - **product_images** — product_id, variant_id?, color_id?, path, alt, sort_order, **is_primary**
@@ -82,32 +82,43 @@ Cêntimos inteiros; IDs auto-increment (`$table->id()`, convenção qrcode); `ti
 **O preço não sai da gramagem.** Duas peças de 32 g podem demorar 30 minutos ou 4 horas: o material custa o mesmo e a produção não. O **tempo de impressão é input obrigatório** do cálculo.
 
 ```
-material   = weightGrams × pricePerKgCents × 10                  ← micros; o ÷1000 do kg
-                                                                   dissolve-se na constante
-máquina    = printTimeMinutes ÷ 60 × hourlyRateCents             ← do printer_profile
-manuseam.  = custo fixo por peça (0,15 €)                        ← sem tabela por peso
-risco      = (material + máquina) × failure_reserve_bp           ← extras NÃO pagam risco
-custo      = material + máquina + manuseamento + risco + extras
+filamento     = weightGrams × pricePerKgCents × 10                ← micros; o ÷1000 do kg
+                                                                    dissolve-se na constante
+eletricidade  = minutos × watts × tarifa ÷ 60 000                 ← watts do perfil,
+                                                                    tarifa das definições
+depreciação   = minutos × preçoCompra ÷ (vidaÚtil × 60)           ← a máquina paga-se a si
+manutenção    = minutos × manutençãoPorHora ÷ 60                    própria nas peças
+mão de obra   = minutosAtivos × valorHora ÷ 60                    ← só trabalho humano
+subtotal      = filamento + eletricidade + depreciação
+                + manutenção + mão de obra + embalagem + componentes
 
-revenda    = ceil(custo × 1,70, 0,50 €)                          ← chão de 1,50 €
-cliente    = arredondamento comercial(revenda × 1,75)            ← 0,50/1/5 € por faixa
-             com chão de revenda × 1,60 (rede de segurança)
+custo real    = subtotal ÷ (1 − taxaFalhas)                       ← DIVIDE, não soma
+revenda       = ceil(custo real ÷ (1 − margemRevenda), 0,50 €)    ← chão de 1,50 €
+cliente       = ceil(revenda ÷ (1 − margemRevendedor))            ← 0,50/1/5 € por faixa
 
-lucro produtor    = revenda − custo
-margem produtor   = lucro ÷ revenda × 100    ← margem sobre venda (definição oficial)
+lucro revenda     = revenda − custo real
+lucro direto      = cliente − custo real     ← vendo eu ao mesmo preço público
 lucro revendedor  = cliente − revenda
+margem            = lucro ÷ preço × 100      ← sobre a VENDA, sempre
 markup revendedor = lucro ÷ revenda × 100    (o admin mostra ambos, rotulados)
+lucro líquido     = lucro direto − comissões do canal
 ```
 
-**Aritmética em micro-euros** (`app/Support/Micros.php`): inteiros de 1/1 000 000 €. A regra do projeto é "cêntimos, nunca floats", mas as parcelas intermédias (0,765 € de filamento, 0,06325 € de reserva) não cabem num cêntimo e arredondá-las desviava o preço final. Caso de referência oficial, fixado em teste: **17 €/kg, 45 g, 2h30 a 0,20 €/h → custo 1,47825 €, revenda 3,00 €, cliente 5,50 €**.
+**Aritmética em micro-euros** (`app/Support/Micros.php`): inteiros de 1/1 000 000 €. A regra do projeto é "cêntimos, nunca floats", mas as parcelas intermédias (0,06177 € de eletricidade, 0,1420 €/kWh de tarifa) não cabem num cêntimo e arredondá-las desviava o preço final. Caso de referência oficial, fixado em teste: **17 €/kg, 50 g, 3h numa A1 (145 W, 400 €/4000 h, 0,04 €/h), 5 min de trabalho a 8 €/h, tarifa 0,1420 €/kWh, falhas 5 %, margens 40 %/40 % → subtotal 1,998437 €, custo real 2,103618 €, revenda 4,00 €, cliente 7,00 €**.
 
-**Um multiplicador único, e não uma tabela progressiva.** A margem do produtor foi 2,00× até 2 € de custo, 1,90× até 5 €, e por aí fora. Saiu em agosto de 2026: fazia o preço saltar de forma descontínua ao atravessar um limiar (um custo de 2,00 € dava 4,00 € de revenda, um de 2,02 € dava 3,84 — a peça mais cara vendia-se mais barato) e, somada a um custo de máquina de 0,50 €/h, dava preços que não competiam. Quem protege as peças pequenas passou a ser só o **chão de 1,50 €**, que abaixo de ~0,88 € de custo é quem decide o preço.
+**A taxa de falhas divide, não soma.** Somar 5 % (custo × 1,05) recupera menos do que se perdeu: a peça falhada também gastou filamento, luz e horas de máquina. Com 100 peças e 5 falhadas são 95 a pagar o custo de 100 — logo `÷ 0,95`. Antes de agosto de 2026 a reserva somava-se, e só sobre filamento + máquina.
+
+**As margens são declaradas, não derivadas.** Aqui viveram dois multiplicadores (1,70×, 1,75×) e ninguém sabia que margem é que davam — 1,70× sobre o custo são 41,2 % de margem sobre a venda, o que só se descobre fazendo a conta ao contrário. Pedir a margem e dividir por `(1 − margem)` diz exatamente o que se queria dizer. Antes disso houve ainda uma tabela progressiva (2,00× até 2 € de custo, 1,90× até 5 €), que saiu por fazer o preço saltar ao atravessar um limiar: um custo de 2,00 € dava 4,00 € de revenda e um de 2,02 € dava 3,84 — a peça mais cara vendia-se mais barato.
+
+**Os dois arredondamentos são sempre PARA CIMA.** O do cliente já foi ao mais próximo, e uma descida comia a margem que se acabou de pedir — a ponto de ter sido preciso um `minimum_retail_multiplier` como rede de segurança. Com o `ceil`, a margem do revendedor é um chão garantido por construção e a rede deixou de ter o que apanhar.
 
 **Tempo em horas e minutos separados, nunca num decimal**: "1,30" tanto se lê como uma hora e trinta como 1,3 horas, e a diferença são 12 minutos de máquina em cada peça. A BD guarda o total em minutos.
 
-**Modos**: `per_unit` (o utilizador descreve uma peça; a quantidade só multiplica os totais) e `batch` (peso e tempo da mesa inteira; o custo divide-se pela quantidade). Em lote o custo fixo por peça **não se usa** — numa mesa o trabalho que se faz uma vez dilui-se por todas as peças, e um valor por peça não sabe exprimir essa diluição. Em vez disso: montagem por impressão + trabalho por unidade.
+**Modos**: `per_unit` (o utilizador descreve uma peça; a quantidade só multiplica os totais) e `batch` (peso e tempo da mesa inteira; o custo divide-se pela quantidade). Em lote a mão de obra decompõe-se: a **preparação** (`setup_labor_minutes`, uma vez por mesa) dilui-se por todas as peças, o **acabamento** (`active_labor_minutes`, por peça) não. A embalagem e os componentes também não se dividem — doze peças levam doze sacos.
 
-Parâmetros globais em `config/pricing.php`, sobrepostos pelas chaves `pricing.*` da tabela `settings` e editáveis em `/admin/definicoes`: reserva de falha, preço mínimo de revenda, multiplicador de revenda, multiplicador do cliente, multiplicador mínimo, manuseamento por peça, manuseamento em lote. **Fora do config de propósito**: o degrau de 0,50 € da revenda e as faixas de arredondamento do retalho — são regras comerciais fixas.
+**Comissões do canal** (`sales_channel_*`, a zero por omissão): ficam **fora** do custo industrial de propósito — não custam nada produzir, e metidas no custo contaminavam o preço de revenda de peças vendidas por outros canais. Entram só no lucro líquido, e por isso mexer-lhes não move o preço, move o que sobra dele.
+
+Parâmetros globais em `config/pricing.php`, sobrepostos pelas chaves `pricing.*` da tabela `settings` e editáveis em `/admin/definicoes`: tarifa da eletricidade, valor do trabalho, trabalho ativo e preparação em minutos, taxa de falhas, margem de revenda, margem do revendedor, preço mínimo de revenda, comissões do canal. **Fora do config de propósito**: (1) os números da máquina — potência, preço, vida útil, manutenção — que pertencem a cada `printer_profile`, com os `fallback_printer_*` do config só para quando não há nenhuma ativa; (2) o degrau de 0,50 € da revenda e as faixas de arredondamento do retalho, que são regras comerciais fixas.
 
 Superfícies: `/admin/calculadora` (simulação livre, estado no URL) e o formulário de variante (com "Aplicar preços"). As duas usam o **mesmo motor no servidor** — a fórmula nunca é espelhada em TypeScript, porque não há runner de testes JS e os números caem em cima das fronteiras de arredondamento. **O modal de produto ficou de fora**: a gramagem e o tempo são dados de produção e editam-se variante a variante; lá em cima escrevem-se só os três preços (revenda, venda, promoção) que servem de molde à matriz.
 
@@ -262,9 +273,10 @@ Numa segunda ronda, ainda antes da Fase 2 propriamente dita, foi antecipado o re
 - **Materiais & cores** (Fase 2 parcial) — CRUD completo com swatches e preço/kg, e o seletor de cor na variante. `variants.color_id` deixou de ficar a null. **Sem galeria por cor** — continua a ser Fase 2.
 - **Cores por filamento** — a pivô `color_material` e a intersecção que dela decorre. Cada cor declara em que filamentos existe; a matriz de criação de produto deixa cair os pares que o dono não tem (`ColorMaterialMatrix`), o formulário da variante avulsa recusa-os com mensagem legível, e desmarcar um filamento esconde — nunca apaga — as variantes que o usavam. Ver `App\Support\ColorMaterialMatrix` e `ColorService::syncMaterials()`.
 - **Fotografias** (Fase 2 parcial) — `ImageService` (upload no disco `public`, `setPrimary` transacional contra o índice único parcial, reordenar, apagar) e a galeria na página de edição do produto. **Sem redimensionamento nem miniaturas**: os originais (até 5 MB) são servidos como estão — tem de mudar antes da montra pública.
-- **Custo, revenda e preço final** — o `PricingCalculator` completo, `/admin/calculadora`, perfis de impressora (`/admin/impressoras`) e a pré-visualização dentro do formulário de variante. O tempo de impressão passou a ser input do cálculo; as colunas da fórmula antiga (`labor_minutes`, `energy_cost_cents`, `failure_rate_percent`) saíram do esquema e `packaging_cost_cents` virou `extra_cost_cents`.
+- **Custo, revenda e preço final** — o `PricingCalculator` completo, `/admin/calculadora`, perfis de impressora (`/admin/impressoras`) e a pré-visualização dentro do formulário de variante. O tempo de impressão passou a ser input do cálculo; as colunas da fórmula antiga (`labor_minutes`, `energy_cost_cents`, `failure_rate_percent`) saíram do esquema.
+- **Custos reais em vez de aproximações** (agosto de 2026) — o custo/hora agregado decompôs-se em eletricidade + depreciação + manutenção, o manuseamento fixo deu lugar a minutos de mão de obra a um valor/hora, e os multiplicadores deram lugar a margens declaradas. A calculadora passou a responder "quanto pesa cada parcela" e não só "quanto dá no fim". Ver a secção da fórmula acima.
 - **Tags, slug editável e descrição formatada** — ver o schema acima.
-- **Definições em runtime** — `SettingService` + `/admin/definicoes`: a moeda e os parâmetros de preço (chaves `pricing.*`, por cima do `config/pricing.php`). Duas rotas e dois formulários independentes, para uma gravação de moeda não rebentar num custo de manuseamento que ninguém tocou. O serviço tolera a tabela `settings` não existir (é lido em todos os pedidos pelo `HandleInertiaRequests`) e cai no config.
+- **Definições em runtime** — `SettingService` + `/admin/definicoes`: a moeda e os parâmetros de preço (chaves `pricing.*`, por cima do `config/pricing.php`). Duas rotas e dois formulários independentes, para uma gravação de moeda não rebentar numa margem que ninguém tocou. O serviço tolera a tabela `settings` não existir (é lido em todos os pedidos pelo `HandleInertiaRequests`) e cai no config.
 
 O que **não** foi antecipado e continua exatamente como planeado: carrinho, checkout, Stripe, webhook, reservas, sweep, capacidade de produção, montra pública de produtos, custos e margens.
 
@@ -274,7 +286,7 @@ O que **não** foi antecipado e continua exatamente como planeado: carrinho, che
 
 - **Contínuo:** `composer test` (config:clear → pint --test → artisan test), `npm run lint && npm run types:check && npm run format:check`; suites `Unit`/`Feature` como no qrcode (NonFunctional opcional mais tarde); testes em SQLite `:memory:`; PHPUnit class-style (convenção dominante do qrcode)
 - **Fase 1:** ver critérios abaixo
-- **Fase 2:** seed (2 materiais × 3 cores, produtos dos 3 fulfillment modes); a matriz gera só os pares declarados em `color_material` e as referências saem contíguas depois do filtro; custo/margem conferem (unit tests em `Money`, `Micros`, `Rate` e `PricingCalculator` — **incl. o caso de referência 17 €/kg + 45 g + 2h30 → 1,47825 € / 3,00 € / 5,50 €**, a sensibilidade ao tempo, o lote, margem vs markup); combinação inexistente não aparece; personalização required bloqueia; `setPrimary` transacional testado
+- **Fase 2:** seed (2 materiais × 3 cores, produtos dos 3 fulfillment modes); a matriz gera só os pares declarados em `color_material` e as referências saem contíguas depois do filtro; custo/margem conferem (unit tests em `Money`, `Micros`, `Rate` e `PricingCalculator` — **incl. o caso de referência 17 €/kg + 50 g + 3h → 2,103618 € / 4,00 € / 7,00 €**, a taxa de falhas a dividir e não a somar, o arredondamento sempre para cima, a sensibilidade ao tempo, o lote, margem vs markup); combinação inexistente não aparece; personalização required bloqueia; `setPrimary` transacional testado
 - **Fase 3:** `stripe listen --forward-to 12studio.test/webhooks/stripe`; cartão `4242…` → paid + stock decrementado; Multibanco → `pending_payment` + reserva (stock intacto, available reduzido) → sucesso simulado → conversão; falha → libertação; **replay de evento** → zero duplicados (PK `webhook_events`); corrida: 2 checkouts c/ availableStock=1 → um passa; capacidade: made_to_order max=2 com 2 em produção → rejeitado; sweep do scheduler liberta reserva expirada (teste com `travel()`); assinatura inválida → 403; feature tests com `Inertia\Testing\AssertableInertia`
 - **Fase 4:** encomenda mista (in_stock + made_to_order) mostra estados independentes e só avança quando o segundo fica ready; manual Vinted desconta stock e aparece no quadro; email em `→ shipped` (Mail::fake + afterCommit); invariantes payment_status × status testadas exaustivamente no `OrderService`
 - **Fase 5:** registo/verificação/login; encomendas em /conta; sitemap e meta OG; smoke E2E manual browse → carrinho → checkout → sucesso

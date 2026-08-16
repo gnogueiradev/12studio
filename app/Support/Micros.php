@@ -68,9 +68,30 @@ final class Micros
         return intdiv($micros + $step - 1, $step) * $step;
     }
 
-    /** Multiplo de $step mais proximo, com o meio exato a subir. */
-    public static function roundHalfUpTo(int $micros, int $step): int
+    /**
+     * Euros escritos por humanos -> micros. Gemeo do Money::fromDecimal, mas
+     * com quatro casas a mais.
+     *
+     * Existe porque ha dois parametros do negocio que nao cabem num centimo: a
+     * tarifa da eletricidade (0,1420 EUR/kWh) e a manutencao a hora (0,0400
+     * EUR/h). Guardados em centimos viravam 14 e 4, e o custo de energia de uma
+     * peca de tres horas saia 4% ao lado. A leitura do numero — virgula ou
+     * ponto, com ou sem simbolo — continua a ser a do Money.
+     */
+    public static function fromDecimal(string $value): int
     {
-        return intdiv(2 * $micros + $step, 2 * $step) * $step;
+        return (int) round(Money::normalizeDecimal($value) * self::PER_EURO);
+    }
+
+    /**
+     * Micros -> string decimal para pre-preencher um input.
+     *
+     * Quatro casas por omissao porque e essa a precisao que os campos que
+     * precisam desta classe mostram; quem so quer euros passa 2. A formatacao
+     * com simbolo e separadores PT continua a ser do frontend.
+     */
+    public static function toDecimal(int $micros, int $decimals = 4): string
+    {
+        return number_format($micros / self::PER_EURO, $decimals, '.', '');
     }
 }

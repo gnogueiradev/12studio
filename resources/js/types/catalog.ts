@@ -323,8 +323,12 @@ export type VariantRow = {
     printingTimeMinutes: number | null;
     /** Null = a impressora predefinida. */
     printerProfileId: number | null;
-    /** Decimais em euros; ímanes, feltro, caixa. */
-    extraCost: string | null;
+    /** Decimais em euros; saco, caixa, etiqueta. */
+    packagingCost: string | null;
+    /** Decimais em euros; ímanes, argolas, feltro, parafusos. */
+    componentsCost: string | null;
+    /** Null = usa a definição global. Zero é "não leva trabalho nenhum". */
+    activeLaborMinutes: number | null;
     stock: number;
     reservedStock: number;
     availableStock: number;
@@ -345,7 +349,9 @@ export type VariantFormData = {
     filament_weight_grams: number | null;
     printing_time_minutes: number | null;
     printer_profile_id: number | null;
-    extra_cost: string;
+    packaging_cost: string;
+    components_cost: string;
+    active_labor_minutes: number | null;
     stock: number;
     low_stock_threshold: number;
     is_default: boolean;

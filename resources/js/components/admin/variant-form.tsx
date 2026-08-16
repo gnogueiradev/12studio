@@ -15,7 +15,12 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
-import { centsToInput, formatCents, inputToCents } from '@/lib/money';
+import {
+    centsToInput,
+    formatCents,
+    formatMicros,
+    inputToCents,
+} from '@/lib/money';
 import type {
     ColorOption,
     MaterialOption,
@@ -29,7 +34,8 @@ import type {
 /** O que o PricingPreview do servidor devolve para esta variante. */
 export type VariantPricingPreview = {
     result: Breakdown | null;
-    hourlyRateCents: number;
+    /** O €/h já derivado da máquina: energia + amortização + manutenção. */
+    hourlyCostMicros: number;
     usingFallbackRate: boolean;
     printerProfileId: number | null;
 };
@@ -49,6 +55,8 @@ type Props = {
     printers: PrinterProfileOption[];
     /** Calculada no servidor e recarregada em `only: ['pricing']`. */
     pricing: VariantPricingPreview;
+    /** O que acontece se o campo do trabalho ativo ficar em branco. */
+    defaultActiveLaborMinutes: number;
     /** Unidades presas a pagamentos pendentes — só existem a partir da Fase 3. */
     reservedStock?: number;
 };
@@ -72,6 +80,7 @@ export default function VariantForm({
     materials,
     printers,
     pricing,
+    defaultActiveLaborMinutes,
     reservedStock = 0,
 }: Props) {
     const printMinutes = data.printing_time_minutes ?? 0;
@@ -158,7 +167,9 @@ export default function VariantForm({
                     // cada troca de tom.
                     material_id: data.material_id,
                     printer_profile_id: data.printer_profile_id,
-                    extra_cost: data.extra_cost,
+                    packaging_cost: data.packaging_cost,
+                    components_cost: data.components_cost,
+                    active_labor_minutes: data.active_labor_minutes,
                 },
             });
 
@@ -188,7 +199,9 @@ export default function VariantForm({
         data.filament_weight_grams,
         data.material_id,
         data.printer_profile_id,
-        data.extra_cost,
+        data.packaging_cost,
+        data.components_cost,
+        data.active_labor_minutes,
         printMinutes,
     ]);
 
@@ -205,7 +218,7 @@ export default function VariantForm({
         setData('normal_price', centsToInput(pricing.result.retailPriceCents));
         setData(
             'wholesale_price',
-            centsToInput(pricing.result.resalePriceCents),
+            centsToInput(pricing.result.wholesalePriceCents),
         );
     };
 
@@ -515,25 +528,71 @@ export default function VariantForm({
                     </fieldset>
 
                     <div className="grid gap-2">
-                        <Label htmlFor="extra_cost">
-                            Custos adicionais (€)
+                        <Label htmlFor="active_labor_minutes">
+                            Trabalho ativo (min)
                         </Label>
                         <Input
-                            id="extra_cost"
+                            id="active_labor_minutes"
+                            type="number"
+                            min={0}
+                            max={600}
+                            value={data.active_labor_minutes ?? ''}
+                            onChange={(event) =>
+                                setData(
+                                    'active_labor_minutes',
+                                    event.target.value === ''
+                                        ? null
+                                        : Number(event.target.value),
+                                )
+                            }
+                            placeholder={String(defaultActiveLaborMinutes)}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                            Só o tempo em que estás mesmo a mexer nesta peça. Em
+                            branco usa os {defaultActiveLaborMinutes} min das
+                            definições.
+                        </p>
+                        <InputError message={errors.active_labor_minutes} />
+                    </div>
+                </div>
+
+                <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="grid gap-2">
+                        <Label htmlFor="packaging_cost">Embalagem (€)</Label>
+                        <Input
+                            id="packaging_cost"
                             type="number"
                             step="0.01"
                             min={0}
-                            value={data.extra_cost}
+                            value={data.packaging_cost}
                             onChange={(event) =>
-                                setData('extra_cost', event.target.value)
+                                setData('packaging_cost', event.target.value)
                             }
                             placeholder="0.00"
                         />
                         <p className="text-xs text-muted-foreground">
-                            Ímanes, feltro, argolas, caixa. Entram a cru: não
-                            pagam reserva de falha.
+                            Saco, caixa, cartão, etiqueta, fita.
                         </p>
-                        <InputError message={errors.extra_cost} />
+                        <InputError message={errors.packaging_cost} />
+                    </div>
+
+                    <div className="grid gap-2">
+                        <Label htmlFor="components_cost">Componentes (€)</Label>
+                        <Input
+                            id="components_cost"
+                            type="number"
+                            step="0.01"
+                            min={0}
+                            value={data.components_cost}
+                            onChange={(event) =>
+                                setData('components_cost', event.target.value)
+                            }
+                            placeholder="0.00"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                            Ímanes, argolas, correntes, parafusos, feltro.
+                        </p>
+                        <InputError message={errors.components_cost} />
                     </div>
                 </div>
 
@@ -570,7 +629,7 @@ export default function VariantForm({
                                     value={String(printer.id)}
                                 >
                                     {printer.name} —{' '}
-                                    {formatCents(printer.hourlyRateCents)}/h
+                                    {formatMicros(printer.hourlyCostMicros)}/h
                                 </SelectItem>
                             ))}
                         </SelectContent>
@@ -581,7 +640,7 @@ export default function VariantForm({
                 <PricingBreakdown
                     result={pricing.result}
                     printTimeMinutes={printMinutes}
-                    hourlyRateCents={pricing.hourlyRateCents}
+                    hourlyCostMicros={pricing.hourlyCostMicros}
                     printerName={chosenPrinter?.name ?? null}
                     usingFallbackRate={pricing.usingFallbackRate}
                     emptyHint="Preenche a gramagem e o tempo de impressão para veres o custo e o preço sugerido."

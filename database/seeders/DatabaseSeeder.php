@@ -22,22 +22,25 @@ class DatabaseSeeder extends Seeder
     }
 
     /**
-     * A impressora da casa. Sem ela a calculadora cai no custo/hora do
+     * A impressora da casa. Sem ela a calculadora cai nos valores de recurso do
      * config/pricing.php e mostra um aviso — funciona, mas o dono nao tem onde
-     * mudar a taxa sem um deploy.
+     * mexer nos numeros da maquina sem um deploy.
      *
      * Idempotente pelo nome, como o admin: o deploy corre este seeder sempre, e
-     * uma taxa que o dono ja ajustou nao pode voltar aos 0,20 EUR a cada
-     * lancamento. Por isso quem moveu as impressoras ja existentes para a taxa
-     * nova foi uma migracao, e nao este seeder.
+     * numeros que o dono ja ajustou (mediu o consumo, comprou outra maquina)
+     * nao podem voltar aos de fabrica a cada lancamento. Por isso quem mexeu
+     * nas impressoras ja existentes foi uma migracao, e nao este seeder.
      */
     private function seedPrinterProfiles(): void
     {
         PrinterProfile::query()->firstOrCreate(
             ['name' => 'Bambu Lab A1'],
             [
-                'hourly_rate_cents' => 20,
-                'notes' => 'Inclui energia, desgaste, manutencao e depreciacao.',
+                'average_power_watts' => 145,
+                'purchase_price_cents' => 40_000,
+                'lifetime_hours' => 4_000,
+                'maintenance_micros_per_hour' => 40_000,
+                'notes' => 'Consumo estimado; medir com um wattimetro quando der.',
                 'is_default' => true,
                 'active' => true,
                 'sort_order' => 0,

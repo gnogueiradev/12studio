@@ -132,14 +132,25 @@ class VariantService
             $data['wholesale_price_cents'] = $this->optionalCents($data['wholesale_price']);
         }
 
-        // Imanes, feltro, argolas, caixa: tudo o que se soma ao custo desta
-        // peca depois de ela sair da impressora. Entra na calculadora a cru,
-        // sem reserva de falha por cima.
-        if (array_key_exists('extra_cost', $data)) {
-            $data['extra_cost_cents'] = $this->optionalCents($data['extra_cost']);
+        // Os dois custos que se somam ao da impressao. Separados porque sao
+        // decisoes diferentes: a embalagem (saco, caixa, etiqueta) e mais ou
+        // menos igual para tudo o que sai da loja, os componentes (imanes,
+        // argolas, feltro) sao especificos da peca. Entram os dois ANTES do
+        // risco de falhas — quando uma impressao falha, o saco e o iman que ja
+        // la estavam perdem-se com ela.
+        foreach (['packaging_cost' => 'packaging_cost_cents', 'components_cost' => 'components_cost_cents'] as $field => $column) {
+            if (array_key_exists($field, $data)) {
+                $data[$column] = $this->optionalCents($data[$field]);
+            }
         }
 
-        unset($data['normal_price'], $data['sale_price'], $data['wholesale_price'], $data['extra_cost']);
+        unset(
+            $data['normal_price'],
+            $data['sale_price'],
+            $data['wholesale_price'],
+            $data['packaging_cost'],
+            $data['components_cost'],
+        );
 
         return $data;
     }

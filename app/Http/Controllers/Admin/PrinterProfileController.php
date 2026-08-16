@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Printer\StorePrinterProfileRequest;
 use App\Http\Requests\Printer\UpdatePrinterProfileRequest;
 use App\Models\PrinterProfile;
+use App\Services\PricingSettings;
 use App\Services\PrinterProfileService;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Http\RedirectResponse;
@@ -13,17 +14,19 @@ use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * Perfis de impressora: uma maquina e o que custa te-la a trabalhar uma hora.
+ * Perfis de impressora: uma maquina e os numeros de que o seu custo/hora se faz.
  *
- * O custo/hora daqui e a parcela de maquina de cada peca — a segunda maior
- * depois do filamento, e a unica que cresce com o tempo de impressao. Uma A1 e
- * uma P1S nao custam o mesmo por hora; por isso isto e uma tabela e nao uma
- * definicao unica em /admin/definicoes.
+ * As tres parcelas de maquina de cada peca saem daqui — energia, depreciacao e
+ * manutencao — e juntas sao a segunda maior fatia depois do filamento, alem de
+ * serem as unicas que crescem com o tempo de impressao. Uma A1 e uma P1S nao
+ * custam o mesmo por hora; por isso isto e uma tabela e nao uma definicao
+ * unica em /admin/definicoes. A tarifa da luz, essa, e mesmo global e vive la.
  */
 class PrinterProfileController extends Controller
 {
     public function __construct(
         private PrinterProfileService $profiles,
+        private PricingSettings $settings,
     ) {}
 
     public function index(): Response
@@ -36,11 +39,19 @@ class PrinterProfileController extends Controller
             ->orderBy('name')
             ->get();
 
+        $tariff = $this->settings->electricityPriceMicrosPerKwh();
+
         return Inertia::render('admin/impressoras/index', [
             'printers' => $profiles->map(fn (PrinterProfile $profile): array => [
                 'id' => $profile->id,
                 'name' => $profile->name,
-                'hourlyRateCents' => $profile->hourly_rate_cents,
+                'averagePowerWatts' => $profile->average_power_watts,
+                'purchasePriceCents' => $profile->purchase_price_cents,
+                'lifetimeHours' => $profile->lifetime_hours,
+                'maintenanceMicrosPerHour' => $profile->maintenance_micros_per_hour,
+                // O agregado que as quatro colunas produzem. Vai calculado do
+                // servidor para a tarifa nao ter de viajar ate ao browser.
+                'hourlyCostMicros' => $profile->hourlyCostMicros($tariff),
                 'notes' => $profile->notes,
                 'isDefault' => $profile->is_default,
                 'active' => $profile->active,
@@ -50,7 +61,10 @@ class PrinterProfileController extends Controller
                 // explica porque e que arquivar e a unica saida.
                 'variantsCount' => (int) $profile->variants_count,
             ]),
-            'stats' => $this->stats($profiles),
+            'stats' => $this->stats($profiles, $tariff),
+            // O modal precisa dela para pre-visualizar o EUR/h enquanto se
+            // escreve; o valor a serio continua a ser o que o servidor devolve.
+            'electricityPriceMicrosPerKwh' => $tariff,
         ]);
     }
 
@@ -115,20 +129,24 @@ class PrinterProfileController extends Controller
      * listagem de materiais: sao meia duzia de linhas que a pagina ja trouxe.
      *
      * @param  Collection<int, PrinterProfile>  $profiles
-     * @return array{activeCount: int, defaultName: string|null, defaultRateCents: int|null, averageRateCents: int}
+     * @return array{activeCount: int, defaultName: string|null, defaultHourlyCostMicros: int|null, averageHourlyCostMicros: int}
      */
-    private function stats(Collection $profiles): array
+    private function stats(Collection $profiles, int $tariff): array
     {
         $active = $profiles->filter(fn (PrinterProfile $profile): bool => $profile->active);
         $default = $active->firstWhere('is_default', true);
 
+        $costs = $active->map(
+            fn (PrinterProfile $profile): int => $profile->hourlyCostMicros($tariff)
+        );
+
         return [
             'activeCount' => $active->count(),
             'defaultName' => $default?->name,
-            'defaultRateCents' => $default?->hourly_rate_cents,
+            'defaultHourlyCostMicros' => $default?->hourlyCostMicros($tariff),
             // `avg` devolve null com a coleccao vazia — o cartao quer um numero
             // para formatar, nao um buraco.
-            'averageRateCents' => (int) round((float) $active->avg('hourly_rate_cents')),
+            'averageHourlyCostMicros' => (int) round((float) $costs->avg()),
         ];
     }
 }

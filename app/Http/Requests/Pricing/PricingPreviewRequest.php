@@ -33,10 +33,12 @@ class PricingPreviewRequest extends FormRequest
      */
     protected function prepareForValidation(): void
     {
-        $value = $this->input('extra_cost');
+        foreach (['packaging_cost', 'components_cost'] as $field) {
+            $value = $this->input($field);
 
-        if (is_string($value) && $value !== '') {
-            $this->merge(['extra_cost' => str_replace(',', '.', $value)]);
+            if (is_string($value) && $value !== '') {
+                $this->merge([$field => str_replace(',', '.', $value)]);
+            }
         }
     }
 
@@ -52,7 +54,11 @@ class PricingPreviewRequest extends FormRequest
             'weight_grams' => ['nullable', 'integer', 'min:0', 'max:50000'],
             'hours' => ['nullable', 'integer', 'min:0', 'max:999'],
             'minutes' => ['nullable', 'integer', 'min:0', 'max:59'],
-            'extra_cost' => ['nullable', 'numeric', 'min:0', 'max:9999.99'],
+            'packaging_cost' => ['nullable', 'numeric', 'min:0', 'max:9999.99'],
+            'components_cost' => ['nullable', 'numeric', 'min:0', 'max:9999.99'],
+            // Nullable a serio: vazio quer dizer "usa a definicao global", e e
+            // diferente de zero, que quer dizer "esta peca nao leva trabalho".
+            'active_labor_minutes' => ['nullable', 'integer', 'min:0', 'max:600'],
             'quantity' => ['nullable', 'integer', 'min:1', 'max:9999'],
             'material_id' => ['nullable', 'integer', Rule::exists('materials', 'id')],
             'printer_profile_id' => ['nullable', 'integer', Rule::exists('printer_profiles', 'id')],
@@ -69,7 +75,9 @@ class PricingPreviewRequest extends FormRequest
             'weight_grams' => 'peso',
             'hours' => 'horas',
             'minutes' => 'minutos',
-            'extra_cost' => 'custos adicionais',
+            'packaging_cost' => 'embalagem',
+            'components_cost' => 'componentes',
+            'active_labor_minutes' => 'trabalho ativo',
             'quantity' => 'quantidade',
             'material_id' => 'material',
             'printer_profile_id' => 'impressora',
@@ -101,9 +109,32 @@ class PricingPreviewRequest extends FormRequest
         return max(1, (int) $this->input('quantity', 1));
     }
 
-    public function extraCostCents(): int
+    public function packagingCostCents(): int
     {
-        $value = $this->input('extra_cost');
+        return $this->costCents('packaging_cost');
+    }
+
+    public function componentsCostCents(): int
+    {
+        return $this->costCents('components_cost');
+    }
+
+    /**
+     * Minutos de trabalho ativo, ou null para a definicao global.
+     *
+     * Um campo vazio nao pode virar zero: zero e uma afirmacao ("esta peca nao
+     * leva trabalho nenhum") e vazio e a ausencia dela.
+     */
+    public function activeLaborMinutes(): ?int
+    {
+        $value = $this->input('active_labor_minutes');
+
+        return is_numeric($value) ? (int) $value : null;
+    }
+
+    private function costCents(string $field): int
+    {
+        $value = $this->input($field);
 
         return is_string($value) || is_numeric($value) ? Money::fromDecimal((string) $value) : 0;
     }
@@ -167,7 +198,9 @@ class PricingPreviewRequest extends FormRequest
      *     weight_grams: int,
      *     hours: int,
      *     minutes: int,
-     *     extra_cost: string,
+     *     packaging_cost: string,
+     *     components_cost: string,
+     *     active_labor_minutes: int|null,
      *     quantity: int,
      *     material_id: int|null,
      *     printer_profile_id: int|null,
@@ -180,7 +213,9 @@ class PricingPreviewRequest extends FormRequest
             'weight_grams' => $this->weightGrams(),
             'hours' => intdiv($this->printTimeMinutes(), 60),
             'minutes' => $this->printTimeMinutes() % 60,
-            'extra_cost' => Money::toDecimal($this->extraCostCents()),
+            'packaging_cost' => Money::toDecimal($this->packagingCostCents()),
+            'components_cost' => Money::toDecimal($this->componentsCostCents()),
+            'active_labor_minutes' => $this->activeLaborMinutes(),
             'quantity' => $this->quantity(),
             'material_id' => $this->materialId(),
             'printer_profile_id' => $this->printerProfileId(),

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\PrinterProfile;
+use App\Support\Micros;
 use App\Support\Money;
 use Illuminate\Support\Facades\DB;
 
@@ -14,7 +15,7 @@ class PrinterProfileService
     public function store(array $data): PrinterProfile
     {
         return DB::transaction(function () use ($data): PrinterProfile {
-            $data = $this->normalizeRate($data);
+            $data = $this->normalizeCosts($data);
 
             // A primeira impressora e a predefinida sem ninguem pedir: uma
             // calculadora sem impressora escolhida cai no custo/hora do config
@@ -39,7 +40,7 @@ class PrinterProfileService
     public function update(PrinterProfile $profile, array $data): PrinterProfile
     {
         return DB::transaction(function () use ($profile, $data): PrinterProfile {
-            $data = $this->normalizeRate($data);
+            $data = $this->normalizeCosts($data);
 
             $makeDefault = (bool) ($data['is_default'] ?? false);
             unset($data['is_default']);
@@ -104,8 +105,8 @@ class PrinterProfileService
 
     /**
      * A impressora a usar num calculo: a escolhida, senao a predefinida.
-     * Devolve null quando nao ha nenhuma ativa — quem chama cai no
-     * PricingSettings::fallbackHourlyRateCents() e avisa o utilizador.
+     * Devolve null quando nao ha nenhuma ativa — quem chama cai nos
+     * PricingSettings::fallbackPrinter*() e avisa o utilizador.
      */
     public function resolve(?int $printerProfileId): ?PrinterProfile
     {
@@ -150,17 +151,29 @@ class PrinterProfileService
     }
 
     /**
-     * Euros por hora do formulario -> centimos inteiros. Mesmo padrao do
+     * Os dois campos decimais do formulario -> inteiros. Mesmo padrao do
      * MaterialService::normalizePrice().
+     *
+     * A potencia e a vida util nao passam por aqui: sao inteiros no
+     * formulario, inteiros na base. Sao unidades onde o decimal nao acrescenta
+     * nada (0,145 kWh/h le-se 145 W, e ninguem estima a vida util ao minuto).
+     *
+     * A manutencao vai em MICROS e nao em centimos: 0,04 EUR/h arredondado ao
+     * centimo era 4, e 0,035 EUR/h era 4 tambem.
      *
      * @param  array<string, mixed>  $data
      * @return array<string, mixed>
      */
-    private function normalizeRate(array $data): array
+    private function normalizeCosts(array $data): array
     {
-        if (array_key_exists('hourly_rate', $data)) {
-            $data['hourly_rate_cents'] = Money::fromDecimal((string) $data['hourly_rate']);
-            unset($data['hourly_rate']);
+        if (array_key_exists('purchase_price', $data)) {
+            $data['purchase_price_cents'] = Money::fromDecimal((string) $data['purchase_price']);
+            unset($data['purchase_price']);
+        }
+
+        if (array_key_exists('maintenance_rate', $data)) {
+            $data['maintenance_micros_per_hour'] = Micros::fromDecimal((string) $data['maintenance_rate']);
+            unset($data['maintenance_rate']);
         }
 
         return $data;

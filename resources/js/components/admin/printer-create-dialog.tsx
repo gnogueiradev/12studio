@@ -12,7 +12,14 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
-import { centsToInput, formatCents, inputToCents } from '@/lib/money';
+import {
+    centsToInput,
+    formatCents,
+    formatMicros,
+    inputToCents,
+    inputToMicros,
+    microsToInput,
+} from '@/lib/money';
 import { store, update } from '@/routes/admin/impressoras';
 import type {
     PrinterProfileFormData,
@@ -26,20 +33,29 @@ type Props = {
     editing: PrinterProfileRow | null;
     /** True quando ainda não há impressora nenhuma — muda o texto de ajuda. */
     isFirst: boolean;
+    /** A tarifa global, só para pré-visualizar o €/h enquanto se escreve. */
+    electricityPriceMicrosPerKwh: number;
 };
 
 /** Peça de referência para o custo/hora deixar de ser um número abstrato. */
 const EXAMPLE_MINUTES = 90;
 
-/** Onde a primeira impressora começa: meio cêntimo por minuto de máquina. */
-const DEFAULT_RATE = '0.50';
+/** Onde a primeira impressora começa: os números de uma Bambu Lab A1. */
+const DEFAULTS = {
+    watts: 145,
+    purchasePrice: '400.00',
+    lifetimeHours: 4000,
+    maintenanceRate: '0.0400',
+};
 
 /**
  * Criar e editar uma impressora — os dois no mesmo sítio, para não haver dois
  * formulários da mesma coisa a divergir com o tempo.
  *
- * São quatro campos e só um deles precisa de explicação: o custo/hora, que quem
- * o preenche a pensar só em eletricidade deixa com peças a metade do preço.
+ * Aqui viveu um "custo por hora" único, e o problema dele era este: quem o
+ * preenchia a pensar só em eletricidade ficava com peças a metade do preço, e
+ * nada no ecrã dizia o que é que faltava lá dentro. Agora pedem-se os quatro
+ * números de que ele se faz, e o €/h aparece calculado por baixo.
  *
  * Nem "predefinida" nem "ativa" aparecem aqui. As duas são um clique na própria
  * linha da listagem ("Tornar predefinida", "Arquivar"/"Restaurar"), e uma chave
@@ -57,6 +73,7 @@ export function PrinterCreateDialog({
     onOpenChange,
     editing,
     isFirst,
+    electricityPriceMicrosPerKwh,
 }: Props) {
     const {
         data,
@@ -69,15 +86,33 @@ export function PrinterCreateDialog({
         clearErrors,
     } = useForm<PrinterProfileFormData>({
         name: editing?.name ?? '',
-        hourly_rate: editing
-            ? centsToInput(editing.hourlyRateCents)
-            : DEFAULT_RATE,
+        average_power_watts: editing?.averagePowerWatts ?? DEFAULTS.watts,
+        purchase_price: editing
+            ? centsToInput(editing.purchasePriceCents)
+            : DEFAULTS.purchasePrice,
+        lifetime_hours: editing?.lifetimeHours ?? DEFAULTS.lifetimeHours,
+        maintenance_rate: editing
+            ? microsToInput(editing.maintenanceMicrosPerHour)
+            : DEFAULTS.maintenanceRate,
         notes: editing?.notes ?? '',
         sort_order: editing?.sortOrder ?? 0,
     });
 
-    const rateCents = inputToCents(data.hourly_rate);
-    const exampleCents = Math.round((rateCents * EXAMPLE_MINUTES) / 60);
+    /*
+     * Pré-visualização e mais nada: a autoridade continua a ser o servidor, que
+     * faz esta conta em inteiros. Aqui basta ser aproximadamente certa para o
+     * admin ver o efeito do que está a escrever.
+     */
+    const hourlyCostMicros =
+        (data.average_power_watts * electricityPriceMicrosPerKwh) / 1000 +
+        (data.lifetime_hours > 0
+            ? (inputToCents(data.purchase_price) * 10_000) / data.lifetime_hours
+            : 0) +
+        inputToMicros(data.maintenance_rate);
+
+    const exampleCents = Math.round(
+        (hourlyCostMicros * EXAMPLE_MINUTES) / 60 / 10_000,
+    );
 
     const close = (next: boolean) => {
         if (!next) {
@@ -114,10 +149,10 @@ export function PrinterCreateDialog({
                         </DialogTitle>
                         <DialogDescription>
                             {editing
-                                ? 'O custo por hora entra em cada peça feita nesta máquina — mudá-lo muda o preço sugerido de tudo o que ela imprime.'
+                                ? 'Estes quatro números entram em cada peça feita nesta máquina — mexer-lhes muda o preço sugerido de tudo o que ela imprime.'
                                 : isFirst
                                   ? 'A primeira máquina fica logo a predefinida — é ela que a calculadora usa quando ninguém escolhe outra.'
-                                  : 'Cada máquina tem o seu custo por hora, e é ele que faz uma peça lenta custar mais do que uma rápida com o mesmo plástico.'}
+                                  : 'Cada máquina tem os seus números, e são eles que fazem uma peça lenta custar mais do que uma rápida com o mesmo plástico.'}
                         </DialogDescription>
                     </DialogHeader>
 
@@ -137,37 +172,121 @@ export function PrinterCreateDialog({
                         <InputError message={errors.name} />
                     </div>
 
-                    <div className="grid gap-2">
-                        <Label htmlFor="printer_rate">Custo por hora (€)</Label>
-                        <Input
-                            id="printer_rate"
-                            type="number"
-                            step="0.01"
-                            min={0}
-                            value={data.hourly_rate}
-                            onChange={(event) =>
-                                setData('hourly_rate', event.target.value)
-                            }
-                            required
-                            className="max-w-40"
-                        />
-                        <p className="text-xs text-muted-foreground">
-                            Energia, desgaste, manutenção, consumíveis e
-                            depreciação num número só. É por isso que a fórmula
-                            não volta a somar energia nem desgaste em mais lado
-                            nenhum.
-                        </p>
-                        {rateCents > 0 && (
-                            <p className="text-sm text-muted-foreground">
-                                Uma impressão de 1h30 custa{' '}
-                                <strong className="text-foreground tabular-nums">
-                                    {formatCents(exampleCents)}
-                                </strong>{' '}
-                                de máquina.
+                    <div className="grid gap-4 sm:grid-cols-2">
+                        <div className="grid gap-2">
+                            <Label htmlFor="printer_watts">
+                                Potência média (W)
+                            </Label>
+                            <Input
+                                id="printer_watts"
+                                type="number"
+                                min={0}
+                                max={5000}
+                                value={data.average_power_watts}
+                                onChange={(event) =>
+                                    setData(
+                                        'average_power_watts',
+                                        Number(event.target.value || 0),
+                                    )
+                                }
+                                required
+                                className="max-w-40 tabular-nums"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                Durante a impressão, não em pico. 0,145 kWh/h
+                                lê-se 145 W.
                             </p>
-                        )}
-                        <InputError message={errors.hourly_rate} />
+                            <InputError message={errors.average_power_watts} />
+                        </div>
+
+                        <div className="grid gap-2">
+                            <Label htmlFor="printer_maintenance">
+                                Manutenção (€/h)
+                            </Label>
+                            <Input
+                                id="printer_maintenance"
+                                type="number"
+                                step="0.0001"
+                                min={0}
+                                value={data.maintenance_rate}
+                                onChange={(event) =>
+                                    setData(
+                                        'maintenance_rate',
+                                        event.target.value,
+                                    )
+                                }
+                                required
+                                className="max-w-40 tabular-nums"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                Reserva para nozzle, hotend, correias e peças de
+                                desgaste.
+                            </p>
+                            <InputError message={errors.maintenance_rate} />
+                        </div>
+
+                        <div className="grid gap-2">
+                            <Label htmlFor="printer_purchase_price">
+                                Preço de compra (€)
+                            </Label>
+                            <Input
+                                id="printer_purchase_price"
+                                type="number"
+                                step="0.01"
+                                min={0}
+                                value={data.purchase_price}
+                                onChange={(event) =>
+                                    setData(
+                                        'purchase_price',
+                                        event.target.value,
+                                    )
+                                }
+                                required
+                                className="max-w-40 tabular-nums"
+                            />
+                            <InputError message={errors.purchase_price} />
+                        </div>
+
+                        <div className="grid gap-2">
+                            <Label htmlFor="printer_lifetime">
+                                Vida útil (h)
+                            </Label>
+                            <Input
+                                id="printer_lifetime"
+                                type="number"
+                                min={1}
+                                value={data.lifetime_hours}
+                                onChange={(event) =>
+                                    setData(
+                                        'lifetime_hours',
+                                        Number(event.target.value || 0),
+                                    )
+                                }
+                                required
+                                className="max-w-40 tabular-nums"
+                            />
+                            <p className="text-xs text-muted-foreground">
+                                A máquina paga-se a si própria nas peças que
+                                faz.
+                            </p>
+                            <InputError message={errors.lifetime_hours} />
+                        </div>
                     </div>
+
+                    {hourlyCostMicros > 0 && (
+                        <p className="rounded-lg border border-border/60 bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+                            Sai a{' '}
+                            <strong className="text-foreground tabular-nums">
+                                {formatMicros(hourlyCostMicros)}
+                            </strong>
+                            /h de máquina — uma impressão de 1h30 custa{' '}
+                            <strong className="text-foreground tabular-nums">
+                                {formatCents(exampleCents)}
+                            </strong>
+                            . A tarifa da luz vem das definições; o valor a
+                            valer é sempre o que o servidor calcula.
+                        </p>
+                    )}
 
                     <div className="grid gap-2">
                         <Label htmlFor="printer_notes">Notas</Label>

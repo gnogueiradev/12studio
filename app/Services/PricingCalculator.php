@@ -5,39 +5,49 @@ namespace App\Services;
 use App\Support\Micros;
 use App\Support\PricingInput;
 use App\Support\PricingResult;
+use App\Support\Rate;
 
 /**
- * O custo real de imprimir uma peca, e por quanto vende-la.
+ * O que custa produzir uma peca, e por quanto se vende.
  *
- * A versao anterior deste calculo (docs/plano.md, nunca implementada) partia da
- * gramagem. Duas pecas de 32 g podem demorar 30 minutos ou 4 horas: o custo do
- * material e igual e o custo real de producao nao e. A partir daqui o TEMPO DE
- * IMPRESSAO e input obrigatorio, e o preco sai de
+ * A cadeia e sempre a mesma:
  *
- *     MATERIAL + TEMPO DE MAQUINA + MANUSEAMENTO + RISCO + EXTRAS + MARGEM
+ *   filamento + eletricidade + depreciacao + manutencao + mao de obra
+ *   + embalagem + componentes                                    = SUBTOTAL
+ *   subtotal / (1 - taxa de falhas)                              = CUSTO REAL
+ *   custo real / (1 - margem de revenda)   -> arredonda p/ cima  = REVENDA
+ *   revenda / (1 - margem do revendedor)   -> arredonda p/ cima  = CLIENTE
  *
- * Toda a aritmetica corre em micro-euros inteiros (App\Support\Micros): as
- * parcelas intermedias — 0,765 EUR de filamento, 0,06325 EUR de reserva — nao
- * cabem num centimo, e arredonda-las desviava o preco final.
+ * Duas coisas nesta formula sao contra-intuitivas e valem os dois paragrafos
+ * que se seguem, porque ja aqui esteve a versao ingenua de ambas:
  *
- * A MARGEM e um multiplicador so, aplicado ao custo real. Ja aqui houve uma
- * tabela progressiva por faixa de custo; saiu porque fazia o preco saltar ao
- * atravessar um limiar (dois centimos de custo a mais podiam BAIXAR o preco) e
- * porque, somada a um custo de maquina alto, dava precos que nao competiam.
+ * 1. A TAXA DE FALHAS DIVIDE, NAO SOMA. Somar 5% (custo x 1,05) recupera menos
+ *    do que se perdeu: a peca que falhou tambem gastou filamento, luz e horas
+ *    de maquina, e o que se perde nela tem de ser recuperado nas que saem
+ *    boas. Com 100 pecas e 5 falhadas, sao 95 a pagar o custo de 100 — logo
+ *    /0,95, e nao x1,05. A diferenca no caso de referencia sao 5 milesimos de
+ *    euro por peca, que a 500 pecas por ano deixa de ser arredondamento.
  *
- * Os parametros vem do PricingSettings (config/pricing.php + tabela settings);
- * o custo/hora vem do perfil de impressora e entra por argumento.
+ * 2. AS MARGENS SAO DECLARADAS, NAO DERIVADAS. Aqui viveram dois
+ *    multiplicadores (1,70x, 1,75x) e ninguem sabia que margem e que davam —
+ *    1,70x sobre o custo sao 41,2% de margem sobre a venda, o que so se
+ *    descobre fazendo a conta ao contrario. Pedir a margem e dividir por
+ *    (1 - margem) diz exatamente o que se queria dizer.
+ *
+ * O que NAO e configuravel, e vive aqui: o degrau de 0,50 EUR do preco de
+ * revenda e as tres faixas de arredondamento do preco ao cliente. Sao regras
+ * comerciais fixas — ninguem anuncia uma peca a 63,40 EUR.
+ *
+ * Os dois arredondamentos sao SEMPRE para cima. Ja foram ao mais proximo, e
+ * arredondar para baixo comia a margem que se acabou de pedir — a ponto de ter
+ * sido preciso uma rede de seguranca (um multiplicador minimo do revendedor)
+ * para a apanhar. Com o `ceil` a rede deixou de ter o que apanhar e saiu.
  */
 class PricingCalculator
 {
-    /**
-     * Degrau do preco de revenda: 0,50 EUR, sempre para CIMA. Regra comercial
-     * fixa, nao definicao — a lista de precos e 1,50 / 2,00 / 2,50 e por ai
-     * fora, e um 3,30 EUR no meio nao pertence a lista nenhuma.
-     */
-    private const RESALE_STEP = 500_000;
+    /** Degrau do preco de revenda: 0,50 EUR. */
+    private const WHOLESALE_STEP = 500_000;
 
-    /** Degraus do arredondamento do preco ao cliente, por faixa. */
     private const RETAIL_STEP_UNDER_20 = 500_000;
 
     private const RETAIL_STEP_UNDER_50 = 1_000_000;
@@ -50,106 +60,163 @@ class PricingCalculator
 
     public function calculate(PricingInput $input): PricingResult
     {
-        // Exato por construcao: um centimo sao 10.000 micros e um kg sao 1000 g,
-        // por isso o /1000 do preco por kg dissolve-se na constante (10000/1000
-        // = 10) e este passo — o mais sensivel de todos — nao tem divisao
-        // nenhuma. E daqui que sai o 0,765 EUR do caso de referencia.
+        $divisor = $input->costDivisor();
+        $quantity = max(1, $input->quantity);
+
+        /*
+         * Parcelas ao nivel do TRABALHO: em modo lote descrevem a mesa toda.
+         *
+         * Cada uma faz UMA divisao, no fim. A ordem nao e estilo: dividir a
+         * tarifa por 1000 antes de multiplicar, ou calcular um EUR/h de
+         * depreciacao intermedio, da o mesmo resultado nos numeros redondos do
+         * caso de referencia e erra em qualquer outro — 400 EUR / 3000 h sao
+         * 133_333,33 micros/h, e o terco perdido reaparece multiplicado pelas
+         * horas da peca.
+         */
+
+        // Sem divisao nenhuma: um centimo sao 10.000 micros e um kg sao 1000 g,
+        // logo o /1000 do preco por kg dissolve-se na constante (10000/1000).
         $filament = $input->weightGrams * $input->pricePerKgCents * 10;
 
-        $machine = Micros::divRound(
-            $input->minutes * $input->hourlyRateCents * Micros::PER_CENT,
+        // Minutos a W watts sao (minutos/60) x (W/1000) kWh. As duas divisoes
+        // fundem-se no 60_000.
+        $electricity = Micros::divRound(
+            $input->minutes * $input->printerPowerWatts * $this->settings->electricityPriceMicrosPerKwh(),
+            60_000,
+        );
+
+        // A maquina paga-se a si propria nas pecas que faz. Guarda contra a
+        // vida util a zero: a validacao do formulario poe min:1, mas uma
+        // definicao escrita a mao por fora nao passa por validacao nenhuma.
+        $depreciation = $input->printerLifetimeHours <= 0
+            ? 0
+            : Micros::divRound(
+                $input->minutes * $input->printerPurchasePriceCents * Micros::PER_CENT,
+                $input->printerLifetimeHours * 60,
+            );
+
+        $maintenance = Micros::divRound(
+            $input->minutes * $input->printerMaintenanceMicrosPerHour,
             60,
         );
 
-        $handling = $this->handling($input);
-
-        // A reserva de falha aplica-se so sobre filamento + maquina. Os custos
-        // extra ficam DE FORA de proposito: um ima ou uma caixa entram depois
-        // da impressao, e uma impressao falhada nao os consome.
-        $reserve = Micros::applyBp($filament + $machine, $this->settings->failureReserveBp());
-
-        $extra = Micros::fromCents($input->extraCostCents);
-
-        $jobCost = $filament + $machine + $handling + $reserve + $extra;
-
-        $divisor = $input->costDivisor();
-        $unitCost = Micros::divRound($jobCost, $divisor);
-
-        $multiplierBp = $this->settings->resaleMultiplierBp();
-
-        $rawResale = max(
-            Micros::applyBp($unitCost, $multiplierBp),
-            Micros::fromCents($this->settings->minimumResalePriceCents()),
+        $laborMinutes = $this->laborMinutes($input, $quantity);
+        $labor = Micros::divRound(
+            $laborMinutes * $this->settings->laborRateMicrosPerHour(),
+            60,
         );
 
-        $resale = Micros::ceilTo($rawResale, self::RESALE_STEP);
+        /*
+         * Parcelas ja POR UNIDADE. A embalagem e os componentes nao se dividem
+         * pela mesa: doze pecas levam doze sacos e doze imanes.
+         */
+        $packaging = Micros::fromCents($input->packagingCostCents);
+        $components = Micros::fromCents($input->componentsCostCents);
 
-        $rawRetail = Micros::applyBp($resale, $this->settings->retailMultiplierBp());
-        $retail = Micros::roundHalfUpTo($rawRetail, self::retailStep($rawRetail));
+        $unitFilament = Micros::divRound($filament, $divisor);
+        $unitElectricity = Micros::divRound($electricity, $divisor);
+        $unitDepreciation = Micros::divRound($depreciation, $divisor);
+        $unitMaintenance = Micros::divRound($maintenance, $divisor);
+        $unitLabor = Micros::divRound($labor, $divisor);
 
-        // Protecao da margem do revendedor: o arredondamento comercial tanto
-        // sobe como desce, e uma descida pode deixar quem revende abaixo do
-        // markup minimo. Nesse caso sobe-se ao proximo preco valido — nunca se
-        // baixa o preco de revenda para compensar.
-        $minimumRetail = Micros::applyBp($resale, $this->settings->minimumRetailMultiplierBp());
-        $bumped = $retail < $minimumRetail;
+        // O subtotal soma as parcelas JA DIVIDIDAS, e nao o total do trabalho a
+        // dividir no fim. Sao quase a mesma coisa — diferem em micros — mas so
+        // esta versao fecha a conta que o painel detalhado mostra linha a
+        // linha. Um subtotal que nao bate certo com as parcelas por cima dele
+        // faz duvidar do resto.
+        $base = $unitFilament
+            + $unitElectricity
+            + $unitDepreciation
+            + $unitMaintenance
+            + $unitLabor
+            + $packaging
+            + $components;
 
-        if ($bumped) {
-            $retail = self::nextCommercialPrice($minimumRetail);
-        }
+        $failureRateBp = $this->failureRateBp();
+        $production = Micros::divRound($base * Rate::PER_UNIT, Rate::PER_UNIT - $failureRateBp);
+
+        $wholesaleMarginBp = $this->marginBp($this->settings->targetWholesaleMarginBp());
+        $rawWholesale = max(
+            Micros::divRound($production * Rate::PER_UNIT, Rate::PER_UNIT - $wholesaleMarginBp),
+            // O chao aplica-se ANTES do arredondamento e ao custo da UNIDADE:
+            // e ele que protege as pecas pequenas, nao a margem.
+            Micros::fromCents($this->settings->minimumWholesalePriceCents()),
+        );
+        $wholesale = Micros::ceilTo($rawWholesale, self::WHOLESALE_STEP);
+
+        // O preco ao cliente sai do preco de REVENDA, e nao do meu custo: e o
+        // que garante que quem me compra para revender consegue mesmo viver da
+        // diferenca. Vender eu proprio ao mesmo preco e uma escolha — nao ha
+        // dois precos publicos para a mesma peca.
+        $resellerMarginBp = $this->marginBp($this->settings->targetResellerMarginBp());
+        $rawRetail = Micros::divRound($wholesale * Rate::PER_UNIT, Rate::PER_UNIT - $resellerMarginBp);
+        $retail = Micros::ceilTo($rawRetail, self::retailStep($rawRetail));
+
+        // Comissoes do canal: fora do custo industrial de proposito (nao custam
+        // nada produzir), so no lucro liquido.
+        $channelFee = Micros::fromCents($this->settings->salesChannelFixedFeeCents())
+            + Micros::applyBp($retail, $this->settings->salesChannelPercentageFeeBp());
 
         return new PricingResult(
             mode: $input->mode,
-            quantity: max(1, $input->quantity),
-            filamentCostMicros: Micros::divRound($filament, $divisor),
-            machineCostMicros: Micros::divRound($machine, $divisor),
-            handlingCostMicros: Micros::divRound($handling, $divisor),
-            failureReserveMicros: Micros::divRound($reserve, $divisor),
-            extraCostMicros: Micros::divRound($extra, $divisor),
-            productionCostMicros: $unitCost,
-            resaleMultiplierBp: $multiplierBp,
-            rawResalePriceMicros: $rawResale,
-            resalePriceMicros: $resale,
+            quantity: $quantity,
+            laborMinutes: $laborMinutes,
+            filamentCostMicros: $unitFilament,
+            electricityCostMicros: $unitElectricity,
+            depreciationCostMicros: $unitDepreciation,
+            maintenanceCostMicros: $unitMaintenance,
+            laborCostMicros: $unitLabor,
+            packagingCostMicros: $packaging,
+            componentsCostMicros: $components,
+            baseProductionCostMicros: $base,
+            productionCostMicros: $production,
+            rawWholesalePriceMicros: $rawWholesale,
+            wholesalePriceMicros: $wholesale,
             rawRetailPriceMicros: $rawRetail,
-            minimumRetailPriceMicros: $minimumRetail,
             retailPriceMicros: $retail,
-            retailBumped: $bumped,
+            channelFeeMicros: $channelFee,
+            failureRateBp: $failureRateBp,
+            targetWholesaleMarginBp: $wholesaleMarginBp,
+            targetResellerMarginBp: $resellerMarginBp,
         );
     }
 
     /**
-     * Manuseamento: o trabalho que existe independentemente das horas da
-     * maquina — preparar o ficheiro, tirar a peca da mesa, verificar, limpar,
-     * separar suportes, embalar.
+     * Os minutos de trabalho humano do TRABALHO todo.
      *
-     * Fora de lote e um custo FIXO, e nao uma tabela por peso. O que cresce com
-     * o tamanho da peca e o tempo de impressao, que ja se cobra a parte —
-     * cobrar tambem manuseamento a subir era pagar duas vezes pela mesma coisa.
-     *
-     * Em lote nao se usa esse custo fixo: o trabalho decompoe-se no que se faz
-     * UMA vez (montar a mesa, tirar a placa) e no que se faz a CADA peca
-     * (rebarbar, ensacar) — uma diluicao que um valor por peca nao exprime.
-     *
-     * Consequencia assumida: um lote de uma peca paga mais do que a mesma peca
-     * em modo unitario. Esta certo — um lote de um ainda paga uma montagem.
+     * Em lote o trabalho decompoe-se no que se faz UMA vez (montar a mesa,
+     * lancar, tirar a placa) e no que se faz a CADA peca (rebarbar, limpar,
+     * ensacar). E dai que vem a economia real de imprimir doze de uma vez: a
+     * preparacao dilui-se, o acabamento nao.
      */
-    private function handling(PricingInput $input): int
+    private function laborMinutes(PricingInput $input, int $quantity): int
     {
-        if ($input->isBatch()) {
-            return Micros::fromCents(
-                $this->settings->batchJobHandlingCents()
-                + $this->settings->batchUnitHandlingCents() * max(1, $input->quantity),
-            );
-        }
+        $active = $input->activeLaborMinutes ?? $this->settings->activeLaborMinutes();
 
-        return Micros::fromCents($this->settings->handlingCostCents());
+        return $input->isBatch()
+            ? $this->settings->setupLaborMinutes() + $active * $quantity
+            : $active;
     }
 
     /**
-     * Degrau do preco ao cliente, pela faixa em que o valor CRU cai. Abaixo de
-     * 20 EUR le-se em meias-unidades (6,50), ate 50 EUR no euro redondo, e daí
-     * para cima aos 5 EUR — ninguem anuncia uma peca a 63 EUR.
+     * A taxa de falhas, garantidamente dentro do dominio.
+     *
+     * A 100% o custo dividia-se por zero. O formulario ja poe um tecto de 50%,
+     * mas uma chave `pricing.*` escrita a mao na tabela `settings` nao passa
+     * por validacao nenhuma — e um erro de digitacao nao pode derrubar o
+     * backoffice inteiro.
      */
+    private function failureRateBp(): int
+    {
+        return max(0, min($this->settings->failureRateBp(), Rate::PER_UNIT - 1));
+    }
+
+    /** Mesma guarda, pelo mesmo motivo: preco = custo / (1 - margem). */
+    private function marginBp(int $bp): int
+    {
+        return max(0, min($bp, Rate::PER_UNIT - 1));
+    }
+
     private static function retailStep(int $micros): int
     {
         return match (true) {
@@ -157,31 +224,5 @@ class PricingCalculator
             $micros <= 50 * Micros::PER_EURO => self::RETAIL_STEP_UNDER_50,
             default => self::RETAIL_STEP_ABOVE_50,
         };
-    }
-
-    /**
-     * O menor preco comercialmente valido >= $floor.
-     *
-     * "Valido" = multiplo do degrau DA SUA PROPRIA faixa. Arredondar para cima
-     * dentro de uma faixa pode atirar o valor para a seguinte (19,80 -> 20,00),
-     * por isso testam-se as faixas por ordem e ganha a primeira onde o
-     * candidato ainda cabe. Nao ha ciclo: as faixas sao crescentes e a ultima
-     * nao tem tecto, portanto o terceiro candidato e sempre resposta.
-     */
-    private static function nextCommercialPrice(int $floor): int
-    {
-        $half = Micros::ceilTo($floor, self::RETAIL_STEP_UNDER_20);
-
-        if ($half < 20 * Micros::PER_EURO) {
-            return $half;
-        }
-
-        $euro = Micros::ceilTo($floor, self::RETAIL_STEP_UNDER_50);
-
-        if ($euro <= 50 * Micros::PER_EURO) {
-            return $euro;
-        }
-
-        return Micros::ceilTo($floor, self::RETAIL_STEP_ABOVE_50);
     }
 }

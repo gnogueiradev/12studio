@@ -51,21 +51,6 @@ class MicrosTest extends TestCase
     }
 
     /**
-     * O arredondamento comercial do preco ao cliente tanto sobe como desce, e o
-     * caso de referencia cai EM CIMA da fronteira: 6,125 EUR e exatamente um
-     * quarto de degrau acima de 6,00 — arredonda para baixo. Um valor a meio
-     * degrau (6,25) sobe.
-     */
-    public function test_round_half_up_to_lands_on_the_nearest_step_with_the_middle_going_up(): void
-    {
-        $this->assertSame(6_000_000, Micros::roundHalfUpTo(6_125_000, 500_000));
-        $this->assertSame(6_500_000, Micros::roundHalfUpTo(6_250_000, 500_000));
-        $this->assertSame(6_500_000, Micros::roundHalfUpTo(6_400_000, 500_000));
-        $this->assertSame(25_000_000, Micros::roundHalfUpTo(24_500_000, 1_000_000));
-        $this->assertSame(65_000_000, Micros::roundHalfUpTo(62_500_000, 5_000_000));
-    }
-
-    /**
      * As taxas vivem em pontos base para caber um 7,5% sem mudar de tipo.
      * 10000 bp = 100%, por isso aplicar 10000 nao pode mexer no valor.
      */
@@ -86,5 +71,34 @@ class MicrosTest extends TestCase
     {
         $this->assertSame(10, Micros::PER_CENT / 1000);
         $this->assertSame(544_000, 32 * 1700 * 10);
+    }
+
+    /**
+     * A tarifa da eletricidade e a manutencao a hora nao cabem num centimo:
+     * 0,1420 EUR/kWh guardado em centimos era 14, e o custo de energia saia 4%
+     * ao lado. O admin escreve com virgula ou com ponto, como no resto do
+     * backoffice.
+     */
+    public function test_a_sub_cent_amount_survives_the_round_trip(): void
+    {
+        $this->assertSame(142_000, Micros::fromDecimal('0,1420'));
+        $this->assertSame(142_000, Micros::fromDecimal('0.142'));
+        $this->assertSame(40_000, Micros::fromDecimal('0,04'));
+        $this->assertSame(8_000_000, Micros::fromDecimal('8'));
+
+        $this->assertSame('0.1420', Micros::toDecimal(142_000));
+        $this->assertSame('0.0400', Micros::toDecimal(40_000));
+        $this->assertSame('8.00', Micros::toDecimal(8_000_000, 2));
+    }
+
+    /**
+     * O que o centimo perdia: 0,1420 EUR/kWh e 0,0400 EUR/h nao sao multiplos
+     * de PER_CENT, e e exatamente por isso que estes dois parametros vivem em
+     * micros e nao ao lado do resto do dinheiro.
+     */
+    public function test_the_electricity_tariff_is_not_a_whole_number_of_cents(): void
+    {
+        $this->assertNotSame(0, Micros::fromDecimal('0,1420') % Micros::PER_CENT);
+        $this->assertNotSame(0, Micros::fromDecimal('0,0425') % Micros::PER_CENT);
     }
 }
