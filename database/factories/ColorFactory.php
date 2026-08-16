@@ -3,6 +3,7 @@
 namespace Database\Factories;
 
 use App\Models\Color;
+use App\Models\Material;
 use Illuminate\Database\Eloquent\Factories\Factory;
 
 /**
@@ -34,5 +35,24 @@ class ColorFactory extends Factory
     public function archived(): static
     {
         return $this->state(fn (array $attributes): array => ['is_active' => false]);
+    }
+
+    /**
+     * A cor existe nestes filamentos.
+     *
+     * Explicito de proposito. Ligar a todos os materiais por omissao dava
+     * testes verdes que nao provavam nada: a matriz de variantes so filtra o
+     * que o catalogo exclui, e uma factory que nunca exclui nada escondia
+     * precisamente o comportamento em teste.
+     *
+     * @param  Material|iterable<int, Material>  $materials
+     */
+    public function withMaterials(Material|iterable $materials): static
+    {
+        $ids = collect($materials instanceof Material ? [$materials] : $materials)
+            ->map(fn (Material $material): int => $material->id)
+            ->all();
+
+        return $this->afterCreating(fn (Color $color) => $color->materials()->sync($ids));
     }
 }

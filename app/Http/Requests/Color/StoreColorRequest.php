@@ -5,6 +5,7 @@ namespace App\Http\Requests\Color;
 use App\Models\Color;
 use Closure;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Validation\Rule;
 
 class StoreColorRequest extends FormRequest
 {
@@ -38,7 +39,35 @@ class StoreColorRequest extends FormRequest
             // 6 digitos, ou 8 quando a cor tem alfa (a coluna aceita 9 chars).
             'hex_color' => ['required', 'string', 'regex:/^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/'],
             'sort_order' => ['integer', 'min:0', 'max:65535'],
+            // Em que filamentos e que esta cor existe. Opcional de proposito:
+            // uma cor por declarar e um estado legitimo — vive com a pastilha
+            // "sem material" ate o dono saber o que tem. O que ela nao faz e
+            // gerar variantes (ver ColorMaterialMatrix).
+            'material_ids' => ['array'],
+            'material_ids.*' => ['integer', Rule::exists('materials', 'id')],
         ];
+    }
+
+    /**
+     * Os materiais submetidos, ou null quando o campo nem veio no pedido.
+     *
+     * A distincao nao e cosmetica: lista vazia e "nao tenho isto em filamento
+     * nenhum, sincroniza", ausencia e "este formulario nao fala de materiais,
+     * nao lhes toques". Sem ela, qualquer gravacao parcial de uma cor apagava
+     * o catalogo dela em silencio.
+     *
+     * @return array<int, int>|null
+     */
+    public function materialIds(): ?array
+    {
+        if (! $this->has('material_ids')) {
+            return null;
+        }
+
+        /** @var array<int, mixed> $ids */
+        $ids = $this->validated('material_ids') ?? [];
+
+        return array_values(array_map(intval(...), $ids));
     }
 
     /**

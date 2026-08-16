@@ -87,6 +87,27 @@ class ProductCrudTest extends TestCase
                 ->where('products.data.0.name', 'Vaso Espiral'));
     }
 
+    /**
+     * A matriz do modal esbate as cores impossiveis no cliente, e para isso
+     * precisa de saber, por cor, em que filamentos ela existe. Sem isto o
+     * seletor deixava escolher e so o servidor recusava.
+     */
+    public function test_the_page_tells_each_colour_which_filaments_it_has(): void
+    {
+        Material::factory()->create(['name' => 'PLA Silk']);
+        Color::factory()->withMaterials($this->material)->create(['name' => 'Rosa']);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.produtos.index'))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('colors.0.name', 'Rosa')
+                // Os dois filamentos viajam, mas o rosa so declara um deles —
+                // e e essa diferenca que esbate o silk no seletor.
+                ->has('materials', 2)
+                ->where('colors.0.materialIds', [$this->material->id]));
+    }
+
     public function test_store_creates_product_with_ascii_slug(): void
     {
         $category = Category::query()->create(['name' => 'Decoração', 'slug' => 'decoracao']);
@@ -109,8 +130,8 @@ class ProductCrudTest extends TestCase
 
     public function test_store_generates_a_variant_per_colour_material_and_size(): void
     {
-        $colors = Color::factory()->count(3)->create();
         $petg = Material::factory()->create();
+        $colors = Color::factory()->count(3)->withMaterials([$this->material, $petg])->create();
 
         $this->actingAs($this->admin)
             ->post(route('admin.produtos.store'), [
@@ -152,7 +173,7 @@ class ProductCrudTest extends TestCase
      */
     public function test_the_generated_variants_carry_the_material(): void
     {
-        $color = Color::factory()->create();
+        $color = Color::factory()->withMaterials($this->material)->create();
 
         $this->actingAs($this->admin)
             ->post(route('admin.produtos.store'), [
@@ -176,7 +197,7 @@ class ProductCrudTest extends TestCase
      */
     public function test_a_matrix_without_materials_creates_no_variants(): void
     {
-        $color = Color::factory()->create();
+        $color = Color::factory()->withMaterials($this->material)->create();
 
         $this->actingAs($this->admin)
             ->post(route('admin.produtos.store'), [
@@ -208,11 +229,123 @@ class ProductCrudTest extends TestCase
         $this->assertDatabaseCount('variants', 0);
     }
 
+    /**
+     * O par que o dono nao tem nao chega a nascer.
+     *
+     * Ha rosa em PLA e nao ha rosa em Silk. Escolher as duas cores e os dois
+     * filamentos nao e um erro — e escolher EIXOS. O que sai e a interseccao:
+     * tres variantes, e nao as quatro do cruzamento cego que isto era.
+     */
+    public function test_the_matrix_skips_a_pair_the_owner_does_not_have(): void
+    {
+        $silk = Material::factory()->create(['name' => 'PLA Silk']);
+        $rosa = Color::factory()->withMaterials($this->material)->create(['name' => 'Rosa']);
+        $preto = Color::factory()->withMaterials([$this->material, $silk])->create(['name' => 'Preto']);
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.produtos.store'), [
+                ...$this->validPayload(),
+                'name' => 'Vaso ondulado',
+                'variants' => $this->matrix([
+                    'color_ids' => [$rosa->id, $preto->id],
+                    'material_ids' => [$this->material->id, $silk->id],
+                ]),
+            ])
+            ->assertSessionHasNoErrors();
+
+        $product = Product::query()->where('slug', 'vaso-ondulado')->sole();
+
+        $this->assertSame(3, $product->variants()->count());
+        $this->assertDatabaseMissing('variants', [
+            'color_id' => $rosa->id,
+            'material_id' => $silk->id,
+        ]);
+    }
+
+    /**
+     * A numeracao nao guarda o lugar do par que caiu.
+     *
+     * O VariantSku::series() le a contagem UMA vez e numera dai em diante, por
+     * isso tem de receber a matriz ja filtrada. Pedi-la sobre a matriz por
+     * filtrar dava tres variantes com as referencias 1, 2 e 4 — um buraco no
+     * catalogo que ninguem sabia explicar.
+     */
+    public function test_the_references_stay_contiguous_after_the_filter(): void
+    {
+        $silk = Material::factory()->create(['name' => 'PLA Silk']);
+        $rosa = Color::factory()->withMaterials($this->material)->create(['name' => 'Rosa']);
+        $preto = Color::factory()->withMaterials([$this->material, $silk])->create(['name' => 'Preto']);
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.produtos.store'), [
+                ...$this->validPayload(),
+                'name' => 'Vaso ondulado',
+                'variants' => $this->matrix([
+                    'color_ids' => [$rosa->id, $preto->id],
+                    'material_ids' => [$this->material->id, $silk->id],
+                ]),
+            ]);
+
+        $product = Product::query()->where('slug', 'vaso-ondulado')->sole();
+
+        $this->assertSame(
+            ['VASO-ONDULADO-1', 'VASO-ONDULADO-2', 'VASO-ONDULADO-3'],
+            $product->variants()->orderBy('id')->pluck('sku')->all(),
+        );
+    }
+
+    /**
+     * Quando NENHUM par sobrevive, a submissao e recusada em vez de gravar um
+     * produto com a matriz vazia — que se gravava em silencio, e ninguem
+     * percebia onde e que tinha perdido as variantes.
+     */
+    public function test_a_matrix_with_no_possible_pair_is_rejected(): void
+    {
+        $silk = Material::factory()->create(['name' => 'PLA Silk']);
+        $rosa = Color::factory()->withMaterials($this->material)->create(['name' => 'Rosa']);
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.produtos.store'), [
+                ...$this->validPayload(),
+                'name' => 'Vaso ondulado',
+                'variants' => $this->matrix([
+                    'color_ids' => [$rosa->id],
+                    'material_ids' => [$silk->id],
+                ]),
+            ])
+            ->assertSessionHasErrors('variants.color_ids');
+
+        $this->assertDatabaseCount('variants', 0);
+        $this->assertDatabaseMissing('products', ['slug' => 'vaso-ondulado']);
+    }
+
+    /**
+     * Uma cor por declarar nao gera nada — nao se sabe em que filamento a
+     * imprimir —, e a recusa diz isso em vez de deixar gravar um produto oco.
+     */
+    public function test_a_colour_with_no_declared_filament_generates_nothing(): void
+    {
+        $porDeclarar = Color::factory()->create(['name' => 'Rosa']);
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.produtos.store'), [
+                ...$this->validPayload(),
+                'name' => 'Vaso ondulado',
+                'variants' => $this->matrix([
+                    'color_ids' => [$porDeclarar->id],
+                    'material_ids' => [$this->material->id],
+                ]),
+            ])
+            ->assertSessionHasErrors('variants.color_ids');
+
+        $this->assertDatabaseCount('variants', 0);
+    }
+
     /** Sem tamanhos, o produto cartesiano degenera num par cor x material. */
     public function test_a_matrix_without_sizes_generates_one_variant_per_pair(): void
     {
-        $colors = Color::factory()->count(2)->create();
         $petg = Material::factory()->create();
+        $colors = Color::factory()->count(2)->withMaterials([$this->material, $petg])->create();
 
         $this->actingAs($this->admin)
             ->post(route('admin.produtos.store'), [
@@ -232,7 +365,7 @@ class ProductCrudTest extends TestCase
 
     public function test_the_matrix_prices_accept_a_decimal_comma(): void
     {
-        $color = Color::factory()->create();
+        $color = Color::factory()->withMaterials($this->material)->create();
 
         $this->actingAs($this->admin)
             ->post(route('admin.produtos.store'), [
@@ -265,7 +398,7 @@ class ProductCrudTest extends TestCase
      */
     public function test_a_matrix_with_a_sale_price_swaps_the_two_columns(): void
     {
-        $colors = Color::factory()->count(2)->create();
+        $colors = Color::factory()->count(2)->withMaterials($this->material)->create();
 
         $this->actingAs($this->admin)
             ->post(route('admin.produtos.store'), [
@@ -290,7 +423,7 @@ class ProductCrudTest extends TestCase
     /** Sem promocao nao ha nada para riscar na montra. */
     public function test_a_matrix_without_a_sale_price_leaves_nothing_struck_through(): void
     {
-        $color = Color::factory()->create();
+        $color = Color::factory()->withMaterials($this->material)->create();
 
         $this->actingAs($this->admin)
             ->post(route('admin.produtos.store'), [
@@ -311,7 +444,7 @@ class ProductCrudTest extends TestCase
 
     public function test_store_numbers_the_generated_references_in_sequence(): void
     {
-        $colors = Color::factory()->count(2)->create();
+        $colors = Color::factory()->count(2)->withMaterials($this->material)->create();
 
         $this->actingAs($this->admin)
             ->post(route('admin.produtos.store'), [
@@ -336,7 +469,7 @@ class ProductCrudTest extends TestCase
 
     public function test_the_first_generated_variant_is_the_default_one(): void
     {
-        $colors = Color::factory()->count(3)->create();
+        $colors = Color::factory()->count(3)->withMaterials($this->material)->create();
 
         $this->actingAs($this->admin)
             ->post(route('admin.produtos.store'), [
@@ -375,7 +508,7 @@ class ProductCrudTest extends TestCase
 
     public function test_a_matrix_without_a_price_is_rejected(): void
     {
-        $color = Color::factory()->create();
+        $color = Color::factory()->withMaterials($this->material)->create();
 
         $this->actingAs($this->admin)
             ->post(route('admin.produtos.store'), [
@@ -399,7 +532,7 @@ class ProductCrudTest extends TestCase
      */
     public function test_a_matrix_without_a_wholesale_price_is_rejected(): void
     {
-        $color = Color::factory()->create();
+        $color = Color::factory()->withMaterials($this->material)->create();
 
         $this->actingAs($this->admin)
             ->post(route('admin.produtos.store'), [
@@ -423,7 +556,7 @@ class ProductCrudTest extends TestCase
      */
     public function test_a_matrix_sale_price_above_the_normal_one_is_rejected(): void
     {
-        $color = Color::factory()->create();
+        $color = Color::factory()->withMaterials($this->material)->create();
 
         $this->actingAs($this->admin)
             ->post(route('admin.produtos.store'), [
@@ -442,7 +575,7 @@ class ProductCrudTest extends TestCase
     /** Acima do que o cliente final paga nao e revenda. */
     public function test_a_matrix_wholesale_price_above_the_sale_price_is_rejected(): void
     {
-        $color = Color::factory()->create();
+        $color = Color::factory()->withMaterials($this->material)->create();
 
         $this->actingAs($this->admin)
             ->post(route('admin.produtos.store'), [
@@ -463,7 +596,7 @@ class ProductCrudTest extends TestCase
     public function test_update_ignores_a_matrix_smuggled_into_the_payload(): void
     {
         $product = Product::factory()->create();
-        $color = Color::factory()->create();
+        $color = Color::factory()->withMaterials($this->material)->create();
 
         $this->actingAs($this->admin)->patch(route('admin.produtos.update', $product), [
             ...$this->validPayload(),

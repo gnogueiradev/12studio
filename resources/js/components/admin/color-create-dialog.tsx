@@ -1,5 +1,6 @@
 import { useForm } from '@inertiajs/react';
 import { ColorPicker } from '@/components/admin/color-picker';
+import { ToggleChip } from '@/components/admin/toggle-chip';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import {
@@ -15,7 +16,12 @@ import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { isPlainHex } from '@/lib/color';
 import { store, update } from '@/routes/admin/cores';
-import type { ColorFormData, ColorRow, PaletteColor } from '@/types/catalog';
+import type {
+    ColorFormData,
+    ColorRow,
+    MaterialOption,
+    PaletteColor,
+} from '@/types/catalog';
 
 type Props = {
     open: boolean;
@@ -23,13 +29,16 @@ type Props = {
     /** Null cria; uma cor edita. */
     editing: ColorRow | null;
     palette: PaletteColor[];
+    materials: MaterialOption[];
 };
 
 /**
- * Criar e editar uma cor: um nome, um tom e a ordem em que aparece.
+ * Criar e editar uma cor: um nome, um tom, os filamentos em que existe e a
+ * ordem em que aparece.
  *
- * Não há materiais aqui, e é essa a questão — uma cor imprime-se em qualquer
- * bobine. O cruzamento acontece na variante, ao criar um produto.
+ * Os filamentos estão aqui e não no produto porque a limitação é do stock de
+ * bobines, não da peça: se não há rosa silk, não há para peça nenhuma, e
+ * repetir isso em cada produto era esperar que os cem se lembrassem do mesmo.
  *
  * Não há efeito nenhum a sincronizar o formulário com o `editing`: quem monta
  * este componente dá-lhe uma `key` que muda com o alvo, e o remonte trata do
@@ -41,15 +50,30 @@ export function ColorCreateDialog({
     onOpenChange,
     editing,
     palette,
+    materials,
 }: Props) {
     const { data, setData, post, put, processing, errors, reset } =
         useForm<ColorFormData>({
             name: editing?.name ?? '',
             hex_color: editing?.hex ?? '',
             sort_order: editing?.sortOrder ?? 0,
+            material_ids:
+                editing?.materials.map((material) => material.id) ?? [],
         });
 
+    // Os filamentos não entram aqui: uma cor por declarar é um estado legítimo,
+    // e obrigar a escolher um agora era impedir de apontar a cor antes de saber
+    // em que bobines ela vai existir. O aviso da listagem é que faz a cobrança.
     const canSave = data.name.trim() !== '' && isPlainHex(data.hex_color);
+
+    const toggleMaterial = (id: number) => {
+        setData(
+            'material_ids',
+            data.material_ids.includes(id)
+                ? data.material_ids.filter((current) => current !== id)
+                : [...data.material_ids, id],
+        );
+    };
 
     /**
      * Escolher o tom pode também dar o nome, mas só quando o tom sai exatamente
@@ -97,8 +121,8 @@ export function ColorCreateDialog({
                         {editing ? 'Editar cor' : 'Nova cor'}
                     </DialogTitle>
                     <DialogDescription>
-                        Uma cor é um nome e um tom. Imprime-se em qualquer
-                        material — o preço por quilo é da bobine.
+                        Uma cor é um nome, um tom e os filamentos em que a tens.
+                        O preço por quilo é da bobine.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -127,6 +151,40 @@ export function ColorCreateDialog({
                             idPrefix="color"
                         />
                         <InputError message={errors.hex_color} />
+                    </div>
+
+                    <div className="grid gap-2">
+                        <Label>Tenho esta cor em</Label>
+                        {materials.length === 0 ? (
+                            <p className="text-sm text-muted-foreground">
+                                Ainda não há filamentos no catálogo. Cria-os em
+                                Materiais.
+                            </p>
+                        ) : (
+                            <>
+                                <div className="flex flex-wrap gap-2">
+                                    {materials.map((material) => (
+                                        <ToggleChip
+                                            key={material.id}
+                                            active={data.material_ids.includes(
+                                                material.id,
+                                            )}
+                                            onClick={() =>
+                                                toggleMaterial(material.id)
+                                            }
+                                        >
+                                            {material.name}
+                                        </ToggleChip>
+                                    ))}
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                    {data.material_ids.length === 0
+                                        ? 'Enquanto não escolheres nenhum, esta cor não gera variantes de produto.'
+                                        : 'Desmarcar um filamento esconde da loja as variantes que o usavam — nunca as apaga.'}
+                                </p>
+                            </>
+                        )}
+                        <InputError message={errors.material_ids} />
                     </div>
 
                     <div className="grid w-32 gap-2 border-t border-border/60 pt-6">

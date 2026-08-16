@@ -73,6 +73,14 @@ export const TONES: Record<string, Tone> = {
      */
     low_stock: 'warning',
     /*
+     * colors.state (derivado) — reaproveita `active` e `archived` acima.
+     * `no_material` fica em warning pelo mesmo criterio do `low_stock`: e o
+     * unico estado de cor que pede uma accao concreta a quem esta deste lado
+     * (dizer em que filamentos a tem), e ate isso acontecer a cor nao gera
+     * variante nenhuma.
+     */
+    no_material: 'warning',
+    /*
      * categories.status — "oculta" fica em warning e nao em neutro porque e o
      * unico dos tres que engana: a categoria esta viva, mas ninguem a encontra
      * pelo menu. Arquivada partilha o neutro com o `archived` dos produtos, que

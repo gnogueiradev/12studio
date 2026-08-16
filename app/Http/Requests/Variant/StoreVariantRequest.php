@@ -2,6 +2,8 @@
 
 namespace App\Http\Requests\Variant;
 
+use App\Models\Color;
+use App\Models\Material;
 use App\Models\Variant;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
@@ -97,7 +99,60 @@ class StoreVariantRequest extends FormRequest
                     );
                 }
             },
+            $this->pairExists(...),
         ];
+    }
+
+    /**
+     * Esta cor existe neste filamento?
+     *
+     * Aqui o par e unico e explicito — alguem escolheu "rosa" e escolheu
+     * "silk" —, por isso e erro duro e nao filtro silencioso. E o contrario da
+     * matriz do modal, onde o dono escolhe EIXOS e recebe a interseccao: la,
+     * deixar cair um par e a funcionalidade; aqui era engolir a escolha.
+     *
+     * Uma cor sem filamentos declarados nao recusa nada. A mesma regra do
+     * ColorService::syncMaterials: nao ter declarado nao e ter declarado que
+     * nao existe, e enquanto o catalogo estiver por preencher ninguem pode
+     * ficar sem conseguir editar as variantes que ja tem.
+     */
+    private function pairExists(Validator $validator): void
+    {
+        $colorId = $this->integerOrNull('color_id');
+        $materialId = $this->integerOrNull('material_id');
+
+        if ($colorId === null || $materialId === null) {
+            return;
+        }
+
+        if ($validator->errors()->hasAny(['color_id', 'material_id'])) {
+            return;
+        }
+
+        $color = Color::query()->with('materials:id,name')->find($colorId);
+
+        if ($color === null || $color->materials->isEmpty()) {
+            return;
+        }
+
+        if ($color->materials->contains('id', $materialId)) {
+            return;
+        }
+
+        $material = Material::query()->find($materialId);
+        $has = $color->materials->pluck('name')->implode(', ');
+
+        $validator->errors()->add(
+            'material_id',
+            "Não tens {$color->name} em {$material?->name}. Só o tens em: {$has}.",
+        );
+    }
+
+    private function integerOrNull(string $field): ?int
+    {
+        $value = $this->input($field);
+
+        return ($value === null || $value === '') ? null : (int) $value;
     }
 
     /**

@@ -3,6 +3,7 @@
 namespace App\Http\Requests\Product;
 
 use App\Models\Product;
+use App\Support\ColorMaterialMatrix;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -171,7 +172,49 @@ class StoreProductRequest extends FormRequest
                     );
                 }
             },
+            $this->matrixHasSomethingToPrint(...),
         ];
+    }
+
+    /**
+     * A matriz tem de dar pelo menos uma peca imprimivel.
+     *
+     * So recusa quando NENHUM par sobrevive ao catalogo. Impossibilidade
+     * parcial nao e erro: escolher eixos e receber a interseccao e precisamente
+     * a funcionalidade — Rosa+Preto em PLA+Silk deve gerar tres variantes e
+     * dizer que a quarta ficou de fora, nao recusar o produto inteiro.
+     *
+     * Sem esta regra o produto gravava-se e a matriz saia vazia em silencio: um
+     * produto sem variante nenhuma, e ninguem a perceber onde e que as tinha
+     * perdido.
+     */
+    private function matrixHasSomethingToPrint(Validator $validator): void
+    {
+        /** @var array<int, int> $colorIds */
+        $colorIds = array_map(intval(...), (array) $this->input('variants.color_ids', []));
+        /** @var array<int, int> $materialIds */
+        $materialIds = array_map(intval(...), (array) $this->input('variants.material_ids', []));
+
+        // Sem eixos nao ha matriz — e um rascunho, nao um erro. Um eixo sozinho
+        // ja e recusado pelo `required_with` das regras.
+        if ($colorIds === [] || $materialIds === []) {
+            return;
+        }
+
+        // Ids inventados sao problema do Rule::exists; nao vale a pena somar-lhe
+        // uma segunda queixa sobre o catalogo.
+        if ($validator->errors()->hasAny(['variants.color_ids.*', 'variants.material_ids.*'])) {
+            return;
+        }
+
+        if (ColorMaterialMatrix::hasAny($colorIds, $materialIds, ColorMaterialMatrix::availableFor($colorIds))) {
+            return;
+        }
+
+        $validator->errors()->add(
+            'variants.color_ids',
+            'Nenhuma destas cores existe nos materiais que escolheste. Vê em que filamentos as tens, na paleta de cores.',
+        );
     }
 
     /**

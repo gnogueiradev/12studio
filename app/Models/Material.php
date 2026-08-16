@@ -6,6 +6,7 @@ use Database\Factories\MaterialFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Carbon;
 
@@ -90,5 +91,23 @@ class Material extends Model
     public function variants(): HasMany
     {
         return $this->hasMany(Variant::class);
+    }
+
+    /**
+     * As cores que existem nesta bobine.
+     *
+     * O outro lado da `Color::materials()`. Nao e o regresso da antiga relacao
+     * 1:N — la a cor PERTENCIA ao material e havia um "Preto" por cada
+     * filamento; aqui ha um "Preto" so, ligado as bobines em que existe.
+     *
+     * A declaracao faz-se do lado da cor, que e onde a pergunta nasce ("em que
+     * e que tenho rosa?"). Esta ponta serve a pergunta inversa: que cores e que
+     * este filamento me da.
+     *
+     * @return BelongsToMany<Color, $this>
+     */
+    public function colors(): BelongsToMany
+    {
+        return $this->belongsToMany(Color::class);
     }
 }

@@ -7,6 +7,18 @@ type Common = {
     colors: Color[];
     /** Rótulo do botão que devolve a escolha a "sem cor". Sem ele não aparece. */
     emptyLabel?: string;
+    /**
+     * Cores que não se podem escolher agora — não existem no filamento que já
+     * está escolhido. Ficam esbatidas e bloqueadas em vez de desaparecerem: o
+     * cliente do backoffice precisa de ver que a cor existe e que é o material
+     * que a exclui, senão fica a pensar que ela nunca se fez.
+     *
+     * Uma cor JÁ ESCOLHIDA nunca é bloqueada, mesmo que entre nesta lista —
+     * senão, mudar de material deixava-a presa na selecção sem forma de a tirar.
+     */
+    disabledIds?: number[];
+    /** Porquê, em linguagem de dono de loja. Vai no `title` do botão. */
+    disabledReason?: (id: number) => string;
 };
 
 type Props = Common &
@@ -35,7 +47,13 @@ type Props = Common &
  * Não é o `ColorPicker`: aqui não se inventa um tom, escolhe-se um que já
  * existe. Cor nova cria-se em /admin/cores, que é onde ela ganha nome.
  */
-export function ColorSwatchGrid({ colors, emptyLabel, ...props }: Props) {
+export function ColorSwatchGrid({
+    colors,
+    emptyLabel,
+    disabledIds,
+    disabledReason,
+    ...props
+}: Props) {
     if (colors.length === 0) {
         return (
             <p className="text-sm text-muted-foreground">
@@ -81,24 +99,36 @@ export function ColorSwatchGrid({ colors, emptyLabel, ...props }: Props) {
                 </button>
             )}
 
-            {colors.map((color) => (
-                <button
-                    key={color.id}
-                    type="button"
-                    onClick={() => toggle(color.id)}
-                    aria-pressed={chosen(color.id)}
-                    title={color.hex}
-                    className={cn(
-                        'flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors',
-                        chosen(color.id)
-                            ? 'border-ring bg-secondary'
-                            : 'border-border hover:border-ring',
-                    )}
-                >
-                    <ColorSwatch hex={color.hex} />
-                    {color.name}
-                </button>
-            ))}
+            {colors.map((color) => {
+                const blocked =
+                    !chosen(color.id) &&
+                    (disabledIds?.includes(color.id) ?? false);
+                const reason = blocked
+                    ? (disabledReason?.(color.id) ?? null)
+                    : null;
+
+                return (
+                    <button
+                        key={color.id}
+                        type="button"
+                        onClick={() => toggle(color.id)}
+                        disabled={blocked}
+                        aria-pressed={chosen(color.id)}
+                        title={reason ?? color.hex}
+                        className={cn(
+                            'flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors',
+                            blocked
+                                ? 'cursor-not-allowed border-dashed border-border text-muted-foreground opacity-50'
+                                : chosen(color.id)
+                                  ? 'border-ring bg-secondary'
+                                  : 'border-border hover:border-ring',
+                        )}
+                    >
+                        <ColorSwatch hex={color.hex} />
+                        {color.name}
+                    </button>
+                );
+            })}
         </div>
     );
 }

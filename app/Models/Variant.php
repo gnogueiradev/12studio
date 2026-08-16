@@ -26,6 +26,7 @@ use Illuminate\Support\Carbon;
  * @property int $low_stock_threshold
  * @property bool $is_default
  * @property bool $active
+ * @property bool $hidden_by_palette
  * @property int|null $filament_weight_grams
  * @property int|null $printing_time_minutes
  * @property int|null $printer_profile_id
@@ -47,7 +48,8 @@ use Illuminate\Support\Carbon;
     'product_id', 'sku', 'color_id', 'material_id', 'size_label', 'price_cents',
     'compare_at_cents', 'wholesale_price_cents', 'stock', 'reserved_stock',
     'low_stock_threshold',
-    'is_default', 'active', 'filament_weight_grams', 'printing_time_minutes',
+    'is_default', 'active', 'hidden_by_palette',
+    'filament_weight_grams', 'printing_time_minutes',
     'printer_profile_id', 'extra_cost_cents',
     'product_weight_grams', 'package_weight_grams',
     'length_mm', 'width_mm', 'height_mm',
@@ -73,6 +75,9 @@ class Variant extends Model
             'low_stock_threshold' => 'integer',
             'is_default' => 'boolean',
             'active' => 'boolean',
+            // Quem escondeu esta variante: o catalogo (true) ou o dono (false).
+            // So a primeira volta sozinha quando a cor recupera o material.
+            'hidden_by_palette' => 'boolean',
             'color_id' => 'integer',
             'material_id' => 'integer',
             'filament_weight_grams' => 'integer',

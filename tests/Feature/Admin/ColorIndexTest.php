@@ -3,6 +3,7 @@
 namespace Tests\Feature\Admin;
 
 use App\Models\Color;
+use App\Models\Material;
 use App\Models\Product;
 use App\Models\User;
 use App\Models\Variant;
@@ -11,8 +12,9 @@ use Inertia\Testing\AssertableInertia as Assert;
 use Tests\TestCase;
 
 /**
- * A listagem e uma lista plana: uma linha por cor. Sem materiais e sem precos —
- * a cor deixou de ter os dois.
+ * A listagem e uma lista plana: uma linha por cor. Sem precos — quem custa
+ * dinheiro e a bobine — mas com os filamentos em que a cor existe, que e o que
+ * decide se ela consegue gerar variantes.
  */
 class ColorIndexTest extends TestCase
 {
@@ -20,16 +22,30 @@ class ColorIndexTest extends TestCase
 
     private User $admin;
 
+    private Material $material;
+
     protected function setUp(): void
     {
         parent::setUp();
 
         $this->admin = User::factory()->admin()->create();
+        $this->material = Material::factory()->create();
     }
 
-    private function color(string $name, int $sortOrder = 0, bool $active = true): Color
+    /**
+     * Nasce com um filamento declarado, que e o estado normal de uma cor em
+     * servico. Quem quiser testar a cor por declarar passa `withMaterial:
+     * false` e recebe o estado `no_material`.
+     */
+    private function color(string $name, int $sortOrder = 0, bool $active = true, bool $withMaterial = true): Color
     {
-        return Color::factory()->create([
+        $factory = Color::factory();
+
+        if ($withMaterial) {
+            $factory = $factory->withMaterials($this->material);
+        }
+
+        return $factory->create([
             'name' => $name,
             'hex_color' => '#1A1715',
             'sort_order' => $sortOrder,
@@ -92,6 +108,50 @@ class ColorIndexTest extends TestCase
                 ->where('stats.unusedCount', 1));
 
         $this->assertNotNull($variant->color_id);
+    }
+
+    /**
+     * A linha leva os filamentos em que a cor existe, para a listagem os
+     * mostrar e o modal os abrir ja marcados.
+     */
+    public function test_each_colour_carries_the_filaments_it_exists_in(): void
+    {
+        $this->color('Preto');
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.cores.index'))
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('colors.0.materials', 1)
+                ->where('colors.0.materials.0.id', $this->material->id)
+                ->where('colors.0.state', 'active'));
+    }
+
+    /**
+     * Uma cor por declarar tem de o dizer na listagem: nao gera variante
+     * nenhuma, e falhar em silencio na matriz de criacao era deixar o dono a
+     * procurar o erro no sitio errado.
+     */
+    public function test_a_colour_with_no_filament_says_so(): void
+    {
+        $this->color('Rosa', withMaterial: false);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.cores.index'))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('colors.0.state', 'no_material')
+                ->has('colors.0.materials', 0));
+    }
+
+    /** O formulario da cor precisa das bobines para as poder marcar. */
+    public function test_the_page_carries_the_filaments_to_choose_from(): void
+    {
+        $this->color('Preto');
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.cores.index'))
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('materials', 1)
+                ->where('materials.0.id', $this->material->id));
     }
 
     /**
