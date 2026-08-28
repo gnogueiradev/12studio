@@ -66,11 +66,20 @@ ADMIN_PASSWORD=$(openssl rand -base64 18)
 # As tabelas `jobs`, `sessions` e `cache` ja vem nas migracoes 0001_01_01_*.
 # Se um dia a instancia passar a `noeviction` + `appendonly yes`, basta voltar a
 # por aqui as duas linhas de SESSION_DRIVER/QUEUE_CONNECTION.
+#
+# O SESSION_SECURE_COOKIE e o SESSION_ENCRYPT sao forcados a true AQUI, e nao
+# deixados ao valor do .env.example, de proposito: em producao o cookie de
+# sessao nunca pode sair sem a flag Secure. O bootstrap/app.php ja ensina o
+# Laravel a reconhecer o TLS do proxy (trustProxies), o que por si so bastaria
+# para o modo automatico acertar — mas esta linha e a que continua a valer se
+# essa configuracao se perder um dia numa refactorizacao.
 sed \
     -e "s|^APP_ENV=.*|APP_ENV=production|" \
     -e "s|^APP_DEBUG=.*|APP_DEBUG=false|" \
     -e "s|^APP_KEY=.*|APP_KEY=${APP_KEY}|" \
     -e "s|^LOG_LEVEL=.*|LOG_LEVEL=warning|" \
+    -e "s|^SESSION_ENCRYPT=.*|SESSION_ENCRYPT=true|" \
+    -e "s|^SESSION_SECURE_COOKIE=.*|SESSION_SECURE_COOKIE=true|" \
     -e "s|^SEED_ADMIN_PASSWORD=.*|SEED_ADMIN_PASSWORD=${ADMIN_PASSWORD}|" \
     -e "s|^LOGIN_GATE_SECRET=.*|LOGIN_GATE_SECRET=${GATE_SECRET}|" \
     -e "s|^CACHE_STORE=.*|CACHE_STORE=redis|" \
