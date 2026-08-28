@@ -1,2 +1,12 @@
+# O backoffice e as definicoes de conta nao tem nada que ser indexados. Isto nao
+# e seguranca — quem os protege sao o EnsureAdmin e os Form Requests — e so
+# evita que um motor de busca gaste tempo la e que os enderecos aparecam em
+# resultados de pesquisa.
+#
+# Nada mais e listado aqui, e isso e deliberado: um Disallow e uma lista PUBLICA
+# do que existe, e este ficheiro e feito para ser lido. Rotas cuja protecao
+# assenta em nao serem conhecidas nunca podem aparecer num robots.txt — listar
+# uma era entregar exatamente aquilo que a guarda.
 User-agent: *
-Disallow:
+Disallow: /admin
+Disallow: /settings
