@@ -111,11 +111,19 @@ class DatabaseSeeder extends Seeder
         // acontecer por mass-assignment de um request), o segundo por arrasto.
         //
         // O email_verified_at estava aqui em cima, no array do firstOrCreate, e
-        // era descartado em silencio por nao ser fillable. O admin nascia com a
-        // verificacao por fazer, e como o backoffice inteiro esta atras de
-        // ['auth', 'verified'] (routes/web.php), a unica conta da loja
-        // autenticava-se e ficava presa na pagina de verificacao — sem SMTP
-        // configurado, sem sequer receber o email para sair de la.
+        // funcionava — mas por uma razao que nao esta escrita em lado nenhum: o
+        // SeedCommand do Laravel corre os seeders dentro de Model::unguarded(),
+        // por isso pelo `db:seed` do deploy a proteccao esta desligada e o
+        // atributo passa.
+        //
+        // Chamado de qualquer outra maneira — (new DatabaseSeeder)->run() num
+        // teste, ou de dentro de outro seeder — nao ha esse desligamento, e o
+        // admin nascia por verificar. Como o backoffice inteiro esta atras de
+        // ['auth', 'verified'] (routes/web.php), essa conta autenticava-se e
+        // ficava presa na pagina de verificacao.
+        //
+        // Atribuir os dois diretamente tira a dependencia do unguarded: o
+        // seeder passa a fazer o que diz, seja como for chamado.
         $user->is_admin = true;
         $user->email_verified_at ??= now();
 
