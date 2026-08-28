@@ -72,6 +72,32 @@ class LoginGateTest extends TestCase
         )->get('/login')->assertOk();
     }
 
+    /**
+     * O ponto de descoberta de passkeys estava fora de TODO o middleware.
+     * Devolvia os enderecos do /settings/security a quem passasse pelo site —
+     * ou seja, anunciava que ha contas para atacar, com a loja ainda fechada.
+     */
+    public function test_the_passkey_discovery_endpoint_is_hidden_too(): void
+    {
+        $this->lockGate();
+
+        $this->get('/.well-known/passkey-endpoints')->assertNotFound();
+    }
+
+    /**
+     * Atras do cadeado nao perde utilidade nenhuma: quem tem passkeys para
+     * gerir esta autenticado, e o middleware deixa passar quem esta.
+     */
+    public function test_the_passkey_discovery_endpoint_still_works_for_whoever_needs_it(): void
+    {
+        $this->lockGate();
+
+        $this->actingAs(User::factory()->create())
+            ->get('/.well-known/passkey-endpoints')
+            ->assertOk()
+            ->assertJsonStructure(['enroll', 'manage']);
+    }
+
     public function test_authenticated_users_are_never_locked_out(): void
     {
         $this->lockGate();

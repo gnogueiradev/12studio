@@ -41,14 +41,28 @@ class AppServiceProvider extends ServiceProvider
             app()->isProduction(),
         );
 
-        Password::defaults(fn (): ?Password => app()->isProduction()
-            ? Password::min(12)
+        // As regras de forca valiam SO em producao, e fora dela o `null` nao
+        // significa "sem regras": o Laravel cai no Password::min(8) dele. Ou
+        // seja, um staging aceitava oito caracteres sem exigencia nenhuma de
+        // complexidade — e um staging com dados a serio e um alvo a serio.
+        Password::defaults(function (): ?Password {
+            // Nos testes fica o default do framework. As factories e os testes
+            // de autenticacao usam passwords simples, e endurecer aqui obrigava
+            // a reescrever dezenas de testes sem provar nada sobre producao.
+            if (app()->environment('testing')) {
+                return null;
+            }
+
+            $rules = Password::min(12)
                 ->mixedCase()
                 ->letters()
                 ->numbers()
-                ->symbols()
-                ->uncompromised()
-            : null,
-        );
+                ->symbols();
+
+            // O uncompromised() consulta a HaveIBeenPwned por HTTP. Em producao
+            // a espera vale a pena; em dev punha o formulario de password
+            // dependente de haver rede, e a falhar sem explicacao quando nao ha.
+            return app()->isProduction() ? $rules->uncompromised() : $rules;
+        });
     }
 }

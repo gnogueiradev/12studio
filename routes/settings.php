@@ -26,9 +26,19 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::inertia('settings/appearance', 'settings/appearance')->name('appearance.edit');
 });
 
+/**
+ * Ponto de descoberta que os gestores de passwords consultam para oferecer
+ * "passar a passkey". Estava fora de TODO o middleware — anunciava a quem
+ * passasse pelo site que existe um /settings/security, e portanto que ha contas
+ * para atacar, enquanto a loja ainda esta fechada.
+ *
+ * Atras do cadeado nao perde utilidade: o EnsureLoginGate deixa passar quem ja
+ * esta autenticado, que e exatamente quem tem passkeys para gerir. Quem nao
+ * tem sessao nem cookie leva o mesmo 404 de qualquer rota inexistente.
+ */
 Route::get('.well-known/passkey-endpoints', function () {
     return response()->json([
         'enroll' => route('security.edit'),
         'manage' => route('security.edit'),
     ]);
-})->name('well-known.passkeys');
+})->middleware('login-gate')->name('well-known.passkeys');
