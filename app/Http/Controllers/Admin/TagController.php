@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\AdminActionRequest;
 use App\Http\Requests\Tag\StoreTagRequest;
 use App\Http\Requests\Tag\UpdateTagRequest;
 use App\Models\Tag;
@@ -65,7 +66,7 @@ class TagController extends Controller
      * escrita na migracao original. Os pivots caem por cascade, portanto quem
      * usava a etiqueta fica sem ela e nada mais.
      */
-    public function destroy(Tag $tag): RedirectResponse
+    public function destroy(AdminActionRequest $request, Tag $tag): RedirectResponse
     {
         $this->tagService->destroy($tag);
 
@@ -74,7 +75,7 @@ class TagController extends Controller
         return to_route('admin.etiquetas.index');
     }
 
-    public function prune(): RedirectResponse
+    public function prune(AdminActionRequest $request): RedirectResponse
     {
         $deleted = $this->tagService->pruneUnused();
 

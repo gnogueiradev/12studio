@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\AdminActionRequest;
 use App\Http\Requests\Color\StoreColorRequest;
 use App\Http\Requests\Color\UpdateColorRequest;
 use App\Models\Color;
@@ -99,7 +100,7 @@ class ColorController extends Controller
     /**
      * "Apagar" no admin = arquivar (regra global de eliminacao logica).
      */
-    public function destroy(Color $color): RedirectResponse
+    public function destroy(AdminActionRequest $request, Color $color): RedirectResponse
     {
         $this->colorService->archive($color);
 
@@ -108,7 +109,7 @@ class ColorController extends Controller
         return to_route('admin.cores.index');
     }
 
-    public function restore(Color $color): RedirectResponse
+    public function restore(AdminActionRequest $request, Color $color): RedirectResponse
     {
         $this->colorService->restore($color);
 

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\AdminActionRequest;
 use App\Http\Requests\ProductImage\ReorderProductImagesRequest;
 use App\Http\Requests\ProductImage\StoreProductImageRequest;
 use App\Http\Requests\ProductImage\UpdateProductImageRequest;
@@ -49,7 +50,7 @@ class ProductImageController extends Controller
         return back();
     }
 
-    public function setPrimary(ProductImage $image): RedirectResponse
+    public function setPrimary(AdminActionRequest $request, ProductImage $image): RedirectResponse
     {
         $this->imageService->setPrimary($image);
 
@@ -72,7 +73,7 @@ class ProductImageController extends Controller
      * Ao contrario de produtos, variantes e cores, uma fotografia apaga-se
      * mesmo: nao tem historial comercial agarrado.
      */
-    public function destroy(ProductImage $image): RedirectResponse
+    public function destroy(AdminActionRequest $request, ProductImage $image): RedirectResponse
     {
         $this->imageService->delete($image);
 

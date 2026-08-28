@@ -1,4 +1,4 @@
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useInitials } from '@/hooks/use-initials';
 import type { User } from '@/types';
 
@@ -13,8 +13,13 @@ export function UserInfo({
 
     return (
         <>
+            {/*
+                Sem <AvatarImage>: nao ha coluna de avatar nos users nem prop
+                que a traga, por isso o src vinha sempre undefined e o que se
+                via eram sempre as iniciais. O fallback passa a ser o unico
+                caminho porque sempre foi o unico caminho.
+            */}
             <Avatar className="h-8 w-8 overflow-hidden rounded-full">
-                <AvatarImage src={user.avatar} alt={user.name} />
                 <AvatarFallback className="rounded-lg bg-muted text-muted-foreground">
                     {getInitials(user.name)}
                 </AvatarFallback>

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\AdminActionRequest;
 use App\Http\Requests\Category\StoreCategoryRequest;
 use App\Http\Requests\Category\UpdateCategoryRequest;
 use App\Models\Category;
@@ -111,7 +112,7 @@ class CategoryController extends Controller
      * vista filtrada, e mandar o utilizador para a lista sem filtros tirava-o
      * de onde estava a trabalhar.
      */
-    public function destroy(Category $category): RedirectResponse
+    public function destroy(AdminActionRequest $request, Category $category): RedirectResponse
     {
         $this->categoryService->archive($category);
 
@@ -120,7 +121,7 @@ class CategoryController extends Controller
         return back();
     }
 
-    public function restore(Category $category): RedirectResponse
+    public function restore(AdminActionRequest $request, Category $category): RedirectResponse
     {
         $this->categoryService->restore($category);
 

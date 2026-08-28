@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\AdminActionRequest;
 use App\Http\Requests\Order\StoreOrderDraftRequest;
 use App\Models\OrderDraft;
 use App\Support\ManualOrderOptions;
@@ -95,7 +96,12 @@ class OrderDraftController extends Controller
         return back();
     }
 
-    public function destroy(Request $request, OrderDraft $draft): RedirectResponse
+    /**
+     * O AdminActionRequest e um Request com a verificacao de administrador
+     * agarrada; o authorizeOwner por baixo continua a ser preciso, porque ser
+     * administrador nao da acesso ao rascunho a meio de outra pessoa.
+     */
+    public function destroy(AdminActionRequest $request, OrderDraft $draft): RedirectResponse
     {
         $this->authorizeOwner($request, $draft);
 

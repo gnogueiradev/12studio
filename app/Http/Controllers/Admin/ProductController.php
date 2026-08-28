@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\AdminActionRequest;
 use App\Http\Requests\Pricing\PricingPreviewRequest;
 use App\Http\Requests\Product\StoreProductRequest;
 use App\Http\Requests\Product\UpdateProductRequest;
@@ -220,7 +221,7 @@ class ProductController extends Controller
     /**
      * "Apagar" no admin = arquivar (regra global de eliminacao logica).
      */
-    public function destroy(Product $product): RedirectResponse
+    public function destroy(AdminActionRequest $request, Product $product): RedirectResponse
     {
         $this->productService->archive($product);
 
@@ -232,7 +233,7 @@ class ProductController extends Controller
     /**
      * Desarquivar: volta a rascunho, nao a montra. Ver ProductService::restore.
      */
-    public function restore(Product $product): RedirectResponse
+    public function restore(AdminActionRequest $request, Product $product): RedirectResponse
     {
         $this->productService->restore($product);
 

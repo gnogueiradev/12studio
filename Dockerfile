@@ -43,7 +43,7 @@ WORKDIR /app
 COPY --from=build /app /app
 # Supervisor: worker das filas, scheduler e SSR ao lado do nginx+fpm.
 COPY docker/queue-worker.conf docker/scheduler.conf docker/inertia-ssr.conf /opt/docker/etc/supervisor.d/
-COPY docker/opcache.ini /opt/docker/etc/php/php.ini
+COPY docker/php.ini /opt/docker/etc/php/php.ini
 COPY docker/entrypoint-permissions.sh /opt/docker/provision/entrypoint.d/20-permissions.sh
 RUN chmod +x /opt/docker/provision/entrypoint.d/20-permissions.sh \
     && chown -R application:application /app
@@ -55,8 +55,10 @@ RUN chmod +x /opt/docker/provision/entrypoint.d/20-permissions.sh \
 # "duplicate", o nginx recusa arrancar e o container fica em loop de reinicio.
 # Esta env var e o marcador que o entrypoint da imagem substitui nesse template
 # (o default dela seria 50m). Guardado por tests/Unit/NginxVhostConfigTest.php.
-# Nota: o PHP tem o seu proprio tecto (upload_max_filesize/post_max_size), hoje
-# nao fixado em docker/opcache.ini — subir aqui sem subir la nao chega.
+# O PHP tem o seu proprio tecto (upload_max_filesize/post_max_size), fixado em
+# docker/php.ini abaixo deste valor de proposito: quem excede leva um 413 limpo
+# do nginx em vez de um erro mudo do PHP. Subir aqui sem subir la nao chega —
+# guardado por tests/Unit/PhpUploadLimitsTest.php.
 ENV SERVICE_NGINX_CLIENT_MAX_BODY_SIZE=25m
 
 # O healthcheck do compose/Jenkins bate no /up do Laravel.
