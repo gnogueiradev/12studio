@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\AdminActionRequest;
 use App\Http\Requests\Printer\StorePrinterProfileRequest;
 use App\Http\Requests\Printer\UpdatePrinterProfileRequest;
 use App\Models\PrinterProfile;
@@ -91,7 +92,7 @@ class PrinterProfileController extends Controller
      * variantes que ja usam esta impressora ficam intactas — a FK e
      * restrictOnDelete de proposito.
      */
-    public function destroy(PrinterProfile $printerProfile): RedirectResponse
+    public function destroy(AdminActionRequest $request, PrinterProfile $printerProfile): RedirectResponse
     {
         $this->profiles->archive($printerProfile);
 
@@ -100,7 +101,7 @@ class PrinterProfileController extends Controller
         return to_route('admin.impressoras.index');
     }
 
-    public function restore(PrinterProfile $printerProfile): RedirectResponse
+    public function restore(AdminActionRequest $request, PrinterProfile $printerProfile): RedirectResponse
     {
         $this->profiles->restore($printerProfile);
 
@@ -115,7 +116,7 @@ class PrinterProfileController extends Controller
      * para trocar uma caixa era ceremonia a mais. Por isso o `is_default` nao
      * vai no payload do modal — quem manda nele e o botao da linha.
      */
-    public function setDefault(PrinterProfile $printerProfile): RedirectResponse
+    public function setDefault(AdminActionRequest $request, PrinterProfile $printerProfile): RedirectResponse
     {
         $this->profiles->setDefault($printerProfile);
 

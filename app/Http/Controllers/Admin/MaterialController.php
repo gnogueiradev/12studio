@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\AdminActionRequest;
 use App\Http\Requests\Material\StoreMaterialRequest;
 use App\Http\Requests\Material\UpdateMaterialRequest;
 use App\Models\Material;
@@ -77,7 +78,7 @@ class MaterialController extends Controller
     /**
      * "Apagar" no admin = arquivar (regra global de eliminacao logica).
      */
-    public function destroy(Material $material): RedirectResponse
+    public function destroy(AdminActionRequest $request, Material $material): RedirectResponse
     {
         $this->materialService->archive($material);
 
@@ -86,7 +87,7 @@ class MaterialController extends Controller
         return to_route('admin.materiais.index');
     }
 
-    public function restore(Material $material): RedirectResponse
+    public function restore(AdminActionRequest $request, Material $material): RedirectResponse
     {
         $this->materialService->restore($material);
 

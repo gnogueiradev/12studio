@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\AdminActionRequest;
 use App\Http\Requests\Variant\StoreVariantRequest;
 use App\Http\Requests\Variant\UpdateVariantRequest;
 use App\Models\Product;
@@ -53,7 +54,7 @@ class VariantController extends Controller
      * "Apagar" = arquivar: a variante tem movimentos de stock e itens de
      * encomenda agarrados (regra global de eliminacao logica).
      */
-    public function destroy(Variant $variant): RedirectResponse
+    public function destroy(AdminActionRequest $request, Variant $variant): RedirectResponse
     {
         $this->variantService->archive($variant);
 

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\AdminActionRequest;
 use App\Http\Requests\Customer\StoreCustomerRequest;
 use App\Http\Requests\Customer\UpdateCustomerRequest;
 use App\Models\Address;
@@ -219,7 +220,7 @@ class CustomerController extends Controller
     /**
      * Hard delete so sem encomendas; com historico comercial o registo fica.
      */
-    public function destroy(User $customer): RedirectResponse
+    public function destroy(AdminActionRequest $request, User $customer): RedirectResponse
     {
         $this->ensureIsCustomer($customer);
 
