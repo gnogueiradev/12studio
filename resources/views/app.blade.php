@@ -1,13 +1,34 @@
 <!DOCTYPE html>
-<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" @class(['dark' => ($appearance ?? 'system') == 'dark'])>
+<html lang="{{ str_replace('_', '-', app()->getLocale()) }}" @class(['dark' => ($appearance ?? 'system') == 'dark']) data-appearance="{{ $appearance ?? 'system' }}">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">
 
-        {{-- Inline script to detect system dark mode preference and apply it immediately --}}
+        {{--
+            Aplica o tema escuro antes do primeiro pixel, para nao haver um
+            flash de tema claro enquanto o React nao hidrata. Tem mesmo de ser
+            inline: um <script src> era um pedido a espera do qual o flash
+            acontecia.
+
+            O valor vem do atributo data-appearance do <html> e NAO interpolado
+            aqui dentro, por duas razoes que andam juntas:
+
+              1. Assim o corpo do script e CONSTANTE, e o CSP pode autoriza-lo
+                 por um unico hash sha256 (ver App\Http\Middleware\SecurityHeaders).
+                 Interpolado, o hash mudava com o tema escolhido e era preciso
+                 um por valor — e mais um sempre que aparecesse um tema novo.
+              2. Um atributo HTML e o contexto para que o escape do {{ }} do
+                 Blade foi desenhado. Dentro de um <script> o valor ficava numa
+                 string JavaScript, onde o escape do Blade so por acaso chega
+                 (o browser nao descodifica entidades em raw text, por isso nem
+                 a plica fechava a string nem o </script> terminava o bloco) —
+                 e o cookie `appearance` nem sequer e encriptado.
+
+            Guardado por tests/Feature/InlineScriptPolicyTest.php.
+        --}}
         <script>
             (function() {
-                const appearance = '{{ $appearance ?? "system" }}';
+                const appearance = document.documentElement.dataset.appearance || 'system';
 
                 if (appearance === 'system') {
                     const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;

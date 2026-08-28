@@ -28,10 +28,9 @@ class SecurityHeaders
      *     usam URL.createObjectURL.
      *   img-src data: e font-src data: — icones e fontes embutidos pelo Vite.
      *
-     * O script-src fica em 'self' sem folga nenhuma: em producao o @vite emite
-     * <script type="module" src="..."> externo, e nao ha inline nenhum no
-     * app.blade.php. E precisamente por isso nao ser garantido para todos os
-     * ecras que o cabecalho comeca em Report-Only.
+     * O script-src NAO leva 'unsafe-inline' — seria abdicar da unica coisa
+     * para que o CSP aqui serve. O unico script inline da app vai autorizado
+     * por hash (ver a constante abaixo).
      */
     private const CONTENT_SECURITY_POLICY = [
         "default-src 'self'",
@@ -42,9 +41,25 @@ class SecurityHeaders
         "img-src 'self' data: blob:",
         "font-src 'self' data:",
         "style-src 'self' 'unsafe-inline'",
-        "script-src 'self'",
+        "script-src 'self' '".self::THEME_SCRIPT_HASH."'",
         "connect-src 'self'",
     ];
+
+    /**
+     * O unico script inline da app: o que aplica o tema escuro antes do
+     * primeiro pixel, no app.blade.php. Um hash e uma promessa sobre bytes
+     * exatos — vale para aquele script e para mais nenhum, ao contrario do
+     * 'unsafe-inline', que valeria tambem para um que alguem injetasse.
+     *
+     * Foi medido, nao adivinhado, e o app.blade.php foi mudado para o tornar
+     * possivel: o tema chega ao script por um atributo do <html> em vez de ser
+     * interpolado no corpo dele, senao o hash mudava com o cookie e era preciso
+     * um por tema.
+     *
+     * Se o script mudar, o tests/Feature/InlineScriptPolicyTest.php falha com o
+     * hash novo na mensagem de erro — e ele que torna isto seguro de manter.
+     */
+    private const THEME_SCRIPT_HASH = 'sha256-pf99VV58o/7L5eBHhk/Psn3QartrDgXPkddtm+kgaow=';
 
     public function handle(Request $request, Closure $next): Response
     {
