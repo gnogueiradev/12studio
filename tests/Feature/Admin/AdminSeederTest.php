@@ -153,6 +153,38 @@ class AdminSeederTest extends TestCase
     }
 
     /**
+     * As guardas protegem a CRIACAO de um admin, nao a existencia de uma
+     * variavel de ambiente.
+     *
+     * Postas a correr sempre, rebentavam o `db:seed` de cada lancamento quando
+     * a SEED_ADMIN_PASSWORD do .env fosse curta — mesmo com o admin ja criado e
+     * a password a nao ser sequer lida. E rebentavam DEPOIS de o migrate ter
+     * corrido e do container ter sido trocado, antes do health-check que faz
+     * rollback: um falso positivo que deixava producao a meio.
+     */
+    public function test_an_existing_admin_does_not_break_the_deploy(): void
+    {
+        config(['seeding.admin_email' => 'dono@12studio.test']);
+        config(['seeding.admin_password' => 'segredo-forte']);
+
+        $this->runSeederDirectly();
+
+        // Segundo lancamento, com uma password que as guardas recusariam se
+        // houvesse alguma conta para criar.
+        config(['seeding.admin_password' => '123']);
+        $this->app['env'] = 'production';
+
+        try {
+            $this->runSeederDirectly();
+        } finally {
+            $this->app['env'] = 'testing';
+        }
+
+        $this->assertSame(1, User::query()->count());
+        $this->assertTrue(User::query()->sole()->isAdmin());
+    }
+
+    /**
      * Sem passar pelo comando: o db:seed pede confirmacao interativa em
      * producao (ConfirmableTrait) e envolve tudo em Model::unguarded(), duas
      * coisas que escondem o que estes testes querem ver.

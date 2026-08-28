@@ -63,48 +63,14 @@ class DatabaseSeeder extends Seeder
     private function seedAdmin(): void
     {
         $email = (string) config('seeding.admin_email');
-        $password = (string) config('seeding.admin_password');
 
-        // Nunca existe um admin com password por omissao em producao — o
-        // deploy rebenta aqui antes de criar um user inseguro (padrao qrcode).
-        //
-        // Isto ja estava escrito, e ja aqui estava; o que nao estava era a
-        // funcionar. O config/seeding.php trazia '123' por omissao, e '123'
-        // nunca e '', por isso esta condicao nunca era verdadeira e o deploy
-        // seguia em frente com um admin de password trivial.
-        if ($password === '' && app()->isProduction()) {
-            throw new RuntimeException(
-                'SEED_ADMIN_PASSWORD esta vazio: define-o no .env de producao antes de correr o seeder.'
-            );
-        }
+        $user = User::query()->where('email', $email)->first()
+            ?? $this->createAdmin($email);
 
-        // Segunda guarda, para um erro de escrita no .env nao passar por uma
-        // password a serio. O Jenkins corre `db:seed --force` em TODOS os
-        // deploys — rebentar aqui e barato; um admin fraco em producao nao.
-        if (app()->isProduction() && mb_strlen($password) < self::MINIMUM_PRODUCTION_LENGTH) {
-            throw new RuntimeException(sprintf(
-                'SEED_ADMIN_PASSWORD tem %d caracteres: em producao sao precisos pelo menos %d.',
-                mb_strlen($password),
-                self::MINIMUM_PRODUCTION_LENGTH,
-            ));
-        }
-
-        // Fora de producao, sem password nao ha admin — e nao ha password de
-        // recurso nenhuma a substitui-la. Ja era assim na pratica (o
-        // .env.example traz SEED_ADMIN_PASSWORD vazio, e o '123' do config so
-        // se aplicava quando a chave faltava por completo), e continua a ser:
-        // quem quer entrar em dev poe a sua propria password no .env.
-        if ($password === '') {
+        // Fora de producao e sem password: nao ha admin nenhum para promover.
+        if ($user === null) {
             return;
         }
-
-        $user = User::query()->firstOrCreate(
-            ['email' => $email],
-            [
-                'name' => (string) config('seeding.admin_name'),
-                'password' => $password,
-            ],
-        );
 
         // is_admin e email_verified_at ficam os DOIS fora do #[Fillable] do
         // User — o primeiro de proposito (promover alguem a admin nunca pode
@@ -131,5 +97,63 @@ class DatabaseSeeder extends Seeder
         if ($user->isDirty()) {
             $user->save();
         }
+    }
+
+    /**
+     * Cria o administrador. So chega aqui quando ele ainda NAO existe, e e por
+     * isso que as guardas vivem ca dentro e nao no seedAdmin.
+     *
+     * Postas la fora, corriam em todos os deploys — inclusive quando o admin ja
+     * existe e a password do .env nem chega a ser lida (o firstOrCreate so usa
+     * os valores ao criar). Uma SEED_ADMIN_PASSWORD curta rebentava entao o
+     * `db:seed` de CADA lancamento, depois de o migrate ja ter corrido e do
+     * container ja ter sido trocado, e antes do health-check que faz rollback.
+     * Um falso positivo caro, e sem beneficio de seguranca: nao havia nada a
+     * criar para proteger.
+     *
+     * O que estas guardas prometem e "nunca nasce um admin fraco", e e isso que
+     * cumprem — no unico momento em que um admin pode nascer.
+     */
+    private function createAdmin(string $email): ?User
+    {
+        $password = (string) config('seeding.admin_password');
+
+        // Nunca existe um admin com password por omissao em producao — o
+        // deploy rebenta aqui antes de criar um user inseguro (padrao qrcode).
+        //
+        // Isto ja estava escrito, e ja aqui estava; o que nao estava era a
+        // funcionar. O config/seeding.php trazia '123' por omissao, e '123'
+        // nunca e '', por isso esta condicao nunca era verdadeira e o deploy
+        // seguia em frente com um admin de password trivial.
+        if ($password === '' && app()->isProduction()) {
+            throw new RuntimeException(
+                'SEED_ADMIN_PASSWORD esta vazio: define-o no .env de producao antes de correr o seeder.'
+            );
+        }
+
+        // Segunda guarda, para um erro de escrita no .env nao passar por uma
+        // password a serio.
+        if (app()->isProduction() && mb_strlen($password) < self::MINIMUM_PRODUCTION_LENGTH) {
+            throw new RuntimeException(sprintf(
+                'SEED_ADMIN_PASSWORD tem %d caracteres: em producao sao precisos pelo menos %d.',
+                mb_strlen($password),
+                self::MINIMUM_PRODUCTION_LENGTH,
+            ));
+        }
+
+        // Fora de producao, sem password nao ha admin — e nao ha password de
+        // recurso nenhuma a substitui-la. Ja era assim na pratica (o
+        // .env.example traz SEED_ADMIN_PASSWORD vazio, e o '123' do config so
+        // se aplicava quando a chave faltava por completo), e continua a ser:
+        // quem quer entrar em dev poe a sua propria password no .env.
+        if ($password === '') {
+            return null;
+        }
+
+        return User::query()->create([
+            'email' => $email,
+            'name' => (string) config('seeding.admin_name'),
+            'password' => $password,
+        ]);
     }
 }
