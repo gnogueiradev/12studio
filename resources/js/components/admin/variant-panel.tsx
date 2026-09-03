@@ -8,6 +8,7 @@ import {
     DialogHeader,
     DialogTitle,
 } from '@/components/ui/dialog';
+import type { ProductProduction } from '@/lib/production';
 import { store as storeVariant } from '@/routes/admin/produtos/variantes';
 import { update as updateVariant } from '@/routes/admin/variantes';
 import type {
@@ -24,6 +25,12 @@ type Props = {
     /** Null cria; uma variante da lista edita essa variante. */
     variant: VariantRow | null;
     suggestedSku: string;
+    /**
+     * O tempo e a gramagem do produto. Uma variante nova nasce com eles: a
+     * peça é a mesma em todas, e a aba "Produção" escreve-os em todas de uma
+     * vez — uma ficha a abrir vazia era a única que ficava fora dessa regra.
+     */
+    production: ProductProduction;
     colors: ColorOption[];
     materials: MaterialOption[];
     printers: PrinterProfileOption[];
@@ -57,6 +64,7 @@ export function VariantPanel({
     productName,
     variant,
     suggestedSku,
+    production,
     colors,
     materials,
     printers,
@@ -75,8 +83,8 @@ export function VariantPanel({
                       normal_price: '',
                       sale_price: '',
                       wholesale_price: '',
-                      filament_weight_grams: null,
-                      printing_time_minutes: null,
+                      filament_weight_grams: production.filamentWeightGrams,
+                      printing_time_minutes: production.printingTimeMinutes,
                       printer_profile_id: null,
                       packaging_cost: '',
                       components_cost: '',
