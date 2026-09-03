@@ -8,14 +8,14 @@ use App\Support\Money;
 use Illuminate\Support\Facades\DB;
 
 /**
- * A aba "Producao" do produto: o que cada variante custa a imprimir, e os
- * precos que saem dai.
+ * A aba "Producao" do produto: o que a peca custa a imprimir, e os precos
+ * que saem dai para cada variante.
  *
- * Duas accoes, deliberadamente separadas. Guardar tempos e gramagens nao mexe
- * em preco nenhum — o admin pode estar so a corrigir o que o slicer disse.
- * Aplicar precos nao le formulario nenhum — calcula a partir do que esta
- * GRAVADO, para o preco que fica na variante ser sempre o mesmo que a ficha
- * dela mostra como sugerido.
+ * Duas accoes, deliberadamente separadas. Guardar o tempo e a gramagem nao
+ * mexe em preco nenhum — o admin pode estar so a corrigir o que o slicer
+ * disse. Aplicar precos nao le formulario nenhum — calcula a partir do que
+ * esta GRAVADO, para o preco que fica na variante ser sempre o mesmo que a
+ * aba mostra como sugerido.
  */
 class VariantProductionService
 {
@@ -25,30 +25,36 @@ class VariantProductionService
     ) {}
 
     /**
-     * @param  array<int, array{printing_time_minutes: int|null, filament_weight_grams: int|null}>  $rows  Indexado pelo id da variante.
+     * O mesmo tempo e a mesma gramagem em TODAS as variantes do produto,
+     * arquivadas incluidas: a peca e a mesma, muda a cor e o material.
+     *
+     * Um so UPDATE em vez de um por variante — nao ha traducao nenhuma a
+     * fazer nestas duas colunas, e o Builder do Eloquent ainda carimba o
+     * updated_at.
+     *
+     * @param  array{printing_time_minutes: int|null, filament_weight_grams: int|null}  $values
+     * @return int Quantas variantes ficaram com os valores.
      */
-    public function updateProduction(Product $product, array $rows): void
+    public function updateProduction(Product $product, array $values): int
     {
-        DB::transaction(function () use ($product, $rows): void {
-            $variants = $product->variants()->whereKey(array_keys($rows))->get();
-
-            foreach ($variants as $variant) {
-                $variant->update($rows[$variant->id]);
-            }
-        });
+        return $product->variants()->update($values);
     }
 
     /**
-     * Escreve em cada variante ativa o preco que a calculadora lhe da.
+     * Escreve em cada variante o preco que a calculadora lhe da: preco normal
+     * = preco ao cliente, preco de revenda = revenda.
      *
-     * Preco normal = preco ao cliente; preco de revenda = revenda. Uma
-     * promocao que exista fica, desde que continue abaixo do novo preco normal
-     * — acima dele deixava de ser desconto e cai, pela mesma regra que o
-     * formulario da variante impoe a mao.
+     * Todas, arquivadas incluidas — uma variante que volte a montra com o
+     * preco antigo era uma armadilha, e escrever-lhe o preco novo nao custa
+     * nada enquanto esta fora dela.
      *
-     * As variantes sem conta possivel (sem peso, sem tempo, sem material) e as
-     * arquivadas ficam como estao: o retorno diz quantas foram e quantas
-     * ficaram, para o toast nao fingir que aplicou a todas.
+     * Uma promocao que exista fica, desde que continue abaixo do novo preco
+     * normal — acima dele deixava de ser desconto e cai, pela mesma regra que
+     * o formulario da variante impoe a mao.
+     *
+     * As variantes sem conta possivel (sem peso, sem tempo, sem material)
+     * ficam como estao: o retorno diz quantas foram e quantas ficaram, para o
+     * toast nao fingir que aplicou a todas.
      *
      * @return array{updated: int, skipped: int}
      */
@@ -58,7 +64,7 @@ class VariantProductionService
             $updated = 0;
             $skipped = 0;
 
-            $variants = $product->variants()->where('active', true)->with('material')->get();
+            $variants = $product->variants()->with('material')->get();
 
             foreach ($variants as $variant) {
                 $result = $this->pricing->forVariant($variant);

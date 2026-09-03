@@ -12,8 +12,9 @@ use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
 
 /**
- * A aba "Producao" do produto: tempos e gramagens de todas as variantes de uma
- * vez, e os precos calculados a partir deles.
+ * A aba "Producao" do produto: o tempo de impressao e a gramagem sao do
+ * PRODUTO — todas as variantes gastam o mesmo — e os precos calculados a
+ * partir deles vao para todas.
  *
  * Os numeros sao os da peca de referencia do PricingCalculatorTest: 50 g a
  * 17,00 EUR/kg, 3 h na Bambu Lab A1 -> 4,00 EUR de revenda, 7,00 EUR ao cliente.
@@ -43,32 +44,53 @@ class VariantProductionTest extends TestCase
         $this->product = Product::factory()->create();
     }
 
-    public function test_it_saves_print_time_and_weight_for_every_variant_at_once(): void
+    /**
+     * Um par de valores, todas as variantes: a cor e o material mudam entre
+     * elas, o tempo de maquina e o plastico gasto nao.
+     */
+    public function test_it_saves_the_same_print_time_and_weight_on_every_variant(): void
     {
-        $small = Variant::factory()->for($this->product)->create();
-        $large = Variant::factory()->for($this->product)->create();
+        $white = Variant::factory()->for($this->product)->create();
+        $black = Variant::factory()->for($this->product)->create(['printing_time_minutes' => 10]);
+        $archived = Variant::factory()->for($this->product)->create(['active' => false]);
 
         $this->actingAs($this->admin)
             ->from(route('admin.produtos.index', ['editar' => $this->product->id]))
             ->patch(route('admin.produtos.variantes.producao', $this->product), [
-                'rows' => [
-                    ['id' => $small->id, 'hours' => 1, 'minutes' => 30, 'weight_grams' => 40],
-                    ['id' => $large->id, 'hours' => 4, 'minutes' => 0, 'weight_grams' => 120],
-                ],
+                'hours' => 1,
+                'minutes' => 30,
+                'weight_grams' => 40,
             ])
             ->assertRedirect(route('admin.produtos.index', ['editar' => $this->product->id]));
 
-        $this->assertSame(90, $small->refresh()->printing_time_minutes);
-        $this->assertSame(40, $small->filament_weight_grams);
-        $this->assertSame(240, $large->refresh()->printing_time_minutes);
-        $this->assertSame(120, $large->filament_weight_grams);
+        foreach ([$white, $black, $archived] as $variant) {
+            $this->assertSame(90, $variant->refresh()->printing_time_minutes);
+            $this->assertSame(40, $variant->filament_weight_grams);
+        }
+    }
+
+    public function test_it_never_touches_the_variants_of_another_product(): void
+    {
+        $foreign = Variant::factory()->create(['printing_time_minutes' => 10, 'filament_weight_grams' => 5]);
+        Variant::factory()->for($this->product)->create();
+
+        $this->actingAs($this->admin)
+            ->patch(route('admin.produtos.variantes.producao', $this->product), [
+                'hours' => 2,
+                'minutes' => 0,
+                'weight_grams' => 50,
+            ])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame(10, $foreign->refresh()->printing_time_minutes);
+        $this->assertSame(5, $foreign->filament_weight_grams);
     }
 
     /**
      * Um campo vazio apaga o valor — e diferente de zero, que e uma peca que
      * nao existe. So assim se limpa um engano.
      */
-    public function test_an_empty_field_clears_the_value(): void
+    public function test_an_empty_field_clears_the_value_everywhere(): void
     {
         $variant = Variant::factory()->for($this->product)->create([
             'printing_time_minutes' => 90,
@@ -77,9 +99,9 @@ class VariantProductionTest extends TestCase
 
         $this->actingAs($this->admin)
             ->patch(route('admin.produtos.variantes.producao', $this->product), [
-                'rows' => [
-                    ['id' => $variant->id, 'hours' => null, 'minutes' => null, 'weight_grams' => null],
-                ],
+                'hours' => null,
+                'minutes' => null,
+                'weight_grams' => null,
             ])
             ->assertSessionHasNoErrors();
 
@@ -87,48 +109,60 @@ class VariantProductionTest extends TestCase
         $this->assertNull($variant->filament_weight_grams);
     }
 
-    public function test_it_refuses_a_variant_that_belongs_to_another_product(): void
-    {
-        $foreign = Variant::factory()->create(['printing_time_minutes' => 10]);
-
-        $this->actingAs($this->admin)
-            ->patch(route('admin.produtos.variantes.producao', $this->product), [
-                'rows' => [
-                    ['id' => $foreign->id, 'hours' => 2, 'minutes' => 0, 'weight_grams' => 50],
-                ],
-            ])
-            ->assertSessionHasErrors('rows.0.id');
-
-        $this->assertSame(10, $foreign->refresh()->printing_time_minutes);
-    }
-
-    public function test_it_validates_each_row_like_the_calculator_does(): void
+    /**
+     * "0 h 45 min" e "2 h" sao ambos tempos: um dos dois campos preenchido
+     * chega para haver tempo.
+     */
+    public function test_hours_alone_or_minutes_alone_still_count_as_a_time(): void
     {
         $variant = Variant::factory()->for($this->product)->create();
 
         $this->actingAs($this->admin)
             ->patch(route('admin.produtos.variantes.producao', $this->product), [
-                'rows' => [
-                    ['id' => $variant->id, 'hours' => 1, 'minutes' => 75, 'weight_grams' => -5],
-                ],
+                'hours' => null,
+                'minutes' => 45,
+                'weight_grams' => 10,
             ])
-            ->assertSessionHasErrors(['rows.0.minutes', 'rows.0.weight_grams']);
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame(45, $variant->refresh()->printing_time_minutes);
     }
 
-    public function test_applying_prices_writes_the_calculated_prices_on_every_calculable_variant(): void
+    public function test_it_validates_like_the_calculator_does(): void
     {
-        $priced = Variant::factory()->for($this->product)->create([
+        Variant::factory()->for($this->product)->create();
+
+        $this->actingAs($this->admin)
+            ->patch(route('admin.produtos.variantes.producao', $this->product), [
+                'hours' => 1,
+                'minutes' => 75,
+                'weight_grams' => -5,
+            ])
+            ->assertSessionHasErrors(['minutes', 'weight_grams']);
+    }
+
+    /**
+     * O mesmo tempo e a mesma gramagem dao precos DIFERENTES quando o
+     * material muda: e o preco/kg de cada filamento que entra na conta.
+     * PVP e revenda vao os dois para cada variante.
+     */
+    public function test_applying_prices_writes_retail_and_wholesale_on_every_calculable_variant(): void
+    {
+        $pricier = Material::factory()->create(['price_per_kg_cents' => 3_400]);
+
+        $reference = Variant::factory()->for($this->product)->create([
             'material_id' => $this->material->id,
             'filament_weight_grams' => 50,
             'printing_time_minutes' => 180,
             'price_cents' => 1_000,
             'wholesale_price_cents' => null,
         ]);
-        $noTime = Variant::factory()->for($this->product)->create([
-            'material_id' => $this->material->id,
+        $premium = Variant::factory()->for($this->product)->create([
+            'material_id' => $pricier->id,
             'filament_weight_grams' => 50,
-            'printing_time_minutes' => null,
+            'printing_time_minutes' => 180,
             'price_cents' => 1_000,
+            'wholesale_price_cents' => null,
         ]);
         $noMaterial = Variant::factory()->for($this->product)->create([
             'material_id' => null,
@@ -142,15 +176,40 @@ class VariantProductionTest extends TestCase
             ->post(route('admin.produtos.variantes.precos', $this->product))
             ->assertRedirect(route('admin.produtos.index', ['editar' => $this->product->id]));
 
-        $this->assertSame(700, $priced->refresh()->price_cents);
-        $this->assertSame(400, $priced->wholesale_price_cents);
-        $this->assertNull($priced->compare_at_cents);
-        // Sem tempo nao ha calculo; sem material o plastico seria de graca.
-        $this->assertSame(1_000, $noTime->refresh()->price_cents);
+        $this->assertSame(700, $reference->refresh()->price_cents);
+        $this->assertSame(400, $reference->wholesale_price_cents);
+        $this->assertNull($reference->compare_at_cents);
+
+        $premium->refresh();
+        $this->assertGreaterThan(700, $premium->price_cents);
+        $this->assertGreaterThan(400, $premium->wholesale_price_cents);
+
+        // Sem material o plastico seria de graca: fica como estava.
         $this->assertSame(1_000, $noMaterial->refresh()->price_cents);
     }
 
-    public function test_applying_prices_leaves_archived_variants_alone(): void
+    public function test_applying_prices_skips_a_product_without_time_or_weight(): void
+    {
+        $variant = Variant::factory()->for($this->product)->create([
+            'material_id' => $this->material->id,
+            'filament_weight_grams' => 50,
+            'printing_time_minutes' => null,
+            'price_cents' => 1_000,
+        ]);
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.produtos.variantes.precos', $this->product))
+            ->assertRedirect();
+
+        $this->assertSame(1_000, $variant->refresh()->price_cents);
+    }
+
+    /**
+     * "Todas" inclui as arquivadas: uma variante que volte a montra com o
+     * preco antigo era uma armadilha, e escrever-lhe o preco novo nao custa
+     * nada enquanto esta fora dela.
+     */
+    public function test_applying_prices_reaches_archived_variants_too(): void
     {
         $archived = Variant::factory()->for($this->product)->create([
             'material_id' => $this->material->id,
@@ -164,7 +223,8 @@ class VariantProductionTest extends TestCase
             ->post(route('admin.produtos.variantes.precos', $this->product))
             ->assertRedirect();
 
-        $this->assertSame(1_000, $archived->refresh()->price_cents);
+        $this->assertSame(700, $archived->refresh()->price_cents);
+        $this->assertSame(400, $archived->wholesale_price_cents);
     }
 
     /**
@@ -265,12 +325,17 @@ class VariantProductionTest extends TestCase
 
         $this->actingAs($customer)
             ->patch(route('admin.produtos.variantes.producao', $this->product), [
-                'rows' => [['id' => $variant->id, 'hours' => 1, 'minutes' => 0, 'weight_grams' => 10]],
+                'hours' => 1,
+                'minutes' => 0,
+                'weight_grams' => 10,
             ])
             ->assertForbidden();
 
         $this->actingAs($customer)
             ->post(route('admin.produtos.variantes.precos', $this->product))
             ->assertForbidden();
+
+        $this->assertNull($variant->refresh()->printing_time_minutes);
+        $this->assertSame(1_000, $variant->price_cents);
     }
 }

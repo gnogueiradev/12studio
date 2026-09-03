@@ -10,8 +10,9 @@ use App\Services\VariantProductionService;
 use Illuminate\Http\RedirectResponse;
 
 /**
- * A aba "Producao" do modal do produto: tempos e gramagens de todas as
- * variantes numa tabela so, e um botao que escreve nelas os precos calculados.
+ * A aba "Producao" do modal do produto: o tempo e a gramagem da peca, a
+ * escrever de uma vez em todas as variantes, e um botao que escreve nelas os
+ * precos calculados.
  *
  * Duas accoes e nao uma, porque sao decisoes diferentes: corrigir o que o
  * slicer disse nao e decidir que o preco muda. Ambas respondem com `back()`,
@@ -26,9 +27,11 @@ class VariantProductionController extends Controller
 
     public function update(UpdateVariantProductionRequest $request, Product $product): RedirectResponse
     {
-        $this->production->updateProduction($product, $request->rows());
+        $count = $this->production->updateProduction($product, $request->values());
 
-        $this->toast('Tempos e gramagens guardados.');
+        $this->toast($count === 1
+            ? 'Tempo e gramagem guardados na variante.'
+            : "Tempo e gramagem guardados nas {$count} variantes.");
 
         return back();
     }

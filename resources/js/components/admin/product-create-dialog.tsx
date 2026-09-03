@@ -35,6 +35,7 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList } from '@/components/ui/tabs';
 import { formatCents, inputToCents } from '@/lib/money';
+import { productProduction } from '@/lib/production';
 import { cn } from '@/lib/utils';
 import { store, update } from '@/routes/admin/produtos';
 import { destroy as destroyVariant } from '@/routes/admin/variantes';
@@ -442,6 +443,7 @@ export function ProductCreateDialog({
                         productName={editing.product.name}
                         variant={variantTarget === 'new' ? null : variantTarget}
                         suggestedSku={editing.suggestedSku}
+                        production={productProduction(editing.variants)}
                         colors={colors}
                         materials={materials}
                         printers={printers}
@@ -894,9 +896,9 @@ export function ProductCreateDialog({
                             /*
                              * Dois separadores e não uma lista mais comprida:
                              * a lista responde a "que variantes há e a quanto",
-                             * a produção a "quanto demora e quanto pesa cada
-                             * uma" — e é na segunda que se preenche de uma vez
-                             * o que alimenta a calculadora.
+                             * a produção a "quanto demora e quanto pesa a
+                             * peça" — um par só, igual para todas — e é daí
+                             * que saem os preços de todas de uma vez.
                              */
                             <Tabs defaultValue="lista">
                                 <TabsList>
