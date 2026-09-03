@@ -18,6 +18,7 @@ use App\Services\ProductService;
 use App\Services\TagService;
 use App\Support\ColorOptions;
 use App\Support\MaterialOptions;
+use App\Support\Micros;
 use App\Support\Money;
 use App\Support\PrinterOptions;
 use App\Support\VariantSku;
@@ -260,54 +261,65 @@ class ProductController extends Controller
             ->orderByDesc('is_default')
             ->orderBy('sku')
             ->get()
-            ->map(fn (Variant $variant): array => [
-                'id' => $variant->id,
-                'sku' => $variant->sku,
-                'sizeLabel' => $variant->size_label,
-                'colorId' => $variant->color_id,
-                'color' => $variant->color === null ? null : [
-                    'id' => $variant->color->id,
-                    'name' => $variant->color->name,
-                    'hex' => $variant->color->hex_color,
-                ],
-                // Ao lado da cor e nao dentro dela: sao dois eixos, e o
-                // material chegava aqui atraves da cor so porque a cor lhe
-                // pertencia.
-                'materialId' => $variant->material_id,
-                'material' => $variant->material === null ? null : [
-                    'id' => $variant->material->id,
-                    'name' => $variant->material->name,
-                ],
-                'priceCents' => $variant->price_cents,
-                'compareAtCents' => $variant->compare_at_cents,
-                'wholesalePriceCents' => $variant->wholesale_price_cents,
-                // Desfaz a troca normal/promocional que o VariantService faz na
-                // escrita — o formulario nunca ve `price_cents` cru.
-                'normalPrice' => Money::toDecimal($variant->normalPriceCents()),
-                'salePrice' => $variant->salePriceCents() === null
-                    ? null
-                    : Money::toDecimal((int) $variant->salePriceCents()),
-                'wholesalePrice' => $variant->wholesale_price_cents === null
-                    ? null
-                    : Money::toDecimal($variant->wholesale_price_cents),
-                'filamentWeightGrams' => $variant->filament_weight_grams,
-                'printingTimeMinutes' => $variant->printing_time_minutes,
-                'printerProfileId' => $variant->printer_profile_id,
-                'packagingCost' => $variant->packaging_cost_cents === null
-                    ? null
-                    : Money::toDecimal($variant->packaging_cost_cents),
-                'componentsCost' => $variant->components_cost_cents === null
-                    ? null
-                    : Money::toDecimal($variant->components_cost_cents),
-                'activeLaborMinutes' => $variant->active_labor_minutes,
-                'stock' => $variant->stock,
-                'reservedStock' => $variant->reserved_stock,
-                'availableStock' => $variant->available_stock,
-                'lowStockThreshold' => $variant->low_stock_threshold,
-                'lowStock' => $variant->isLowStock(),
-                'isDefault' => $variant->is_default,
-                'active' => $variant->active,
-            ])
+            ->map(function (Variant $variant): array {
+                $suggested = $this->preview->forVariant($variant);
+
+                return [
+                    'id' => $variant->id,
+                    'sku' => $variant->sku,
+                    'sizeLabel' => $variant->size_label,
+                    'colorId' => $variant->color_id,
+                    'color' => $variant->color === null ? null : [
+                        'id' => $variant->color->id,
+                        'name' => $variant->color->name,
+                        'hex' => $variant->color->hex_color,
+                    ],
+                    // Ao lado da cor e nao dentro dela: sao dois eixos, e o
+                    // material chegava aqui atraves da cor so porque a cor lhe
+                    // pertencia.
+                    'materialId' => $variant->material_id,
+                    'material' => $variant->material === null ? null : [
+                        'id' => $variant->material->id,
+                        'name' => $variant->material->name,
+                    ],
+                    'priceCents' => $variant->price_cents,
+                    'compareAtCents' => $variant->compare_at_cents,
+                    'wholesalePriceCents' => $variant->wholesale_price_cents,
+                    // Desfaz a troca normal/promocional que o VariantService faz na
+                    // escrita — o formulario nunca ve `price_cents` cru.
+                    'normalPrice' => Money::toDecimal($variant->normalPriceCents()),
+                    'salePrice' => $variant->salePriceCents() === null
+                        ? null
+                        : Money::toDecimal((int) $variant->salePriceCents()),
+                    'wholesalePrice' => $variant->wholesale_price_cents === null
+                        ? null
+                        : Money::toDecimal($variant->wholesale_price_cents),
+                    'filamentWeightGrams' => $variant->filament_weight_grams,
+                    'printingTimeMinutes' => $variant->printing_time_minutes,
+                    'printerProfileId' => $variant->printer_profile_id,
+                    'packagingCost' => $variant->packaging_cost_cents === null
+                        ? null
+                        : Money::toDecimal($variant->packaging_cost_cents),
+                    'componentsCost' => $variant->components_cost_cents === null
+                        ? null
+                        : Money::toDecimal($variant->components_cost_cents),
+                    'activeLaborMinutes' => $variant->active_labor_minutes,
+                    // O que a calculadora daria a esta variante tal como esta
+                    // gravada, para a aba "Producao" mostrar ao lado do preco
+                    // atual. Null quando falta peso, tempo ou material. O mesmo
+                    // motor — e a mesma regra do material — que o "Aplicar
+                    // precos" usa para escrever, portanto o que se ve e o que fica.
+                    'suggestedRetailCents' => $suggested === null ? null : Micros::toCents($suggested->retailPriceMicros),
+                    'suggestedWholesaleCents' => $suggested === null ? null : Micros::toCents($suggested->wholesalePriceMicros),
+                    'stock' => $variant->stock,
+                    'reservedStock' => $variant->reserved_stock,
+                    'availableStock' => $variant->available_stock,
+                    'lowStockThreshold' => $variant->low_stock_threshold,
+                    'lowStock' => $variant->isLowStock(),
+                    'isDefault' => $variant->is_default,
+                    'active' => $variant->active,
+                ];
+            })
             ->all();
     }
 
