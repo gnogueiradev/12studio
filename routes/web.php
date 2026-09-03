@@ -185,6 +185,15 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
             ->parameters(['produtos' => 'product', 'variantes' => 'variant'])
             ->except(['show', 'index', 'create', 'edit'])
             ->shallow();
+
+        // A aba "Producao" do modal: tempos e gramagens de todas as variantes
+        // de uma vez, e os precos calculados a partir deles. Antes do resource
+        // nao e preciso — `producao` e `precos` nao colidem com `{variant}`,
+        // que so existe em /admin/variantes/{variant}.
+        Route::patch('produtos/{product}/variantes/producao', [Admin\VariantProductionController::class, 'update'])
+            ->name('produtos.variantes.producao');
+        Route::post('produtos/{product}/variantes/precos', [Admin\VariantProductionController::class, 'applyPrices'])
+            ->name('produtos.variantes.precos');
     });
 });
 

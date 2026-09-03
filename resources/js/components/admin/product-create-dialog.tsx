@@ -4,12 +4,14 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ColorSwatch } from '@/components/admin/color-swatch';
 import { ColorSwatchGrid } from '@/components/admin/color-swatch-grid';
 import { ConfirmDialog } from '@/components/admin/confirm-dialog';
+import { FormTab } from '@/components/admin/form-tab';
 import { ProductImages } from '@/components/admin/product-images';
 import { RichTextEditor } from '@/components/admin/rich-text-editor';
 import { TagInput } from '@/components/admin/tag-input';
 import { ToggleChip } from '@/components/admin/toggle-chip';
 import type { VariantPricingPreview } from '@/components/admin/variant-form';
 import { VariantPanel } from '@/components/admin/variant-panel';
+import { VariantProductionTable } from '@/components/admin/variant-production-table';
 import InputError from '@/components/input-error';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -31,6 +33,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList } from '@/components/ui/tabs';
 import { formatCents, inputToCents } from '@/lib/money';
 import { cn } from '@/lib/utils';
 import { store, update } from '@/routes/admin/produtos';
@@ -888,10 +891,35 @@ export function ProductCreateDialog({
                                 <InputError message={variantsError} />
                             </>
                         ) : (
-                            <ExistingVariants
-                                editing={editing}
-                                onOpenVariant={setVariantTarget}
-                            />
+                            /*
+                             * Dois separadores e não uma lista mais comprida:
+                             * a lista responde a "que variantes há e a quanto",
+                             * a produção a "quanto demora e quanto pesa cada
+                             * uma" — e é na segunda que se preenche de uma vez
+                             * o que alimenta a calculadora.
+                             */
+                            <Tabs defaultValue="lista">
+                                <TabsList>
+                                    <FormTab value="lista">
+                                        Lista
+                                        <span className="text-muted-foreground tabular-nums">
+                                            {editing.variants.length}
+                                        </span>
+                                    </FormTab>
+                                    <FormTab value="producao">Produção</FormTab>
+                                </TabsList>
+
+                                <TabsContent value="lista">
+                                    <ExistingVariants
+                                        editing={editing}
+                                        onOpenVariant={setVariantTarget}
+                                    />
+                                </TabsContent>
+
+                                <TabsContent value="producao">
+                                    <VariantProductionTable editing={editing} />
+                                </TabsContent>
+                            </Tabs>
                         )}
                     </div>
 

@@ -329,6 +329,13 @@ export type VariantRow = {
     componentsCost: string | null;
     /** Null = usa a definição global. Zero é "não leva trabalho nenhum". */
     activeLaborMinutes: number | null;
+    /**
+     * O que a calculadora dá a esta variante tal como está gravada — o mesmo
+     * motor, e o mesmo número, que "Aplicar preços" escreve. Null quando falta
+     * gramagem, tempo ou material.
+     */
+    suggestedRetailCents: number | null;
+    suggestedWholesaleCents: number | null;
     stock: number;
     reservedStock: number;
     availableStock: number;
