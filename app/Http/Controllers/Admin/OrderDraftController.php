@@ -54,14 +54,14 @@ class OrderDraftController extends Controller
             ...ManualOrderOptions::props(),
             'draft' => [
                 'id' => $draft->id,
-                'payload' => $draft->payload,
+                'payload' => $this->formShape($draft->payload),
             ],
         ]);
     }
 
     public function store(StoreOrderDraftRequest $request): RedirectResponse
     {
-        $payload = $request->validated();
+        $payload = $this->formShape($request->validated());
 
         $draft = OrderDraft::query()->create([
             'created_by_user_id' => $request->user()?->getKey(),
@@ -83,7 +83,7 @@ class OrderDraftController extends Controller
     {
         $this->authorizeOwner($request, $draft);
 
-        $payload = $request->validated();
+        $payload = $this->formShape($request->validated());
 
         $draft->update([
             'customer_name' => $this->name($payload),
@@ -119,6 +119,49 @@ class OrderDraftController extends Controller
     private function authorizeOwner(Request $request, OrderDraft $draft): void
     {
         abort_unless($draft->created_by_user_id === $request->user()?->getKey(), 404);
+    }
+
+    /**
+     * O payload promete ser "o formulario, tal e qual" — e ha uma coisa no
+     * caminho a desmentir a promessa. O formulario manda `''` nos campos por
+     * preencher; o ConvertEmptyStringsToNull do Laravel, que e global e corre
+     * ANTES da validacao, troca-os todos por null. Como aqui tudo e
+     * `nullable`, os null passam e vao para a coluna JSON.
+     *
+     * Ao retomar, a pagina faz `{...BLANK, ...payload}`: um spread tapa um
+     * campo em FALTA, mas nao um campo presente a null — o null ganha ao `''`
+     * do BLANK, e o primeiro `.trim()` do render deitava a pagina abaixo.
+     *
+     * Corre a gravar E a ler: a gravar para nao entrarem mais null, a ler
+     * porque os rascunhos guardados antes disto continuam com os null na base
+     * de dados e tem de abrir na mesma.
+     *
+     * A lista e a dos campos que NAO sao texto, e nao ao contrario: assim um
+     * campo novo no formulario fica coberto sem ninguem se lembrar dele.
+     *
+     * @param  array<string, mixed>  $payload
+     * @return array<string, mixed>
+     */
+    private function formShape(array $payload): array
+    {
+        $keepNull = ['user_id', 'draft_id', 'send_confirmation'];
+        $keepNullInItem = ['variant_id', 'qty', 'vat_rate'];
+
+        foreach ($payload as $key => $value) {
+            if ($value === null && ! in_array($key, $keepNull, true)) {
+                $payload[$key] = '';
+            }
+        }
+
+        foreach ($payload['items'] ?? [] as $line => $item) {
+            foreach ($item as $key => $value) {
+                if ($value === null && ! in_array($key, $keepNullInItem, true)) {
+                    $payload['items'][$line][$key] = '';
+                }
+            }
+        }
+
+        return $payload;
     }
 
     /**

@@ -85,6 +85,71 @@ class OrderDraftTest extends TestCase
     }
 
     /**
+     * O formulario manda `''` nos campos por preencher, mas o
+     * ConvertEmptyStringsToNull do Laravel corre antes da validacao e troca-os
+     * todos por null. Guardados assim, ao retomar o rascunho o `...payload`
+     * por cima do BLANK punha null onde o formulario espera texto — e o
+     * primeiro `.trim()` do render rebentava a pagina.
+     */
+    public function test_a_draft_keeps_empty_fields_as_text(): void
+    {
+        $this->actingAs($this->admin)
+            ->post(route('admin.encomendas.rascunhos.store'), $this->payload());
+
+        $payload = OrderDraft::query()->firstOrFail()->payload;
+
+        foreach (['email', 'phone', 'nif', 'external_order_reference',
+            'shipping_method_name', 'line1', 'line2', 'postal_code',
+            'city', 'admin_note'] as $field) {
+            $this->assertSame('', $payload[$field], "O campo {$field} devia ficar vazio, nao null.");
+        }
+    }
+
+    public function test_a_draft_keeps_empty_item_fields_as_text(): void
+    {
+        $payload = $this->payload();
+        $payload['items'][0]['variant_label'] = '';
+        $payload['items'][0]['price_override_reason'] = '';
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.encomendas.rascunhos.store'), $payload);
+
+        $item = OrderDraft::query()->firstOrFail()->payload['items'][0];
+
+        $this->assertSame('', $item['variant_label']);
+        $this->assertSame('', $item['price_override_reason']);
+    }
+
+    /**
+     * Os rascunhos guardados antes desta correcao continuam na base de dados
+     * com os null la dentro. Retomar um desses tem de dar o mesmo formulario
+     * que retomar um novo — senao a correcao so serve para quem comecar de
+     * folha limpa.
+     */
+    public function test_resuming_a_draft_saved_with_nulls_still_gets_text(): void
+    {
+        $payload = $this->payload();
+        $payload['email'] = null;
+        $payload['line1'] = null;
+        $payload['items'][0]['variant_label'] = null;
+
+        $draft = OrderDraft::query()->create([
+            'created_by_user_id' => $this->admin->id,
+            'customer_name' => 'Julia Marques',
+            'total_cents' => 5330,
+            'payload' => $payload,
+        ]);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.encomendas.rascunhos.edit', $draft))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('draft.payload.email', '')
+                ->where('draft.payload.line1', '')
+                ->where('draft.payload.items.0.variant_label', ''));
+    }
+
+    /**
      * O que separa um rascunho de uma encomenda: nao gasta numero da
      * sequencia anual e nao mexe em stock.
      */
