@@ -4,8 +4,6 @@ namespace Tests\Feature\Admin;
 
 use App\Models\Category;
 use App\Models\Product;
-use App\Models\ProductImage;
-use App\Models\Tag;
 use App\Models\User;
 use App\Models\Variant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -190,77 +188,54 @@ class ProductIndexTest extends TestCase
                 ->where('products.data.0.readyStock', 0));
     }
 
-    public function test_the_page_carries_the_lists_the_new_product_modal_needs(): void
+    /**
+     * A listagem voltou a ser so uma listagem. As cores, os materiais, as
+     * impressoras e o preco sugerido saem daqui com o modal: eram carregados em
+     * TODOS os pedidos da pagina mais visitada do backoffice so porque o modal
+     * podia abrir. Agora sao do formulario, que tem pagina propria.
+     */
+    public function test_the_listing_no_longer_carries_the_product_form(): void
     {
-        Category::query()->create(['name' => 'Decoração', 'slug' => 'decoracao']);
+        Product::factory()->create();
 
         $this->actingAs($this->admin)
             ->get(route('admin.produtos.index'))
             ->assertInertia(fn (Assert $page) => $page
-                ->has('categories', 1)
-                ->has('colors')
-                ->has('materials')
-                ->has('tagSuggestions')
-                ->has('defaultVatRate')
-                // Sem `?editar`, o modal esta em modo de criacao e nao ha
-                // produto nenhum a carregar.
-                ->where('editing', null));
+                ->missing('editing')
+                ->missing('colors')
+                ->missing('materials')
+                ->missing('printers')
+                ->missing('pricing'));
     }
 
     /**
-     * O modal de edicao nao se semeia da linha, como o dos materiais e o das
-     * impressoras: a linha nao traz categoria, descricao, etiquetas nem IVA, e
-     * a galeria e as variantes sao tabelas proprias. Vem por `?editar={id}`,
-     * num recarregamento parcial.
+     * `?editar={id}` foi o endereco do modal durante toda a vida dele, e anda
+     * em historicos e em separadores guardados. Continua a levar ao produto
+     * certo — agora a pagina dele.
      */
-    public function test_the_page_carries_the_product_the_edit_modal_needs(): void
+    public function test_the_old_modal_address_leads_to_the_form_page(): void
     {
-        $category = Category::query()->create(['name' => 'Decoração', 'slug' => 'decoracao']);
-
-        $product = Product::factory()->create([
-            'name' => 'Vaso Espiral',
-            'category_id' => $category->id,
-            'description' => '<p>Impresso em PLA.</p>',
-            'vat_rate' => 6,
-        ]);
-        $product->tags()->attach(
-            Tag::query()->create(['name' => 'Natal', 'slug' => 'natal']),
-        );
-
-        $variant = Variant::factory()->create(['product_id' => $product->id]);
-        ProductImage::factory()->create(['product_id' => $product->id]);
+        $product = Product::factory()->create();
 
         $this->actingAs($this->admin)
             ->get(route('admin.produtos.index', ['editar' => $product->id]))
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page
-                ->where('editing.product.id', $product->id)
-                ->where('editing.product.name', 'Vaso Espiral')
-                ->where('editing.product.categoryId', $category->id)
-                ->where('editing.product.description', '<p>Impresso em PLA.</p>')
-                ->where('editing.product.vatRate', 6)
-                ->where('editing.product.tags', ['Natal'])
-                ->has('editing.images', 1)
-                ->has('editing.variants', 1)
-                ->where('editing.variants.0.sku', $variant->sku));
+            ->assertRedirect(route('admin.produtos.edit', $product));
     }
 
     /**
      * Um id que nao existe (ou lixo) devolve a listagem normal em vez de
-     * rebentar: o parametro vem do URL, e um URL partilhado sobrevive ao
-     * produto que o originou.
+     * rebentar ou de redirecionar para lado nenhum: o parametro vem do URL, e
+     * um URL partilhado sobrevive ao produto que o originou.
      */
-    public function test_an_unknown_product_to_edit_leaves_the_modal_closed(): void
+    public function test_an_unknown_product_to_edit_just_lists(): void
     {
         $this->actingAs($this->admin)
             ->get(route('admin.produtos.index', ['editar' => 99999]))
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page->where('editing', null));
+            ->assertOk();
 
         $this->actingAs($this->admin)
             ->get(route('admin.produtos.index', ['editar' => 'ou-nem-um-numero']))
-            ->assertOk()
-            ->assertInertia(fn (Assert $page) => $page->where('editing', null));
+            ->assertOk();
     }
 
     public function test_non_admins_cannot_list_products(): void

@@ -266,10 +266,10 @@ export type ProductFormData = {
 };
 
 /**
- * O que o modal precisa para editar um produto, pedido por `?editar={id}` num
- * recarregamento parcial. Não vem da linha da listagem como nos materiais e nas
- * impressoras: a linha não traz categoria, descrição, etiquetas nem IVA, e a
- * galeria e as variantes são tabelas próprias.
+ * O que a página do formulário precisa para editar um produto. Não vem da linha
+ * da listagem como nos materiais e nas impressoras: a linha não traz categoria,
+ * descrição, etiquetas nem IVA, e a galeria e as variantes são tabelas
+ * próprias.
  */
 export type ProductEditing = {
     product: ProductDetail;
@@ -277,6 +277,8 @@ export type ProductEditing = {
     variants: VariantRow[];
     /** Semente do campo SKU ao criar uma variante nova. */
     suggestedSku: string;
+    /** Data legível da última gravação, para o subtítulo da página. */
+    updatedAt: string | null;
 };
 
 export type ProductImageRow = {

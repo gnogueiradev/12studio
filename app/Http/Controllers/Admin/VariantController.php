@@ -16,15 +16,15 @@ use Illuminate\Http\RedirectResponse;
  * POST em /admin/produtos/{product}/variantes, editar e arquivar por
  * /admin/variantes/{variant}.
  *
- * Nao ha `create` nem `edit`: a ficha da variante vive dentro do modal do
- * produto, na listagem, como o proprio produto. Cor, material, gramagem, tempo
- * de impressao, impressora e custos extra escrevem-se todos lá — e o painel de
- * custo que os acompanha vem da prop `pricing` do ProductController::index,
- * calculada pelo MESMO motor que calcula o preco gravado.
+ * Nao ha `create` nem `edit`: a ficha da variante abre em gaveta dentro da
+ * pagina do produto. Cor, material, gramagem, tempo de impressao, impressora e
+ * custos extra escrevem-se todos lá — e o painel de custo que os acompanha vem
+ * da prop `pricing` do ProductController::edit, calculada pelo MESMO motor que
+ * calcula o preco gravado.
  *
  * Daí que as tres accoes que sobram respondam com `back()`: disparam-se todas
- * de dentro do modal, e voltar ao endereco de onde se veio guarda a pagina, os
- * filtros, a pesquisa e o `?editar={id}` que reabre o produto certo.
+ * de dentro da pagina do produto, e voltar ao endereco de onde se veio aterra
+ * na lista de variantes com o resto do formulario como estava.
  */
 class VariantController extends Controller
 {

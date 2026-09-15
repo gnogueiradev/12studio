@@ -41,16 +41,30 @@ class ProductController extends Controller
     ) {}
 
     /**
-     * A listagem, e com ela o modal do produto — que desde que as variantes
-     * deixaram de ter pagina propria e tambem a ficha da variante.
+     * A listagem, e so a listagem.
      *
-     * Daí o `PricingPreviewRequest` num `index`: o painel de custo do
-     * formulario da variante nao espelha a formula em TypeScript, recarrega a
-     * prop `pricing` (`only: ['pricing']`) e deixa o servidor responder. Os
-     * campos do calculo viajam no URL, como na calculadora.
+     * O formulario mudou-se para pagina propria (ver `create`/`edit`) e levou
+     * com ele as cores, os materiais, as impressoras e o preco sugerido — que
+     * eram carregados em TODOS os pedidos desta pagina so porque o modal podia
+     * abrir.
      */
-    public function index(PricingPreviewRequest $request): Response
+    public function index(Request $request): Response|RedirectResponse
     {
+        // `?editar={id}` foi o endereco do formulario durante toda a vida do
+        // modal, e anda em historicos e em separadores guardados. Um id que ja
+        // nao existe (ou lixo) cai para a listagem normal, em vez de dar 404: o
+        // parametro vem do URL, e um URL partilhado sobrevive ao produto que o
+        // originou.
+        $legacy = $request->query('editar');
+
+        if ($legacy !== null && ctype_digit((string) $legacy)) {
+            $product = Product::query()->find((int) $legacy);
+
+            if ($product !== null) {
+                return to_route('admin.produtos.edit', $product);
+            }
+        }
+
         $filters = [
             'search' => trim((string) $request->query('search', '')),
             'status' => (string) $request->query('status', ''),
@@ -127,26 +141,46 @@ class ProductController extends Controller
                 'readyStock' => (int) $product->ready_stock,
             ]);
 
-        // Antes das listas de propósito: sao as variantes do produto aberto que
-        // dizem que cores e materiais arquivados tem de continuar a aparecer.
-        $editing = $this->editingProduct($request);
-
         return Inertia::render('admin/produtos/index', [
             'products' => $products,
             'filters' => $filters,
             'statusCounts' => $statusCounts,
-            // Listas do modal de produto, que vive nesta pagina.
-            'categories' => $this->categoryOptions(),
-            'colors' => ColorOptions::all(array_column($editing['variants'] ?? [], 'colorId')),
-            'materials' => MaterialOptions::all(array_column($editing['variants'] ?? [], 'materialId')),
-            'printers' => PrinterOptions::all($this->pricingSettings->electricityPriceMicrosPerKwh()),
-            'defaultActiveLaborMinutes' => $this->pricingSettings->activeLaborMinutes(),
-            // Do ambito `product` e so dele: desde que as etiquetas deixaram de
-            // ser exclusivas do catalogo, sugerir todas era oferecer
-            // "revendedor" e "urgente" ao classificar um vaso.
-            'tagSuggestions' => $this->tagService->suggestions(Tag::SCOPE_PRODUCT),
-            'tagOptions' => $this->tagService->optionsFor(Tag::SCOPE_PRODUCT),
-            'defaultVatRate' => (int) config('shop.default_vat_rate', 23),
+        ]);
+    }
+
+    /**
+     * A pagina do formulario, em branco: o produto novo.
+     *
+     * Leva o `PricingPreviewRequest` como o `edit` — a matriz nao usa o painel
+     * de custo, mas a prop tem de existir para a pagina ser a mesma nos dois
+     * modos.
+     */
+    public function create(PricingPreviewRequest $request): Response
+    {
+        return Inertia::render('admin/produtos/form', [
+            ...$this->formLists(null),
+            'editing' => null,
+            'pricing' => $this->preview->fromRequest($request),
+        ]);
+    }
+
+    /**
+     * A pagina do formulario com um produto dentro.
+     *
+     * O painel de custo da ficha de variante nao espelha a formula em
+     * TypeScript: recarrega a prop `pricing` (`only: ['pricing']`) com os
+     * campos do calculo no URL e deixa o servidor responder, como na
+     * calculadora. E por isso que um `edit` recebe um `PricingPreviewRequest`.
+     */
+    public function edit(PricingPreviewRequest $request, Product $product): Response
+    {
+        $editing = $this->editingProduct($product);
+
+        return Inertia::render('admin/produtos/form', [
+            // Antes das listas de propósito: sao as variantes do produto aberto
+            // que dizem que cores e materiais arquivados tem de continuar a
+            // aparecer.
+            ...$this->formLists($editing),
             'editing' => $editing,
             // Sem peso nem tempo no URL o `isCalculable()` diz que nao, e isto
             // sai a `result: null` — que e exatamente como o painel de custo
@@ -156,35 +190,41 @@ class ProductController extends Controller
     }
 
     /**
-     * O produto que o modal esta a editar, ou null quando esta a criar.
+     * As listas que o formulario precisa, iguais a criar e a editar.
      *
-     * Vem por `?editar={id}` e nao pela linha da listagem, ao contrario dos
-     * materiais e das impressoras: a linha nao traz categoria, descricao,
-     * etiquetas nem IVA, e alargar o `->through()` para os trazer era carregar
-     * vinte descricoes em HTML, vinte galerias e vinte matrizes de variantes em
-     * cada render da listagem para servir a que se abre.
-     *
-     * O modal pede-o com um recarregamento parcial (`only: ['editing']`), o
-     * mesmo mecanismo com que ja pede o preco sugerido. O parametro fica no URL
-     * de proposito: e o que faz o modal reabrir no produto certo depois de
-     * qualquer accao da galeria ou das variantes, e o que torna
-     * `/admin/produtos?editar=12` um endereco que se pode partilhar.
-     *
-     * @return array<string, mixed>|null
+     * @param  array<string, mixed>|null  $editing
+     * @return array<string, mixed>
      */
-    private function editingProduct(Request $request): ?array
+    private function formLists(?array $editing): array
     {
-        $id = $request->query('editar');
+        return [
+            'categories' => $this->categoryOptions(),
+            'colors' => ColorOptions::all(array_column($editing['variants'] ?? [], 'colorId')),
+            'materials' => MaterialOptions::all(array_column($editing['variants'] ?? [], 'materialId')),
+            'printers' => PrinterOptions::all($this->pricingSettings->electricityPriceMicrosPerKwh()),
+            'defaultActiveLaborMinutes' => $this->pricingSettings->activeLaborMinutes(),
+            // Do ambito `product` e so dele: desde que as etiquetas deixaram de
+            // ser exclusivas do catalogo, sugerir todas era oferecer
+            // "revendedor" e "urgente" ao classificar um vaso.
+            'tagSuggestions' => $this->tagService->suggestions(Tag::SCOPE_PRODUCT),
+            'defaultVatRate' => (int) config('shop.default_vat_rate', 23),
+        ];
+    }
 
-        if ($id === null || ! ctype_digit((string) $id)) {
-            return null;
-        }
-
-        $product = Product::query()->with(['tags', 'images'])->find((int) $id);
-
-        if ($product === null) {
-            return null;
-        }
+    /**
+     * O produto da pagina, com a galeria e as variantes.
+     *
+     * Nao se semeia da linha da listagem, ao contrario dos materiais e das
+     * impressoras: a linha nao traz categoria, descricao, etiquetas nem IVA, e
+     * alargar o `->through()` para os trazer era carregar vinte descricoes em
+     * HTML, vinte galerias e vinte matrizes de variantes em cada render da
+     * listagem para servir a que se abre.
+     *
+     * @return array<string, mixed>
+     */
+    private function editingProduct(Product $product): array
+    {
+        $product->load(['tags', 'images']);
 
         return [
             'product' => [
@@ -204,19 +244,28 @@ class ProductController extends Controller
             ],
             'images' => $this->imageRows($product),
             'variants' => $this->variantRows($product),
-            // A semente do campo SKU quando se cria uma variante nova dentro
-            // do modal. A mesma numeracao da matriz — ver VariantSku.
+            // A semente do campo SKU quando se cria uma variante nova na
+            // gaveta. A mesma numeracao da matriz — ver VariantSku.
             'suggestedSku' => VariantSku::next($product),
+            'updatedAt' => $product->updated_at?->format('d/m/Y H:i'),
         ];
     }
 
+    /**
+     * Criado o produto, fica-se na pagina dele.
+     *
+     * Criar e so o principio — faltam as fotografias, os tempos do slicer e os
+     * precos de cada variante, e nenhuma dessas coisas cabe no pedido de
+     * criacao. Voltar a listagem era fechar a porta na cara de quem ainda tem
+     * trabalho para fazer ali dentro.
+     */
     public function store(StoreProductRequest $request): RedirectResponse
     {
-        $this->productService->store($request->validated());
+        $product = $this->productService->store($request->validated());
 
         $this->toast('Produto criado.');
 
-        return to_route('admin.produtos.index');
+        return to_route('admin.produtos.edit', $product);
     }
 
     public function update(UpdateProductRequest $request, Product $product): RedirectResponse
@@ -225,7 +274,9 @@ class ProductController extends Controller
 
         $this->toast('Produto atualizado.');
 
-        return to_route('admin.produtos.index');
+        // Fica-se onde se estava: gravar o nome nao e razao para perder de
+        // vista a galeria e as variantes que se estava a arrumar.
+        return to_route('admin.produtos.edit', $product);
     }
 
     /**
@@ -253,13 +304,18 @@ class ProductController extends Controller
     }
 
     /**
-     * Variantes do produto para a seccao "Variantes" do modal de edicao.
+     * Variantes do produto para a seccao "Variantes" da pagina.
      *
      * Traz duas coisas ao mesmo tempo: o que a LINHA mostra (a cor e o material
      * com nome e tom, o preco efetivo, o stock disponivel) e o que o
      * FORMULARIO edita (os ids, os precos em euros, o tempo de impressao). Sao
      * poucas variantes por produto, e uma segunda viagem ao servidor so para
-     * abrir a ficha de uma delas dava um modal a piscar.
+     * abrir a ficha de uma delas dava uma gaveta a piscar.
+     *
+     * A linha traz o formulario inteiro tambem por outra razao: o preco e o
+     * stock editam-se na propria linha, e o endpoint da variante herda as
+     * regras do `store` — um patch so com o preco era um pedido a que faltava
+     * o SKU.
      *
      * @return array<int, array<string, mixed>>
      */
@@ -333,7 +389,7 @@ class ProductController extends Controller
     }
 
     /**
-     * Galeria do produto para a seccao "Fotografias" do modal de edicao.
+     * Galeria do produto para a seccao "Fotografias" da pagina.
      * A relacao `images` ja vem ordenada por sort_order.
      *
      * @return array<int, array<string, mixed>>

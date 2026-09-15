@@ -1,9 +1,7 @@
-import { Head, router, usePage } from '@inertiajs/react';
+import { Head, Link, router } from '@inertiajs/react';
 import { Box } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { PageHeader } from '@/components/admin/page-header';
-import { ProductCreateDialog } from '@/components/admin/product-create-dialog';
-import type { VariantPricingPreview } from '@/components/admin/variant-form';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -13,22 +11,13 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
-import { Spinner } from '@/components/ui/spinner';
 import { formatCents } from '@/lib/money';
 import { label } from '@/lib/options';
-import type { Option } from '@/lib/options';
 import { cn } from '@/lib/utils';
-import { index } from '@/routes/admin/produtos';
-import type {
-    CategoryOption,
-    ColorOption,
-    MaterialOption,
-    ProductEditing,
-    ProductRow,
-} from '@/types/catalog';
+import { create, edit, index } from '@/routes/admin/produtos';
+import type { ProductRow } from '@/types/catalog';
 import { PRODUCT_STATUSES } from '@/types/catalog';
 import type { Paginated } from '@/types/pagination';
-import type { PrinterProfileOption } from '@/types/pricing';
 
 type Filters = {
     search: string;
@@ -51,22 +40,6 @@ type Props = {
     filters: Filters;
     /** Contagem por estado, já sem o filtro de estado aplicado. */
     statusCounts: Record<string, number>;
-    categories: CategoryOption[];
-    colors: ColorOption[];
-    materials: MaterialOption[];
-    printers: PrinterProfileOption[];
-    tagSuggestions: string[];
-    tagOptions: Option[];
-    defaultVatRate: number;
-    /** O produto a editar, carregado por `?editar={id}`. Null a criar. */
-    editing: ProductEditing | null;
-    /**
-     * O painel de custo da ficha de variante, que vive no modal desta página.
-     * Recarrega-se sozinha com `only: ['pricing']` enquanto o admin escreve —
-     * ver VariantForm.
-     */
-    pricing: VariantPricingPreview;
-    defaultActiveLaborMinutes: number;
 };
 
 /** Tempo de silêncio antes de a pesquisa ir ao servidor. */
@@ -141,56 +114,8 @@ export default function ProductsIndex({
     products,
     filters,
     statusCounts,
-    categories,
-    colors,
-    materials,
-    printers,
-    tagSuggestions,
-    defaultVatRate,
-    editing,
-    pricing,
-    defaultActiveLaborMinutes,
 }: Props) {
     const [search, setSearch] = useState(filters.search);
-    /*
-     * `?novo=1` é o atalho "Novo produto" do painel a pedir o modal já aberto.
-     * Lido do `usePage().url` e não do `window.location` para o SSR não ir
-     * abaixo à procura de um `window` que lá não existe.
-     */
-    const { url } = usePage();
-    const [creating, setCreating] = useState(() => url.includes('novo=1'));
-
-    /*
-     * `?editar={id}` faz para a edição o que o `?novo=1` faz para a criação, e
-     * pela mesma razão: o modal tem de sobreviver a uma recarga da página. É
-     * também para lá que voltam o carregamento de fotografias e a criação de
-     * variantes — de outro modo, cada uma dessas ações deixava o admin na
-     * listagem, sem o produto em que estava a trabalhar.
-     *
-     * O id é estado local e o produto é uma prop: separá-los é o que impede o
-     * modal de abrir com os dados do produto anterior enquanto o
-     * recarregamento parcial do produto novo ainda vem a caminho.
-     */
-    const [editingId, setEditingId] = useState<number | null>(
-        () => Number(url.match(/[?&]editar=(\d+)/)?.[1]) || null,
-    );
-    const [loadingId, setLoadingId] = useState<number | null>(null);
-
-    const openEdit = (id: number) => {
-        if (editing?.product.id === id) {
-            setEditingId(id);
-
-            return;
-        }
-
-        setLoadingId(id);
-        router.reload({
-            only: ['editing'],
-            data: { editar: id },
-            onSuccess: () => setEditingId(id),
-            onFinish: () => setLoadingId(null),
-        });
-    };
 
     const applyFilters = (changes: Partial<Filters>) =>
         visit({ ...filters, search, ...changes });
@@ -241,11 +166,8 @@ export default function ProductsIndex({
                     title="Produtos"
                     description="O catálogo, com variantes de material e cor."
                 >
-                    <Button
-                        className="rounded-full"
-                        onClick={() => setCreating(true)}
-                    >
-                        Novo produto
+                    <Button asChild className="rounded-full">
+                        <Link href={create()}>Novo produto</Link>
                     </Button>
                 </PageHeader>
 
@@ -296,10 +218,8 @@ export default function ProductsIndex({
                     <ul>
                         {products.data.map((product) => (
                             <li key={product.id}>
-                                <button
-                                    type="button"
-                                    onClick={() => openEdit(product.id)}
-                                    disabled={loadingId === product.id}
+                                <Link
+                                    href={edit(product.id)}
                                     className="flex w-full flex-wrap items-center gap-x-3.5 gap-y-2 border-b border-border/60 px-0.5 py-2.75 text-left transition-colors hover:bg-secondary/40 focus-visible:bg-secondary/40 focus-visible:outline-none"
                                 >
                                     <span className="grid size-9.5 flex-none place-items-center overflow-hidden rounded-[9px] bg-secondary text-muted-foreground/60">
@@ -343,14 +263,11 @@ export default function ProductsIndex({
                                                 'text-muted-foreground',
                                         )}
                                     >
-                                        {loadingId === product.id && (
-                                            <Spinner />
-                                        )}
                                         {product.priceCents === null
                                             ? '—'
                                             : formatCents(product.priceCents)}
                                     </span>
-                                </button>
+                                </Link>
                             </li>
                         ))}
                     </ul>
@@ -444,34 +361,6 @@ export default function ProductsIndex({
                     )}
                 </div>
             </div>
-
-            {/*
-             * O `key` é o que remonta o modal ao trocar de produto: a semente
-             * do formulário é lida uma vez, na montagem, e sem isto abrir o
-             * produto B logo a seguir ao A mostrava os dados do A.
-             */}
-            <ProductCreateDialog
-                key={editingId ?? 'new'}
-                open={
-                    creating ||
-                    (editingId !== null && editing?.product.id === editingId)
-                }
-                onOpenChange={(open) => {
-                    if (!open) {
-                        setCreating(false);
-                        setEditingId(null);
-                    }
-                }}
-                editing={editingId === null ? null : editing}
-                categories={categories}
-                colors={colors}
-                materials={materials}
-                printers={printers}
-                pricing={pricing}
-                defaultActiveLaborMinutes={defaultActiveLaborMinutes}
-                tagSuggestions={tagSuggestions}
-                defaultVatRate={defaultVatRate}
-            />
         </>
     );
 }

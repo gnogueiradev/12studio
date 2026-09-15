@@ -10,14 +10,13 @@ use App\Services\VariantProductionService;
 use Illuminate\Http\RedirectResponse;
 
 /**
- * A aba "Producao" do modal do produto: o tempo e a gramagem da peca, a
+ * A seccao "Impressao" da pagina do produto: o tempo e a gramagem da peca, a
  * escrever de uma vez em todas as variantes, e um botao que escreve nelas os
  * precos calculados.
  *
  * Duas accoes e nao uma, porque sao decisoes diferentes: corrigir o que o
  * slicer disse nao e decidir que o preco muda. Ambas respondem com `back()`,
- * como as restantes accoes do modal — o `?editar={id}` no URL de origem e o
- * que reabre o produto certo.
+ * como as restantes accoes da pagina.
  */
 class VariantProductionController extends Controller
 {

@@ -15,12 +15,12 @@ use Illuminate\Http\RedirectResponse;
 /**
  * Fotografias vivem no contexto de um produto (rota shallow, como as
  * variantes): carregar passa por /admin/produtos/{product}/imagens, o resto
- * por /admin/imagens/{image}. A galeria e uma seccao do modal de edicao do
- * produto — nao tem ecra proprio.
+ * por /admin/imagens/{image}. A galeria e uma seccao da pagina do produto —
+ * nao tem ecra proprio.
  *
- * Dai o `back()` de todas as accoes: a galeria vive na listagem, com o modal
- * aberto por `?editar={id}`, e voltar ao endereco de onde se veio e o que
- * mantem o modal no sitio com a paginacao, os filtros e a pesquisa intactos.
+ * Dai o `back()` de todas as accoes: voltar ao endereco de onde se veio deixa
+ * quem carregou uma foto exatamente onde estava, com o resto do formulario por
+ * gravar intacto.
  */
 class ProductImageController extends Controller
 {

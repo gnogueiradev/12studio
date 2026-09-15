@@ -150,11 +150,20 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         Route::patch('definicoes/precos', [Admin\SettingController::class, 'updatePricing'])
             ->name('definicoes.precos');
 
-        // Sem `create` nem `edit`: o produto vive todo no modal da propria
-        // listagem — a criar, e onde se cruzam as cores, os materiais e os
-        // tamanhos que geram as variantes; a editar, chega la por
-        // `?editar={id}`, que o `index` le para carregar o produto, a galeria e
-        // as variantes. Como nos materiais e nas impressoras.
+        // O formulario do produto tem pagina, ao contrario do dos materiais e
+        // do das impressoras: sao seis seccoes, uma galeria, uma matriz de
+        // variantes e uma ficha de variante por dentro — dentro de um modal, a
+        // ficha da variante tinha de tomar conta do ecra todo para caber.
+        //
+        // Escritas a mao e antes do resource por causa do endereco: o
+        // `Route::resource` dava `/produtos/create` e `/produtos/{id}/edit` em
+        // ingles, e esta casa fala portugues nos URIs (`/restaurar`,
+        // `/imagens`, `/variantes`).
+        Route::get('produtos/novo', [Admin\ProductController::class, 'create'])
+            ->name('produtos.create');
+        Route::get('produtos/{product}/editar', [Admin\ProductController::class, 'edit'])
+            ->name('produtos.edit');
+
         Route::resource('produtos', Admin\ProductController::class)
             ->parameters(['produtos' => 'product'])
             ->except(['show', 'create', 'edit']);
@@ -177,16 +186,16 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
             ->name('imagens.destroy');
 
         // Shallow: criar dentro do produto, editar/arquivar por
-        // /admin/variantes/{variant}. Sem `create` nem `edit`, como no proprio
-        // produto: a ficha da variante vive dentro do modal, na seccao
-        // "Variantes", e o painel de custo dela vem da prop `pricing` que o
-        // ProductController::index serve.
+        // /admin/variantes/{variant}. Sem `create` nem `edit`: a ficha da
+        // variante abre em gaveta na seccao "Variantes" da pagina do produto, e
+        // o painel de custo dela vem da prop `pricing` que o
+        // ProductController::edit serve.
         Route::resource('produtos.variantes', Admin\VariantController::class)
             ->parameters(['produtos' => 'product', 'variantes' => 'variant'])
             ->except(['show', 'index', 'create', 'edit'])
             ->shallow();
 
-        // A aba "Producao" do modal: tempos e gramagens de todas as variantes
+        // A seccao "Impressao": tempos e gramagens de todas as variantes
         // de uma vez, e os precos calculados a partir deles. Antes do resource
         // nao e preciso — `producao` e `precos` nao colidem com `{variant}`,
         // que so existe em /admin/variantes/{variant}.

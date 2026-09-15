@@ -32,6 +32,18 @@ class ProductCrudTest extends TestCase
     }
 
     /**
+     * O destino de quem acaba de criar um produto: a pagina dele.
+     *
+     * Criar e so o principio — faltam as fotografias, os tempos do slicer e os
+     * precos de cada variante. Mandar de volta para a listagem era fechar a
+     * porta na cara de quem ainda tem trabalho para fazer ali dentro.
+     */
+    private function pageOfTheNewProduct(): string
+    {
+        return route('admin.produtos.edit', Product::query()->latest('id')->firstOrFail());
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function validPayload(): array
@@ -88,9 +100,9 @@ class ProductCrudTest extends TestCase
     }
 
     /**
-     * A matriz do modal esbate as cores impossiveis no cliente, e para isso
-     * precisa de saber, por cor, em que filamentos ela existe. Sem isto o
-     * seletor deixava escolher e so o servidor recusava.
+     * A matriz esbate as cores impossiveis no cliente, e para isso precisa de
+     * saber, por cor, em que filamentos ela existe. Sem isto o seletor deixava
+     * escolher e so o servidor recusava.
      */
     public function test_the_page_tells_each_colour_which_filaments_it_has(): void
     {
@@ -98,7 +110,7 @@ class ProductCrudTest extends TestCase
         Color::factory()->withMaterials($this->material)->create(['name' => 'Rosa']);
 
         $this->actingAs($this->admin)
-            ->get(route('admin.produtos.index'))
+            ->get(route('admin.produtos.create'))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->where('colors.0.name', 'Rosa')
@@ -117,7 +129,7 @@ class ProductCrudTest extends TestCase
                 ...$this->validPayload(),
                 'category_id' => $category->id,
             ])
-            ->assertRedirect(route('admin.produtos.index'));
+            ->assertRedirect($this->pageOfTheNewProduct());
 
         $this->assertDatabaseHas('products', [
             'name' => 'Caixa Âmbar',
@@ -143,7 +155,7 @@ class ProductCrudTest extends TestCase
                     'sizes' => ['Pequeno', 'Grande'],
                 ]),
             ])
-            ->assertRedirect(route('admin.produtos.index'));
+            ->assertRedirect($this->pageOfTheNewProduct());
 
         $product = Product::query()->where('slug', 'vaso-ondulado')->sole();
 
@@ -650,7 +662,7 @@ class ProductCrudTest extends TestCase
                     UploadedFile::fake()->image('verso.jpg', 800, 800),
                 ],
             ])
-            ->assertRedirect(route('admin.produtos.index'));
+            ->assertRedirect($this->pageOfTheNewProduct());
 
         $product = Product::query()->where('name', 'Caixa Âmbar')->firstOrFail();
         $images = $product->images()->orderBy('sort_order')->get();
@@ -675,7 +687,7 @@ class ProductCrudTest extends TestCase
 
         $this->actingAs($this->admin)
             ->post(route('admin.produtos.store'), $this->validPayload())
-            ->assertRedirect(route('admin.produtos.index'));
+            ->assertRedirect($this->pageOfTheNewProduct());
 
         $this->assertDatabaseCount('product_images', 0);
     }
@@ -696,16 +708,22 @@ class ProductCrudTest extends TestCase
     }
 
     /**
-     * A rota de edicao foi-se com a pagina: o produto edita-se no modal da
-     * listagem, como os materiais e as impressoras.
+     * O formulario voltou a ter pagina, mas com endereco em portugues como o
+     * resto do backoffice (`/restaurar`, `/imagens`, `/variantes`). O `/edit`
+     * em ingles que o `Route::resource` daria de borla nao e endereco desta
+     * casa. Ver ProductFormPageTest para o que a pagina serve.
      */
-    public function test_the_old_edit_page_is_gone(): void
+    public function test_the_form_page_speaks_portuguese(): void
     {
         $product = Product::factory()->create();
 
         $this->actingAs($this->admin)
             ->get("/admin/produtos/{$product->id}/edit")
             ->assertNotFound();
+
+        $this->actingAs($this->admin)
+            ->get("/admin/produtos/{$product->id}/editar")
+            ->assertOk();
     }
 
     public function test_store_rejects_invalid_fulfillment_mode_and_status(): void
