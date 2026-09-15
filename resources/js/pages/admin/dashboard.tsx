@@ -144,7 +144,16 @@ export default function AdminDashboard({
                     </div>
                 )}
 
-                <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+                    <StatCard
+                        label={`Faturação · ${kpis.year}`}
+                        value={formatCents(kpis.revenueYearCents)}
+                        hint={
+                            kpis.paidOrdersYear === 1
+                                ? `1 encomenda paga em ${kpis.year}`
+                                : `${kpis.paidOrdersYear} encomendas pagas em ${kpis.year}`
+                        }
+                    />
                     <StatCard
                         label="Receita · 30 dias"
                         value={formatCents(kpis.revenue30Cents)}

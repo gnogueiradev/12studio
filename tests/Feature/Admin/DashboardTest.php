@@ -72,6 +72,41 @@ class DashboardTest extends TestCase
                 ->where('kpis.avgOrderCents', 4000));
     }
 
+    /**
+     * A faturacao do ano e o ano civil ate hoje: apanha o que ja saiu da
+     * janela de 30 dias, mas nao o que foi pago no ano anterior.
+     */
+    public function test_year_revenue_counts_paid_orders_since_january_first(): void
+    {
+        $this->travelTo(now()->setDate(2026, 9, 15));
+
+        Order::factory()->paid()->create(['total_cents' => 5000]);
+        Order::factory()->paid()->create([
+            'total_cents' => 3000,
+            'paid_at' => now()->setDate(2026, 1, 1)->startOfDay(),
+        ]);
+
+        // Paga na vespera de ano novo: fica no ano anterior.
+        Order::factory()->paid()->create([
+            'total_cents' => 9900,
+            'paid_at' => now()->setDate(2025, 12, 31)->endOfDay(),
+        ]);
+
+        // Por pagar: nao e faturacao.
+        Order::factory()->create([
+            'status' => 'shipped',
+            'payment_status' => 'pending',
+            'total_cents' => 7700,
+        ]);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.dashboard'))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('kpis.year', 2026)
+                ->where('kpis.revenueYearCents', 8000)
+                ->where('kpis.paidOrdersYear', 2));
+    }
+
     public function test_the_revenue_delta_is_null_without_a_previous_window(): void
     {
         Order::factory()->paid()->create(['total_cents' => 5000]);
