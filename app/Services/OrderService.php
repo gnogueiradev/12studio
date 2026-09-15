@@ -196,6 +196,17 @@ class OrderService
                 throw new RuntimeException("Transicao invalida: {$from} -> {$to}.");
             }
 
+            // `paid` e o degrau que o proprio pagamento pisa. Nem o avanco
+            // forcado la chega: uma encomenda "com pagamento confirmado" e o
+            // pagamento pendente e uma contradicao, e era o que deixava o
+            // advanceAfterPayment sem saber o que fazer quando o dinheiro
+            // entrava. Para avancar sem pagamento, salta-se este degrau.
+            if ($to === 'paid' && ! $order->isPaid()) {
+                throw new RuntimeException(
+                    'O pagamento confirmado so chega marcando o pagamento como pago — para avancar sem ele, escolhe um estado mais a frente.'
+                );
+            }
+
             if (! $order->isPaid() && ! $force) {
                 throw new RuntimeException(
                     'Uma encomenda so avanca depois de paga — usa o avanco manual com nota para forcar.'
@@ -455,11 +466,16 @@ class OrderService
      */
     private function advanceAfterPayment(Order $order, ?User $by): Order
     {
-        if ($order->status !== 'pending_payment') {
+        // `paid` tambem conta: e onde ficaram as encomendas forcadas para ali
+        // a mao antes de o transitionOrder o recusar. Sem isto, marcar-lhes o
+        // pagamento nao as tirava do sitio.
+        if (! in_array($order->status, ['pending_payment', 'paid'], true)) {
             return $order;
         }
 
-        $order = $this->transitionOrder($order, 'paid', $by, 'Pagamento confirmado.');
+        if ($order->status === 'pending_payment') {
+            $order = $this->transitionOrder($order, 'paid', $by, 'Pagamento confirmado.');
+        }
 
         $needsProduction = $order->items()
             ->where('production_status', '!=', 'not_required')

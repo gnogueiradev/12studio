@@ -148,16 +148,55 @@ export type OrderAddress = {
     phone?: string | null;
 };
 
-export type TimelineEntry = {
+type TimelineBase = {
     id: string;
-    kind: 'order' | 'item';
-    /** Nome do item, quando `kind` é 'item'. */
-    subject: string | null;
     fromStatus: string | null;
     toStatus: string;
     note: string | null;
     author: string | null;
     at: string;
+    /** "15 set" — separa os dias no histórico. */
+    day: string | null;
+    /** "20:50". */
+    time: string | null;
+};
+
+/**
+ * Uma linha do histórico, já separada no que é. O pagamento e o ajuste vêm
+ * gravados na nota de uma entrada `from === to`; o servidor desmonta-os para
+ * o ecrã nunca mostrar "pending -> paid" em bruto.
+ */
+export type TimelineEntry =
+    | (TimelineBase & { kind: 'order'; subject: null; category: 'state' })
+    | (TimelineBase & {
+          kind: 'order';
+          subject: null;
+          category: 'payment';
+          paymentFrom: string;
+          paymentTo: string;
+      })
+    | (TimelineBase & {
+          kind: 'order';
+          subject: null;
+          category: 'adjustment';
+          fromCents: number;
+          toCents: number;
+      })
+    | (TimelineBase & {
+          kind: 'item';
+          /** Nome do artigo. */
+          subject: string;
+          category: 'item';
+          itemId: number;
+      });
+
+/** Degrau da barra de progresso do detalhe. */
+export type ProgressStep = {
+    status: string;
+    /** `failed` é o cancelado/reembolsado com que uma encomenda fechada acaba. */
+    state: 'done' | 'current' | 'todo' | 'failed';
+    /** "20:50", ou "16 set, 10:02" noutro dia que não o do registo. */
+    at: string | null;
 };
 
 export type OrderDetail = {
@@ -196,8 +235,11 @@ export type OrderDetail = {
     shippedAt: string | null;
     deliveredAt: string | null;
     cancelledAt: string | null;
+    /** Encomendas do cliente registado, esta incluída; null sem cliente. */
+    customerOrdersCount: number | null;
     /** Estados de fulfilment ainda alcançáveis a partir do atual. */
     availableStatuses: string[];
+    progress: ProgressStep[];
     items: OrderItemRow[];
     timeline: TimelineEntry[];
 };
