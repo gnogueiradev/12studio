@@ -55,9 +55,11 @@ class OrderInvariantsTest extends TestCase
     {
         $order = $this->unpaidOrder();
 
-        $this->expectException(RuntimeException::class);
+        // `in_production` e nao `paid`: esse ja e recusado por si so com o
+        // pagamento pendente, e o teste passava sem provar nada sobre a nota.
+        $this->expectExceptionMessage('exige uma nota');
 
-        $this->orders->transitionOrder($order, 'paid', $this->admin, null, true);
+        $this->orders->transitionOrder($order, 'in_production', $this->admin, null, true);
     }
 
     public function test_forcing_with_a_note_records_the_author(): void

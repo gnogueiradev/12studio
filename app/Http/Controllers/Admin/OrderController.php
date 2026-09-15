@@ -156,10 +156,22 @@ class OrderController extends Controller
 
     public function updateStatus(UpdateOrderStatusRequest $request, Order $order): RedirectResponse
     {
+        $status = $request->string('status')->value();
+
+        // O service trata "ja esta neste estado" como no-op, e bem: e o que
+        // deixa as transicoes automaticas chamarem-no sem medo. Mas vindo do
+        // admin, um pedido destes e um formulario desatualizado — responder
+        // "Estado atualizado." sem nada ter mudado era mentir-lhe.
+        if ($order->status === $status) {
+            $this->toast('A encomenda já está nesse estado.', 'error');
+
+            return back();
+        }
+
         try {
             $this->orderService->transitionOrder(
                 $order,
-                $request->string('status')->value(),
+                $status,
                 $request->user(),
                 $request->input('note'),
                 $request->boolean('force'),

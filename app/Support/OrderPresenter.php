@@ -6,6 +6,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\OrderItemStatusHistory;
 use App\Models\OrderStatusHistory;
+use Carbon\CarbonInterface;
 use Illuminate\Support\Str;
 
 /**
@@ -58,10 +59,108 @@ class OrderPresenter
             'shippedAt' => $order->shipped_at?->format('Y-m-d H:i'),
             'deliveredAt' => $order->delivered_at?->format('Y-m-d H:i'),
             'cancelledAt' => $order->cancelled_at?->format('Y-m-d H:i'),
+            'customerOrdersCount' => $order->user_id === null
+                ? null
+                : Order::query()->where('user_id', $order->user_id)->count(),
             'availableStatuses' => self::availableStatuses($order),
+            'progress' => self::progress($order),
             'items' => $order->items->map(self::item(...))->all(),
             'timeline' => self::timeline($order),
         ];
+    }
+
+    /**
+     * A barra de progresso do topo do detalhe: um degrau por estado do
+     * pipeline, com a hora a que a encomenda la chegou.
+     *
+     * So mostra o caminho que esta encomenda faz de facto. Um degrau que ficou
+     * para tras sem nunca ter sido pisado (a producao de uma encomenda so de
+     * stock, o envio de uma venda em mao) desaparece em vez de ficar cinzento
+     * a fingir que falta. Pelo mesmo motivo, os degraus futuros que se sabe
+     * que vao ser saltados tambem nao aparecem.
+     *
+     * @return array<int, array{status: string, state: string, at: string|null}>
+     */
+    public static function progress(Order $order): array
+    {
+        $reachedAt = ['pending_payment' => $order->created_at];
+
+        foreach ($order->statusHistories->sortBy('id') as $history) {
+            /** @var OrderStatusHistory $history */
+            // `from === to` sao eventos de pagamento e ajuste, nao degraus.
+            if ($history->from_status !== $history->to_status && ! isset($reachedAt[$history->to_status])) {
+                $reachedAt[$history->to_status] = $history->created_at;
+            }
+        }
+
+        $terminal = in_array($order->status, ['cancelled', 'refunded'], true);
+
+        // Numa encomenda fechada, o "onde ia" e o degrau mais avancado a que
+        // chegou antes de morrer.
+        $currentIndex = $terminal
+            ? max(array_keys(array_filter(
+                self::PIPELINE,
+                fn (string $status): bool => isset($reachedAt[$status]),
+            )) ?: [0])
+            : (int) array_search($order->status, self::PIPELINE, true);
+
+        $needsProduction = $order->items->contains(
+            fn (OrderItem $item): bool => $item->production_status !== 'not_required',
+        );
+
+        $steps = [];
+
+        foreach (self::PIPELINE as $index => $status) {
+            $at = $reachedAt[$status] ?? null;
+
+            if ($index <= $currentIndex) {
+                if ($at === null && $index > 0) {
+                    continue;
+                }
+
+                $state = $index === $currentIndex && ! $terminal ? 'current' : 'done';
+            } else {
+                $skipped = ($status === 'in_production' && ! $needsProduction)
+                    || ($status === 'shipped' && $order->shipping_address === null);
+
+                if ($terminal || $skipped) {
+                    continue;
+                }
+
+                $state = 'todo';
+            }
+
+            $steps[] = [
+                'status' => $status,
+                'state' => $state,
+                'at' => self::stamp($at, $order),
+            ];
+        }
+
+        if ($terminal) {
+            $steps[] = [
+                'status' => $order->status,
+                'state' => 'failed',
+                'at' => self::stamp($reachedAt[$order->status] ?? null, $order),
+            ];
+        }
+
+        return $steps;
+    }
+
+    /**
+     * Hora curta para a barra: so "HH:MM" no dia em que a encomenda foi
+     * registada, e a data a frente nos outros dias.
+     */
+    private static function stamp(?CarbonInterface $at, Order $order): ?string
+    {
+        if ($at === null) {
+            return null;
+        }
+
+        return $order->created_at !== null && $at->isSameDay($order->created_at)
+            ? $at->format('H:i')
+            : ShortDate::of($at).', '.$at->format('H:i');
     }
 
     /**
@@ -125,6 +224,10 @@ class OrderPresenter
         $index = array_search($order->status, self::PIPELINE, true);
         $forward = $index === false ? [] : array_slice(self::PIPELINE, $index + 1);
 
+        // `paid` nunca e um passo manual: chega-se la marcando o pagamento,
+        // e o OrderService recusa-o com o pagamento pendente.
+        $forward = array_values(array_diff($forward, ['paid']));
+
         return [...$forward, 'cancelled', 'refunded'];
     }
 
@@ -154,6 +257,9 @@ class OrderPresenter
                 'note' => $history->note,
                 'author' => $history->changedBy?->name,
                 'at' => $history->created_at?->format('Y-m-d H:i') ?? '',
+                'day' => ShortDate::of($history->created_at),
+                'time' => $history->created_at?->format('H:i'),
+                ...self::orderEvent($history),
                 'sortKey' => $history->created_at?->getTimestamp() ?? 0,
                 'seq' => $seq++,
             ];
@@ -171,6 +277,10 @@ class OrderPresenter
                     'note' => $history->note,
                     'author' => $history->changedBy?->name,
                     'at' => $history->created_at?->format('Y-m-d H:i') ?? '',
+                    'day' => ShortDate::of($history->created_at),
+                    'time' => $history->created_at?->format('H:i'),
+                    'category' => 'item',
+                    'itemId' => $item->id,
                     'sortKey' => $history->created_at?->getTimestamp() ?? 0,
                     'seq' => $seq++,
                 ];
@@ -187,5 +297,43 @@ class OrderPresenter
 
             return $entry;
         }, $entries);
+    }
+
+    /**
+     * Uma linha do historico da encomenda, ja separada no que ela e.
+     *
+     * O pagamento e o ajuste gravam-se como `from === to` com a mudanca
+     * escrita na nota (ver OrderService::setPaymentStatus e setAdjustment).
+     * Desmonta-se aqui, ao lado de quem conhece esse formato, para o ecra
+     * nunca mostrar "pending -> paid" em bruto. Uma nota que nao bata com o
+     * formato fica como esta — perde o resumo, nunca o conteudo.
+     *
+     * @return array<string, mixed>
+     */
+    private static function orderEvent(OrderStatusHistory $history): array
+    {
+        $note = (string) $history->note;
+
+        if ($history->from_status === $history->to_status) {
+            if (preg_match('/^Pagamento: (\w+) -> (\w+)\.\s*(.*)$/s', $note, $match) === 1) {
+                return [
+                    'category' => 'payment',
+                    'paymentFrom' => $match[1],
+                    'paymentTo' => $match[2],
+                    'note' => $match[3] === '' ? null : $match[3],
+                ];
+            }
+
+            if (preg_match('/^Total ajustado: (-?[\d.]+) -> (-?[\d.]+) \([+-]?-?[\d.]+\)\.\s*(.*)$/s', $note, $match) === 1) {
+                return [
+                    'category' => 'adjustment',
+                    'fromCents' => Money::fromDecimal($match[1]),
+                    'toCents' => Money::fromDecimal($match[2]),
+                    'note' => $match[3] === '' ? null : $match[3],
+                ];
+            }
+        }
+
+        return ['category' => 'state'];
     }
 }
