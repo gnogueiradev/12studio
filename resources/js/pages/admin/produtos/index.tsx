@@ -1,16 +1,8 @@
 import { Head, router, usePage } from '@inertiajs/react';
-import { Package, Search } from 'lucide-react';
+import { Box } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { AdminTable } from '@/components/admin/admin-table';
-import type { Column } from '@/components/admin/admin-table';
-import { ConfirmDialog } from '@/components/admin/confirm-dialog';
-import { FilterChip } from '@/components/admin/filter-chip';
 import { PageHeader } from '@/components/admin/page-header';
-import { Pagination } from '@/components/admin/pagination';
 import { ProductCreateDialog } from '@/components/admin/product-create-dialog';
-import { StatusBadge, StatusText } from '@/components/admin/status-badge';
-import { TagChips } from '@/components/admin/tag-chips';
-import { TagFilter } from '@/components/admin/tag-filter';
 import type { VariantPricingPreview } from '@/components/admin/variant-form';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -26,7 +18,7 @@ import { formatCents } from '@/lib/money';
 import { label } from '@/lib/options';
 import type { Option } from '@/lib/options';
 import { cn } from '@/lib/utils';
-import { destroy, index, restaurar } from '@/routes/admin/produtos';
+import { index } from '@/routes/admin/produtos';
 import type {
     CategoryOption,
     ColorOption,
@@ -34,17 +26,24 @@ import type {
     ProductEditing,
     ProductRow,
 } from '@/types/catalog';
-import { FULFILLMENT_MODES, PRODUCT_STATUSES } from '@/types/catalog';
+import { PRODUCT_STATUSES } from '@/types/catalog';
 import type { Paginated } from '@/types/pagination';
 import type { PrinterProfileOption } from '@/types/pricing';
 
 type Filters = {
     search: string;
     status: string;
+    /*
+     * Categoria, produção e etiqueta deixaram de ter controlo na página — o
+     * desenho ficou só com as abas e a pesquisa. Continuam a ser respeitados
+     * quando vêm no URL, e por isso viajam em cada visita.
+     */
     category_id: string;
     fulfillment_mode: string;
     /** Slug da etiqueta, ou '' sem filtro. */
     tag: string;
+    /** '8', '20' ou '50'; '' são os 20 por omissão do servidor. */
+    per_page: string;
 };
 
 type Props = {
@@ -57,7 +56,6 @@ type Props = {
     materials: MaterialOption[];
     printers: PrinterProfileOption[];
     tagSuggestions: string[];
-    /** Só as que algum produto usa — as outras dariam zero resultados. */
     tagOptions: Option[];
     defaultVatRate: number;
     /** O produto a editar, carregado por `?editar={id}`. Null a criar. */
@@ -71,56 +69,72 @@ type Props = {
     defaultActiveLaborMinutes: number;
 };
 
-// O Radix Select não aceita value="" — sentinela para "sem filtro".
-const ALL = 'all';
-
 /** Tempo de silêncio antes de a pesquisa ir ao servidor. */
 const SEARCH_DEBOUNCE_MS = 350;
 
+const PAGE_SIZES = ['8', '20', '50'];
+
 /** Filtros vazios saem da query string em vez de irem como `?status=`. */
-function visit(filters: Filters) {
+function visit(filters: Filters, page?: number) {
     router.get(
         index().url,
-        Object.fromEntries(
-            Object.entries(filters).filter(([, value]) => value !== ''),
-        ),
-        { preserveState: true, replace: true },
+        {
+            ...Object.fromEntries(
+                Object.entries(filters).filter(([, value]) => value !== ''),
+            ),
+            ...(page !== undefined && page > 1 ? { page } : {}),
+        },
+        { preserveState: true, preserveScroll: true, replace: true },
     );
 }
 
-/** 130 → "2 h 10 m"; 55 → "55 m". */
-function formatMinutes(minutes: number): string {
-    const hours = Math.floor(minutes / 60);
-    const rest = minutes % 60;
-
-    if (hours === 0) {
-        return `${rest} m`;
-    }
-
-    return rest === 0 ? `${hours} h` : `${hours} h ${rest} m`;
+function plural(count: number, one: string, many: string): string {
+    return `${count} ${count === 1 ? one : many}`;
 }
 
 /**
- * A segunda linha da célula do produto: referência, gramagem e tempo da
- * variante default. Um produto sem variantes não tem nenhum dos três — é o
- * rascunho a meio, e o que ali falta é a informação útil.
+ * A linha de apoio do produto: referência · variantes · o que falta ou o
+ * prazo. Um produto sem preço não tem prazo que interesse — o que ali importa
+ * dizer é o que o impede de ir para a montra.
  */
 function productMeta(product: ProductRow): string {
-    if (product.variantsCount === 0) {
-        return 'Sem variantes — falta preço e referência';
+    const variants =
+        product.variantsCount === 0
+            ? 'sem variantes'
+            : plural(product.variantsCount, 'variante', 'variantes');
+
+    let readiness: string;
+
+    if (product.priceCents === null) {
+        readiness = 'falta preço';
+    } else if (product.fulfillmentMode === 'in_stock') {
+        readiness = `${product.readyStock} un. prontas`;
+    } else if (product.productionTimeDays === null) {
+        readiness = 'prazo por definir';
+    } else {
+        readiness = plural(product.productionTimeDays, 'dia', 'dias');
     }
 
-    return [
-        product.sku,
-        product.filamentWeightGrams === null
-            ? null
-            : `${product.filamentWeightGrams} g`,
-        product.printingTimeMinutes === null
-            ? null
-            : formatMinutes(product.printingTimeMinutes),
-    ]
-        .filter((part) => part !== null)
-        .join(' · ');
+    return [product.sku ?? 'sem referência', variants, readiness].join(' · ');
+}
+
+/**
+ * Os números de página a mostrar: todos até sete, e daí para cima a primeira,
+ * a última e as vizinhas da atual, com reticências nos buracos — senão um
+ * catálogo grande a 8 por página empurrava os botões para fora do ecrã.
+ */
+function pageWindow(current: number, last: number): (number | null)[] {
+    if (last <= 7) {
+        return Array.from({ length: last }, (_, i) => i + 1);
+    }
+
+    const pages = [1, current - 1, current, current + 1, last].filter(
+        (page, i, all) => page >= 1 && page <= last && all.indexOf(page) === i,
+    );
+
+    return pages.flatMap((page, i) =>
+        i > 0 && page - pages[i - 1] > 1 ? [null, page] : [page],
+    );
 }
 
 export default function ProductsIndex({
@@ -132,7 +146,6 @@ export default function ProductsIndex({
     materials,
     printers,
     tagSuggestions,
-    tagOptions,
     defaultVatRate,
     editing,
     pricing,
@@ -146,7 +159,6 @@ export default function ProductsIndex({
      */
     const { url } = usePage();
     const [creating, setCreating] = useState(() => url.includes('novo=1'));
-    const [archiving, setArchiving] = useState<ProductRow | null>(null);
 
     /*
      * `?editar={id}` faz para a edição o que o `?novo=1` faz para a criação, e
@@ -183,6 +195,8 @@ export default function ProductsIndex({
     const applyFilters = (changes: Partial<Filters>) =>
         visit({ ...filters, search, ...changes });
 
+    const goToPage = (page: number) => visit({ ...filters, search }, page);
+
     /*
      * Pesquisa ao vivo, como no design. A guarda `search === filters.search`
      * trava o pedido na montagem e, sobretudo, depois de cada resposta — sem
@@ -207,150 +221,22 @@ export default function ProductsIndex({
         0,
     );
 
-    const columns: Column<ProductRow>[] = [
-        {
-            key: 'name',
-            header: 'Produto',
-            cell: (product) => (
-                <div className="flex items-center gap-3">
-                    <span className="grid size-9 flex-none place-items-center overflow-hidden rounded-lg border border-border/60 bg-secondary text-muted-foreground">
-                        {product.imageUrl === null ? (
-                            <Package className="size-4" />
-                        ) : (
-                            <img
-                                src={product.imageUrl}
-                                alt=""
-                                className="size-full object-cover"
-                            />
-                        )}
-                    </span>
-                    <span>
-                        <button
-                            type="button"
-                            onClick={() => openEdit(product.id)}
-                            className="text-left font-medium hover:underline"
-                        >
-                            {product.name}
-                        </button>
-                        <span className="mt-0.5 block text-xs text-muted-foreground">
-                            {productMeta(product)}
-                        </span>
-                        <TagChips tags={product.tags} />
-                    </span>
-                </div>
-            ),
-        },
-        {
-            key: 'category',
-            header: 'Categoria',
-            className: 'text-muted-foreground',
-            cell: (product) => product.category ?? '—',
-        },
-        {
-            key: 'variants',
-            header: 'Variantes',
-            className: 'text-right tabular-nums',
-            cell: (product) =>
-                product.variantsCount === 0 ? (
-                    <span className="text-muted-foreground">0</span>
-                ) : (
-                    product.variantsCount
-                ),
-        },
-        {
-            key: 'fulfillment',
-            header: 'Produção',
-            cell: (product) => (
-                <>
-                    <StatusText
-                        tone={
-                            product.fulfillmentMode === 'in_stock'
-                                ? 'success'
-                                : 'warning'
-                        }
-                        label={label(
-                            FULFILLMENT_MODES,
-                            product.fulfillmentMode,
-                        )}
-                    />
-                    <span className="mt-0.5 block text-xs text-muted-foreground">
-                        {product.fulfillmentMode === 'in_stock'
-                            ? `${product.readyStock} un. prontas`
-                            : product.productionTimeDays === null
-                              ? 'Prazo por definir'
-                              : `${product.productionTimeDays} dias`}
-                    </span>
-                </>
-            ),
-        },
-        {
-            key: 'price',
-            header: 'Preço',
-            className: 'text-right tabular-nums',
-            cell: (product) =>
-                product.priceCents === null ? (
-                    <span className="text-muted-foreground">—</span>
-                ) : (
-                    formatCents(product.priceCents)
-                ),
-        },
-        {
-            key: 'status',
-            header: 'Estado',
-            cell: (product) => (
-                <StatusBadge
-                    value={product.status}
-                    label={label(PRODUCT_STATUSES, product.status)}
-                />
-            ),
-        },
-        {
-            key: 'actions',
-            header: '',
-            className: 'text-right',
-            cell: (product) => (
-                <div className="flex justify-end gap-2">
-                    <Button
-                        variant="outline"
-                        size="sm"
-                        disabled={loadingId === product.id}
-                        onClick={() => openEdit(product.id)}
-                    >
-                        {loadingId === product.id && <Spinner />}
-                        Editar
-                    </Button>
-                    {product.status === 'archived' ? (
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() =>
-                                router.patch(
-                                    restaurar(product.id).url,
-                                    {},
-                                    { preserveScroll: true },
-                                )
-                            }
-                        >
-                            Restaurar
-                        </Button>
-                    ) : (
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => setArchiving(product)}
-                        >
-                            Arquivar
-                        </Button>
-                    )}
-                </div>
-            ),
-        },
+    const tabs = [
+        { value: '', text: 'Todos', count: totalProducts },
+        ...PRODUCT_STATUSES.map((status) => ({
+            value: status.value,
+            text: status.chipLabel,
+            count: statusCounts[status.value] ?? 0,
+        })),
     ];
+
+    const current = products.current_page;
+    const last = products.last_page;
 
     return (
         <>
             <Head title="Produtos" />
-            <div className="flex h-full w-full max-w-[1400px] flex-1 flex-col gap-4 p-6 pb-10">
+            <div className="flex h-full w-full max-w-[1400px] flex-1 flex-col p-6 pb-10">
                 <PageHeader
                     title="Produtos"
                     description="O catálogo, com variantes de material e cor."
@@ -363,111 +249,200 @@ export default function ProductsIndex({
                     </Button>
                 </PageHeader>
 
-                <div className="flex flex-wrap items-center gap-2">
-                    <div className="relative min-w-60 flex-1 sm:max-w-85">
-                        <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-                        <Input
-                            type="search"
-                            value={search}
-                            onChange={(event) => setSearch(event.target.value)}
-                            placeholder="Nome ou referência"
-                            aria-label="Procurar produtos"
-                            className="pl-9"
-                        />
+                <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-3.5 border-b border-border pb-3">
+                    <div className="flex flex-wrap gap-4.5">
+                        {tabs.map((tab) => {
+                            const active = filters.status === tab.value;
+
+                            return (
+                                <button
+                                    key={tab.value || 'all'}
+                                    type="button"
+                                    aria-pressed={active}
+                                    onClick={() =>
+                                        applyFilters({ status: tab.value })
+                                    }
+                                    className={cn(
+                                        'border-b-2 pt-0.5 pb-1.5 text-[13.5px] transition-colors',
+                                        active
+                                            ? 'border-gold font-semibold text-foreground'
+                                            : 'border-transparent text-muted-foreground hover:text-foreground',
+                                    )}
+                                >
+                                    {tab.text}{' '}
+                                    <span className="font-normal text-muted-foreground tabular-nums">
+                                        {tab.count}
+                                    </span>
+                                </button>
+                            );
+                        })}
                     </div>
 
-                    <Select
-                        value={filters.category_id || ALL}
-                        onValueChange={(value) =>
-                            applyFilters({
-                                category_id: value === ALL ? '' : value,
-                            })
-                        }
-                    >
-                        <SelectTrigger className="w-52">
-                            <SelectValue placeholder="Categoria" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value={ALL}>
-                                Todas as categorias
-                            </SelectItem>
-                            {categories.map((category) => (
-                                <SelectItem
-                                    key={category.id}
-                                    value={String(category.id)}
+                    <Input
+                        type="search"
+                        value={search}
+                        onChange={(event) => setSearch(event.target.value)}
+                        placeholder="Procurar"
+                        aria-label="Procurar produtos por nome ou referência"
+                        className="ml-auto h-auto w-full rounded-[9px] bg-secondary/30 px-3 py-2 text-[13px] focus-visible:border-gold sm:w-50 md:text-[13px]"
+                    />
+                </div>
+
+                {products.data.length === 0 ? (
+                    <p className="py-9 text-center text-[13px] text-muted-foreground">
+                        Nenhum produto com estes filtros.
+                    </p>
+                ) : (
+                    <ul>
+                        {products.data.map((product) => (
+                            <li key={product.id}>
+                                <button
+                                    type="button"
+                                    onClick={() => openEdit(product.id)}
+                                    disabled={loadingId === product.id}
+                                    className="flex w-full flex-wrap items-center gap-x-3.5 gap-y-2 border-b border-border/60 px-0.5 py-2.75 text-left transition-colors hover:bg-secondary/40 focus-visible:bg-secondary/40 focus-visible:outline-none"
                                 >
-                                    {category.name}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                                    <span className="grid size-9.5 flex-none place-items-center overflow-hidden rounded-[9px] bg-secondary text-muted-foreground/60">
+                                        {product.imageUrl === null ? (
+                                            <Box
+                                                className="size-4.5"
+                                                strokeWidth={1.2}
+                                            />
+                                        ) : (
+                                            <img
+                                                src={product.imageUrl}
+                                                alt=""
+                                                className="size-full object-cover"
+                                            />
+                                        )}
+                                    </span>
 
-                    <Select
-                        value={filters.fulfillment_mode || ALL}
-                        onValueChange={(value) =>
-                            applyFilters({
-                                fulfillment_mode: value === ALL ? '' : value,
-                            })
-                        }
-                    >
-                        <SelectTrigger className="w-52">
-                            <SelectValue placeholder="Produção" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value={ALL}>
-                                Qualquer produção
-                            </SelectItem>
-                            {FULFILLMENT_MODES.map((mode) => (
-                                <SelectItem key={mode.value} value={mode.value}>
-                                    {mode.label}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
+                                    <span className="min-w-0 flex-[1_1_150px]">
+                                        <span className="flex flex-wrap items-center gap-2">
+                                            <span className="text-sm font-medium text-pretty">
+                                                {product.name}
+                                            </span>
+                                            {product.status !== 'active' && (
+                                                <span className="rounded-full border border-border px-2 py-0.5 text-[10.5px] text-muted-foreground">
+                                                    {label(
+                                                        PRODUCT_STATUSES,
+                                                        product.status,
+                                                    )}
+                                                </span>
+                                            )}
+                                        </span>
+                                        <span className="mt-0.5 block text-[11.5px] text-muted-foreground">
+                                            {productMeta(product)}
+                                        </span>
+                                    </span>
 
-                    <TagFilter
-                        value={filters.tag}
-                        options={tagOptions}
-                        onChange={(tag) => applyFilters({ tag })}
-                    />
+                                    <span
+                                        className={cn(
+                                            'flex min-w-17.5 flex-none items-center justify-end gap-2 text-right text-sm font-semibold tabular-nums',
+                                            product.priceCents === null &&
+                                                'text-muted-foreground',
+                                        )}
+                                    >
+                                        {loadingId === product.id && (
+                                            <Spinner />
+                                        )}
+                                        {product.priceCents === null
+                                            ? '—'
+                                            : formatCents(product.priceCents)}
+                                    </span>
+                                </button>
+                            </li>
+                        ))}
+                    </ul>
+                )}
 
-                    <span className="ml-auto text-xs text-muted-foreground">
-                        {products.total}{' '}
-                        {products.total === 1 ? 'produto' : 'produtos'}
+                <div className="mt-4.5 flex flex-wrap items-center gap-x-4 gap-y-2.5 text-[12.5px] text-muted-foreground">
+                    <span className="tabular-nums">
+                        {products.total === 0
+                            ? '0 de 0'
+                            : `${products.from}–${products.to} de ${products.total}`}
                     </span>
-                </div>
 
-                <div className="flex flex-wrap gap-2 border-b border-border/60 pb-3.5">
-                    <FilterChip
-                        text="Todos"
-                        count={totalProducts}
-                        active={filters.status === ''}
-                        onClick={() => applyFilters({ status: '' })}
-                    />
-                    {PRODUCT_STATUSES.map((status) => (
-                        <FilterChip
-                            key={status.value}
-                            text={status.chipLabel}
-                            count={statusCounts[status.value] ?? 0}
-                            active={filters.status === status.value}
-                            onClick={() =>
-                                applyFilters({ status: status.value })
+                    <label className="flex items-center gap-2">
+                        por página
+                        <Select
+                            value={filters.per_page || '20'}
+                            onValueChange={(value) =>
+                                applyFilters({
+                                    per_page: value === '20' ? '' : value,
+                                })
                             }
-                        />
-                    ))}
+                        >
+                            <SelectTrigger
+                                size="sm"
+                                className="h-7 gap-1.5 rounded-lg px-2.5 text-[12.5px] text-foreground"
+                            >
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {PAGE_SIZES.map((size) => (
+                                    <SelectItem key={size} value={size}>
+                                        {size}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </label>
+
+                    {last > 1 && (
+                        <nav
+                            aria-label="Páginas"
+                            className="ml-auto flex items-center gap-1"
+                        >
+                            <button
+                                type="button"
+                                disabled={current === 1}
+                                onClick={() => goToPage(current - 1)}
+                                className="rounded-lg border border-border px-3 py-1.5 text-foreground transition-colors hover:border-muted-foreground disabled:pointer-events-none disabled:text-muted-foreground/60"
+                            >
+                                Anterior
+                            </button>
+                            {pageWindow(current, last).map((page, i) =>
+                                page === null ? (
+                                    <span
+                                        key={`gap-${i}`}
+                                        className="px-1"
+                                        aria-hidden
+                                    >
+                                        …
+                                    </span>
+                                ) : (
+                                    <button
+                                        key={page}
+                                        type="button"
+                                        aria-current={
+                                            page === current
+                                                ? 'page'
+                                                : undefined
+                                        }
+                                        onClick={() => goToPage(page)}
+                                        className={cn(
+                                            'min-w-7.5 rounded-lg px-2 py-1.5 tabular-nums transition-colors',
+                                            page === current
+                                                ? 'bg-primary-hover text-primary-foreground'
+                                                : 'hover:text-foreground',
+                                        )}
+                                    >
+                                        {page}
+                                    </button>
+                                ),
+                            )}
+                            <button
+                                type="button"
+                                disabled={current === last}
+                                onClick={() => goToPage(current + 1)}
+                                className="rounded-lg border border-border px-3 py-1.5 text-foreground transition-colors hover:border-muted-foreground disabled:pointer-events-none disabled:text-muted-foreground/60"
+                            >
+                                Seguinte
+                            </button>
+                        </nav>
+                    )}
                 </div>
-
-                <AdminTable
-                    columns={columns}
-                    rows={products.data}
-                    rowKey={(product) => product.id}
-                    rowClassName={(product) =>
-                        cn(product.status === 'archived' && 'opacity-60')
-                    }
-                    empty="Nenhum produto com estes filtros."
-                />
-
-                <Pagination page={products} noun="produtos" />
             </div>
 
             {/*
@@ -496,29 +471,6 @@ export default function ProductsIndex({
                 defaultActiveLaborMinutes={defaultActiveLaborMinutes}
                 tagSuggestions={tagSuggestions}
                 defaultVatRate={defaultVatRate}
-            />
-
-            <ConfirmDialog
-                open={archiving !== null}
-                onOpenChange={(open) => !open && setArchiving(null)}
-                title="Arquivar produto"
-                description={
-                    <>
-                        O produto <strong>{archiving?.name}</strong> sai da
-                        montra. As variantes, o stock e o histórico de
-                        encomendas mantêm-se intactos.
-                    </>
-                }
-                confirmLabel="Arquivar"
-                destructive
-                onConfirm={() => {
-                    if (archiving) {
-                        router.delete(destroy(archiving.id).url, {
-                            preserveScroll: true,
-                            onFinish: () => setArchiving(null),
-                        });
-                    }
-                }}
             />
         </>
     );
