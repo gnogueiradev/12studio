@@ -14,11 +14,10 @@ use Tests\TestCase;
 /**
  * O painel de custo da ficha de variante.
  *
- * A ficha vive dentro do modal do produto, e por isso e a LISTAGEM de produtos
- * que serve a prop `pricing` — calculada pelo mesmo motor que calcula o preco
- * gravado, a partir dos campos que o formulario manda no URL
- * (`only: ['pricing']`). E a mesma prop que a calculadora usa; o que muda e so
- * a pagina que a hospeda.
+ * A ficha vive na pagina do produto, e por isso e essa pagina que serve a prop
+ * `pricing` — calculada pelo mesmo motor que calcula o preco gravado, a partir
+ * dos campos que o formulario manda no URL (`only: ['pricing']`). E a mesma
+ * prop que a calculadora usa; o que muda e so a pagina que a hospeda.
  */
 class VariantPricingTest extends TestCase
 {
@@ -28,11 +27,16 @@ class VariantPricingTest extends TestCase
 
     private Material $material;
 
+    private Product $product;
+
     protected function setUp(): void
     {
         parent::setUp();
 
         $this->admin = User::factory()->admin()->create();
+        // O painel vive dentro de um produto: sem ele nao ha pagina que o
+        // hospede, mesmo quando o calculo nao depende de nada dele.
+        $this->product = Product::factory()->create();
 
         PrinterProfile::factory()->isDefault()->create([
             'name' => 'Bambu Lab A1',
@@ -51,19 +55,16 @@ class VariantPricingTest extends TestCase
     private function preview(array $fields): TestResponse
     {
         return $this->actingAs($this->admin)
-            ->get(route('admin.produtos.index', $fields));
+            ->get(route('admin.produtos.edit', ['product' => $this->product, ...$fields]));
     }
 
     /**
-     * O caso base, com o produto aberto no modal ao lado dos campos do calculo
-     * — que e exatamente o URL que o formulario produz enquanto se escreve.
+     * O caso base: a pagina do produto com os campos do calculo no URL — que e
+     * exatamente o que a ficha da variante produz enquanto se escreve.
      */
-    public function test_the_listing_prices_the_fields_the_form_sends(): void
+    public function test_the_page_prices_the_fields_the_form_sends(): void
     {
-        $product = Product::factory()->create();
-
         $this->preview([
-            'editar' => $product->id,
             'weight_grams' => 45,
             'hours' => 2,
             'minutes' => 30,
@@ -150,7 +151,7 @@ class VariantPricingTest extends TestCase
     /**
      * Sem tempo de impressao nao ha preco sugerido nenhum, e esta certo: e a
      * regra fundamental desta versao. E tambem o estado em que a ficha de uma
-     * variante nova abre — sem campos no URL, a listagem devolve o mesmo.
+     * variante nova abre — sem campos no URL, a pagina devolve o mesmo.
      */
     public function test_without_a_print_time_there_is_no_suggestion(): void
     {
@@ -160,7 +161,7 @@ class VariantPricingTest extends TestCase
         ])->assertInertia(fn (AssertableInertia $page) => $page->where('pricing.result', null));
     }
 
-    public function test_the_bare_listing_has_nothing_to_suggest(): void
+    public function test_the_bare_page_has_nothing_to_suggest(): void
     {
         $this->preview([])
             ->assertOk()
@@ -194,10 +195,10 @@ class VariantPricingTest extends TestCase
     public function test_the_print_time_and_the_two_costs_are_stored(): void
     {
         $product = Product::factory()->create();
-        $modal = route('admin.produtos.index', ['editar' => $product->id]);
+        $page = route('admin.produtos.edit', $product);
 
         $this->actingAs($this->admin)
-            ->from($modal)
+            ->from($page)
             ->post(route('admin.produtos.variantes.store', $product), [
                 'sku' => 'TEST-0001',
                 'material_id' => $this->material->id,
@@ -213,7 +214,7 @@ class VariantPricingTest extends TestCase
                 'is_default' => false,
                 'active' => true,
             ])
-            ->assertRedirect($modal);
+            ->assertRedirect($page);
 
         $this->assertDatabaseHas('variants', [
             'sku' => 'TEST-0001',

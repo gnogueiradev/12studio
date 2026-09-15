@@ -1,14 +1,10 @@
 import { useForm } from '@inertiajs/react';
-import { ArrowLeft } from 'lucide-react';
+import { X } from 'lucide-react';
 import VariantForm from '@/components/admin/variant-form';
 import type { VariantPricingPreview } from '@/components/admin/variant-form';
 import { Button } from '@/components/ui/button';
-import {
-    DialogDescription,
-    DialogHeader,
-    DialogTitle,
-} from '@/components/ui/dialog';
 import type { ProductProduction } from '@/lib/production';
+import { newVariantForm, variantFormFromRow } from '@/lib/variant-form-data';
 import { store as storeVariant } from '@/routes/admin/produtos/variantes';
 import { update as updateVariant } from '@/routes/admin/variantes';
 import type {
@@ -36,28 +32,21 @@ type Props = {
     printers: PrinterProfileOption[];
     pricing: VariantPricingPreview;
     defaultActiveLaborMinutes: number;
-    onBack: () => void;
+    onClose: () => void;
 };
 
-/** O stock de arranque de uma variante nova, e o limiar do aviso. */
-const NEW_VARIANT = {
-    stock: 0,
-    low_stock_threshold: 3,
-} as const;
-
 /**
- * A ficha da variante, dentro do modal do produto.
+ * A ficha da variante, em gaveta dentro da secção "Variantes" da página do
+ * produto.
  *
- * Não é um segundo modal por cima: o modal do produto troca de face, e o
- * formulário do produto fica montado por baixo com o que o admin já lá tinha
- * escrito. Dois overlays empilhados para editar uma coisa que pertence ao
- * produto que está aberto era pedir para perder o fio.
+ * Não é um modal por cima: o que se edita pertence ao produto que está à
+ * frente, e um overlay por cima de um formulário desta altura era perder o fio
+ * ao sítio onde se estava.
  *
  * Não fecha nada ao gravar. O servidor responde `back()`, o Inertia remonta a
- * página, o `?editar={id}` que ficou no URL reabre o modal no mesmo produto e o
- * `variantTarget` nasce a null — ou seja, aterra-se na lista de variantes já
- * com a nova lá dentro. Em erro de validação o Inertia liga o `preserveState`
- * sozinho e a ficha fica aberta com as mensagens.
+ * página do produto e o estado da gaveta nasce fechado — ou seja, aterra-se na
+ * lista de variantes já com a nova lá dentro. Em erro de validação o Inertia
+ * liga o `preserveState` sozinho e a ficha fica aberta com as mensagens.
  */
 export function VariantPanel({
     productId,
@@ -70,55 +59,19 @@ export function VariantPanel({
     printers,
     pricing,
     defaultActiveLaborMinutes,
-    onBack,
+    onClose,
 }: Props) {
     const { data, setData, post, patch, processing, errors } =
         useForm<VariantFormData>(
             variant === null
-                ? {
-                      sku: suggestedSku,
-                      color_id: null,
-                      material_id: null,
-                      size_label: '',
-                      normal_price: '',
-                      sale_price: '',
-                      wholesale_price: '',
-                      filament_weight_grams: production.filamentWeightGrams,
-                      printing_time_minutes: production.printingTimeMinutes,
-                      printer_profile_id: null,
-                      packaging_cost: '',
-                      components_cost: '',
-                      active_labor_minutes: null,
-                      stock: NEW_VARIANT.stock,
-                      low_stock_threshold: NEW_VARIANT.low_stock_threshold,
-                      is_default: false,
-                      active: true,
-                  }
-                : {
-                      sku: variant.sku,
-                      color_id: variant.colorId,
-                      material_id: variant.materialId,
-                      size_label: variant.sizeLabel ?? '',
-                      normal_price: variant.normalPrice,
-                      sale_price: variant.salePrice ?? '',
-                      wholesale_price: variant.wholesalePrice ?? '',
-                      filament_weight_grams: variant.filamentWeightGrams,
-                      printing_time_minutes: variant.printingTimeMinutes,
-                      printer_profile_id: variant.printerProfileId,
-                      packaging_cost: variant.packagingCost ?? '',
-                      components_cost: variant.componentsCost ?? '',
-                      active_labor_minutes: variant.activeLaborMinutes,
-                      stock: variant.stock,
-                      low_stock_threshold: variant.lowStockThreshold,
-                      is_default: variant.isDefault,
-                      active: variant.active,
-                  },
+                ? newVariantForm(suggestedSku, production)
+                : variantFormFromRow(variant),
         );
 
     const submit = (event: React.FormEvent) => {
         event.preventDefault();
 
-        // `preserveScroll` para o modal não saltar para o topo quando a
+        // `preserveScroll` para a página não saltar para o topo quando a
         // validação recusa: o campo que falhou pode estar a meio de um
         // formulário com esta altura.
         if (variant === null) {
@@ -132,27 +85,27 @@ export function VariantPanel({
 
     return (
         <>
-            <DialogHeader className="border-b border-border/60 p-6">
-                <div className="flex items-center gap-2">
-                    <Button
-                        type="button"
-                        variant="ghost"
-                        size="icon"
-                        className="-ml-2 size-8 rounded-full"
-                        onClick={onBack}
-                        aria-label="Voltar ao produto"
-                    >
-                        <ArrowLeft className="size-4" />
-                    </Button>
-                    <DialogTitle>
+            <div className="flex items-start gap-3.5 border-b border-border/60 bg-secondary/30 px-5 py-4">
+                <div className="min-w-0 flex-1">
+                    <h3 className="text-[15px] font-semibold">
                         {variant === null ? 'Nova variante' : variant.sku}
-                    </DialogTitle>
+                    </h3>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                        {productName} — cada variante tem o seu SKU, preço e
+                        stock próprios.
+                    </p>
                 </div>
-                <DialogDescription>
-                    {productName} — cada variante tem o seu SKU, preço e stock
-                    próprios.
-                </DialogDescription>
-            </DialogHeader>
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="size-8 flex-none"
+                    onClick={onClose}
+                    aria-label="Fechar a ficha da variante"
+                >
+                    <X className="size-4" />
+                </Button>
+            </div>
 
             <div className="p-6">
                 <VariantForm

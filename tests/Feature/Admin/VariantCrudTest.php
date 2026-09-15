@@ -49,18 +49,18 @@ class VariantCrudTest extends TestCase
 
     public function test_store_converts_euros_to_cents(): void
     {
-        // Criar dispara-se de dentro do modal, e por isso responde com um
-        // `back()` — voltar ao endereco de onde se veio guarda a pagina, os
-        // filtros e a pesquisa, e o `?editar={id}` reabre o produto certo.
-        $modal = route('admin.produtos.index', ['editar' => $this->product->id]);
+        // Criar dispara-se de dentro da pagina do produto, e por isso responde
+        // com um `back()`: aterra-se na lista de variantes ja com a nova la
+        // dentro, sem perder o resto do formulario.
+        $page = route('admin.produtos.edit', $this->product);
 
         $this->actingAs($this->admin)
-            ->from($modal)
+            ->from($page)
             ->post(route('admin.produtos.variantes.store', $this->product), [
                 ...$this->validPayload(),
                 'normal_price' => '24,90',
             ])
-            ->assertRedirect($modal);
+            ->assertRedirect($page);
 
         $this->assertDatabaseHas('variants', [
             'sku' => 'VASO-PLA-20',
@@ -272,7 +272,7 @@ class VariantCrudTest extends TestCase
         PrinterProfile::factory()->isDefault()->create();
 
         $this->actingAs($this->admin)
-            ->get(route('admin.produtos.index', ['editar' => $this->product->id]))
+            ->get(route('admin.produtos.edit', $this->product))
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->has('colors', 2)
@@ -300,7 +300,7 @@ class VariantCrudTest extends TestCase
         ]);
 
         $this->actingAs($this->admin)
-            ->get(route('admin.produtos.index', ['editar' => $this->product->id]))
+            ->get(route('admin.produtos.edit', $this->product))
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->has('colors', 1)
@@ -318,7 +318,7 @@ class VariantCrudTest extends TestCase
         ]);
 
         $this->actingAs($this->admin)
-            ->get(route('admin.produtos.index', ['editar' => $this->product->id]))
+            ->get(route('admin.produtos.edit', $this->product))
             ->assertOk()
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->has('materials', 1)
@@ -344,7 +344,7 @@ class VariantCrudTest extends TestCase
         ]);
 
         $this->actingAs($this->admin)
-            ->get(route('admin.produtos.index', ['editar' => $this->product->id]))
+            ->get(route('admin.produtos.edit', $this->product))
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('editing.variants.0.normalPrice', '24.90')
                 ->where('editing.variants.0.salePrice', '19.90')
@@ -357,15 +357,15 @@ class VariantCrudTest extends TestCase
     public function test_destroy_archives_instead_of_deleting(): void
     {
         $variant = Variant::factory()->create(['product_id' => $this->product->id]);
-        $modal = route('admin.produtos.index', ['editar' => $this->product->id]);
+        $page = route('admin.produtos.edit', $this->product);
 
         // Arquivar dispara-se de dentro do modal, e por isso responde com um
         // `back()` — ao contrario de criar e editar, que vem do formulario da
         // variante e tem de nomear o destino.
         $this->actingAs($this->admin)
-            ->from($modal)
+            ->from($page)
             ->delete(route('admin.variantes.destroy', $variant))
-            ->assertRedirect($modal);
+            ->assertRedirect($page);
 
         $this->assertDatabaseHas('variants', [
             'id' => $variant->id,

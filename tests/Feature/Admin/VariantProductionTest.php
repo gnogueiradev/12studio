@@ -55,13 +55,13 @@ class VariantProductionTest extends TestCase
         $archived = Variant::factory()->for($this->product)->create(['active' => false]);
 
         $this->actingAs($this->admin)
-            ->from(route('admin.produtos.index', ['editar' => $this->product->id]))
+            ->from(route('admin.produtos.edit', $this->product))
             ->patch(route('admin.produtos.variantes.producao', $this->product), [
                 'hours' => 1,
                 'minutes' => 30,
                 'weight_grams' => 40,
             ])
-            ->assertRedirect(route('admin.produtos.index', ['editar' => $this->product->id]));
+            ->assertRedirect(route('admin.produtos.edit', $this->product));
 
         foreach ([$white, $black, $archived] as $variant) {
             $this->assertSame(90, $variant->refresh()->printing_time_minutes);
@@ -172,9 +172,9 @@ class VariantProductionTest extends TestCase
         ]);
 
         $this->actingAs($this->admin)
-            ->from(route('admin.produtos.index', ['editar' => $this->product->id]))
+            ->from(route('admin.produtos.edit', $this->product))
             ->post(route('admin.produtos.variantes.precos', $this->product))
-            ->assertRedirect(route('admin.produtos.index', ['editar' => $this->product->id]));
+            ->assertRedirect(route('admin.produtos.edit', $this->product));
 
         $this->assertSame(700, $reference->refresh()->price_cents);
         $this->assertSame(400, $reference->wholesale_price_cents);
@@ -306,7 +306,7 @@ class VariantProductionTest extends TestCase
         $blank = Variant::factory()->for($this->product)->create();
 
         $this->actingAs($this->admin)
-            ->get(route('admin.produtos.index', ['editar' => $this->product->id]))
+            ->get(route('admin.produtos.edit', $this->product))
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('editing.variants', function ($variants) use ($variant, $blank): bool {
                     $rows = collect($variants)->keyBy('id');

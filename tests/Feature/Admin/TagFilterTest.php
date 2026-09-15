@@ -142,17 +142,17 @@ class TagFilterTest extends TestCase
      */
     public function test_the_filter_options_leave_out_unused_tags(): void
     {
-        $used = $this->tag(Tag::SCOPE_PRODUCT);
-        $this->tag(Tag::SCOPE_PRODUCT, 'nunca-usada');
-        // Do ambito errado: nao pode aparecer nas opcoes dos produtos.
-        $this->tag(Tag::SCOPE_CUSTOMER, 'revendedor');
+        $used = $this->tag(Tag::SCOPE_CUSTOMER, 'revendedor');
+        $this->tag(Tag::SCOPE_CUSTOMER, 'nunca-usada');
+        // Do ambito errado: nao pode aparecer nas opcoes dos clientes.
+        $this->tag(Tag::SCOPE_PRODUCT);
 
-        Product::factory()->create()->tags()->attach($used->id);
+        User::factory()->create(['is_admin' => false])->tags()->attach($used->id);
 
         $this->actingAs($this->admin)
-            ->get(route('admin.produtos.index'))
+            ->get(route('admin.clientes.index'))
             ->assertInertia(fn ($page) => $page
-                ->where('tagOptions', [['value' => 'natal', 'label' => 'natal']]));
+                ->where('tagOptions', [['value' => 'revendedor', 'label' => 'revendedor']]));
     }
 
     /**
@@ -165,8 +165,10 @@ class TagFilterTest extends TestCase
         $this->tag(Tag::SCOPE_CUSTOMER, 'revendedor');
         $this->tag(Tag::SCOPE_ORDER, 'urgente');
 
+        // As sugestoes sao do formulario, que tem pagina propria — a listagem
+        // ja nao as carrega.
         $this->actingAs($this->admin)
-            ->get(route('admin.produtos.index'))
+            ->get(route('admin.produtos.create'))
             ->assertInertia(fn ($page) => $page->where('tagSuggestions', ['natal']));
     }
 

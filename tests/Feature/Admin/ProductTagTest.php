@@ -42,7 +42,7 @@ class ProductTagTest extends TestCase
             ->post(route('admin.produtos.store'), $this->payload([
                 'tags' => ['natal', 'presente'],
             ]))
-            ->assertRedirect(route('admin.produtos.index'));
+            ->assertRedirect(route('admin.produtos.edit', Product::query()->latest('id')->firstOrFail()));
 
         $product = Product::query()->firstOrFail();
 
