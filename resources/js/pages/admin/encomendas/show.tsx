@@ -290,7 +290,7 @@ export default function OrdersShow({ order, tagSuggestions }: Props) {
     return (
         <>
             <Head title={`Encomenda ${order.orderNumber}`} />
-            <div className="flex w-full max-w-[1320px] flex-1 flex-col gap-5 p-4 pb-10">
+            <div className="flex h-full flex-1 flex-col gap-5 p-4 pb-10">
                 <div className="flex flex-wrap items-end justify-between gap-4">
                     <div className="flex flex-col gap-1.5">
                         <div className="flex flex-wrap items-center gap-2.5">
@@ -640,7 +640,7 @@ export default function OrdersShow({ order, tagSuggestions }: Props) {
                         <OrderTimeline entries={order.timeline} />
                     </div>
 
-                    <aside className="flex min-w-0 flex-[1_1_300px] flex-col gap-3.5 lg:sticky lg:top-5 lg:max-w-[332px]">
+                    <aside className="flex min-w-0 flex-[1_1_300px] flex-col gap-3.5 lg:sticky lg:top-5 lg:max-w-[332px] 2xl:max-w-[400px]">
                         <section className="flex flex-col gap-3 rounded-xl border border-border/60 bg-card px-4 py-4">
                             <div className="flex items-center gap-3">
                                 <span className="grid size-9 shrink-0 place-items-center rounded-full bg-secondary text-xs font-semibold">
