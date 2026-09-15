@@ -89,7 +89,17 @@ class DashboardController extends Controller
 
         $lowStock = $this->lowStockVariants();
 
+        // Ano civil ate hoje, e nao 365 dias corridos: e o numero que bate com
+        // a contabilidade e com o que se declara.
+        $yearStart = $now->startOfYear();
+
         return [
+            'year' => $now->year,
+            'revenueYearCents' => $this->paidTotalBetween($yearStart, $now),
+            'paidOrdersYear' => Order::query()
+                ->where('payment_status', 'paid')
+                ->whereBetween('paid_at', [$yearStart, $now])
+                ->count(),
             'revenue30Cents' => $revenue,
             // null (e nao 0) quando nao ha periodo anterior: "+100%" a partir
             // do nada nao quer dizer nada, e a interface esconde a linha.

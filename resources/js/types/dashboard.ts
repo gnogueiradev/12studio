@@ -1,6 +1,11 @@
 /** Formas das props do painel do backoffice (Admin\DashboardController). */
 
 export type DashboardKpis = {
+    /** Ano civil corrente, para o rótulo do cartão. */
+    year: number;
+    /** Receita paga desde 1 de janeiro. */
+    revenueYearCents: number;
+    paidOrdersYear: number;
     revenue30Cents: number;
     /** null quando não há período anterior com que comparar. */
     revenueDeltaPercent: number | null;
