@@ -30,6 +30,9 @@ use Inertia\Response;
 
 class ProductController extends Controller
 {
+    /** Os tamanhos de pagina que a listagem aceita, como strings do URL. */
+    private const PAGE_SIZES = ['8', '20', '50'];
+
     public function __construct(
         private ProductService $productService,
         private TagService $tagService,
@@ -54,6 +57,12 @@ class ProductController extends Controller
             'category_id' => (string) $request->query('category_id', ''),
             'fulfillment_mode' => (string) $request->query('fulfillment_mode', ''),
             'tag' => (string) $request->query('tag', ''),
+            // So os tamanhos do seletor "por pagina". Fora da lista cai para ''
+            // (os 20 de sempre): o numero vem do URL e sem esta porta um
+            // `?per_page=100000` carregava o catalogo inteiro num pedido.
+            'per_page' => in_array((string) $request->query('per_page', ''), self::PAGE_SIZES, true)
+                ? (string) $request->query('per_page')
+                : '',
         ];
 
         // Base com todos os filtros MENOS o estado, como nas encomendas e nos
@@ -97,7 +106,7 @@ class ProductController extends Controller
             // nao existe como coluna para o agregado somar.
             ->withSum('variants as ready_stock', DB::raw('stock - reserved_stock'))
             ->orderByDesc('created_at')
-            ->paginate(20)
+            ->paginate($filters['per_page'] === '' ? 20 : (int) $filters['per_page'])
             ->withQueryString()
             ->through(fn (Product $product): array => [
                 'id' => $product->id,

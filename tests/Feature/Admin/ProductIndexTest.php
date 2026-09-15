@@ -51,6 +51,26 @@ class ProductIndexTest extends TestCase
                 ->where('products.last_page', 2));
     }
 
+    public function test_the_page_size_is_picked_from_a_short_list(): void
+    {
+        Product::factory()->count(25)->create();
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.produtos.index', ['per_page' => 8]))
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('products.data', 8)
+                ->where('products.last_page', 4)
+                ->where('filters.per_page', '8'));
+
+        // Fora da lista volta aos 20 — um `?per_page=100000` escrito a mao nao
+        // pode trazer o catalogo inteiro de uma vez.
+        $this->actingAs($this->admin)
+            ->get(route('admin.produtos.index', ['per_page' => 100000]))
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('products.data', 20)
+                ->where('filters.per_page', ''));
+    }
+
     public function test_filters_narrow_the_list(): void
     {
         $decoracao = Category::query()->create(['name' => 'Decoração', 'slug' => 'decoracao']);
