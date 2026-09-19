@@ -21,6 +21,10 @@ use App\Mcp\Tools\Write\Catalog\ColorUpdateTool;
 use App\Mcp\Tools\Write\Catalog\MaterialCreateTool;
 use App\Mcp\Tools\Write\Catalog\MaterialUpdateTool;
 use App\Mcp\Tools\Write\Catalog\TagCreateTool;
+use App\Mcp\Tools\Write\Orders\OrderCreateManualTool;
+use App\Mcp\Tools\Write\Orders\OrderItemSetProductionStatusTool;
+use App\Mcp\Tools\Write\Orders\OrderSetPaymentStatusTool;
+use App\Mcp\Tools\Write\Orders\OrderTransitionTool;
 use App\Mcp\Tools\Write\ProductArchiveTool;
 use App\Mcp\Tools\Write\ProductCreateTool;
 use App\Mcp\Tools\Write\ProductRestoreTool;
@@ -101,6 +105,11 @@ class StudioServer extends Server
         ColorUpdateTool::class,
         MaterialCreateTool::class,
         MaterialUpdateTool::class,
+        // Encomendas
+        OrderCreateManualTool::class,
+        OrderTransitionTool::class,
+        OrderSetPaymentStatusTool::class,
+        OrderItemSetProductionStatusTool::class,
     ];
 
     /**
