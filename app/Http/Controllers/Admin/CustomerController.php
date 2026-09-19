@@ -20,7 +20,7 @@ use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * Cliente = User com is_admin = false.
+ * Cliente = User::scopeCustomers() (nem admin nem equipa).
  *
  * Nao ha paginas de formulario: criar e editar acontecem os dois no modal da
  * listagem, como nos produtos. O formulario e o historico de encomendas, que
@@ -46,7 +46,7 @@ class CustomerController extends Controller
         // estado das encomendas: se a contagem respeitasse o proprio filtro,
         // todas as chips exceto a ativa mostrariam zero.
         $scoped = fn () => User::query()
-            ->where('is_admin', false)
+            ->customers()
             ->when($filters['search'] !== '', fn ($query) => $query->where(fn ($inner) => $inner
                 ->where('name', 'like', "%{$filters['search']}%")
                 ->orWhere('email', 'like', "%{$filters['search']}%")
@@ -143,7 +143,7 @@ class CustomerController extends Controller
         }
 
         $customer = User::query()
-            ->where('is_admin', false)
+            ->customers()
             ->with(['addresses', 'tags'])
             ->find((int) $id);
 
@@ -305,7 +305,7 @@ class CustomerController extends Controller
      */
     private function stats(): array
     {
-        $customers = fn () => User::query()->where('is_admin', false);
+        $customers = fn () => User::query()->customers();
 
         // Valor medio = quanto gastou, em media, um cliente que ja pagou
         // alguma coisa. Clientes sem encomenda paga ficam de fora: incluidos
@@ -348,10 +348,11 @@ class CustomerController extends Controller
     }
 
     /**
-     * A rota resolve qualquer User; administradores nao se gerem por aqui.
+     * A rota resolve qualquer User; a equipa (admins e producao, ativos ou
+     * desativados) nao se gere por aqui — gere-se em /admin/utilizadores.
      */
     private function ensureIsCustomer(User $customer): void
     {
-        abort_if($customer->isAdmin(), 404);
+        abort_if($customer->isStaff(), 404);
     }
 }

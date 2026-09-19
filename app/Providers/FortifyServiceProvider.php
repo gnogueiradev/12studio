@@ -4,8 +4,10 @@ namespace App\Providers;
 
 use App\Actions\Fortify\CreateNewUser;
 use App\Actions\Fortify\ResetUserPassword;
+use App\Models\User;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
@@ -41,6 +43,22 @@ class FortifyServiceProvider extends ServiceProvider
     {
         Fortify::resetUserPasswordsUsing(ResetUserPassword::class);
         Fortify::createUsersUsing(CreateNewUser::class);
+
+        // O login normal, mais uma regra: conta desativada pelo dono nao
+        // entra. A mensagem e a mesma de uma password errada — nao confirma a
+        // quem tenta que o email existe. O EnsureAccountUsable apanha o resto
+        // (sessoes ja abertas, login por passkey).
+        Fortify::authenticateUsing(function (Request $request): ?User {
+            $user = User::query()
+                ->where(Fortify::username(), $request->input(Fortify::username()))
+                ->first();
+
+            if ($user === null || $user->isDisabled()) {
+                return null;
+            }
+
+            return Hash::check((string) $request->input('password'), $user->password) ? $user : null;
+        });
     }
 
     /**

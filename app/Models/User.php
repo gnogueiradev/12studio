@@ -8,7 +8,9 @@ use Carbon\CarbonImmutable;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -27,6 +29,11 @@ use Laravel\Fortify\TwoFactorAuthenticatable;
  * @property CarbonImmutable|null $two_factor_confirmed_at
  * @property string|null $remember_token
  * @property bool $is_admin
+ * @property bool $is_owner
+ * @property string|null $staff_role
+ * @property bool $must_change_password
+ * @property CarbonImmutable|null $disabled_at
+ * @property int|null $created_by_user_id
  * @property string $customer_type
  * @property string|null $phone
  * @property string|null $nif
@@ -40,6 +47,16 @@ class User extends Authenticatable implements PasskeyUser
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, HasTags, Notifiable, PasskeyAuthenticatable, TwoFactorAuthenticatable;
+
+    public const ROLE_ADMIN = 'admin';
+
+    public const ROLE_PRODUCTION = 'production';
+
+    /**
+     * Papeis que o dono pode dar a uma conta de equipa. O `owner` nao esta
+     * aqui de proposito: so o comando `users:make-owner` o atribui.
+     */
+    public const STAFF_ROLES = [self::ROLE_ADMIN, self::ROLE_PRODUCTION];
 
     /**
      * Quem tem etiquetas e o cliente, nao a conta. Um admin herda a relacao por
@@ -62,13 +79,52 @@ class User extends Authenticatable implements PasskeyUser
             'password' => 'hashed',
             'two_factor_confirmed_at' => 'datetime',
             'is_admin' => 'boolean',
+            'is_owner' => 'boolean',
+            'must_change_password' => 'boolean',
+            'disabled_at' => 'datetime',
         ];
+    }
+
+    /**
+     * Cliente = nem admin nem equipa. E o UNICO sitio que o define: antes era
+     * `where('is_admin', false)` espalhado, e uma conta de producao (que nao e
+     * admin) aparecia na lista de clientes e no seletor das encomendas.
+     *
+     * @param  Builder<$this>  $query
+     * @return Builder<$this>
+     */
+    public function scopeCustomers(Builder $query): Builder
+    {
+        return $query->where('is_admin', false)->whereNull('staff_role');
+    }
+
+    /**
+     * Equipa = quem entra no backoffice, admin ou producao.
+     *
+     * @param  Builder<$this>  $query
+     * @return Builder<$this>
+     */
+    public function scopeStaff(Builder $query): Builder
+    {
+        return $query->where(fn (Builder $inner) => $inner
+            ->where('is_admin', true)
+            ->orWhereNotNull('staff_role'));
     }
 
     /** @return HasMany<Order, $this> */
     public function orders(): HasMany
     {
         return $this->hasMany(Order::class);
+    }
+
+    /**
+     * Quem criou a conta (so contas da equipa criadas pelo dono).
+     *
+     * @return BelongsTo<User, $this>
+     */
+    public function createdBy(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'created_by_user_id');
     }
 
     /** @return HasMany<Address, $this> */
@@ -87,7 +143,52 @@ class User extends Authenticatable implements PasskeyUser
         // Cast explicito: um modelo acabado de criar pela factory pode nem
         // ter o atributo carregado (default aplicado so na BD) — null nunca
         // pode passar por "e admin".
-        return (bool) $this->is_admin;
+        return (bool) $this->is_admin && ! $this->isDisabled();
+    }
+
+    /**
+     * O dono gere a equipa. So conta se tambem for admin: um dono despromovido
+     * por engano na BD nao fica com a pagina de utilizadores.
+     */
+    public function isOwner(): bool
+    {
+        return (bool) $this->is_owner && $this->isAdmin();
+    }
+
+    public function isProductionStaff(): bool
+    {
+        return $this->staff_role === self::ROLE_PRODUCTION && ! $this->isDisabled();
+    }
+
+    /**
+     * Quadro de producao: admins e a equipa de producao.
+     */
+    public function canAccessProduction(): bool
+    {
+        return $this->isAdmin() || $this->isProductionStaff();
+    }
+
+    public function isStaff(): bool
+    {
+        return (bool) $this->is_admin || $this->staff_role !== null;
+    }
+
+    public function isDisabled(): bool
+    {
+        return $this->disabled_at !== null;
+    }
+
+    /**
+     * Papel legivel, para a pagina de utilizadores.
+     */
+    public function role(): string
+    {
+        return match (true) {
+            (bool) $this->is_owner && (bool) $this->is_admin => 'owner',
+            (bool) $this->is_admin => self::ROLE_ADMIN,
+            $this->staff_role === self::ROLE_PRODUCTION => self::ROLE_PRODUCTION,
+            default => 'customer',
+        };
     }
 
     /**

@@ -15,8 +15,19 @@ export type User = {
     email_verified_at: string | null;
 };
 
+/**
+ * O que a conta pode ver, calculado no servidor (HandleInertiaRequests). Serve
+ * só para esconder links — quem decide o acesso continua a ser o servidor.
+ */
+export type Abilities = {
+    backoffice: boolean;
+    production: boolean;
+    manageStaff: boolean;
+};
+
 export type Auth = {
     user: User;
+    can: Abilities;
 };
 
 /* @chisel-passkeys */

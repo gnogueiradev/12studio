@@ -1,7 +1,10 @@
 <?php
 
+use App\Http\Middleware\EnsureAccountUsable;
 use App\Http\Middleware\EnsureAdmin;
 use App\Http\Middleware\EnsureLoginGate;
+use App\Http\Middleware\EnsureOwner;
+use App\Http\Middleware\EnsureProductionAccess;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\SecurityHeaders;
@@ -65,10 +68,14 @@ return Application::configure(basePath: dirname(__DIR__))
             // config/fortify.php, mas nao le limitador nenhum para as rotas de
             // reposicao de password — daí este.
             ThrottlePasswordReset::class,
+            // Conta desativada sai; password dada pelo dono tem de ser mudada.
+            EnsureAccountUsable::class,
         ]);
 
         $middleware->alias([
             'admin' => EnsureAdmin::class,
+            'production' => EnsureProductionAccess::class,
+            'owner' => EnsureOwner::class,
             // Aplicado a TODAS as rotas do Fortify via config/fortify.php.
             'login-gate' => EnsureLoginGate::class,
         ]);

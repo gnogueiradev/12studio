@@ -175,7 +175,8 @@ export default function ProductionBoard({ items }: Props) {
 
 ProductionBoard.layout = {
     breadcrumbs: [
-        { title: 'Backoffice', href: '/admin' },
+        // Sem "Backoffice" à frente: a equipa de produção também aterra aqui,
+        // e para ela o /admin é um 403.
         { title: 'Produção', href: '/admin/producao' },
     ],
 };

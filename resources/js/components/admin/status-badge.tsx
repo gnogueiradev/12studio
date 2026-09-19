@@ -101,6 +101,13 @@ export const TONES: Record<string, Tone> = {
      */
     particular: 'neutral',
     empresa: 'info',
+    /*
+     * users.role (equipa) — o tom sobe com o poder da conta: a produção e a
+     * mais contida, o dono o único que gere a equipa.
+     */
+    owner: 'warning',
+    admin: 'info',
+    production: 'neutral',
 };
 
 /**
