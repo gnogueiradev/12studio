@@ -95,6 +95,22 @@ class McpSecurityTest extends TestCase
             ->assertJsonFragment(['name' => 'whoami']);
     }
 
+    public function test_a_read_key_sees_exactly_the_read_tools(): void
+    {
+        $token = $this->tokenFor(User::factory()->admin()->create());
+
+        $tools = collect($this->mcp($token, $this->listTools())->assertOk()->json('result.tools'));
+
+        $this->assertEqualsCanonicalizing([
+            'whoami', 'products_list', 'product_get', 'pricing_preview', 'stock_low',
+            'stock_movements', 'categories_list', 'tags_list', 'colors_list',
+            'materials_list', 'orders_list', 'order_get',
+        ], $tools->pluck('name')->all());
+
+        // Todas marcadas como so leitura, para o cliente nao pedir confirmacao.
+        $this->assertTrue($tools->every(fn (array $tool): bool => ($tool['annotations']['readOnlyHint'] ?? false) === true));
+    }
+
     public function test_whoami_reports_the_access_level(): void
     {
         $token = $this->tokenFor(User::factory()->admin()->create(), ApiKeyService::ACCESS_WRITE);

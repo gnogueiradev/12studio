@@ -88,30 +88,9 @@ class McpAuditor
         return $clean;
     }
 
-    /**
-     * "goncalo@hotmail.com" -> "g***@hotmail.com"; "912345612" -> "9******12".
-     */
     public function mask(mixed $value): ?string
     {
-        if ($value === null || $value === '') {
-            return null;
-        }
-
-        $value = (string) $value;
-
-        if (str_contains($value, '@')) {
-            [$local, $domain] = explode('@', $value, 2);
-
-            return Str::substr($local, 0, 1).'***@'.$domain;
-        }
-
-        $length = Str::length($value);
-
-        if ($length <= 4) {
-            return str_repeat('*', $length);
-        }
-
-        return Str::substr($value, 0, 1).str_repeat('*', $length - 3).Str::substr($value, -2);
+        return McpFormat::mask($value);
     }
 
     private function clientLabel(?Token $token): ?string

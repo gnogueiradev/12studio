@@ -2,6 +2,17 @@
 
 namespace App\Mcp\Servers;
 
+use App\Mcp\Tools\Read\CategoriesListTool;
+use App\Mcp\Tools\Read\ColorsListTool;
+use App\Mcp\Tools\Read\MaterialsListTool;
+use App\Mcp\Tools\Read\OrderGetTool;
+use App\Mcp\Tools\Read\OrdersListTool;
+use App\Mcp\Tools\Read\PricingPreviewTool;
+use App\Mcp\Tools\Read\ProductGetTool;
+use App\Mcp\Tools\Read\ProductsListTool;
+use App\Mcp\Tools\Read\StockLowTool;
+use App\Mcp\Tools\Read\StockMovementsTool;
+use App\Mcp\Tools\Read\TagsListTool;
 use App\Mcp\Tools\WhoAmITool;
 use Laravel\Mcp\Server;
 use Laravel\Mcp\Server\Attributes\Instructions;
@@ -35,6 +46,18 @@ class StudioServer extends Server
      */
     protected array $tools = [
         WhoAmITool::class,
+        // Leitura
+        ProductsListTool::class,
+        ProductGetTool::class,
+        PricingPreviewTool::class,
+        StockLowTool::class,
+        StockMovementsTool::class,
+        CategoriesListTool::class,
+        TagsListTool::class,
+        ColorsListTool::class,
+        MaterialsListTool::class,
+        OrdersListTool::class,
+        OrderGetTool::class,
     ];
 
     /**
