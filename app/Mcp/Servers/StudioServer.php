@@ -14,6 +14,13 @@ use App\Mcp\Tools\Read\StockLowTool;
 use App\Mcp\Tools\Read\StockMovementsTool;
 use App\Mcp\Tools\Read\TagsListTool;
 use App\Mcp\Tools\WhoAmITool;
+use App\Mcp\Tools\Write\Catalog\CategoryCreateTool;
+use App\Mcp\Tools\Write\Catalog\CategoryUpdateTool;
+use App\Mcp\Tools\Write\Catalog\ColorCreateTool;
+use App\Mcp\Tools\Write\Catalog\ColorUpdateTool;
+use App\Mcp\Tools\Write\Catalog\MaterialCreateTool;
+use App\Mcp\Tools\Write\Catalog\MaterialUpdateTool;
+use App\Mcp\Tools\Write\Catalog\TagCreateTool;
 use App\Mcp\Tools\Write\ProductArchiveTool;
 use App\Mcp\Tools\Write\ProductCreateTool;
 use App\Mcp\Tools\Write\ProductRestoreTool;
@@ -86,6 +93,14 @@ class StudioServer extends Server
         VariantArchiveTool::class,
         VariantsApplyCalculatedPricesTool::class,
         StockAdjustTool::class,
+        // Catalogo auxiliar
+        CategoryCreateTool::class,
+        CategoryUpdateTool::class,
+        TagCreateTool::class,
+        ColorCreateTool::class,
+        ColorUpdateTool::class,
+        MaterialCreateTool::class,
+        MaterialUpdateTool::class,
     ];
 
     /**
