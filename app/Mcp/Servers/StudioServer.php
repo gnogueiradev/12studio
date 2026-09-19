@@ -14,6 +14,16 @@ use App\Mcp\Tools\Read\StockLowTool;
 use App\Mcp\Tools\Read\StockMovementsTool;
 use App\Mcp\Tools\Read\TagsListTool;
 use App\Mcp\Tools\WhoAmITool;
+use App\Mcp\Tools\Write\ProductArchiveTool;
+use App\Mcp\Tools\Write\ProductCreateTool;
+use App\Mcp\Tools\Write\ProductRestoreTool;
+use App\Mcp\Tools\Write\ProductUpdateTool;
+use App\Mcp\Tools\Write\StockAdjustTool;
+use App\Mcp\Tools\Write\VariantArchiveTool;
+use App\Mcp\Tools\Write\VariantCreateTool;
+use App\Mcp\Tools\Write\VariantsApplyCalculatedPricesTool;
+use App\Mcp\Tools\Write\VariantSetDefaultTool;
+use App\Mcp\Tools\Write\VariantUpdateTool;
 use Laravel\Mcp\Server;
 use Laravel\Mcp\Server\Attributes\Instructions;
 use Laravel\Mcp\Server\Attributes\Name;
@@ -42,6 +52,13 @@ TXT)]
 class StudioServer extends Server
 {
     /**
+     * O tools/list e paginado (15 por omissao). Nem todos os clientes seguem
+     * o nextCursor, e uma ferramenta na pagina 2 e uma ferramenta que o
+     * Claude nunca ve — com ~22, cabem todas numa pagina.
+     */
+    public int $defaultPaginationLength = 50;
+
+    /**
      * @var array<int, class-string<Tool>>
      */
     protected array $tools = [
@@ -58,6 +75,17 @@ class StudioServer extends Server
         MaterialsListTool::class,
         OrdersListTool::class,
         OrderGetTool::class,
+        // Escrita (so aparecem a chaves com mcp:write)
+        ProductCreateTool::class,
+        ProductUpdateTool::class,
+        ProductArchiveTool::class,
+        ProductRestoreTool::class,
+        VariantCreateTool::class,
+        VariantUpdateTool::class,
+        VariantSetDefaultTool::class,
+        VariantArchiveTool::class,
+        VariantsApplyCalculatedPricesTool::class,
+        StockAdjustTool::class,
     ];
 
     /**

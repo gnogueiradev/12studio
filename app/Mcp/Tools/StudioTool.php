@@ -5,6 +5,7 @@ namespace App\Mcp\Tools;
 use App\Mcp\McpAuditor;
 use App\Models\McpActivity;
 use App\Models\User;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Validation\ValidationException;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -53,6 +54,10 @@ abstract class StudioTool extends Tool
         try {
             $response = $this->run($request, $user);
             $result = $this->isError($response) ? McpActivity::RESULT_ERROR : McpActivity::RESULT_OK;
+        } catch (AuthorizationException) {
+            $this->audit($auditor, $user, McpActivity::RESULT_DENIED, $arguments, $started);
+
+            return Response::error('Sem permissão.');
         } catch (ValidationException $exception) {
             $this->audit($auditor, $user, McpActivity::RESULT_VALIDATION_ERROR, $arguments, $started);
 

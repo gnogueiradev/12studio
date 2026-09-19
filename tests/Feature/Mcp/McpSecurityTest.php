@@ -111,6 +111,19 @@ class McpSecurityTest extends TestCase
         $this->assertTrue($tools->every(fn (array $tool): bool => ($tool['annotations']['readOnlyHint'] ?? false) === true));
     }
 
+    public function test_a_write_key_also_sees_the_write_tools(): void
+    {
+        $token = $this->tokenFor(User::factory()->admin()->create(), ApiKeyService::ACCESS_WRITE);
+
+        $tools = collect($this->mcp($token, $this->listTools())->assertOk()->json('result.tools'))->keyBy('name');
+
+        $this->assertCount(22, $tools);
+        $this->assertFalse($tools['variant_update']['annotations']['readOnlyHint'] ?? false);
+        // Arquivar leva o aviso de destrutivo; editar um preco nao.
+        $this->assertTrue($tools['product_archive']['annotations']['destructiveHint'] ?? false);
+        $this->assertFalse($tools['variant_update']['annotations']['destructiveHint'] ?? true);
+    }
+
     public function test_whoami_reports_the_access_level(): void
     {
         $token = $this->tokenFor(User::factory()->admin()->create(), ApiKeyService::ACCESS_WRITE);
