@@ -6,7 +6,6 @@ use App\Http\Middleware\EnsureLoginGate;
 use App\Http\Middleware\EnsureMcpToken;
 use App\Http\Middleware\EnsureOwner;
 use App\Http\Middleware\EnsureProductionAccess;
-use App\Http\Middleware\EnsureSecondFactor;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\SecurityHeaders;
@@ -79,7 +78,6 @@ return Application::configure(basePath: dirname(__DIR__))
             'production' => EnsureProductionAccess::class,
             'owner' => EnsureOwner::class,
             'mcp.token' => EnsureMcpToken::class,
-            'mcp.second-factor' => EnsureSecondFactor::class,
             // Aplicado a TODAS as rotas do Fortify via config/fortify.php.
             'login-gate' => EnsureLoginGate::class,
         ]);

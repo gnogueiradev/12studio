@@ -10,7 +10,6 @@ use App\Services\ApiKeyService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Testing\TestResponse;
-use Laravel\Fortify\Events\TwoFactorAuthenticationDisabled;
 use Laravel\Passport\ClientRepository;
 use Laravel\Passport\Passport;
 use Tests\TestCase;
@@ -89,7 +88,7 @@ class McpSecurityTest extends TestCase
 
     public function test_a_valid_admin_key_lists_the_tools(): void
     {
-        $token = $this->tokenFor(User::factory()->admin()->withTwoFactor()->create());
+        $token = $this->tokenFor(User::factory()->admin()->create());
 
         $this->mcp($token, $this->listTools())
             ->assertOk()
@@ -194,16 +193,6 @@ class McpSecurityTest extends TestCase
 
         $admin->disabled_at = now();
         $admin->save();
-
-        $this->mcp($token, $this->listTools())->assertUnauthorized();
-    }
-
-    public function test_turning_2fa_off_revokes_the_keys(): void
-    {
-        $admin = User::factory()->admin()->withTwoFactor()->create();
-        $token = $this->tokenFor($admin);
-
-        event(new TwoFactorAuthenticationDisabled($admin));
 
         $this->mcp($token, $this->listTools())->assertUnauthorized();
     }

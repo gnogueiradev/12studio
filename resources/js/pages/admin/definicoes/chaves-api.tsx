@@ -1,4 +1,4 @@
-import { Head, Link, router, useForm } from '@inertiajs/react';
+import { Head, router, useForm } from '@inertiajs/react';
 import { Check, Copy, KeyRound, ShieldAlert } from 'lucide-react';
 import { useState } from 'react';
 import { AdminTable } from '@/components/admin/admin-table';
@@ -21,7 +21,6 @@ import {
 import { Spinner } from '@/components/ui/spinner';
 import { destroy, destroyAll, index, store } from '@/routes/admin/chaves-api';
 import { index as settingsIndex } from '@/routes/admin/definicoes';
-import { edit as securityEdit } from '@/routes/security';
 
 type ApiKeyRow = {
     id: string;
@@ -35,7 +34,6 @@ type ApiKeyRow = {
 
 type Props = {
     keys: ApiKeyRow[];
-    hasSecondFactor: boolean;
     lifetimes: number[];
     mcpUrl: string;
     enabled: boolean;
@@ -56,7 +54,6 @@ const ACCESS_LABELS = {
  */
 export default function ApiKeysIndex({
     keys,
-    hasSecondFactor,
     lifetimes,
     mcpUrl,
     enabled,
@@ -162,95 +159,73 @@ export default function ApiKeysIndex({
                     <CreatedToken token={createdToken} mcpUrl={mcpUrl} />
                 )}
 
-                {hasSecondFactor ? (
-                    <form
-                        onSubmit={submit}
-                        className="grid gap-4 rounded-xl border p-4 sm:grid-cols-[1fr_12rem_10rem_auto] sm:items-end"
-                    >
-                        <div className="grid gap-2">
-                            <Label htmlFor="key-name">Nome</Label>
-                            <Input
-                                id="key-name"
-                                value={data.name}
-                                placeholder="Claude Code no portátil"
-                                onChange={(event) =>
-                                    setData('name', event.target.value)
-                                }
-                                required
-                            />
-                            <InputError message={errors.name} />
-                        </div>
-                        <div className="grid gap-2">
-                            <Label>Acesso</Label>
-                            <Select
-                                value={data.access}
-                                onValueChange={(value) =>
-                                    setData('access', value)
-                                }
-                            >
-                                <SelectTrigger>
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    <SelectItem value="read">
-                                        {ACCESS_LABELS.read}
+                <form
+                    onSubmit={submit}
+                    className="grid gap-4 rounded-xl border p-4 sm:grid-cols-[1fr_12rem_10rem_auto] sm:items-end"
+                >
+                    <div className="grid gap-2">
+                        <Label htmlFor="key-name">Nome</Label>
+                        <Input
+                            id="key-name"
+                            value={data.name}
+                            placeholder="Claude Code no portátil"
+                            onChange={(event) =>
+                                setData('name', event.target.value)
+                            }
+                            required
+                        />
+                        <InputError message={errors.name} />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label>Acesso</Label>
+                        <Select
+                            value={data.access}
+                            onValueChange={(value) => setData('access', value)}
+                        >
+                            <SelectTrigger>
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="read">
+                                    {ACCESS_LABELS.read}
+                                </SelectItem>
+                                <SelectItem value="write">
+                                    {ACCESS_LABELS.write}
+                                </SelectItem>
+                            </SelectContent>
+                        </Select>
+                        <InputError message={errors.access} />
+                    </div>
+                    <div className="grid gap-2">
+                        <Label>Validade</Label>
+                        <Select
+                            value={data.days}
+                            onValueChange={(value) => setData('days', value)}
+                        >
+                            <SelectTrigger>
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                                {lifetimes.map((days) => (
+                                    <SelectItem key={days} value={String(days)}>
+                                        {days} dias
                                     </SelectItem>
-                                    <SelectItem value="write">
-                                        {ACCESS_LABELS.write}
-                                    </SelectItem>
-                                </SelectContent>
-                            </Select>
-                            <InputError message={errors.access} />
-                        </div>
-                        <div className="grid gap-2">
-                            <Label>Validade</Label>
-                            <Select
-                                value={data.days}
-                                onValueChange={(value) =>
-                                    setData('days', value)
-                                }
-                            >
-                                <SelectTrigger>
-                                    <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                    {lifetimes.map((days) => (
-                                        <SelectItem
-                                            key={days}
-                                            value={String(days)}
-                                        >
-                                            {days} dias
-                                        </SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            <InputError message={errors.days} />
-                        </div>
-                        <Button type="submit" disabled={processing}>
-                            {processing ? <Spinner /> : <KeyRound />}
-                            Criar chave
-                        </Button>
-                        <p className="text-xs text-muted-foreground sm:col-span-4">
-                            Usa uma chave <strong>só de leitura</strong> no dia
-                            a dia e cria uma de escrita só quando precisares. No
-                            Claude, não dês “permitir sempre” às ferramentas que
-                            alteram dados — assim cada alteração passa por ti.
-                        </p>
-                    </form>
-                ) : (
-                    <Alert>
-                        <ShieldAlert />
-                        <AlertTitle>Falta o segundo fator</AlertTitle>
-                        <AlertDescription>
-                            Uma chave de API abre o backoffice sem passar pelo
-                            login. Ativa o 2FA ou uma passkey em{' '}
-                            <Link href={securityEdit()} className="underline">
-                                Segurança
-                            </Link>{' '}
-                            antes de criar a primeira.
-                        </AlertDescription>
-                    </Alert>
-                )}
+                                ))}
+                            </SelectContent>
+                        </Select>
+                        <InputError message={errors.days} />
+                    </div>
+                    <Button type="submit" disabled={processing}>
+                        {processing ? <Spinner /> : <KeyRound />}
+                        Criar chave
+                    </Button>
+                    <p className="text-xs text-muted-foreground sm:col-span-4">
+                        Usa uma chave <strong>só de leitura</strong> no dia a
+                        dia e cria uma de escrita só quando precisares. No
+                        Claude, não dês “permitir sempre” às ferramentas que
+                        alteram dados — assim cada alteração passa por ti.
+                    </p>
+                </form>
 
                 <AdminTable
                     columns={columns}

@@ -32,8 +32,8 @@ Mcp::web('/mcp', StudioServer::class)
 //   - o registo dinamico tem limite, e so aceita redirects para claude.ai e
 //     claude.com (config/mcp.php);
 //   - do Passport so existem as quatro rotas do fluxo authorization code, e
-//     o consentimento exige admin, password acabada de confirmar e segundo
-//     fator.
+//     o consentimento exige admin e password acabada de confirmar (2FA nao
+//     e exigido — decisao do dono).
 // Os nomes das rotas sao os que o laravel/mcp e o Passport esperam.
 
 Route::get('/.well-known/oauth-protected-resource', [McpOAuthMetadataController::class, 'protectedResource'])
@@ -55,7 +55,7 @@ Route::post('/oauth/token', [AccessTokenController::class, 'issueToken'])
     ->middleware('throttle:mcp-token')
     ->name('passport.token');
 
-Route::middleware(['web', 'auth', 'admin', 'password.confirm', 'mcp.second-factor'])
+Route::middleware(['web', 'auth', 'admin', 'password.confirm'])
     ->prefix('oauth')
     ->name('passport.authorizations.')
     ->group(function (): void {

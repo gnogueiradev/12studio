@@ -63,9 +63,9 @@ class McpOAuthTest extends TestCase
         ];
     }
 
-    private function confirmedAdminWith2fa(): User
+    private function confirmedAdmin(): User
     {
-        $admin = User::factory()->admin()->withTwoFactor()->create();
+        $admin = User::factory()->admin()->create();
         $this->actingAs($admin)->withSession(['auth.password_confirmed_at' => time()]);
 
         return $admin;
@@ -142,12 +142,12 @@ class McpOAuthTest extends TestCase
     {
         $request = $this->authorizationRequest();
 
-        $this->actingAs(User::factory()->withTwoFactor()->create())
+        $this->actingAs(User::factory()->create())
             ->withSession(['auth.password_confirmed_at' => time()])
             ->get(route('passport.authorizations.authorize', $request['query']))
             ->assertForbidden();
 
-        $this->actingAs(User::factory()->production()->withTwoFactor()->create())
+        $this->actingAs(User::factory()->production()->create())
             ->withSession(['auth.password_confirmed_at' => time()])
             ->get(route('passport.authorizations.authorize', $request['query']))
             ->assertForbidden();
@@ -157,25 +157,27 @@ class McpOAuthTest extends TestCase
     {
         $request = $this->authorizationRequest();
 
-        $this->actingAs(User::factory()->admin()->withTwoFactor()->create())
+        $this->actingAs(User::factory()->admin()->create())
             ->get(route('passport.authorizations.authorize', $request['query']))
             ->assertRedirect(route('password.confirm'));
     }
 
-    public function test_without_a_second_factor_there_is_no_consent(): void
+    public function test_no_second_factor_is_needed_to_authorize(): void
     {
         $request = $this->authorizationRequest();
 
+        // Decisao do dono: sem 2FA. A password confirmada chega.
         $this->actingAs(User::factory()->admin()->create())
             ->withSession(['auth.password_confirmed_at' => time()])
             ->get(route('passport.authorizations.authorize', $request['query']))
-            ->assertRedirect(route('security.edit'));
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page->component('auth/oauth-authorize'));
     }
 
     public function test_the_consent_page_shows_where_the_access_goes(): void
     {
         $request = $this->authorizationRequest();
-        $this->confirmedAdminWith2fa();
+        $this->confirmedAdmin();
 
         $response = $this->get(route('passport.authorizations.authorize', $request['query']))
             ->assertOk()
@@ -199,7 +201,7 @@ class McpOAuthTest extends TestCase
     public function test_the_full_flow_ends_in_a_working_token(): void
     {
         $request = $this->authorizationRequest();
-        $admin = $this->confirmedAdminWith2fa();
+        $admin = $this->confirmedAdmin();
 
         $page = $this->get(route('passport.authorizations.authorize', $request['query']))->assertOk();
         $authToken = $page->viewData('page')['props']['authToken'];
@@ -234,7 +236,7 @@ class McpOAuthTest extends TestCase
     public function test_denying_sends_the_user_back_with_an_error(): void
     {
         $request = $this->authorizationRequest();
-        $this->confirmedAdminWith2fa();
+        $this->confirmedAdmin();
 
         $page = $this->get(route('passport.authorizations.authorize', $request['query']))->assertOk();
 
@@ -249,7 +251,7 @@ class McpOAuthTest extends TestCase
     public function test_a_read_only_grant_does_not_see_the_write_tools(): void
     {
         $request = $this->authorizationRequest('mcp:read');
-        $this->confirmedAdminWith2fa();
+        $this->confirmedAdmin();
 
         $page = $this->get(route('passport.authorizations.authorize', $request['query']))
             ->assertInertia(fn (Assert $page) => $page->where('canWrite', false));
@@ -281,9 +283,9 @@ class McpOAuthTest extends TestCase
 
     public function test_passport_json_api_and_device_routes_stay_off(): void
     {
-        $this->actingAs(User::factory()->admin()->withTwoFactor()->create());
+        $this->actingAs(User::factory()->admin()->create());
 
-        // Criar chaves pela sessao, sem password nem 2FA, seria o atalho a
+        // Criar chaves pela sessao, sem confirmar a password, seria o atalho a
         // volta da pagina de chaves.
         $this->postJson('/oauth/personal-access-tokens', ['name' => 'x'])->assertNotFound();
         $this->getJson('/oauth/clients')->assertNotFound();

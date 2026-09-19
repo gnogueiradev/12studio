@@ -37,7 +37,7 @@ class AppServiceProvider extends ServiceProvider
         // regista a mao so as quatro que o OAuth do claude.ai precisa, cada
         // uma com o seu porteiro. As outras — o JSON API de clientes e de
         // personal access tokens, o device flow — seriam atalhos a volta da
-        // pagina de chaves (sem password nem 2FA). Tem de ser no register: o
+        // pagina de chaves (sem confirmar a password). Tem de ser no register: o
         // Passport regista as rotas no boot dele, que corre antes deste.
         Passport::ignoreRoutes();
         Passport::$deviceCodeGrantEnabled = false;

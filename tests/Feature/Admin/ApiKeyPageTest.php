@@ -46,20 +46,26 @@ class ApiKeyPageTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_without_a_second_factor_no_key_is_created(): void
+    public function test_creating_a_key_asks_for_the_password_but_not_for_2fa(): void
     {
+        // Sem password confirmada ha instantes: vai confirmar primeiro.
+        $this->actingAs(User::factory()->admin()->create())
+            ->post(route('admin.chaves-api.store'), ['name' => 'Portátil', 'access' => 'read', 'days' => 30])
+            ->assertRedirect(route('password.confirm'));
+
+        // Com ela, e sem 2FA nenhum, a chave nasce.
         $admin = User::factory()->admin()->create();
 
         $this->confirmed($admin)
-            ->post(route('admin.chaves-api.store'), ['name' => 'Portátil', 'access' => 'write', 'days' => 30])
-            ->assertRedirect();
+            ->post(route('admin.chaves-api.store'), ['name' => 'Portátil', 'access' => 'read', 'days' => 30])
+            ->assertRedirect(route('admin.chaves-api.index'));
 
-        $this->assertSame(0, $admin->tokens()->count());
+        $this->assertSame(1, $admin->tokens()->count());
     }
 
-    public function test_an_admin_with_2fa_creates_a_key_and_sees_it_once(): void
+    public function test_an_admin_creates_a_key_and_sees_it_once(): void
     {
-        $admin = User::factory()->admin()->withTwoFactor()->create();
+        $admin = User::factory()->admin()->create();
 
         $this->confirmed($admin)
             ->post(route('admin.chaves-api.store'), ['name' => 'Portátil', 'access' => 'write', 'days' => 30])
@@ -87,7 +93,7 @@ class ApiKeyPageTest extends TestCase
 
     public function test_the_lifetime_is_one_of_the_allowed_ones(): void
     {
-        $admin = User::factory()->admin()->withTwoFactor()->create();
+        $admin = User::factory()->admin()->create();
 
         $this->confirmed($admin)
             ->post(route('admin.chaves-api.store'), ['name' => 'X', 'access' => 'read', 'days' => 3650])

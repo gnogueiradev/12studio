@@ -15,9 +15,9 @@ use Inertia\Response;
 /**
  * Chaves de API para ligar o Claude (e outros clientes MCP) ao backoffice.
  *
- * Cada acao pede a password outra vez (password.confirm) e so funciona com
- * 2FA ou passkey ativos: uma chave de escrita vale tanto como a sessao de
- * admin, sem o segundo fator — o minimo e exigi-lo a quem a cria.
+ * Cada acao pede a password outra vez (password.confirm). O 2FA nao e
+ * exigido — decisao do dono. O que segura uma chave exposta e o resto: o
+ * email a cada chave criada, a validade curta e o "Revogar tudo".
  */
 class ApiKeyController extends Controller
 {
@@ -31,7 +31,6 @@ class ApiKeyController extends Controller
 
         return Inertia::render('admin/definicoes/chaves-api', [
             'keys' => $this->keys->list($user),
-            'hasSecondFactor' => $this->hasSecondFactor($user),
             'lifetimes' => ApiKeyService::LIFETIMES,
             'mcpUrl' => url('/mcp'),
             'enabled' => (bool) config('mcp.enabled'),
@@ -44,12 +43,6 @@ class ApiKeyController extends Controller
     public function store(StoreApiKeyRequest $request): RedirectResponse
     {
         $user = $this->admin($request);
-
-        if (! $this->hasSecondFactor($user)) {
-            $this->toast('Ativa o 2FA ou uma passkey antes de criar chaves.', 'error');
-
-            return back();
-        }
 
         /** @var array{name: string, access: string, days: int} $data */
         $data = $request->validated();
@@ -81,11 +74,6 @@ class ApiKeyController extends Controller
         $this->toast($count === 1 ? '1 chave revogada.' : "{$count} chaves revogadas.");
 
         return back();
-    }
-
-    private function hasSecondFactor(User $user): bool
-    {
-        return $user->hasEnabledTwoFactorAuthentication() || $user->passkeys()->exists();
     }
 
     private function admin(Request $request): User

@@ -110,7 +110,7 @@ class ApiKeyService
 
     /**
      * O "revogar tudo" da pagina, e o que corre sozinho quando a conta perde
-     * o admin, muda de password, desliga o 2FA ou e desativada.
+     * o admin, muda de password, muda de papel ou e desativada.
      */
     public function revokeAll(User $user): int
     {
