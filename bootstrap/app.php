@@ -3,6 +3,7 @@
 use App\Http\Middleware\EnsureAccountUsable;
 use App\Http\Middleware\EnsureAdmin;
 use App\Http\Middleware\EnsureLoginGate;
+use App\Http\Middleware\EnsureMcpToken;
 use App\Http\Middleware\EnsureOwner;
 use App\Http\Middleware\EnsureProductionAccess;
 use App\Http\Middleware\HandleAppearance;
@@ -76,12 +77,15 @@ return Application::configure(basePath: dirname(__DIR__))
             'admin' => EnsureAdmin::class,
             'production' => EnsureProductionAccess::class,
             'owner' => EnsureOwner::class,
+            'mcp.token' => EnsureMcpToken::class,
             // Aplicado a TODAS as rotas do Fortify via config/fortify.php.
             'login-gate' => EnsureLoginGate::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
-            fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
+            // mcp e oauth: clientes de API, que querem JSON e nunca uma pagina
+            // de erro HTML (nem, com APP_DEBUG ligado por engano, um trace).
+            fn (Request $request) => $request->is('api/*', 'mcp', 'mcp/*', 'oauth/*') || $request->expectsJson(),
         );
     })->create();

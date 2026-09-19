@@ -1,5 +1,6 @@
 <?php
 
+use App\Models\McpActivity;
 use Illuminate\Support\Facades\Schedule;
 
 // Scheduler corrido em producao pelo supervisor (`php artisan schedule:work`,
@@ -11,6 +12,16 @@ use Illuminate\Support\Facades\Schedule;
 // pelo dono a partir de storage/backups (bind-mounted no host).
 Schedule::command('db:backup')
     ->dailyAt('04:00')
+    ->withoutOverlapping();
+
+// Tokens do Passport expirados ou revogados: sem isto a tabela so cresce.
+Schedule::command('passport:purge')
+    ->dailyAt('04:30')
+    ->withoutOverlapping();
+
+// Rasto do MCP com mais de 12 meses (McpActivity::prunable).
+Schedule::command('model:prune', ['--model' => [McpActivity::class]])
+    ->dailyAt('04:45')
     ->withoutOverlapping();
 
 // Fase 3 acrescenta aqui o sweep de reservas de stock expiradas

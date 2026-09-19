@@ -169,6 +169,20 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         Route::patch('definicoes/precos', [Admin\SettingController::class, 'updatePricing'])
             ->name('definicoes.precos');
 
+        // Chaves de API do MCP. Cada visita e acao pede a password outra vez:
+        // uma chave de escrita e uma sessao de admin que vive fora do browser.
+        Route::middleware('password.confirm')->group(function (): void {
+            Route::get('definicoes/chaves-api', [Admin\ApiKeyController::class, 'index'])
+                ->name('chaves-api.index');
+            Route::post('definicoes/chaves-api', [Admin\ApiKeyController::class, 'store'])
+                ->middleware('throttle:10,1')
+                ->name('chaves-api.store');
+            Route::delete('definicoes/chaves-api/todas', [Admin\ApiKeyController::class, 'destroyAll'])
+                ->name('chaves-api.destroy-all');
+            Route::delete('definicoes/chaves-api/{key}', [Admin\ApiKeyController::class, 'destroy'])
+                ->name('chaves-api.destroy');
+        });
+
         // O formulario do produto tem pagina, ao contrario do dos materiais e
         // do das impressoras: sao seis seccoes, uma galeria, uma matriz de
         // variantes e uma ficha de variante por dentro — dentro de um modal, a
