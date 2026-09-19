@@ -19,6 +19,12 @@ Schedule::command('passport:purge')
     ->dailyAt('04:30')
     ->withoutOverlapping();
 
+// Clientes OAuth que se registaram (registo dinamico, publico) e nunca foram
+// autorizados em 24 h.
+Schedule::command('mcp:prune-clients')
+    ->dailyAt('04:40')
+    ->withoutOverlapping();
+
 // Rasto do MCP com mais de 12 meses (McpActivity::prunable).
 Schedule::command('model:prune', ['--model' => [McpActivity::class]])
     ->dailyAt('04:45')

@@ -12,6 +12,7 @@ use Illuminate\Support\Facades\Mail;
 use Illuminate\Testing\TestResponse;
 use Laravel\Fortify\Events\TwoFactorAuthenticationDisabled;
 use Laravel\Passport\ClientRepository;
+use Laravel\Passport\Passport;
 use Tests\TestCase;
 
 /**
@@ -152,9 +153,14 @@ class McpSecurityTest extends TestCase
     public function test_a_key_without_the_mcp_scope_is_refused(): void
     {
         $admin = User::factory()->admin()->create();
-        $token = $admin->createToken('x', [])->accessToken;
 
-        $this->mcp($token, $this->listTools())->assertForbidden();
+        // Com o defaultScopes, qualquer token emitido leva pelo menos
+        // mcp:read — um sem scope nenhum so existe forjado, e e isso que se
+        // simula aqui.
+        Passport::actingAs($admin, []);
+
+        $this->postJson('/mcp', $this->listTools(), ['Accept' => 'application/json, text/event-stream'])
+            ->assertForbidden();
 
         $this->assertDatabaseHas('mcp_activity', ['user_id' => $admin->id, 'result' => McpActivity::RESULT_DENIED]);
     }
