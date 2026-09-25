@@ -91,6 +91,24 @@ class ApiKeyPageTest extends TestCase
             ->assertInertia(fn (Assert $page) => $page->where('createdToken', null));
     }
 
+    public function test_a_key_can_be_created_without_expiry(): void
+    {
+        $admin = User::factory()->admin()->create();
+
+        $this->confirmed($admin)
+            ->post(route('admin.chaves-api.store'), ['name' => 'Servidor', 'access' => 'write', 'days' => 'never'])
+            ->assertRedirect(route('admin.chaves-api.index'));
+
+        $this->assertNull($admin->tokens()->sole()->expires_at);
+
+        // Sem data nao e o mesmo que expirada: continua na lista.
+        $this->confirmed($admin)
+            ->get(route('admin.chaves-api.index'))
+            ->assertInertia(fn (Assert $page) => $page
+                ->has('keys', 1)
+                ->where('keys.0.expiresAt', null));
+    }
+
     public function test_the_lifetime_is_one_of_the_allowed_ones(): void
     {
         $admin = User::factory()->admin()->create();

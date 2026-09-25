@@ -35,6 +35,7 @@ type ApiKeyRow = {
 type Props = {
     keys: ApiKeyRow[];
     lifetimes: number[];
+    noExpiry: string;
     mcpUrl: string;
     enabled: boolean;
     createdToken: string | null;
@@ -55,6 +56,7 @@ const ACCESS_LABELS = {
 export default function ApiKeysIndex({
     keys,
     lifetimes,
+    noExpiry,
     mcpUrl,
     enabled,
     createdToken,
@@ -108,7 +110,7 @@ export default function ApiKeysIndex({
             key: 'expires',
             header: 'Expira',
             className: 'text-xs text-muted-foreground tabular-nums',
-            cell: (row) => row.expiresAt ?? '—',
+            cell: (row) => row.expiresAt ?? 'Nunca',
         },
         {
             key: 'actions',
@@ -211,6 +213,9 @@ export default function ApiKeysIndex({
                                         {days} dias
                                     </SelectItem>
                                 ))}
+                                <SelectItem value={noExpiry}>
+                                    Sem validade
+                                </SelectItem>
                             </SelectContent>
                         </Select>
                         <InputError message={errors.days} />
@@ -225,6 +230,12 @@ export default function ApiKeysIndex({
                         Claude, não dês “permitir sempre” às ferramentas que
                         alteram dados — assim cada alteração passa por ti.
                     </p>
+                    {data.days === noExpiry && (
+                        <p className="text-xs text-warning sm:col-span-4">
+                            Uma chave sem validade só deixa de funcionar quando
+                            for revogada. Guarda-a como uma password.
+                        </p>
+                    )}
                 </form>
 
                 <AdminTable

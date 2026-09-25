@@ -215,13 +215,17 @@ class McpOAuthTest extends TestCase
 
         Mail::assertQueued(ApiKeyCreatedMail::class, fn ($mail) => $mail->hasTo($admin->email));
 
-        $token = $this->postJson(route('passport.token'), [
+        $issued = $this->postJson(route('passport.token'), [
             'grant_type' => 'authorization_code',
             'client_id' => $request['client_id'],
             'redirect_uri' => self::REDIRECT,
             'code_verifier' => $request['verifier'],
             'code' => $callback['code'],
-        ])->assertOk()->json('access_token');
+        ])->assertOk();
+        $token = $issued->json('access_token');
+
+        // As chaves pessoais podem nao expirar; o OAuth continua a 1 hora.
+        $this->assertLessThanOrEqual(3600, $issued->json('expires_in'));
 
         $this->app['auth']->forgetGuards();
 

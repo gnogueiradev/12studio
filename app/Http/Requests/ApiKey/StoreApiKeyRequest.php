@@ -16,7 +16,7 @@ class StoreApiKeyRequest extends AdminFormRequest
         return [
             'name' => ['required', 'string', 'max:60'],
             'access' => ['required', Rule::in([ApiKeyService::ACCESS_READ, ApiKeyService::ACCESS_WRITE])],
-            'days' => ['required', 'integer', Rule::in(ApiKeyService::LIFETIMES)],
+            'days' => ['required', Rule::in([...ApiKeyService::LIFETIMES, ApiKeyService::NO_EXPIRY])],
         ];
     }
 }

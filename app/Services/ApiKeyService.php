@@ -14,7 +14,8 @@ use RuntimeException;
 /**
  * Chaves de API (personal access tokens do Passport) para ligar o Claude ao
  * MCP. So admins; cada chave tem um nome, um acesso (leitura, ou leitura e
- * escrita) e uma validade curta e obrigatoria.
+ * escrita) e uma validade de 7, 30 ou 90 dias — ou nenhuma, escolhida de
+ * proposito no formulario.
  *
  * O token em claro so existe no momento da criacao: o Passport guarda apenas
  * o id do JWT. Quem o perder cria outro.
@@ -33,9 +34,17 @@ class ApiKeyService
     public const LIFETIMES = [7, 30, 90];
 
     /**
+     * O valor do formulario para uma chave sem validade: fica com expires_at
+     * a nulo e so morre revogada (a mao, pelo "Revogar tudo" ou pelo
+     * UserSecurityObserver).
+     */
+    public const NO_EXPIRY = 'never';
+
+    /**
+     * @param  int|null  $days  null = sem validade
      * @return array{token: string, key: Token}
      */
-    public function create(User $user, string $name, string $access, int $days): array
+    public function create(User $user, string $name, string $access, ?int $days): array
     {
         $scopes = $access === self::ACCESS_WRITE
             ? [self::SCOPE_READ, self::SCOPE_WRITE]
@@ -43,16 +52,17 @@ class ApiKeyService
 
         $result = $user->createToken($name, $scopes);
 
-        // O JWT leva a validade maxima global (90 dias). A escolhida aqui fica
-        // no expires_at da linha, e o EnsureMcpToken recusa a chave passada
-        // essa data — o Passport sozinho so olharia para o JWT.
+        // O JWT leva o teto global (AppServiceProvider), longo o bastante para
+        // as chaves sem validade. A escolhida aqui fica no expires_at da linha,
+        // e o EnsureMcpToken recusa a chave passada essa data — o Passport
+        // sozinho so olharia para o JWT.
         $key = $result->getToken();
 
         if ($key === null) {
             throw new RuntimeException('O Passport não devolveu a linha do token criado.');
         }
 
-        $key->expires_at = CarbonImmutable::now()->addDays($days);
+        $key->expires_at = $days === null ? null : CarbonImmutable::now()->addDays($days);
         $key->save();
 
         Mail::to($user)->send(new ApiKeyCreatedMail($user, $name, $access, $key->expires_at));
@@ -72,7 +82,7 @@ class ApiKeyService
         $tokens = $user->tokens()
             ->with('client')
             ->where('revoked', false)
-            ->where('expires_at', '>', now())
+            ->where(fn ($query) => $query->whereNull('expires_at')->orWhere('expires_at', '>', now()))
             ->orderByDesc('created_at')
             ->get();
 

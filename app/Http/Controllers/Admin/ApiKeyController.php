@@ -17,7 +17,8 @@ use Inertia\Response;
  *
  * Cada acao pede a password outra vez (password.confirm). O 2FA nao e
  * exigido — decisao do dono. O que segura uma chave exposta e o resto: o
- * email a cada chave criada, a validade curta e o "Revogar tudo".
+ * email a cada chave criada, a validade (curta, ou nenhuma por escolha
+ * explicita) e o "Revogar tudo".
  */
 class ApiKeyController extends Controller
 {
@@ -32,6 +33,7 @@ class ApiKeyController extends Controller
         return Inertia::render('admin/definicoes/chaves-api', [
             'keys' => $this->keys->list($user),
             'lifetimes' => ApiKeyService::LIFETIMES,
+            'noExpiry' => ApiKeyService::NO_EXPIRY,
             'mcpUrl' => url('/mcp'),
             'enabled' => (bool) config('mcp.enabled'),
             // So existe no pedido a seguir a criacao: o token em claro nunca
@@ -44,10 +46,12 @@ class ApiKeyController extends Controller
     {
         $user = $this->admin($request);
 
-        /** @var array{name: string, access: string, days: int} $data */
+        /** @var array{name: string, access: string, days: int|string} $data */
         $data = $request->validated();
 
-        $created = $this->keys->create($user, $data['name'], $data['access'], (int) $data['days']);
+        $days = $data['days'] === ApiKeyService::NO_EXPIRY ? null : (int) $data['days'];
+
+        $created = $this->keys->create($user, $data['name'], $data['access'], $days);
 
         // Flash de sessao e nao prop da resposta: o PRG do Inertia levaria o
         // token para o historico do browser se fosse no URL.
