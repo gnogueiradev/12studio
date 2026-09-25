@@ -64,11 +64,13 @@ class AppServiceProvider extends ServiceProvider
             ApiKeyService::SCOPE_WRITE => 'Criar e alterar produtos, preços, stock, catálogo e encomendas',
         ]);
 
-        // Tetos. A chave pessoal leva ainda a validade escolhida (7/30/90
-        // dias), que o EnsureMcpToken aplica; o JWT nunca dura mais que isto.
+        // Tetos do JWT. O OAuth fica curto. A chave pessoal pode nao ter
+        // validade, por isso o JWT dela dura 100 anos; a validade escolhida
+        // (7/30/90 dias) vive no expires_at da linha e e o EnsureMcpToken que
+        // a aplica. Revogar continua a matar qualquer uma na hora.
         Passport::tokensExpireIn(CarbonInterval::hour());
         Passport::refreshTokensExpireIn(CarbonInterval::days(30));
-        Passport::personalAccessTokensExpireIn(CarbonInterval::days(max(ApiKeyService::LIFETIMES)));
+        Passport::personalAccessTokensExpireIn(CarbonInterval::years(100));
 
         // Um cliente OAuth que nao peca scope nenhum leva so leitura — nunca
         // escrita por omissao.

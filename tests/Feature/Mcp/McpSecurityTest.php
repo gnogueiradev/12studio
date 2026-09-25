@@ -53,7 +53,7 @@ class McpSecurityTest extends TestCase
         ];
     }
 
-    private function tokenFor(User $user, string $access = ApiKeyService::ACCESS_READ, int $days = 30): string
+    private function tokenFor(User $user, string $access = ApiKeyService::ACCESS_READ, ?int $days = 30): string
     {
         return app(ApiKeyService::class)->create($user, 'Teste', $access, $days)['token'];
     }
@@ -213,6 +213,37 @@ class McpSecurityTest extends TestCase
         $token = $this->tokenFor($admin, days: 7);
 
         $this->travel(8)->days();
+
+        $this->mcp($token, $this->listTools())->assertUnauthorized();
+    }
+
+    public function test_a_key_without_expiry_keeps_working(): void
+    {
+        $token = $this->tokenFor(User::factory()->admin()->create(), days: null);
+
+        // Bem para la do teto antigo de 90 dias do JWT.
+        $this->travel(5)->years();
+
+        $this->mcp($token, $this->listTools())->assertOk();
+    }
+
+    public function test_a_key_without_expiry_still_dies_with_the_password(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $token = $this->tokenFor($admin, days: null);
+
+        $admin->password = 'Outra-password-bem-longa-7';
+        $admin->save();
+
+        $this->mcp($token, $this->listTools())->assertUnauthorized();
+    }
+
+    public function test_revoke_all_also_takes_the_keys_without_expiry(): void
+    {
+        $admin = User::factory()->admin()->create();
+        $token = $this->tokenFor($admin, days: null);
+
+        app(ApiKeyService::class)->revokeAll($admin);
 
         $this->mcp($token, $this->listTools())->assertUnauthorized();
     }
