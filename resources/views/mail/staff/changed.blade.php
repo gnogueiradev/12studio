@@ -11,5 +11,5 @@ Se não foste tu, desativa a conta e muda a tua password já.
 Ver a equipa
 </x-mail::button>
 
-12studio
+{{ $brand }}
 </x-mail::message>

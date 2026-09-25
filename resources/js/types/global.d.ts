@@ -10,7 +10,8 @@ declare module 'react' {
 declare module '@inertiajs/core' {
     export interface InertiaConfig {
         sharedPageProps: {
-            name: string;
+            /** Nome da loja e frase do rodapé, das definições. */
+            brand: { name: string; tagline: string };
             auth: Auth;
             sidebarOpen: boolean;
             /** Código ISO vindo das definições (EUR por omissão). */

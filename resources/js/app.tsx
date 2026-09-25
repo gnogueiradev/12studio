@@ -8,10 +8,22 @@ import SettingsLayout from '@/layouts/settings/layout';
 import StoreLayout from '@/layouts/store-layout';
 import { initializeCurrency } from '@/lib/money';
 
-const appName = import.meta.env.VITE_APP_NAME || '12studio';
-
 createInertiaApp({
-    title: (title) => (title ? `${title} - ${appName}` : appName),
+    // O nome da loja vem das definições (shared prop `brand`), e não de um
+    // VITE_APP_NAME: esse fica gravado no build, e o mesmo build vai servir
+    // mais do que uma loja.
+    title: (title, page) => {
+        // O `page` do callback não conhece as shared props tipadas do
+        // global.d.ts; sem o nome (render isolado), fica o título da página.
+        const appName =
+            (page.props.brand as { name?: string } | undefined)?.name ?? '';
+
+        if (!appName) {
+            return title;
+        }
+
+        return title ? `${title} - ${appName}` : appName;
+    },
     layout: (name) => {
         switch (true) {
             // Landing "em breve" (loja fechada): desenha o ecra todo sozinha,

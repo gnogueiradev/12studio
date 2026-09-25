@@ -1,4 +1,4 @@
-import { Link } from '@inertiajs/react';
+import { Link, usePage } from '@inertiajs/react';
 import { home } from '@/routes';
 
 /**
@@ -10,6 +10,8 @@ export default function StoreLayout({
 }: {
     children: React.ReactNode;
 }) {
+    const { brand } = usePage().props;
+
     return (
         <div className="flex min-h-screen flex-col bg-background text-foreground">
             <header className="sticky top-0 z-40 border-b border-border/60 bg-background/95 backdrop-blur">
@@ -18,7 +20,7 @@ export default function StoreLayout({
                         href={home()}
                         className="text-lg font-semibold tracking-tight"
                     >
-                        12studio
+                        {brand.name}
                     </Link>
 
                     <nav className="flex items-center gap-6 text-sm">
@@ -40,8 +42,8 @@ export default function StoreLayout({
             <footer className="border-t border-border/60">
                 <div className="mx-auto flex w-full max-w-6xl flex-col gap-2 px-4 py-8 text-sm text-muted-foreground md:flex-row md:items-center md:justify-between">
                     <p>
-                        © {new Date().getFullYear()} 12studio — peças impressas
-                        em 3D em Portugal.
+                        © {new Date().getFullYear()} {brand.name}
+                        {brand.tagline && ` — ${brand.tagline}`}
                     </p>
                     <nav className="flex flex-wrap gap-4">
                         {/* Paginas legais entram na Fase 5 (lancamento). */}

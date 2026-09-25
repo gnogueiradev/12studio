@@ -1,4 +1,4 @@
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, usePage } from '@inertiajs/react';
 import { AdminTable } from '@/components/admin/admin-table';
 import type { Column } from '@/components/admin/admin-table';
 import { PageHeader } from '@/components/admin/page-header';
@@ -49,6 +49,7 @@ export default function AdminDashboard({
     production,
     alerts,
 }: Props) {
+    const { brand } = usePage().props;
     const openOrders = statusCounts.reduce(
         (sum, entry) => sum + entry.count,
         0,
@@ -100,7 +101,10 @@ export default function AdminDashboard({
         <>
             <Head title="Backoffice" />
             <div className="flex h-full flex-1 flex-col gap-4 p-4">
-                <PageHeader title="Backoffice 12studio" description={today}>
+                <PageHeader
+                    title={`Backoffice ${brand.name}`}
+                    description={today}
+                >
                     <span className="flex items-center gap-2 rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground">
                         <span
                             className={cn(
