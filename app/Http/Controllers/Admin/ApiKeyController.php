@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Admin;
 
+use App\Alerts\SecurityAlerts;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\AdminActionRequest;
 use App\Http\Requests\ApiKey\StoreApiKeyRequest;
@@ -24,6 +25,7 @@ class ApiKeyController extends Controller
 {
     public function __construct(
         private ApiKeyService $keys,
+        private SecurityAlerts $alerts,
     ) {}
 
     public function index(Request $request): Response
@@ -73,7 +75,12 @@ class ApiKeyController extends Controller
 
     public function destroyAll(AdminActionRequest $request): RedirectResponse
     {
-        $count = $this->keys->revokeAll($this->admin($request));
+        $user = $this->admin($request);
+        $count = $this->keys->revokeAll($user);
+
+        // Aqui e nao no revokeAll: esse tambem corre sozinho (UserSecurityObserver),
+        // que avisa com o motivo.
+        $this->alerts->keysRevokedAll($user, $count);
 
         $this->toast($count === 1 ? '1 chave revogada.' : "{$count} chaves revogadas.");
 

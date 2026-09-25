@@ -2,6 +2,7 @@
 
 namespace App\Mcp;
 
+use App\Alerts\SecurityAlerts;
 use App\Models\McpActivity;
 use App\Models\User;
 use Illuminate\Support\Str;
@@ -16,7 +17,7 @@ use Throwable;
  * correu — o que o Claude leu nao se duplica aqui.
  *
  * Nunca rebenta: uma falha a auditar nao pode estragar a resposta, e fica
- * so no log.
+ * so no log. E tambem daqui que o MCP chega ao #seguranca do Discord.
  */
 class McpAuditor
 {
@@ -45,7 +46,7 @@ class McpAuditor
             $request = request();
             $token = CurrentToken::model($user);
 
-            McpActivity::query()->create([
+            $activity = McpActivity::query()->create([
                 'user_id' => $user?->getKey(),
                 'token_id' => $token?->getKey(),
                 'client' => $this->clientLabel($token),
@@ -57,6 +58,12 @@ class McpAuditor
                 'user_agent' => Str::limit((string) $request->userAgent(), 255, ''),
                 'duration_ms' => $durationMs,
             ]);
+
+            // Escritas, recusas e erros chegam ao #seguranca um a um; as
+            // leituras vao no resumo de 15 minutos (alerts:mcp-reads).
+            // Pelo container e nao pelo construtor: os testes unitarios
+            // constroem o auditor com `new`, so para o sanitize().
+            app(SecurityAlerts::class)->mcpActivity($activity);
         } catch (Throwable $exception) {
             report($exception);
         }

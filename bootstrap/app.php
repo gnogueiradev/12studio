@@ -1,5 +1,6 @@
 <?php
 
+use App\Alerts\SystemAlerts;
 use App\Http\Middleware\EnsureAccountUsable;
 use App\Http\Middleware\EnsureAdmin;
 use App\Http\Middleware\EnsureLoginGate;
@@ -83,6 +84,13 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        // Tudo o que o Laravel reportaria (os 404, validacoes e afins ja
+        // ficaram de fora) vai tambem para o #sistema do Discord. Nao devolve
+        // false: o log continua a receber a excecao como sempre.
+        $exceptions->report(function (Throwable $exception): void {
+            app(SystemAlerts::class)->exception($exception);
+        });
+
         $exceptions->shouldRenderJsonWhen(
             // mcp e os endpoints OAuth de maquina: clientes de API, que querem
             // JSON e nunca uma pagina de erro HTML (nem, com APP_DEBUG ligado

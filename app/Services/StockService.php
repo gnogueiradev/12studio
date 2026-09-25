@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Alerts\StockAlerts;
 use App\Models\Order;
 use App\Models\StockMovement;
 use App\Models\User;
@@ -19,6 +20,10 @@ use App\Models\Variant;
  */
 class StockService
 {
+    public function __construct(
+        private StockAlerts $alerts,
+    ) {}
+
     /**
      * Tenta retirar `$qty` do stock. Devolve false — sem escrever movimento —
      * quando nao ha disponivel suficiente. Quem chama decide o que fazer:
@@ -48,6 +53,7 @@ class StockService
 
         $this->recordMovement($variant, -$qty, $reason, $order, $by, $note);
         $variant->refresh();
+        $this->alerts->moved($variant, $variant->stock + $qty, $variant->stock, $reason, $by, $note);
 
         return true;
     }
@@ -74,6 +80,7 @@ class StockService
 
         $this->recordMovement($variant, $qty, $reason, $order, $by, $note);
         $variant->refresh();
+        $this->alerts->moved($variant, $variant->stock - $qty, $variant->stock, $reason, $by, $note);
     }
 
     /**

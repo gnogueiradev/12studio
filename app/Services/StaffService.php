@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Alerts\SecurityAlerts;
 use App\Mail\StaffAccountChangedMail;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -16,11 +17,16 @@ use Illuminate\Validation\ValidationException;
  * um a um, e em mais sitio nenhum. O `is_owner` nem aqui — so o comando
  * `users:make-owner`.
  *
- * Cada mudanca manda um email ao dono. Parece redundante (foi ele que clicou),
- * mas e o rasto que sobra se a sessao dele alguma vez for de outra pessoa.
+ * Cada mudanca manda um email ao dono, e um alerta ao #seguranca. Parece
+ * redundante (foi ele que clicou), mas e o rasto que sobra se a sessao dele
+ * alguma vez for de outra pessoa.
  */
 class StaffService
 {
+    public function __construct(
+        private SecurityAlerts $alerts,
+    ) {}
+
     /**
      * @param  array{name: string, email: string, role: string, password: string}  $data
      */
@@ -95,7 +101,9 @@ class StaffService
         $staff->save();
 
         $this->rotateRememberToken($staff);
-        $this->notify($staff, $by, 'Password redefinida pelo dono');
+        // O aviso no Discord vem do UserSecurityObserver (password mudada),
+        // como para qualquer outra mudanca de password.
+        $this->notify($staff, $by, 'Password redefinida pelo dono', alert: false);
     }
 
     public function disable(User $staff, User $by): void
@@ -161,8 +169,12 @@ class StaffService
         };
     }
 
-    private function notify(User $staff, User $by, string $change): void
+    private function notify(User $staff, User $by, string $change, bool $alert = true): void
     {
+        if ($alert) {
+            $this->alerts->staffChanged($staff, $by, $change);
+        }
+
         User::query()
             ->where('is_owner', true)
             ->whereNotNull('email')
