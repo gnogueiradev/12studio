@@ -3,6 +3,7 @@
 use App\Http\Controllers\McpOAuthMetadataController;
 use App\Http\Middleware\AnnounceMcpScopes;
 use App\Http\Middleware\NotifyOAuthApproval;
+use App\Http\Middleware\NotifyOAuthRegistration;
 use App\Mcp\Servers\StudioServer;
 use Illuminate\Support\Facades\Route;
 use Laravel\Mcp\Facades\Mcp;
@@ -48,7 +49,7 @@ Route::get('/.well-known/oauth-authorization-server/{path}', [McpOAuthMetadataCo
     ->name('mcp.oauth.authorization-server.nested');
 
 Route::post('/oauth/register', OAuthRegisterController::class)
-    ->middleware(['throttle:mcp-register', AnnounceMcpScopes::class])
+    ->middleware(['throttle:mcp-register', AnnounceMcpScopes::class, NotifyOAuthRegistration::class])
     ->name('mcp.oauth.register');
 
 Route::post('/oauth/token', [AccessTokenController::class, 'issueToken'])
@@ -63,5 +64,7 @@ Route::middleware(['web', 'auth', 'admin', 'password.confirm'])
         Route::post('authorize', [ApproveAuthorizationController::class, 'approve'])
             ->middleware(NotifyOAuthApproval::class)
             ->name('approve');
-        Route::delete('authorize', [DenyAuthorizationController::class, 'deny'])->name('deny');
+        Route::delete('authorize', [DenyAuthorizationController::class, 'deny'])
+            ->middleware(NotifyOAuthApproval::class)
+            ->name('deny');
     });

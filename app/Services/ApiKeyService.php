@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Alerts\SecurityAlerts;
 use App\Mail\ApiKeyCreatedMail;
 use App\Models\McpActivity;
 use App\Models\User;
@@ -32,6 +33,10 @@ class ApiKeyService
 
     /** Validades que o formulario oferece, em dias. */
     public const LIFETIMES = [7, 30, 90];
+
+    public function __construct(
+        private SecurityAlerts $alerts,
+    ) {}
 
     /**
      * O valor do formulario para uma chave sem validade: fica com expires_at
@@ -66,6 +71,7 @@ class ApiKeyService
         $key->save();
 
         Mail::to($user)->send(new ApiKeyCreatedMail($user, $name, $access, $key->expires_at));
+        $this->alerts->keyCreated($user, $name, $access, $key->expires_at);
 
         return ['token' => $result->accessToken, 'key' => $key];
     }
@@ -114,6 +120,7 @@ class ApiKeyService
         }
 
         $this->revokeToken($token);
+        $this->alerts->keyRevoked($user, $token);
 
         return true;
     }

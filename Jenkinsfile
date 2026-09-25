@@ -6,6 +6,50 @@
 // pelo docker/bootstrap-env.sh — nao e um checkout do repo como no qrcode. O
 // codigo e os assets chegam sempre pela imagem; nada em APP_DIR e servido.
 
+// Aviso no #sistema do Discord (deploy comecou / OK / falhou / rollback).
+//
+// Nunca parte o build: sem a credencial "Secret text"
+// `12studio-discord-webhook-sistema` (o mesmo webhook do DISCORD_WEBHOOK_SISTEMA
+// do .env), ou com o Discord em baixo, o deploy segue calado. Por isso
+// withCredentials aqui e nao credentials() no environment — esse exige que a
+// credencial exista, senao nenhum build arranca.
+//
+// O JSON e montado a mao (com escape) em vez de JsonOutput, que a sandbox do
+// Jenkins pode pedir para aprovar. O curl e o do agente, ou o da imagem da app
+// quando o agente nao o tem.
+def discord(String title, String level, String description = '') {
+    def colors = [info: 3900150, success: 2278750, danger: 15680580]
+    def escape = { String text -> text.replace('\\', '\\\\').replace('"', '\\"').replace('\n', '\\n').replace('\r', '') }
+    def json = '{"embeds":[{"title":"' + escape(title) + '","description":"' + escape(description) +
+        '","color":' + colors[level] + '}],"allowed_mentions":{"parse":[]}}'
+
+    try {
+        writeFile file: '.discord-payload.json', text: json
+        withCredentials([string(credentialsId: '12studio-discord-webhook-sistema', variable: 'DISCORD_WEBHOOK')]) {
+            sh '''
+                if command -v curl > /dev/null 2>&1; then
+                    curl -fsS -m 10 -H 'Content-Type: application/json' -d @.discord-payload.json "$DISCORD_WEBHOOK" > /dev/null || true
+                else
+                    docker run --rm -i -e DISCORD_WEBHOOK ${IMAGE_NAME}:latest \
+                        sh -c 'curl -fsS -m 10 -H "Content-Type: application/json" -d @- "$DISCORD_WEBHOOK"' \
+                        < .discord-payload.json > /dev/null 2>&1 || true
+                fi
+            '''
+        }
+    } catch (err) {
+        echo "Aviso do Discord nao saiu (${err.getMessage()}) — o deploy continua."
+    }
+}
+
+// "abc1234 — mensagem do commit", para os avisos.
+def commitLabel() {
+    try {
+        return sh(script: 'git log -1 --pretty="%h — %s"', returnStdout: true).trim()
+    } catch (err) {
+        return env.GIT_COMMIT ?: '?'
+    }
+}
+
 pipeline {
     agent any
 
@@ -115,6 +159,9 @@ pipeline {
 
         stage('Deploy') {
             steps {
+                script {
+                    discord('🚀 Deploy começou', 'info', commitLabel())
+                }
                 sh '''
                     # 1. Swap do container. Os assets NAO se constroem aqui:
                     #    vem dentro da imagem (Dockerfile, npm run build:ssr),
@@ -192,6 +239,9 @@ pipeline {
                             echo "Rollback para ${IMAGE_NAME}:previous."
                             docker tag ${IMAGE_NAME}:previous ${IMAGE_NAME}:latest
                             docker compose up -d --remove-orphans
+                            # Marca para o aviso do post: "falhou" e "falhou e
+                            # voltou atras" sao coisas diferentes para quem le.
+                            touch .deploy-rolled-back
                         else
                             echo "Nao existe ${IMAGE_NAME}:previous (primeiro deploy) — nao ha para onde reverter."
                             echo "O container fica como esta, para poderes investigar."
@@ -205,6 +255,29 @@ pipeline {
     }
 
     post {
+        success {
+            script {
+                discord('✅ Deploy OK', 'success', commitLabel())
+            }
+        }
+
+        failure {
+            script {
+                def rolledBack = fileExists('.deploy-rolled-back')
+                discord(
+                    rolledBack ? '↩️ Deploy falhou — rollback feito' : '❌ Deploy falhou',
+                    'danger',
+                    commitLabel() + '\n' + (rolledBack
+                        ? 'O health check falhou e o container voltou à imagem anterior. As migrações NÃO foram revertidas.'
+                        : 'Ver a consola do Jenkins: ') + (env.BUILD_URL ?: '')
+                )
+            }
+        }
+
+        cleanup {
+            sh 'rm -f .deploy-rolled-back .discord-payload.json'
+        }
+
         always {
             sh '''
                 # A imagem de testes traz PHP, node, vendor/ e node_modules —

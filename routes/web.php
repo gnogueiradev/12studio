@@ -1,5 +1,6 @@
 <?php
 
+use App\Alerts\AlertChannel;
 use App\Http\Controllers\Admin;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\HomeController;
@@ -181,6 +182,22 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
                 ->name('chaves-api.destroy-all');
             Route::delete('definicoes/chaves-api/{key}', [Admin\ApiKeyController::class, 'destroy'])
                 ->name('chaves-api.destroy');
+
+            // Webhooks do Discord (alertas). Tambem com password: quem os
+            // muda escolhe para onde vao os dados dos clientes.
+            Route::get('definicoes/alertas', [Admin\AlertSettingsController::class, 'index'])
+                ->name('alertas.index');
+            Route::put('definicoes/alertas/{channel}/guardar', [Admin\AlertSettingsController::class, 'update'])
+                ->whereIn('channel', AlertChannel::ALL)
+                ->middleware('throttle:10,1')
+                ->name('alertas.update');
+            Route::delete('definicoes/alertas/{channel}/remover', [Admin\AlertSettingsController::class, 'destroy'])
+                ->whereIn('channel', AlertChannel::ALL)
+                ->name('alertas.destroy');
+            Route::post('definicoes/alertas/{channel}/testar', [Admin\AlertSettingsController::class, 'test'])
+                ->whereIn('channel', AlertChannel::ALL)
+                ->middleware('throttle:10,1')
+                ->name('alertas.test');
         });
 
         // O formulario do produto tem pagina, ao contrario do dos materiais e

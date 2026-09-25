@@ -2,6 +2,8 @@
 
 namespace App\Providers;
 
+use App\Alerts\AuthEventSubscriber;
+use App\Alerts\SystemAlerts;
 use App\Mcp\CurrentToken;
 use App\Models\User;
 use App\Services\ApiKeyService;
@@ -9,9 +11,13 @@ use App\Services\SettingService;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterval;
 use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Foundation\Events\DiagnosingHealth;
 use Illuminate\Http\Request;
+use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
@@ -51,6 +57,21 @@ class AppServiceProvider extends ServiceProvider
         $this->configureDefaults();
         $this->configurePassport();
         $this->configureRateLimiting();
+        $this->configureAlerts();
+    }
+
+    /**
+     * Alertas do Discord que nao nascem num servico nosso: os eventos de
+     * autenticacao do Laravel, do Fortify e das passkeys, os jobs que
+     * esgotam as tentativas e o batimento do scheduler (visto a cada /up).
+     */
+    protected function configureAlerts(): void
+    {
+        Event::subscribe(AuthEventSubscriber::class);
+
+        Queue::failing(fn (JobFailed $event) => app(SystemAlerts::class)->jobFailed($event));
+
+        Event::listen(DiagnosingHealth::class, fn () => app(SystemAlerts::class)->checkHeartbeat());
     }
 
     /**

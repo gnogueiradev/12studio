@@ -2,6 +2,7 @@
 
 namespace App\Observers;
 
+use App\Alerts\SecurityAlerts;
 use App\Models\User;
 use App\Services\ApiKeyService;
 
@@ -22,12 +23,24 @@ class UserSecurityObserver
 
     public function __construct(
         private ApiKeyService $keys,
+        private SecurityAlerts $alerts,
     ) {}
 
     public function updated(User $user): void
     {
-        if ($user->wasChanged(self::SENSITIVE)) {
-            $this->keys->revokeAll($user);
+        if (! $user->wasChanged(self::SENSITIVE)) {
+            return;
+        }
+
+        $revoked = $this->keys->revokeAll($user);
+
+        // A password tem aviso proprio, venha de onde vier (definicoes, link
+        // de reposicao, dono). O resto (papel, desativar) ja e avisado pelo
+        // StaffService com o contexto — aqui so as chaves que morreram.
+        if ($user->wasChanged('password')) {
+            $this->alerts->passwordChanged($user, $revoked);
+        } else {
+            $this->alerts->keysAutoRevoked($user, $revoked, $user->wasChanged('disabled_at') ? 'Conta desativada' : 'O papel mudou');
         }
     }
 }
