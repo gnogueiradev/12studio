@@ -16,8 +16,9 @@ use Laravel\Passport\Passport;
  *   2. O cliente de "chaves pessoais" do Passport — uma linha em
  *      oauth_clients sem a qual a pagina de chaves nao consegue criar tokens.
  *
- * E um comando manual, e nao um passo do deploy: escreve na BD de producao, e
- * essas escritas fazem-se a vista.
+ * Corre em cada deploy (Jenkinsfile, a seguir ao migrate) — por isso tem de
+ * continuar idempotente. Nunca troca chaves que ja existam: uma chave privada
+ * nova invalidava todas as chaves de API e ligacoes OAuth emitidas.
  */
 class McpInstallCommand extends Command
 {
