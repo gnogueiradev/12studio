@@ -85,11 +85,42 @@ class SecurityHeaders
         if ($this->isHtml($response)) {
             $response->headers->set(
                 'Content-Security-Policy-Report-Only',
-                implode('; ', self::CONTENT_SECURITY_POLICY),
+                implode('; ', $this->policyFor($request)),
             );
         }
 
         return $response;
+    }
+
+    /**
+     * A politica, com uma excecao so: o ecra de consentimento OAuth.
+     *
+     * Ali o botao "Autorizar" faz POST e o servidor responde com um redirect
+     * para o claude.ai — e o `form-action` aplica-se tambem aos redirects que
+     * se seguem ao envio. Com `'self'` so, o browser bloqueava a volta ao
+     * Claude no dia em que o CSP deixasse de ser Report-Only. Os dominios vem
+     * do config/mcp.php: sao os mesmos que o registo dinamico aceita.
+     *
+     * @return array<int, string>
+     */
+    private function policyFor(Request $request): array
+    {
+        if (! $request->routeIs('passport.authorizations.authorize')) {
+            return self::CONTENT_SECURITY_POLICY;
+        }
+
+        /** @var array<int, string> $domains */
+        $domains = array_filter(
+            (array) config('mcp.redirect_domains', []),
+            fn (mixed $domain): bool => is_string($domain) && str_starts_with($domain, 'https://'),
+        );
+
+        return array_map(
+            fn (string $directive): string => $directive === "form-action 'self'"
+                ? trim("form-action 'self' ".implode(' ', array_map(fn (string $domain): string => rtrim($domain, '/'), $domains)))
+                : $directive,
+            self::CONTENT_SECURITY_POLICY,
+        );
     }
 
     /**

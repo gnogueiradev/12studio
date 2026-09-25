@@ -1,7 +1,11 @@
 <?php
 
+use App\Http\Middleware\EnsureAccountUsable;
 use App\Http\Middleware\EnsureAdmin;
 use App\Http\Middleware\EnsureLoginGate;
+use App\Http\Middleware\EnsureMcpToken;
+use App\Http\Middleware\EnsureOwner;
+use App\Http\Middleware\EnsureProductionAccess;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\SecurityHeaders;
@@ -65,16 +69,26 @@ return Application::configure(basePath: dirname(__DIR__))
             // config/fortify.php, mas nao le limitador nenhum para as rotas de
             // reposicao de password — daí este.
             ThrottlePasswordReset::class,
+            // Conta desativada sai; password dada pelo dono tem de ser mudada.
+            EnsureAccountUsable::class,
         ]);
 
         $middleware->alias([
             'admin' => EnsureAdmin::class,
+            'production' => EnsureProductionAccess::class,
+            'owner' => EnsureOwner::class,
+            'mcp.token' => EnsureMcpToken::class,
             // Aplicado a TODAS as rotas do Fortify via config/fortify.php.
             'login-gate' => EnsureLoginGate::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
-            fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
+            // mcp e os endpoints OAuth de maquina: clientes de API, que querem
+            // JSON e nunca uma pagina de erro HTML (nem, com APP_DEBUG ligado
+            // por engano, um trace). O oauth/authorize fica de fora de
+            // proposito: e uma pagina para pessoas, e um visitante sem sessao
+            // tem de ser mandado para o login, nao receber um 401 em JSON.
+            fn (Request $request) => $request->is('api/*', 'mcp', 'mcp/*', 'oauth/token', 'oauth/register') || $request->expectsJson(),
         );
     })->create();

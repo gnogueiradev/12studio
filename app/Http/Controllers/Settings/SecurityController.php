@@ -55,9 +55,18 @@ class SecurityController extends Controller
      */
     public function update(PasswordUpdateRequest $request): RedirectResponse
     {
-        $request->user()->update([
+        $user = $request->user();
+
+        $user->update([
             'password' => $request->password,
         ]);
+
+        // A password dada pelo dono deixa de existir: a conta passa a ser
+        // mesmo desta pessoa. Fora do update() porque nao e fillable.
+        if ($user->must_change_password) {
+            $user->must_change_password = false;
+            $user->save();
+        }
 
         Inertia::flash('toast', ['type' => 'success', 'message' => __('Password updated.')]);
 

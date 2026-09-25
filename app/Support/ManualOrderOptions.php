@@ -36,7 +36,7 @@ class ManualOrderOptions
     public static function customers(): array
     {
         return User::query()
-            ->where('is_admin', false)
+            ->customers()
             ->with('addresses')
             ->orderBy('name')
             ->get()

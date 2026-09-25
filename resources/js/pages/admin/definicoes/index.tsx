@@ -1,4 +1,4 @@
-import { Head, useForm } from '@inertiajs/react';
+import { Head, Link, useForm } from '@inertiajs/react';
 import { useState } from 'react';
 import { PageHeader } from '@/components/admin/page-header';
 import { Panel } from '@/components/admin/panel';
@@ -16,6 +16,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { formatCentsIn } from '@/lib/money';
 import type { Option } from '@/lib/options';
 import { cn } from '@/lib/utils';
+import { index as apiKeysIndex } from '@/routes/admin/chaves-api';
 import { index, update } from '@/routes/admin/definicoes';
 import type { PricingSettingsForm } from '@/types/pricing';
 
@@ -74,7 +75,11 @@ export default function SettingsIndex({
                 <PageHeader
                     title="Definições"
                     description="O que podes mudar sem um novo deploy."
-                />
+                >
+                    <Button variant="outline" asChild>
+                        <Link href={apiKeysIndex()}>Chaves de API</Link>
+                    </Button>
+                </PageHeader>
 
                 <form
                     onSubmit={submit}
