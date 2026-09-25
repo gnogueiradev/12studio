@@ -129,10 +129,19 @@ pipeline {
                     # 2. Dependencias de producao + BACKUP DA BD ANTES do
                     #    migrate: o rollback repoe a imagem, nao as migracoes —
                     #    com SQLite, o backup pre-migracao e o ponto de restauro.
+                    #
+                    #    mcp:install logo a seguir ao migrate (precisa da tabela
+                    #    oauth_clients): cria as chaves RSA do Passport e o
+                    #    cliente de chaves pessoais so se faltarem. Era um passo
+                    #    manual e foi esquecido — sem ele criar uma chave de API
+                    #    dava 500. Corre como root, mas o chown do passo 3 da as
+                    #    chaves ao application; sem isso a oauth-private.key
+                    #    ficava root:root 600 e o php-fpm nao a lia (outro 500).
                     docker compose exec -T app sh -c '
                         composer install --no-dev --optimize-autoloader --no-interaction &&
                         php artisan db:backup &&
                         php artisan migrate --force &&
+                        php artisan mcp:install &&
                         php artisan db:seed --force &&
                         php artisan cache:clear &&
                         php artisan storage:link &&
