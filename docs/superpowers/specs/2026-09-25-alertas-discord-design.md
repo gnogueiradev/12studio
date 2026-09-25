@@ -22,9 +22,12 @@ não aconteceu. Quatro canais, um webhook por canal.
 Serviço explícito, chamado pelos serviços de domínio nos pontos certos — o padrão do
 `StaffService::notify()`. Sem eventos de domínio novos.
 
-- `config/alerts.php`: um webhook por canal (`DISCORD_WEBHOOK_ENCOMENDAS`, `_STOCK`,
-  `_SEGURANCA`, `_SISTEMA`) e os limites (dias para "parada", etc.). Webhook vazio = canal
-  desligado, sem erro.
+- **Webhooks no backoffice** (Definições → Alertas, admins, password pedida outra vez):
+  guardados na tabela `settings`, cifrados com a `APP_KEY`; o browser só vê o fim do URL.
+  Só aceita URLs de webhooks do Discord, e cada mudança avisa o `#seguranca` no webhook
+  novo e no antigo. A página tem o guia de como obter cada webhook.
+- `config/alerts.php`: o `.env` (`DISCORD_WEBHOOK_*`) como alternativa — o backoffice passa
+  à frente — e os limites (dias para "parada", etc.). Sem webhook = canal desligado.
 - `App\Alerts\AlertChannel` (enum dos quatro canais) e `App\Alerts\DiscordMessage`
   (título, descrição, cor, campos, link — serializável).
 - `App\Alerts\Alerts`: um método por evento. Monta a mensagem e despacha o job.
@@ -80,12 +83,10 @@ deploy começou / OK / falhou / rollback (Jenkinsfile).
 
 ## Pôr a funcionar
 
-1. No Discord: criar os quatro canais e um webhook em cada.
-2. No `.env` do servidor: `DISCORD_WEBHOOK_ENCOMENDAS`, `_STOCK`, `_SEGURANCA`, `_SISTEMA`.
-3. No Jenkins: credencial "Secret text" `12studio-discord-webhook-sistema` com o webhook
-   do `#sistema`.
-4. `php artisan alerts:test` no container: manda uma mensagem de teste a cada canal e diz
-   qual respondeu.
+1. No Discord: criar os quatro canais e um webhook em cada (o guia está na página).
+2. No backoffice, Definições → Alertas: colar cada webhook, Guardar, Testar.
+3. No Jenkins (opcional): credencial "Secret text" `12studio-discord-webhook-sistema` com o
+   webhook do `#sistema`, para os avisos de deploy.
 
 ## Testes
 

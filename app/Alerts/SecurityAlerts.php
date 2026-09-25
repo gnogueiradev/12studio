@@ -248,6 +248,27 @@ class SecurityAlerts
         });
     }
 
+    /**
+     * Um webhook do Discord foi ligado, trocado ou removido no backoffice.
+     * Chega ao #seguranca de agora E ao de antes: quem desviasse os alertas
+     * para um servidor seu nao o conseguia fazer sem deixar rasto no antigo.
+     */
+    public function webhookChanged(string $channel, string $change, User $by, ?string $previousSecurityUrl): void
+    {
+        $this->guard(function () use ($channel, $change, $by, $previousSecurityUrl): void {
+            $message = DiscordMessage::make('🔧 Webhook de '.(AlertChannel::LABELS[$channel] ?? $channel)." {$change}", DiscordMessage::WARNING)
+                ->field('Por', $by->name)
+                ->field('IP', request()->ip())
+                ->url(route('admin.alertas.index'));
+
+            $this->send($message);
+
+            if ($previousSecurityUrl !== null && $previousSecurityUrl !== AlertChannel::webhook(AlertChannel::SECURITY)) {
+                $this->sender->sendToUrl($previousSecurityUrl, $message);
+            }
+        });
+    }
+
     public function keyExpiring(Token $token, User $user): void
     {
         $this->guard(fn () => $this->send(

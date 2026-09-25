@@ -42,14 +42,19 @@ class AlertSender
     {
         $url = AlertChannel::webhook($channel);
 
-        if ($url === null) {
-            return false;
-        }
+        return $url !== null && $this->sendToUrl($url, $message);
+    }
 
+    /**
+     * Para um webhook concreto, sem fila. Serve o aviso de "webhook mudado",
+     * que tem de chegar tambem ao webhook ANTIGO — e esse ja nao e o do canal.
+     */
+    public function sendToUrl(string $url, DiscordMessage $message): bool
+    {
         try {
             return Http::timeout(3)->post($url, $message->toPayload())->successful();
         } catch (Throwable $exception) {
-            Log::warning('Alerta do Discord nao saiu.', ['channel' => $channel, 'error' => $exception->getMessage()]);
+            Log::warning('Alerta do Discord nao saiu.', ['error' => $exception->getMessage()]);
 
             return false;
         }

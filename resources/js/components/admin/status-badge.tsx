@@ -108,6 +108,11 @@ export const TONES: Record<string, Tone> = {
     owner: 'warning',
     admin: 'info',
     production: 'neutral',
+    // Alertas do Discord (Definicoes -> Alertas): ligado no backoffice, ligado
+    // so pelo .env (funciona, mas fora da vista de quem gere), desligado.
+    alert_on: 'success',
+    alert_env: 'info',
+    alert_off: 'neutral',
 };
 
 /**
