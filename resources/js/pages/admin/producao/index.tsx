@@ -11,6 +11,8 @@ import { PRODUCTION_BOARD_COLUMNS, PRODUCTION_STATUSES } from '@/types/order';
 
 type Props = {
     items: Card[];
+    /** Quanto tempo um item pronto fica no quadro antes de sair sozinho. */
+    readyVisibleHours: number;
 };
 
 /**
@@ -25,7 +27,7 @@ const COLUMN_DOT: Record<string, string> = {
     ready: 'bg-success',
 };
 
-export default function ProductionBoard({ items }: Props) {
+export default function ProductionBoard({ items, readyVisibleHours }: Props) {
     const [pendingId, setPendingId] = useState<number | null>(null);
     const [dragging, setDragging] = useState<Card | null>(null);
     const [overColumn, setOverColumn] = useState<string | null>(null);
@@ -120,7 +122,16 @@ export default function ProductionBoard({ items }: Props) {
                                         />
                                         {label(PRODUCTION_STATUSES, column)}
                                     </h2>
-                                    <span className="text-xs text-muted-foreground tabular-nums">
+                                    <span
+                                        className="text-xs text-muted-foreground tabular-nums"
+                                        title={
+                                            column === 'ready'
+                                                ? `Os artigos prontos saem do quadro ao fim de ${readyVisibleHours} h, ou logo que a encomenda é enviada.`
+                                                : undefined
+                                        }
+                                    >
+                                        {column === 'ready' &&
+                                            `últimas ${readyVisibleHours} h · `}
                                         {columnItems.length}
                                     </span>
                                 </div>
