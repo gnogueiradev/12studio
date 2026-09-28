@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Alerts\OrderAlerts;
 use App\Mail\OrderShippedMail;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -53,6 +54,7 @@ class OrderService
     public function __construct(
         private StockService $stockService,
         private TagService $tagService,
+        private OrderAlerts $alerts,
     ) {}
 
     /**
@@ -151,6 +153,11 @@ class OrderService
 
             $this->recordOrderHistory($order, null, 'pending_payment', $admin, 'Encomenda registada no backoffice.');
 
+            // Antes do pagamento, de proposito: no Discord le-se "nova" e so
+            // depois "pagamento registado", pela ordem em que aconteceu. So sai
+            // depois do commit — um rollback nao avisa de nada.
+            $this->alerts->created($order, $admin);
+
             // O admin pode registar uma venda ja paga (Vinted garante o
             // pagamento); a transicao passa pelas mesmas invariantes.
             if (($data['payment_status'] ?? 'pending') !== 'pending') {
@@ -245,6 +252,15 @@ class OrderService
             return $order->refresh();
         });
 
+        $this->alerts->transitioned(
+            $order,
+            $from,
+            $to,
+            $by,
+            $note,
+            forced: $force && ! $order->isPaid() && ! in_array($to, self::TERMINAL, true),
+        );
+
         // Fora da transacao: nada de I/O externo dentro de uma escrita ao
         // SQLite (o Mailable e queued e ja usa afterCommit).
         //
@@ -298,6 +314,8 @@ class OrderService
         });
 
         $order->refresh();
+
+        $this->alerts->paymentChanged($order, $previous, $by, $note);
 
         return match ($paymentStatus) {
             'paid' => $this->advanceAfterPayment($order, $by),
@@ -369,7 +387,11 @@ class OrderService
             );
         });
 
-        return $order->refresh();
+        $order->refresh();
+
+        $this->alerts->adjusted($order, $previousTotal, $by);
+
+        return $order;
     }
 
     /**
@@ -427,6 +449,10 @@ class OrderService
         });
 
         $order = $item->order->refresh();
+
+        // Antes do avanco automatico: "item pronto" chega antes de "encomenda
+        // pronta a enviar".
+        $this->alerts->itemProductionChanged($item->refresh(), $from, $to, $by, $note);
 
         if ($toIndex > $fromIndex) {
             $this->autoAdvanceWhenAllReady($order, $by);

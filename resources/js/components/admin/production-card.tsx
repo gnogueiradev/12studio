@@ -1,4 +1,4 @@
-import { Link } from '@inertiajs/react';
+import { Link, usePage } from '@inertiajs/react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { label } from '@/lib/options';
 import { cn } from '@/lib/utils';
@@ -55,6 +55,12 @@ export function ProductionCard({
     const previous = previousProductionStatus(card.productionStatus);
     const isPrinting = card.productionStatus === 'printing';
     const isReady = card.productionStatus === 'ready';
+    const canOpenOrder = usePage().props.auth.can.backoffice;
+    const orderLine = `${card.orderNumber} · ${card.customerName}${
+        card.totalInOrder > 1
+            ? ` · ${card.positionInOrder} de ${card.totalInOrder}`
+            : ''
+    }`;
 
     return (
         <article
@@ -112,14 +118,22 @@ export function ProductionCard({
                 </div>
             </div>
 
-            <Link
-                href={show(card.orderId)}
-                className="text-xs text-muted-foreground hover:underline"
-            >
-                {card.orderNumber} · {card.customerName}
-                {card.totalInOrder > 1 &&
-                    ` · ${card.positionInOrder} de ${card.totalInOrder}`}
-            </Link>
+            {/*
+                A equipa de produção não abre encomendas (dão 403): para ela a
+                linha é só texto.
+            */}
+            {canOpenOrder ? (
+                <Link
+                    href={show(card.orderId)}
+                    className="text-xs text-muted-foreground hover:underline"
+                >
+                    {orderLine}
+                </Link>
+            ) : (
+                <span className="text-xs text-muted-foreground">
+                    {orderLine}
+                </span>
+            )}
 
             {card.personalization.length > 0 && (
                 <dl className="flex flex-col gap-0.5 rounded-md bg-muted/60 p-2 text-xs">

@@ -67,20 +67,59 @@ class VariantProductionService
             $variants = $product->variants()->with('material')->get();
 
             foreach ($variants as $variant) {
-                $result = $this->pricing->forVariant($variant);
-
-                if ($result === null) {
+                if ($this->applyCalculatedPriceTo($variant)) {
+                    $updated++;
+                } else {
                     $skipped++;
-
-                    continue;
                 }
-
-                $this->applyTo($variant, $result->toArray());
-                $updated++;
             }
 
             return ['updated' => $updated, 'skipped' => $skipped];
         });
+    }
+
+    /**
+     * O que a aplicacao faria a UMA variante, sem gravar nada: os precos de
+     * agora e os que ficariam. Null quando nao ha conta possivel. E o
+     * "ensaio" que o MCP mostra antes de aplicar (dry run).
+     *
+     * @return array{normal_cents: int, sale_cents: int|null, wholesale_cents: int|null}|null
+     */
+    public function calculatedPricesFor(Variant $variant): ?array
+    {
+        $result = $this->pricing->forVariant($variant);
+
+        if ($result === null) {
+            return null;
+        }
+
+        $array = $result->toArray();
+        $retailCents = (int) $array['retailPriceCents'];
+
+        $sale = $variant->salePriceCents();
+
+        return [
+            'normal_cents' => $retailCents,
+            'sale_cents' => $sale !== null && $sale < $retailCents ? $sale : null,
+            'wholesale_cents' => (int) $array['wholesalePriceCents'],
+        ];
+    }
+
+    /**
+     * Aplica a uma variante so. False quando nao ha conta possivel (fica
+     * como esta).
+     */
+    public function applyCalculatedPriceTo(Variant $variant): bool
+    {
+        $result = $this->pricing->forVariant($variant);
+
+        if ($result === null) {
+            return false;
+        }
+
+        $this->applyTo($variant, $result->toArray());
+
+        return true;
     }
 
     /**

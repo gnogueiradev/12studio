@@ -8,9 +8,13 @@ use Illuminate\Validation\Rule;
 
 class UpdateProductionStatusRequest extends FormRequest
 {
+    /**
+     * Admins e a equipa de producao: e o unico pedido de escrita que a
+     * producao faz. Segunda camada por cima do middleware 'production'.
+     */
     public function authorize(): bool
     {
-        return $this->user()?->isAdmin() ?? false;
+        return $this->user()?->canAccessProduction() ?? false;
     }
 
     /**

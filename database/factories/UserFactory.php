@@ -58,6 +58,36 @@ class UserFactory extends Factory
     }
 
     /**
+     * Dono: admin que gere a equipa (so o comando users:make-owner o faz em
+     * producao).
+     */
+    public function owner(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'is_admin' => true,
+            'is_owner' => true,
+        ]);
+    }
+
+    /**
+     * Equipa de producao: so o quadro de producao.
+     */
+    public function production(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'is_admin' => false,
+            'staff_role' => User::ROLE_PRODUCTION,
+        ]);
+    }
+
+    public function disabled(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'disabled_at' => now(),
+        ]);
+    }
+
+    /**
      * Cliente empresa: o NIF deixa de ser opcional a partir daqui.
      */
     public function company(): static

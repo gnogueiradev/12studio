@@ -1,6 +1,8 @@
 <?php
 
+use App\Alerts\AlertChannel;
 use App\Http\Controllers\Admin;
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\HomeController;
 use App\Http\Controllers\LoginGateController;
 use App\Http\Controllers\NotifyController;
@@ -24,7 +26,30 @@ Route::get('acesso/{secret}', LoginGateController::class)->name('login-gate');
 // ── Area autenticada (o /dashboard do starter fica para a conta do admin;
 //    /conta de clientes chega na Fase 5) ────────────────────────────────────
 Route::middleware(['auth', 'verified'])->group(function (): void {
-    Route::inertia('dashboard', 'dashboard')->name('dashboard');
+    // A equipa de producao aterra no quadro; os outros no dashboard do starter.
+    Route::get('dashboard', DashboardController::class)->name('dashboard');
+
+    // ── Quadro de producao: o UNICO pedaco do /admin aberto a equipa de
+    //    producao. Mesmo prefixo e nomes do grupo abaixo, outro porteiro. O
+    //    ProductionStaffAccessTest garante que nada mais escapa para aqui. ──
+    Route::middleware('production')->prefix('admin')->name('admin.')->group(function (): void {
+        Route::get('producao', Admin\ProductionBoardController::class)->name('producao');
+        Route::patch('itens/{item}/producao', [Admin\OrderItemController::class, 'updateProduction'])
+            ->name('itens.producao');
+    });
+
+    // ── Equipa: so o dono, e cada acao pede a password outra vez. ──────────
+    Route::middleware(['owner', 'password.confirm'])->prefix('admin')->name('admin.')->group(function (): void {
+        Route::get('utilizadores', [Admin\StaffController::class, 'index'])->name('utilizadores.index');
+        Route::post('utilizadores', [Admin\StaffController::class, 'store'])->name('utilizadores.store');
+        Route::patch('utilizadores/{staff}', [Admin\StaffController::class, 'update'])->name('utilizadores.update');
+        Route::put('utilizadores/{staff}/password', [Admin\StaffController::class, 'resetPassword'])
+            ->name('utilizadores.password');
+        Route::patch('utilizadores/{staff}/desativar', [Admin\StaffController::class, 'disable'])
+            ->name('utilizadores.desativar');
+        Route::patch('utilizadores/{staff}/reativar', [Admin\StaffController::class, 'enable'])
+            ->name('utilizadores.reativar');
+    });
 
     // ── Backoffice: alias 'admin' (EnsureAdmin) por cima de auth+verified.
     //    Form Requests re-verificam isAdmin() — middleware sozinho nao e
@@ -64,12 +89,7 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         Route::patch('encomendas/{order}/detalhes', [Admin\OrderController::class, 'updateDetails'])
             ->name('encomendas.detalhes');
 
-        // Quadro de producao (por item) e o avanco de cada cartao.
-        Route::get('producao', Admin\ProductionBoardController::class)->name('producao');
-        Route::patch('itens/{item}/producao', [Admin\OrderItemController::class, 'updateProduction'])
-            ->name('itens.producao');
-
-        // Cliente = User com is_admin = false. Sem `create` nem `edit`: os dois
+        // Cliente = User::scopeCustomers(). Sem `create` nem `edit`: os dois
         // acontecem no modal da listagem, que chega ao cliente certo por
         // `?editar={id}` — como nos produtos.
         Route::resource('clientes', Admin\CustomerController::class)
@@ -149,6 +169,36 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
             ->name('definicoes.update');
         Route::patch('definicoes/precos', [Admin\SettingController::class, 'updatePricing'])
             ->name('definicoes.precos');
+
+        // Chaves de API do MCP. Cada visita e acao pede a password outra vez:
+        // uma chave de escrita e uma sessao de admin que vive fora do browser.
+        Route::middleware('password.confirm')->group(function (): void {
+            Route::get('definicoes/chaves-api', [Admin\ApiKeyController::class, 'index'])
+                ->name('chaves-api.index');
+            Route::post('definicoes/chaves-api', [Admin\ApiKeyController::class, 'store'])
+                ->middleware('throttle:10,1')
+                ->name('chaves-api.store');
+            Route::delete('definicoes/chaves-api/todas', [Admin\ApiKeyController::class, 'destroyAll'])
+                ->name('chaves-api.destroy-all');
+            Route::delete('definicoes/chaves-api/{key}', [Admin\ApiKeyController::class, 'destroy'])
+                ->name('chaves-api.destroy');
+
+            // Webhooks do Discord (alertas). Tambem com password: quem os
+            // muda escolhe para onde vao os dados dos clientes.
+            Route::get('definicoes/alertas', [Admin\AlertSettingsController::class, 'index'])
+                ->name('alertas.index');
+            Route::put('definicoes/alertas/{channel}/guardar', [Admin\AlertSettingsController::class, 'update'])
+                ->whereIn('channel', AlertChannel::ALL)
+                ->middleware('throttle:10,1')
+                ->name('alertas.update');
+            Route::delete('definicoes/alertas/{channel}/remover', [Admin\AlertSettingsController::class, 'destroy'])
+                ->whereIn('channel', AlertChannel::ALL)
+                ->name('alertas.destroy');
+            Route::post('definicoes/alertas/{channel}/testar', [Admin\AlertSettingsController::class, 'test'])
+                ->whereIn('channel', AlertChannel::ALL)
+                ->middleware('throttle:10,1')
+                ->name('alertas.test');
+        });
 
         // O formulario do produto tem pagina, ao contrario do dos materiais e
         // do das impressoras: sao seis seccoes, uma galeria, uma matriz de

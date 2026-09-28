@@ -57,11 +57,28 @@ class HandleInertiaRequests extends Middleware
                 // `auth.user` em resources/js). Um campo novo aqui e uma
                 // decisao, nao um efeito lateral de acrescentar uma coluna.
                 'user' => $this->sharedUser($request),
+                // O que o frontend pode mostrar, e nao os papeis em bruto:
+                // esconder um link e conforto, quem manda e o servidor.
+                'can' => $this->abilities($request),
             ],
             'sidebarOpen' => ! $request->hasCookie('sidebar_state') || $request->cookie('sidebar_state') === 'true',
             // Moeda em vigor: o resources/js/lib/money.ts formata por ela em
             // vez do EUR fixo que tinha antes.
             'currency' => $this->settings->currency(),
+        ];
+    }
+
+    /**
+     * @return array{backoffice: bool, production: bool, manageStaff: bool}
+     */
+    private function abilities(Request $request): array
+    {
+        $user = $request->user();
+
+        return [
+            'backoffice' => $user?->isAdmin() ?? false,
+            'production' => $user?->canAccessProduction() ?? false,
+            'manageStaff' => $user?->isOwner() ?? false,
         ];
     }
 

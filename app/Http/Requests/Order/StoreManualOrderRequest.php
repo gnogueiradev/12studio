@@ -47,7 +47,10 @@ class StoreManualOrderRequest extends FormRequest
         return [
             // Cliente registado e opcional: o canal Instagram e quase sempre
             // gente sem conta. customer_name, esse, e sempre obrigatorio.
-            'user_id' => ['nullable', 'integer', Rule::exists('users', 'id')],
+            // So clientes: uma encomenda nunca fica presa a uma conta da equipa.
+            'user_id' => ['nullable', 'integer', Rule::exists('users', 'id')
+                ->where('is_admin', false)
+                ->whereNull('staff_role')],
             'customer_name' => ['required', 'string', 'max:120'],
             // O canal `manual` e a venda em maos: o cliente esta a frente, leva
             // a peca e nao ha nada para lhe enviar. Nos outros canais o email e

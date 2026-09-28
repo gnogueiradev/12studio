@@ -101,6 +101,18 @@ export const TONES: Record<string, Tone> = {
      */
     particular: 'neutral',
     empresa: 'info',
+    /*
+     * users.role (equipa) — o tom sobe com o poder da conta: a produção e a
+     * mais contida, o dono o único que gere a equipa.
+     */
+    owner: 'warning',
+    admin: 'info',
+    production: 'neutral',
+    // Alertas do Discord (Definicoes -> Alertas): ligado no backoffice, ligado
+    // so pelo .env (funciona, mas fora da vista de quem gere), desligado.
+    alert_on: 'success',
+    alert_env: 'info',
+    alert_off: 'neutral',
 };
 
 /**

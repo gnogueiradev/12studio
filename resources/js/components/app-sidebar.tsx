@@ -1,4 +1,4 @@
-import { Link } from '@inertiajs/react';
+import { Link, usePage } from '@inertiajs/react';
 import {
     Boxes,
     Calculator,
@@ -12,6 +12,7 @@ import {
     ShoppingCart,
     Store,
     Tags,
+    UserCog,
     Users,
 } from 'lucide-react';
 import AppLogo from '@/components/app-logo';
@@ -27,11 +28,11 @@ import {
     SidebarMenuButton,
     SidebarMenuItem,
 } from '@/components/ui/sidebar';
-import type { NavItem } from '@/types';
+import type { Abilities, NavItem } from '@/types';
 
 // Navegacao do backoffice. Cresce com as fases: carrinho e checkout Stripe
 // (Fase 3), KPIs (Fase 5).
-const mainNavItems: NavItem[] = [
+const backofficeNavItems: NavItem[] = [
     {
         title: 'Backoffice',
         href: '/admin',
@@ -97,6 +98,32 @@ const mainNavItems: NavItem[] = [
     },
 ];
 
+const productionNavItem: NavItem = {
+    title: 'Produção',
+    href: '/admin/producao',
+    icon: Factory,
+};
+
+const staffNavItem: NavItem = {
+    title: 'Equipa',
+    href: '/admin/utilizadores',
+    icon: UserCog,
+};
+
+/**
+ * Cada conta vê só o que pode abrir: a equipa de produção fica com o quadro, o
+ * dono ganha a Equipa. Esconder aqui é conforto — o servidor dá 403 na mesma.
+ */
+function navItemsFor(can: Abilities): NavItem[] {
+    if (can.backoffice) {
+        return can.manageStaff
+            ? [...backofficeNavItems, staffNavItem]
+            : backofficeNavItems;
+    }
+
+    return can.production ? [productionNavItem] : [];
+}
+
 const footerNavItems: NavItem[] = [
     {
         title: 'Ver loja',
@@ -106,13 +133,16 @@ const footerNavItems: NavItem[] = [
 ];
 
 export function AppSidebar() {
+    const { auth } = usePage().props;
+    const home = auth.can.backoffice ? '/admin' : '/dashboard';
+
     return (
         <Sidebar collapsible="icon" variant="inset">
             <SidebarHeader>
                 <SidebarMenu>
                     <SidebarMenuItem>
                         <SidebarMenuButton size="lg" asChild>
-                            <Link href="/admin" prefetch>
+                            <Link href={home} prefetch>
                                 <AppLogo />
                             </Link>
                         </SidebarMenuButton>
@@ -121,7 +151,7 @@ export function AppSidebar() {
             </SidebarHeader>
 
             <SidebarContent>
-                <NavMain items={mainNavItems} />
+                <NavMain items={navItemsFor(auth.can)} />
             </SidebarContent>
 
             <SidebarFooter>

@@ -46,7 +46,7 @@ class Tag extends Model
     }
 
     /**
-     * Cliente e um User com is_admin = false. O filtro esta aqui e nao so em
+     * Cliente = User::scopeCustomers(). O filtro esta aqui e nao so em
      * quem pergunta, para a contagem de usos da pagina de gestao nunca incluir
      * uma conta de administrador.
      *
@@ -54,7 +54,7 @@ class Tag extends Model
      */
     public function customers(): BelongsToMany
     {
-        return $this->belongsToMany(User::class)->where('is_admin', false);
+        return $this->belongsToMany(User::class)->customers();
     }
 
     /** @return BelongsToMany<Order, $this> */

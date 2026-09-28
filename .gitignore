@@ -29,3 +29,8 @@ yarn-error.log
 /.vscode
 /.zed
 /.superpowers
+
+# Reels/vídeos gerados localmente (não versionar — ficheiros grandes)
+/instagram
+# Cache do Laravel LSP
+/storage/framework/lsp-*.php
