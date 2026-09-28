@@ -100,6 +100,30 @@ const TAB_FIELDS: Record<string, string[]> = {
     ],
 };
 
+/** Há erros em campos deste separador? (`items.0.qty` conta para `items`.) */
+const tabHasErrors = (tab: string, keys: string[]) =>
+    keys.some((key) =>
+        TAB_FIELDS[tab].some(
+            (field) => key === field || key.startsWith(`${field}.`),
+        ),
+    );
+
+/**
+ * Os campos copiados da ficha do cliente. Com uma ficha escolhida aparecem em
+ * leitura e não como campos — e as mensagens de validação iam-se com eles.
+ */
+const SNAPSHOT_FIELDS = [
+    'customer_name',
+    'email',
+    'phone',
+    'nif',
+    'line1',
+    'line2',
+    'postal_code',
+    'city',
+    'country',
+];
+
 export default function OrdersCreate({
     customers,
     variants,
@@ -213,13 +237,7 @@ export default function OrdersCreate({
         messages.items ??
         Object.entries(messages).find(([key]) => key.startsWith('items.'))?.[1];
 
-    /** Há erros em campos deste separador? (`items.0.qty` conta para `items`.) */
-    const invalid = (tab: string) =>
-        Object.keys(messages).some((key) =>
-            TAB_FIELDS[tab].some(
-                (field) => key === field || key.startsWith(`${field}.`),
-            ),
-        );
+    const invalid = (tab: string) => tabHasErrors(tab, Object.keys(messages));
 
     /**
      * Chamado antes de cada envio: manda o `shipped` de agora, e o `draft_id`
@@ -244,10 +262,32 @@ export default function OrdersCreate({
                   }),
         }));
 
+    /*
+     * Um cliente criado só com o nome não tem email, e fora das vendas em mão
+     * a encomenda exige-o. Com a ficha escolhida o campo não está no ecrã, e a
+     * recusa do servidor ficava reduzida a um ponto num separador — o botão
+     * parecia simplesmente não fazer nada. Abre-se o que foi recusado.
+     */
+    const reveal = (rejected: Record<string, string>) => {
+        const keys = Object.keys(rejected);
+
+        if (keys.some((key) => SNAPSHOT_FIELDS.includes(key))) {
+            setOverriding(true);
+        }
+
+        const first = Object.keys(TAB_FIELDS).find(
+            (name) => !(manual && name === 'envio') && tabHasErrors(name, keys),
+        );
+
+        if (first !== undefined) {
+            setTab(first);
+        }
+    };
+
     const submit = (event: React.FormEvent) => {
         event.preventDefault();
         clean();
-        post(store().url);
+        post(store().url, { onError: reveal });
     };
 
     /*
@@ -387,6 +427,7 @@ export default function OrdersCreate({
                                         onPick={pickCustomer}
                                         onClear={clearCustomer}
                                     />
+                                    <InputError message={errors.user_id} />
 
                                     {chosen !== null && (
                                         <ChosenCustomer
