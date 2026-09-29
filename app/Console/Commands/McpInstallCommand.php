@@ -44,18 +44,29 @@ class McpInstallCommand extends Command
     {
         if (config('passport.private_key') || file_exists(Passport::keyPath('oauth-private.key'))) {
             $this->components->info('Chaves do Passport: já existem.');
-
-            return;
+        } else {
+            $this->call('passport:keys');
+            $this->components->info('Chaves do Passport: criadas em storage/.');
         }
 
-        $this->call('passport:keys');
+        $this->fixKeyPermissions();
+    }
 
-        foreach (['oauth-private.key', 'oauth-public.key'] as $file) {
-            // So o dono do processo le a chave privada.
-            @chmod(Passport::keyPath($file), $file === 'oauth-private.key' ? 0600 : 0644);
+    /**
+     * Tambem com as chaves ja existentes: quem as criou com 644 fica corrigido
+     * ao correr isto outra vez. O league/oauth2-server so aceita 400/440/600/
+     * 640/660 — e verifica a PUBLICA a cada pedido ao /mcp. Com 644 dispara um
+     * E_USER_NOTICE, o Laravel faz dele excecao e o /mcp responde 500.
+     */
+    private function fixKeyPermissions(): void
+    {
+        foreach (['oauth-private.key' => 0600, 'oauth-public.key' => 0640] as $file => $mode) {
+            $path = Passport::keyPath($file);
+
+            if (file_exists($path)) {
+                @chmod($path, $mode);
+            }
         }
-
-        $this->components->info('Chaves do Passport: criadas em storage/.');
     }
 
     private function ensurePersonalAccessClient(ClientRepository $clients): void
