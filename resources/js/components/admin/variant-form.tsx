@@ -2,6 +2,7 @@ import { router } from '@inertiajs/react';
 import { useEffect, useRef } from 'react';
 import { ColorSwatchGrid } from '@/components/admin/color-swatch-grid';
 import { PricingBreakdown } from '@/components/admin/pricing-breakdown';
+import { VariantProfit } from '@/components/admin/variant-profit';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -230,6 +231,14 @@ export default function VariantForm({
             ? Math.round(((normalCents - saleCents) / normalCents) * 100)
             : null;
 
+    /*
+     * O `pricing` pode ainda trazer o custo de antes de alguém apagar a
+     * gramagem ou o tempo — o pedido novo vem com atraso. Sem os dois não se
+     * mostra lucro nenhum.
+     */
+    const hasCostInputs =
+        printMinutes > 0 && (data.filament_weight_grams ?? 0) > 0;
+
     const hasColors = colors.length > 0;
     const hasMaterials = materials.length > 0;
 
@@ -457,6 +466,21 @@ export default function VariantForm({
                     <InputError message={errors.filament_weight_grams} />
                 </div>
             </div>
+
+            <VariantProfit
+                productionCostCents={
+                    hasCostInputs && pricing.result
+                        ? pricing.result.productionCostCents
+                        : null
+                }
+                normalCents={normalCents}
+                saleCents={saleCents}
+                wholesaleCents={
+                    data.wholesale_price === ''
+                        ? null
+                        : inputToCents(data.wholesale_price)
+                }
+            />
 
             <div className="flex flex-col gap-4 border-t border-border/60 pt-6">
                 <div>
