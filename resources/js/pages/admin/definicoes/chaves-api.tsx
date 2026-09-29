@@ -49,6 +49,9 @@ const ACCESS_LABELS = {
 /**
  * Chaves para ligar o Claude ao backoffice pelo MCP.
  *
+ * O claude.ai, o Desktop e o telemóvel ligam-se por OAuth só com o URL
+ * (ClaudeAiConnector); as chaves são para o Claude Code, que manda o header.
+ *
  * A chave criada aparece uma única vez, já dentro do comando `claude mcp add`
  * pronto a colar. Depois disso o servidor só guarda o id — quem a perder cria
  * outra e revoga a antiga.
@@ -160,6 +163,12 @@ export default function ApiKeysIndex({
                 {createdToken && (
                     <CreatedToken token={createdToken} mcpUrl={mcpUrl} />
                 )}
+
+                <ClaudeAiConnector mcpUrl={mcpUrl} />
+
+                <h2 className="text-sm font-medium">
+                    Chave para o Claude Code
+                </h2>
 
                 <form
                     onSubmit={submit}
@@ -318,6 +327,75 @@ function CreatedToken({ token, mcpUrl }: { token: string; mcpUrl: string }) {
                 </Button>
             </AlertDescription>
         </Alert>
+    );
+}
+
+/**
+ * O claude.ai, o Desktop e o telemóvel não aceitam headers: ligam-se por
+ * OAuth (routes/ai.php). Basta-lhes o URL — o registo do cliente é dinâmico
+ * e o consentimento pede login de admin e a password. O /login está atrás do
+ * EnsureLoginGate, por isso o passo 1 manda fazer isto com sessão aberta.
+ * A ligação aparece
+ * depois na tabela como "Aplicação ligada (OAuth)".
+ */
+function ClaudeAiConnector({ mcpUrl }: { mcpUrl: string }) {
+    const [copied, setCopied] = useState(false);
+
+    const copy = async () => {
+        await navigator.clipboard.writeText(mcpUrl);
+        setCopied(true);
+    };
+
+    return (
+        <section className="flex flex-col gap-3 rounded-xl border p-4">
+            <div>
+                <h2 className="text-sm font-medium">
+                    Ligar ao claude.ai, ao Desktop e ao telemóvel
+                </h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                    Não precisa de chave: o Claude pede-te login aqui e tu
+                    autorizas. Liga-se uma vez e fica em todo o lado.
+                </p>
+            </div>
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <code className="flex-1 rounded-md bg-muted p-2 text-xs break-all">
+                    {mcpUrl}
+                </code>
+                <Button
+                    variant="outline"
+                    size="sm"
+                    className="self-start sm:self-auto"
+                    onClick={copy}
+                >
+                    {copied ? <Check /> : <Copy />}
+                    {copied ? 'Copiado' : 'Copiar URL'}
+                </Button>
+            </div>
+            <ol className="list-decimal space-y-1 pl-5 text-sm text-muted-foreground">
+                <li>
+                    Faz isto no computador, no browser onde já tens sessão no
+                    backoffice — o login está escondido atrás do link secreto e
+                    daria 404. O conector passa sozinho para o Desktop e para o
+                    telemóvel.
+                </li>
+                <li>
+                    No claude.ai, abre <strong>Settings → Connectors</strong> e
+                    escolhe <strong>Add custom connector</strong>.
+                </li>
+                <li>
+                    Dá-lhe o nome <strong>12studio</strong> e cola o URL acima.
+                    Deixa o Client ID e o Client Secret vazios.
+                </li>
+                <li>
+                    Carrega em <strong>Connect</strong>, entra com a tua conta
+                    de admin e autoriza. Confirma que o destino é claude.ai.
+                </li>
+                <li>
+                    No Claude, não dês “permitir sempre” às ferramentas que
+                    alteram dados — assim cada alteração passa por ti.
+                </li>
+            </ol>
+        </section>
     );
 }
 
