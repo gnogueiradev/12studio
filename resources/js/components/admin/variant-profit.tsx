@@ -4,6 +4,11 @@ import { cn } from '@/lib/utils';
 type Props = {
     /** O custo real por peça, do mesmo motor que o painel de custo. Null = por calcular. */
     productionCostCents: number | null;
+    /**
+     * O IVA do produto, em pontos base, tal como o servidor o usou no cálculo
+     * do custo ao lado. Os preços dos campos trazem-no incluído; o custo não.
+     */
+    vatRateBp: number;
     normalCents: number;
     /** Null sem promoção. */
     saleCents: number | null;
@@ -16,11 +21,17 @@ type Props = {
  * que o painel de custo já mostra. É a pergunta de quem pôs 5 € à mão: isto
  * dá lucro?
  *
+ * Os campos são preços com IVA e o custo é sem: o lucro mede-se sobre o que
+ * fica depois de o entregar. Subtrair um ao outro tal como estão fazia passar
+ * por lucro o imposto — e a 23% é a diferença entre ganhar e perder dinheiro
+ * numa peça de margem curta.
+ *
  * Sem custo não há conta: o custo só existe com gramagem E tempo de
  * impressão, porque sem tempo não se sabe quanto a máquina gastou.
  */
 export function VariantProfit({
     productionCostCents,
+    vatRateBp,
     normalCents,
     saleCents,
     wholesaleCents,
@@ -33,6 +44,8 @@ export function VariantProfit({
             </p>
         );
     }
+
+    const hasVat = vatRateBp > 0;
 
     const rows = [
         { label: 'Preço normal', price: normalCents },
@@ -50,21 +63,31 @@ export function VariantProfit({
                 <span className="tabular-nums">
                     {formatCents(productionCostCents)}
                 </span>{' '}
-                por peça.
+                por peça{hasVat ? ', sem IVA' : ''}.
+                {hasVat &&
+                    ` O lucro é sobre o que fica de cada preço depois de entregares os ${formatPercentBp(vatRateBp)} de IVA.`}
             </p>
             <dl className="mt-3 grid gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
                 {rows.map((row) => {
-                    const profit = row.price - productionCostCents;
+                    // Como PricingResult::exVat, em cêntimos: com a taxa a
+                    // zero é o próprio preço.
+                    const exVat = Math.round(
+                        (row.price * 10_000) / (10_000 + vatRateBp),
+                    );
+                    const profit = exVat - productionCostCents;
                     // Margem sobre a VENDA, como em PricingResult::marginBp.
                     const marginBp =
-                        row.price === 0
-                            ? 0
-                            : Math.round((profit * 10_000) / row.price);
+                        exVat === 0 ? 0 : Math.round((profit * 10_000) / exVat);
 
                     return (
                         <div key={row.label}>
                             <dt className="text-xs text-muted-foreground">
                                 {row.label} · {formatCents(row.price)}
+                                {hasVat && (
+                                    <span className="block tabular-nums">
+                                        {formatCents(exVat)} sem IVA
+                                    </span>
+                                )}
                             </dt>
                             <dd
                                 className={cn(

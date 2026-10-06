@@ -40,6 +40,12 @@ function formatDuration(minutes: number): string {
  * de eletricidade, 2,10362 € de custo — e não os cêntimos arredondados. É essa
  * a razão de ele existir: quem abre isto quer perceber de onde veio o preço, e
  * um 0,06 € escondia precisamente a conta que se quer ver.
+ *
+ * Os dois preços mostram-se com IVA incluído — é o que vai para a etiqueta — e
+ * tudo o que é custo ou lucro sem ele. Sempre que um número grande com IVA
+ * aparece ao lado de um lucro, o valor sem IVA vai junto: sem isso a conta
+ * "preço − custo" que quem lê faz de cabeça não dava o lucro que está escrito.
+ * Com a taxa do produto a zero não há nada a separar e o painel fica como era.
  */
 export function PricingBreakdown({
     result,
@@ -60,7 +66,12 @@ export function PricingBreakdown({
 
     const isBatch = result.mode === 'batch';
     const unit = isBatch ? 'por unidade' : 'por peça';
-    const machineHint = `${formatDuration(printTimeMinutes)} × ${formatMicros(hourlyCostMicros)}/h${printerName ? ` · ${printerName}` : ''}`;
+    const hasVat = result.vatRateBp > 0;
+    const vat = formatPercentBp(result.vatRateBp);
+    const costsHadVat = result.costVatRateBp > 0;
+    // O €/h é o da ficha da impressora, com o IVA com que lá foi escrito: as
+    // três parcelas de máquina por cima dele já vão sem.
+    const machineHint = `${formatDuration(printTimeMinutes)} × ${formatMicros(hourlyCostMicros)}/h${costsHadVat ? ' com IVA' : ''}${printerName ? ` · ${printerName}` : ''}`;
 
     return (
         <div className="flex flex-col gap-4">
@@ -77,23 +88,35 @@ export function PricingBreakdown({
                 <StatCard
                     label={`Custo real de produção (${unit})`}
                     value={formatCents(result.productionCostCents)}
-                    hint={`Material, energia, máquina, trabalho e risco de ${formatPercentBp(result.failureRateBp)}.`}
+                    hint={`Material, energia, máquina, trabalho e risco de ${formatPercentBp(result.failureRateBp)}.${costsHadVat ? ' Sem IVA.' : ''}`}
                 />
                 <StatCard
-                    label="Preço para revenda"
+                    label={
+                        hasVat
+                            ? 'Preço para revenda (IVA incl.)'
+                            : 'Preço para revenda'
+                    }
                     value={formatCents(result.wholesalePriceCents)}
                     hint={
                         <>
+                            {hasVat &&
+                                `${formatCents(result.wholesalePriceExVatCents)} sem IVA · `}
                             Lucro {formatCents(result.wholesaleProfitCents)} ·
                             margem {formatPercentBp(result.wholesaleMarginBp)}
                         </>
                     }
                 />
                 <StatCard
-                    label="Preço final recomendado"
+                    label={
+                        hasVat
+                            ? 'Preço final recomendado (IVA incl.)'
+                            : 'Preço final recomendado'
+                    }
                     value={formatCents(result.retailPriceCents)}
                     hint={
                         <>
+                            {hasVat &&
+                                `${formatCents(result.retailPriceExVatCents)} sem IVA · `}
                             Venda direta: lucro{' '}
                             {formatCents(result.directProfitCents)} · margem{' '}
                             {formatPercentBp(result.directMarginBp)}
@@ -105,16 +128,21 @@ export function PricingBreakdown({
             <div className="grid gap-3 sm:grid-cols-2">
                 <Party
                     title="O meu lucro"
+                    note={
+                        hasVat
+                            ? `Sem IVA: o que fica dos preços acima depois de entregares os ${vat}.`
+                            : undefined
+                    }
                     rows={[
                         {
                             label: 'Venda a revendedor',
-                            revenue: result.wholesalePriceCents,
+                            revenue: result.wholesalePriceExVatCents,
                             profit: result.wholesaleProfitCents,
                             marginBp: result.wholesaleMarginBp,
                         },
                         {
                             label: 'Venda direta',
-                            revenue: result.retailPriceCents,
+                            revenue: result.retailPriceExVatCents,
                             profit: result.directProfitCents,
                             marginBp: result.directMarginBp,
                         },
@@ -138,6 +166,7 @@ export function PricingBreakdown({
                         <Metric
                             label="Lucro"
                             value={formatCents(result.resellerProfitCents)}
+                            hint={hasVat ? 'sem IVA' : undefined}
                         />
                         <Metric
                             label="Margem"
@@ -222,6 +251,15 @@ export function PricingBreakdown({
                         <h3 className="mb-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
                             Custo de produção
                         </h3>
+                        {costsHadVat && (
+                            <p className="mb-2 text-xs text-muted-foreground">
+                                Tudo sem IVA: ao que se compra foi tirado o de{' '}
+                                {formatPercentBp(result.costVatRateBp)} que vem
+                                nos preços que escreveste, porque o deduzes. A
+                                mão de obra fica como está — o teu trabalho não
+                                traz IVA para tirar.
+                            </p>
+                        )}
                         <table className="w-full text-sm">
                             <tbody className="[&_td]:py-1.5 [&_th]:py-1.5">
                                 <Step
@@ -313,14 +351,14 @@ export function PricingBreakdown({
                             <tbody className="[&_td]:py-1.5 [&_th]:py-1.5">
                                 <Step
                                     label="Preço bruto de revenda"
-                                    detail={`custo ÷ (1 − ${formatPercentBp(result.targetWholesaleMarginBp)})`}
+                                    detail={`custo ÷ (1 − ${formatPercentBp(result.targetWholesaleMarginBp)})${hasVat ? ` × (1 + ${vat} de IVA)` : ''}`}
                                     value={formatMicros(
                                         result.rawWholesalePriceMicros,
                                     )}
                                 />
                                 <Step
                                     label="Preço para revenda"
-                                    detail="arredondado para cima aos 0,50 €"
+                                    detail={`arredondado para cima aos 0,50 €${hasVat ? ', IVA incluído' : ''}`}
                                     value={formatCents(
                                         result.wholesalePriceCents,
                                     )}
@@ -335,10 +373,28 @@ export function PricingBreakdown({
                                 />
                                 <Step
                                     label="Preço final recomendado"
-                                    detail="sempre para cima: 0,50 € até 20 €, 1 € até 50 €, 5 € acima disso"
+                                    detail={`sempre para cima: 0,50 € até 20 €, 1 € até 50 €, 5 € acima disso${hasVat ? '. IVA incluído' : ''}`}
                                     value={formatCents(result.retailPriceCents)}
                                     emphasis
                                 />
+                                {hasVat && (
+                                    <>
+                                        <Step
+                                            label="Sem IVA"
+                                            detail="o que entra na loja quando o cliente paga"
+                                            value={formatCents(
+                                                result.retailPriceExVatCents,
+                                            )}
+                                        />
+                                        <Step
+                                            label="IVA"
+                                            detail={`${vat} sobre o valor de cima, para entregar`}
+                                            value={formatCents(
+                                                result.retailVatCents,
+                                            )}
+                                        />
+                                    </>
+                                )}
                             </tbody>
                         </table>
                     </section>
@@ -351,10 +407,13 @@ export function PricingBreakdown({
 /** Um bloco "receita − custo = lucro" por tipo de venda. */
 function Party({
     title,
+    note,
     rows,
     cost,
 }: {
     title: string;
+    /** Uma linha por baixo do título, quando a receita não é o preço à vista. */
+    note?: string;
     rows: {
         label: string;
         revenue: number;
@@ -368,6 +427,9 @@ function Party({
             <h3 className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
                 {title}
             </h3>
+            {note && (
+                <p className="mt-1 text-xs text-muted-foreground">{note}</p>
+            )}
             <div className="mt-3 flex flex-col gap-3">
                 {rows.map((row) => (
                     <div key={row.label}>

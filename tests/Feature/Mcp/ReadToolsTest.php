@@ -128,7 +128,11 @@ class ReadToolsTest extends TestCase
         $this->server()->tool(PricingPreviewTool::class, ['variant_id' => $variant->id])
             ->assertOk()
             ->assertSee('retail_price')
-            ->assertSee('production_total');
+            ->assertSee('production_total')
+            // Os precos sao com IVA, as margens sobre o que fica sem ele: a
+            // resposta tem de trazer as duas leituras e a taxa que as separa.
+            ->assertSee('retail_price_ex_vat')
+            ->assertSee('"vat_percent":23');
     }
 
     public function test_stock_low_lists_only_variants_at_or_below_the_threshold(): void

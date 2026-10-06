@@ -43,6 +43,11 @@ final readonly class PricingInput
         public int $printerPurchasePriceCents,
         public int $printerLifetimeHours,
         public int $printerMaintenanceMicrosPerHour,
+        // O IVA da VENDA, em pontos base (2300 = 23%). E do produto, e por
+        // isso entra por aqui e nao pelas definicoes: um livro e um vaso nao
+        // pagam a mesma taxa. Sem valor por omissao de proposito — esquecer-se
+        // dele era vender com IVA a zero sem ninguem dar por isso.
+        public int $vatRateBp,
         // Por peca, sempre — nunca se dividem pela mesa.
         public int $packagingCostCents = 0,
         public int $componentsCostCents = 0,

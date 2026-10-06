@@ -58,6 +58,19 @@ return [
     // do que doze impressoes separadas.
     'setup_labor_minutes' => 5,
 
+    // O IVA que vem DENTRO dos custos que o admin escreve — o EUR/kg do
+    // filamento, o preco das impressoras, a manutencao, a embalagem, os
+    // componentes, a tarifa da luz — em pontos base (2300 = 23%).
+    //
+    // A loja cobra IVA nas vendas e deduz o das compras, portanto o imposto
+    // que se pagou ao fornecedor nao e custo: a calculadora tira-o de cada
+    // parcela antes de fazer a conta. A mao de obra fica de fora — o trabalho
+    // de quem faz a peca nao traz IVA nenhum para tirar.
+    //
+    // A ZERO quer dizer "ja escrevo os custos sem IVA", e nada e tirado. O IVA
+    // da VENDA nao vive aqui: e a `vat_rate` de cada produto.
+    'cost_vat_rate_bp' => 2_300,
+
     /*
      * Risco
      */

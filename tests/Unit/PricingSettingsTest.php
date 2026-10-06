@@ -33,6 +33,26 @@ class PricingSettingsTest extends TestCase
         $this->assertSame(150, $this->pricing->minimumWholesalePriceCents());
         $this->assertSame(0, $this->pricing->salesChannelFixedFeeCents());
         $this->assertSame(0, $this->pricing->salesChannelPercentageFeeBp());
+        $this->assertSame(2_300, $this->pricing->costVatRateBp());
+    }
+
+    /**
+     * O IVA dos custos e uma definicao como as outras: a zero quer dizer "os
+     * meus custos ja estao escritos sem IVA", e tem de sobreviver ao formulario
+     * sem virar o valor por omissao.
+     */
+    public function test_the_cost_vat_rate_is_a_setting_and_zero_is_a_real_value(): void
+    {
+        $this->assertContains(PricingSettings::KEY_COST_VAT_RATE_BP, PricingSettings::KEYS);
+        $this->assertSame('23.00', $this->pricing->toForm()['cost_vat_percent']);
+
+        app(SettingService::class)->setMany($this->pricing->fromForm([
+            ...$this->pricing->toForm(),
+            'cost_vat_percent' => '0',
+        ]));
+
+        $this->assertSame(0, app(PricingSettings::class)->costVatRateBp());
+        $this->assertSame('0.00', app(PricingSettings::class)->toForm()['cost_vat_percent']);
     }
 
     /** A maquina imaginaria, para quando nao ha nenhuma impressora ativa. */
@@ -123,6 +143,7 @@ class PricingSettingsTest extends TestCase
         $this->assertSame(150, $after->minimumWholesalePriceCents());
         $this->assertSame(0, $after->salesChannelFixedFeeCents());
         $this->assertSame(0, $after->salesChannelPercentageFeeBp());
+        $this->assertSame(2_300, $after->costVatRateBp());
     }
 
     /**

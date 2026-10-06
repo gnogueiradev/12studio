@@ -44,6 +44,7 @@ class UpdatePricingSettingsRequest extends FormRequest
             'minimum_wholesale_price',
             'channel_fixed_fee',
             'channel_percentage_fee',
+            'cost_vat_percent',
         ] as $field) {
             $value = $this->input($field);
 
@@ -88,6 +89,10 @@ class UpdatePricingSettingsRequest extends FormRequest
             'channel_fixed_fee' => ['required', 'numeric', 'min:0', 'max:999.99'],
             // Uma comissao acima de metade da venda nao e um canal, e um socio.
             'channel_percentage_fee' => ['required', 'numeric', 'min:0', 'max:50'],
+
+            // Zero e uma resposta valida: "escrevo os custos ja sem IVA". O
+            // tecto de 30% cobre qualquer taxa da UE; acima disso e engano.
+            'cost_vat_percent' => ['required', 'numeric', 'min:0', 'max:30'],
         ];
     }
 
@@ -107,6 +112,7 @@ class UpdatePricingSettingsRequest extends FormRequest
             'minimum_wholesale_price' => 'preço mínimo de revenda',
             'channel_fixed_fee' => 'taxa fixa do canal',
             'channel_percentage_fee' => 'comissão do canal',
+            'cost_vat_percent' => 'IVA dos custos',
         ];
     }
 }

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Http\Requests\Pricing\PricingPreviewRequest;
 use App\Models\PrinterProfile;
+use App\Models\Product;
 use App\Models\Variant;
 use App\Support\PricingInput;
 use App\Support\PricingResult;
@@ -28,6 +29,9 @@ class PricingPreview
     ) {}
 
     /**
+     * O produto e de quem chama: a ficha de variante vive na pagina de um, e e
+     * a taxa de IVA dele que entra na conta. Sem produto fica a da loja.
+     *
      * @return array{
      *     result: array<string, mixed>|null,
      *     printerProfileId: int|null,
@@ -35,7 +39,7 @@ class PricingPreview
      *     usingFallbackRate: bool,
      * }
      */
-    public function fromRequest(PricingPreviewRequest $request): array
+    public function fromRequest(PricingPreviewRequest $request, ?Product $product = null): array
     {
         $printer = $this->printers->resolve($request->printerProfileId());
 
@@ -57,6 +61,7 @@ class PricingPreview
                 packagingCostCents: $request->packagingCostCents(),
                 componentsCostCents: $request->componentsCostCents(),
                 activeLaborMinutes: $request->activeLaborMinutes(),
+                vatRateBp: $this->vatRateBp($product),
                 mode: $request->mode(),
                 quantity: $request->quantity(),
             )->toArray()
@@ -106,7 +111,25 @@ class PricingPreview
             packagingCostCents: $variant->packaging_cost_cents ?? 0,
             componentsCostCents: $variant->components_cost_cents ?? 0,
             activeLaborMinutes: $variant->active_labor_minutes,
+            vatRateBp: $this->vatRateBp($variant->product),
         );
+    }
+
+    /**
+     * O IVA da venda, em pontos base: o do produto, ou o de config/shop.php
+     * quando nao ha produto nenhum — a calculadora solta e a pagina do produto
+     * que ainda nao foi criado.
+     *
+     * E a taxa GRAVADA no produto, e nao a que estiver por guardar no campo do
+     * formulario: o preco sugerido tem de ser o que o "Aplicar precos" escreve.
+     */
+    private function vatRateBp(?Product $product): int
+    {
+        $percent = $product === null
+            ? (int) config('shop.default_vat_rate')
+            : $product->vat_rate;
+
+        return max(0, $percent) * 100;
     }
 
     private function calculate(
@@ -118,6 +141,7 @@ class PricingPreview
         int $packagingCostCents,
         int $componentsCostCents,
         ?int $activeLaborMinutes,
+        int $vatRateBp,
         string $mode = PricingInput::MODE_PER_UNIT,
         int $quantity = 1,
     ): PricingResult {
@@ -130,6 +154,7 @@ class PricingPreview
             printerPurchasePriceCents: $machine->purchase_price_cents,
             printerLifetimeHours: $machine->lifetime_hours,
             printerMaintenanceMicrosPerHour: $machine->maintenance_micros_per_hour,
+            vatRateBp: $vatRateBp,
             packagingCostCents: $packagingCostCents,
             componentsCostCents: $componentsCostCents,
             activeLaborMinutes: $activeLaborMinutes,

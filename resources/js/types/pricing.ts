@@ -57,6 +57,10 @@ export type PricingFormFields = {
  * (0,06177 € de eletricidade não cabe num cêntimo) e alimentam o painel do
  * cálculo detalhado; os cêntimos são o que se mostra em grande e o que o botão
  * "Aplicar preços" escreve nos campos da variante.
+ *
+ * O IVA divide os campos em dois grupos: os PREÇOS (revenda, cliente) trazem-no
+ * incluído, que é como se gravam na variante; os CUSTOS e os LUCROS são sem
+ * ele. Os `*ExVat*` são a ponte entre os dois.
  */
 export type PricingBreakdown = {
     mode: PricingMode;
@@ -90,10 +94,19 @@ export type PricingBreakdown = {
     failureRateBp: number;
     targetWholesaleMarginBp: number;
     targetResellerMarginBp: number;
+    /** O IVA da venda, o do produto: 2300 = 23 %. Zero = não há IVA a mostrar. */
+    vatRateBp: number;
+    /** O IVA tirado aos custos comprados. Zero = já vinham escritos sem ele. */
+    costVatRateBp: number;
 
     productionCostCents: number;
     wholesalePriceCents: number;
     retailPriceCents: number;
+    /** Os dois preços sem IVA: a receita das contas de lucro. */
+    wholesalePriceExVatCents: number;
+    retailPriceExVatCents: number;
+    /** O IVA dentro do preço ao cliente. Soma com o de cima o preço exato. */
+    retailVatCents: number;
     channelFeeCents: number;
     wholesaleProfitCents: number;
     directProfitCents: number;
@@ -202,4 +215,6 @@ export type PricingSettingsForm = {
     minimum_wholesale_price: string;
     channel_fixed_fee: string;
     channel_percentage_fee: string;
+    /** O IVA que vem dentro dos custos escritos. "0" = já estão sem IVA. */
+    cost_vat_percent: string;
 };

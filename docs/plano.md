@@ -89,22 +89,28 @@ eletricidade  = minutos × watts × tarifa ÷ 60 000                 ← watts d
 depreciação   = minutos × preçoCompra ÷ (vidaÚtil × 60)           ← a máquina paga-se a si
 manutenção    = minutos × manutençãoPorHora ÷ 60                    própria nas peças
 mão de obra   = minutosAtivos × valorHora ÷ 60                    ← só trabalho humano
-subtotal      = filamento + eletricidade + depreciação
-                + manutenção + mão de obra + embalagem + componentes
+comprado      = (filamento + eletricidade + depreciação            ← tudo o que traz IVA
+                 + manutenção + embalagem + componentes)             do fornecedor
+                ÷ (1 + ivaCustos)
+subtotal      = comprado + mão de obra                            ← o trabalho não tem IVA
 
 custo real    = subtotal ÷ (1 − taxaFalhas)                       ← DIVIDE, não soma
-revenda       = ceil(custo real ÷ (1 − margemRevenda), 0,50 €)    ← chão de 1,50 €
+revenda       = ceil(custo real ÷ (1 − margemRevenda)
+                     × (1 + ivaVenda), 0,50 €)                    ← chão de 1,50 €
 cliente       = ceil(revenda ÷ (1 − margemRevendedor))            ← 0,50/1/5 € por faixa
 
-lucro revenda     = revenda − custo real
-lucro direto      = cliente − custo real     ← vendo eu ao mesmo preço público
-lucro revendedor  = cliente − revenda
-margem            = lucro ÷ preço × 100      ← sobre a VENDA, sempre
-markup revendedor = lucro ÷ revenda × 100    (o admin mostra ambos, rotulados)
+semIva(p)         = p ÷ (1 + ivaVenda)
+lucro revenda     = semIva(revenda) − custo real
+lucro direto      = semIva(cliente) − custo real   ← vendo eu ao mesmo preço público
+lucro revendedor  = semIva(cliente) − semIva(revenda)
+margem            = lucro ÷ semIva(preço) × 100    ← sobre a VENDA, sempre
+markup revendedor = lucro ÷ revenda × 100          (o admin mostra ambos, rotulados)
 lucro líquido     = lucro direto − comissões do canal
 ```
 
-**Aritmética em micro-euros** (`app/Support/Micros.php`): inteiros de 1/1 000 000 €. A regra do projeto é "cêntimos, nunca floats", mas as parcelas intermédias (0,06177 € de eletricidade, 0,1420 €/kWh de tarifa) não cabem num cêntimo e arredondá-las desviava o preço final. Caso de referência oficial, fixado em teste: **17 €/kg, 50 g, 3h numa A1 (145 W, 400 €/4000 h, 0,04 €/h), 5 min de trabalho a 8 €/h, tarifa 0,1420 €/kWh, falhas 5 %, margens 40 %/40 % → subtotal 1,998437 €, custo real 2,103618 €, revenda 4,00 €, cliente 7,00 €**.
+**O IVA não é da loja, nem à entrada nem à saída** (outubro de 2026). Em regime normal o que se cobra entrega-se e o que se paga deduz-se, por isso a conta faz-se toda **sem IVA** e o imposto só entra no último passo, para chegar ao preço da montra. São duas taxas com donos diferentes: a da **venda** é a `vat_rate` de cada produto (na calculadora solta, a de `config/shop.php`) e entra pelo `PricingInput`; a dos **custos** é a definição `pricing.cost_vat_rate_bp` (23 % por omissão; **0 = "escrevo os custos já sem IVA"**). Os dois **preços** continuam a sair, a arredondar-se e a gravar-se com IVA incluído; os **custos** e os **lucros** são sem ele. Antes disto a calculadora ignorava os dois lados — custos com IVA, preço tratado como se fosse todo receita — e a margem de 40 % que mostrava era em parte dinheiro do Estado. O preço quase não muda (tirar 23 % ao que se compra e somar 23 % ao que se vende anula-se; sobra o IVA sobre a mão de obra); o que muda é o lucro mostrado. A margem do revendedor é um rácio entre dois preços com a mesma taxa, logo igual com ou sem IVA. Quem compara preço com custo fora do motor — o `PriceGuard` do MCP e o bloco "O teu lucro com estes preços" da ficha de variante — tira primeiro o IVA ao preço.
+
+**Aritmética em micro-euros** (`app/Support/Micros.php`): inteiros de 1/1 000 000 €. A regra do projeto é "cêntimos, nunca floats", mas as parcelas intermédias (0,06177 € de eletricidade, 0,1420 €/kWh de tarifa) não cabem num cêntimo e arredondá-las desviava o preço final. Caso de referência oficial, fixado em teste: **17 €/kg, 50 g, 3h numa A1 (145 W, 400 €/4000 h, 0,04 €/h), 5 min de trabalho a 8 €/h, tarifa 0,1420 €/kWh, falhas 5 %, margens 40 %/40 % → subtotal 1,998437 €, custo real 2,103618 €, revenda 4,00 €, cliente 7,00 €** — com as duas taxas de IVA a zero, que é como os testes da fórmula a fixam (`Tests\Concerns\PricesWithoutVat`). A 23 % dos dois lados a mesma peça dá **subtotal 1,749407 €, custo real 1,841481 €, os mesmos 4,00 € e 7,00 €, e uma margem direta de 67,64 % em vez de 69,95 %** (`PricingVatTest`).
 
 **A taxa de falhas divide, não soma.** Somar 5 % (custo × 1,05) recupera menos do que se perdeu: a peça falhada também gastou filamento, luz e horas de máquina. Com 100 peças e 5 falhadas são 95 a pagar o custo de 100 — logo `÷ 0,95`. Antes de agosto de 2026 a reserva somava-se, e só sobre filamento + máquina.
 
@@ -118,7 +124,7 @@ lucro líquido     = lucro direto − comissões do canal
 
 **Comissões do canal** (`sales_channel_*`, a zero por omissão): ficam **fora** do custo industrial de propósito — não custam nada produzir, e metidas no custo contaminavam o preço de revenda de peças vendidas por outros canais. Entram só no lucro líquido, e por isso mexer-lhes não move o preço, move o que sobra dele.
 
-Parâmetros globais em `config/pricing.php`, sobrepostos pelas chaves `pricing.*` da tabela `settings` e editáveis em `/admin/definicoes`: tarifa da eletricidade, valor do trabalho, trabalho ativo e preparação em minutos, taxa de falhas, margem de revenda, margem do revendedor, preço mínimo de revenda, comissões do canal. **Fora do config de propósito**: (1) os números da máquina — potência, preço, vida útil, manutenção — que pertencem a cada `printer_profile`, com os `fallback_printer_*` do config só para quando não há nenhuma ativa; (2) o degrau de 0,50 € da revenda e as faixas de arredondamento do retalho, que são regras comerciais fixas.
+Parâmetros globais em `config/pricing.php`, sobrepostos pelas chaves `pricing.*` da tabela `settings` e editáveis em `/admin/definicoes`: tarifa da eletricidade, valor do trabalho, trabalho ativo e preparação em minutos, taxa de falhas, margem de revenda, margem do revendedor, preço mínimo de revenda, comissões do canal, IVA incluído nos custos. **Fora do config de propósito**: (1) os números da máquina — potência, preço, vida útil, manutenção — que pertencem a cada `printer_profile`, com os `fallback_printer_*` do config só para quando não há nenhuma ativa; (2) o degrau de 0,50 € da revenda e as faixas de arredondamento do retalho, que são regras comerciais fixas.
 
 Superfícies: `/admin/calculadora` (simulação livre, estado no URL) e o formulário de variante (com "Aplicar preços"). As duas usam o **mesmo motor no servidor** — a fórmula nunca é espelhada em TypeScript, porque não há runner de testes JS e os números caem em cima das fronteiras de arredondamento. **O modal de produto ficou de fora**: a gramagem e o tempo são dados de produção e editam-se variante a variante; lá em cima escrevem-se só os três preços (revenda, venda, promoção) que servem de molde à matriz.
 

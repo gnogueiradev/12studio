@@ -129,6 +129,29 @@ export function PricingSettingsPanel({ pricing }: Props) {
                     </fieldset>
 
                     <fieldset className="border-t border-border/60 pt-6">
+                        <legend className="text-sm font-medium">IVA</legend>
+                        <p className="mt-1 mb-3 text-sm text-muted-foreground">
+                            Cobras IVA nas vendas e deduzes o das compras, por
+                            isso nenhum dos dois é dinheiro teu: a calculadora
+                            faz a conta toda sem IVA e só o soma no fim, para
+                            chegar ao preço da montra. O IVA da venda é o de
+                            cada produto.
+                        </p>
+                        <div className="grid gap-4 sm:grid-cols-2">
+                            <Field
+                                id="cost_vat_percent"
+                                label="IVA incluído nos custos (%)"
+                                hint="O que vem dentro dos preços que escreves: filamento, impressoras, manutenção, embalagem, componentes e luz. A calculadora tira-o antes de fazer a conta; o teu trabalho fica de fora. Põe 0 se já escreves os custos sem IVA."
+                                value={data.cost_vat_percent}
+                                error={errors.cost_vat_percent}
+                                onChange={(value) =>
+                                    change('cost_vat_percent', value)
+                                }
+                            />
+                        </div>
+                    </fieldset>
+
+                    <fieldset className="border-t border-border/60 pt-6">
                         <legend className="text-sm font-medium">Risco</legend>
                         <div className="mt-3 grid gap-4 sm:grid-cols-2">
                             <Field

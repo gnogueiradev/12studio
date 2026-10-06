@@ -7,10 +7,12 @@ use App\Models\PrinterProfile;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia;
+use Tests\Concerns\PricesWithoutVat;
 use Tests\TestCase;
 
 class PricingCalculatorPageTest extends TestCase
 {
+    use PricesWithoutVat;
     use RefreshDatabase;
 
     private User $admin;
@@ -25,6 +27,9 @@ class PricingCalculatorPageTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        // A formula por baixo do IVA: ver o trait. O IVA esta no PricingVatPageTest.
+        $this->pricesWithoutVat();
 
         $this->admin = User::factory()->admin()->create();
         PrinterProfile::factory()->isDefault()->create([

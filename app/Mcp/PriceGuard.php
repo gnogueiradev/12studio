@@ -18,7 +18,7 @@ use App\Support\Micros;
  * Pede confirmacao quando o preco que o cliente paga:
  *   - passa a zero;
  *   - muda mais de 50% (para cima ou para baixo);
- *   - fica abaixo do custo de producao calculado.
+ *   - fica, depois de tirado o IVA, abaixo do custo de producao calculado.
  */
 final class PriceGuard
 {
@@ -63,10 +63,16 @@ final class PriceGuard
         if ($result !== null && $newEffectiveCents > 0) {
             $costCents = Micros::toCents($result->productionCostMicros);
 
-            if ($newEffectiveCents < $costCents) {
+            // O preco traz IVA e o custo nao. Compara-los tal como estao
+            // deixava passar um preco que so cobre o custo a contar com o
+            // imposto que se vai entregar — e isso ja e vender com prejuizo.
+            $exVatCents = Micros::toCents($result->exVat(Micros::fromCents($newEffectiveCents)));
+
+            if ($exVatCents < $costCents) {
                 $concerns[] = sprintf(
-                    'o preço (%s) fica abaixo do custo de produção (%s)',
+                    'o preço (%s, que são %s sem IVA) fica abaixo do custo de produção (%s)',
                     McpFormat::money($newEffectiveCents)['eur'],
+                    McpFormat::money($exVatCents)['eur'],
                     McpFormat::money($costCents)['eur'],
                 );
             }
