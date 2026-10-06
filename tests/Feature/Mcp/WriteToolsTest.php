@@ -242,6 +242,37 @@ class WriteToolsTest extends TestCase
             ->assertSee('abaixo do custo');
     }
 
+    /**
+     * O preco e com IVA, o custo e sem: comparar um com o outro deixava passar
+     * um preco que so cobre o custo a contar com o imposto. Uma peca de muito
+     * trabalho custa 8,66 EUR; a 10,00 EUR ficam 8,13 depois do IVA.
+     */
+    public function test_a_price_that_only_covers_the_cost_with_the_vat_needs_confirmation(): void
+    {
+        $material = Material::factory()->create(['price_per_kg_cents' => 2000]);
+        $variant = $this->variant([
+            'material_id' => $material->id,
+            'filament_weight_grams' => 10,
+            'printing_time_minutes' => 30,
+            'active_labor_minutes' => 60,
+            'price_cents' => 1500,
+            'wholesale_price_cents' => null,
+        ]);
+
+        $this->writer()->tool(VariantUpdateTool::class, ['variant_id' => $variant->id, 'normal_price' => '10'])
+            ->assertHasErrors()
+            ->assertSee('abaixo do custo')
+            ->assertSee('8,13');
+
+        $this->assertSame(1500, $variant->refresh()->price_cents);
+
+        // 11,50 EUR sao 9,35 depois do IVA: acima do custo, passa.
+        $this->writer()->tool(VariantUpdateTool::class, ['variant_id' => $variant->id, 'normal_price' => '11,50'])
+            ->assertOk();
+
+        $this->assertSame(1150, $variant->refresh()->price_cents);
+    }
+
     public function test_sale_price_can_be_set_and_removed(): void
     {
         $variant = $this->variant();

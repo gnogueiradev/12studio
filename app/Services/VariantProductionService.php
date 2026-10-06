@@ -67,6 +67,9 @@ class VariantProductionService
             $variants = $product->variants()->with('material')->get();
 
             foreach ($variants as $variant) {
+                // A taxa de IVA do preco e a do produto, que ja ca esta.
+                $variant->setRelation('product', $product);
+
                 if ($this->applyCalculatedPriceTo($variant)) {
                     $updated++;
                 } else {

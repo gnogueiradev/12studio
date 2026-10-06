@@ -13,6 +13,17 @@ namespace App\Support;
  *
  * As margens sao todas sobre a VENDA (lucro / preco), e nao sobre o custo. A
  * unica excepcao esta la a dizer que e: o markup do revendedor.
+ *
+ * O IVA separa os campos em dois grupos, e convem nao os misturar:
+ *
+ *   - os PRECOS (revenda, cliente) vem com IVA incluido — sao o que se grava
+ *     na variante e o que a montra mostra;
+ *   - os CUSTOS e os LUCROS sao sem IVA — o imposto que se cobra entrega-se, o
+ *     que se paga deduz-se, e nenhum dos dois e dinheiro da loja.
+ *
+ * Quem faz a ponte sao os acessores `*ExVat*`. "Sem IVA" e nao "liquido" nos
+ * nomes, de proposito: liquido ja quer dizer outra coisa aqui (o lucro depois
+ * das comissoes do canal).
  */
 final readonly class PricingResult
 {
@@ -44,7 +55,40 @@ final readonly class PricingResult
         public int $failureRateBp,
         public int $targetWholesaleMarginBp,
         public int $targetResellerMarginBp,
+        /** O IVA da venda — o do produto — que os dois precos trazem dentro. */
+        public int $vatRateBp,
+        /** O IVA que foi tirado as parcelas compradas. Zero = ja vinham sem ele. */
+        public int $costVatRateBp,
     ) {}
+
+    /**
+     * Um preco com IVA, sem ele. Publico porque nao serve so os dois precos
+     * deste calculo: o preco que alguem escreveu a mao numa variante le-se com
+     * a mesma taxa, e e isto que o travao do MCP compara com o custo.
+     */
+    public function exVat(int $micros): int
+    {
+        return Micros::divRound($micros * Rate::PER_UNIT, Rate::PER_UNIT + $this->vatRateBp);
+    }
+
+    public function wholesalePriceExVatMicros(): int
+    {
+        return $this->exVat($this->wholesalePriceMicros);
+    }
+
+    public function retailPriceExVatMicros(): int
+    {
+        return $this->exVat($this->retailPriceMicros);
+    }
+
+    /**
+     * O IVA dentro do preco ao cliente. Uma diferenca e nao uma multiplicacao,
+     * para as duas partes fecharem sempre o preco ao micro.
+     */
+    public function retailVatMicros(): int
+    {
+        return $this->retailPriceMicros - $this->retailPriceExVatMicros();
+    }
 
     /**
      * Quanto o risco de falhas acrescentou. E uma diferenca e nao uma parcela
@@ -57,28 +101,29 @@ final readonly class PricingResult
     }
 
     /*
-     * O meu lucro, nas duas vendas.
+     * O meu lucro, nas duas vendas. Sempre sobre o que fica depois de entregar
+     * o IVA: e esse o dinheiro que entra, e e sobre ele que a margem se mede.
      */
 
     public function wholesaleProfitMicros(): int
     {
-        return $this->wholesalePriceMicros - $this->productionCostMicros;
+        return $this->wholesalePriceExVatMicros() - $this->productionCostMicros;
     }
 
     public function wholesaleMarginBp(): int
     {
-        return self::marginBp($this->wholesaleProfitMicros(), $this->wholesalePriceMicros);
+        return self::marginBp($this->wholesaleProfitMicros(), $this->wholesalePriceExVatMicros());
     }
 
     /** Vender eu proprio ao cliente: mesmo preco publico, o meu custo. */
     public function directProfitMicros(): int
     {
-        return $this->retailPriceMicros - $this->productionCostMicros;
+        return $this->retailPriceExVatMicros() - $this->productionCostMicros;
     }
 
     public function directMarginBp(): int
     {
-        return self::marginBp($this->directProfitMicros(), $this->retailPriceMicros);
+        return self::marginBp($this->directProfitMicros(), $this->retailPriceExVatMicros());
     }
 
     /** O que sobra da venda direta depois das comissoes do canal. */
@@ -89,27 +134,35 @@ final readonly class PricingResult
 
     public function netDirectMarginBp(): int
     {
-        return self::marginBp($this->netDirectProfitMicros(), $this->retailPriceMicros);
+        return self::marginBp($this->netDirectProfitMicros(), $this->retailPriceExVatMicros());
     }
 
     /*
      * O lucro de quem me compra para revender.
      */
 
+    /** Em euros, depois de ele entregar o IVA dele. */
     public function resellerProfitMicros(): int
     {
-        return $this->retailPriceMicros - $this->wholesalePriceMicros;
+        return $this->retailPriceExVatMicros() - $this->wholesalePriceExVatMicros();
     }
 
+    /**
+     * A margem e o markup saem dos precos COM IVA, ao contrario de tudo o
+     * resto nesta classe. Sao racios entre dois precos com a mesma taxa — o
+     * IVA cai dos dois lados — e assim nao levam o micro de arredondamento de
+     * o tirar a cada um. E o que mantem exata a garantia de que a margem do
+     * revendedor nunca fica abaixo da pedida.
+     */
     public function resellerMarginBp(): int
     {
-        return self::marginBp($this->resellerProfitMicros(), $this->retailPriceMicros);
+        return self::marginBp($this->retailPriceMicros - $this->wholesalePriceMicros, $this->retailPriceMicros);
     }
 
     /** Markup: lucro sobre o CUSTO do revendedor, nao sobre a venda. */
     public function resellerMarkupBp(): int
     {
-        return self::marginBp($this->resellerProfitMicros(), $this->wholesalePriceMicros);
+        return self::marginBp($this->retailPriceMicros - $this->wholesalePriceMicros, $this->wholesalePriceMicros);
     }
 
     /**
@@ -146,10 +199,18 @@ final readonly class PricingResult
             'failureRateBp' => $this->failureRateBp,
             'targetWholesaleMarginBp' => $this->targetWholesaleMarginBp,
             'targetResellerMarginBp' => $this->targetResellerMarginBp,
+            'vatRateBp' => $this->vatRateBp,
+            'costVatRateBp' => $this->costVatRateBp,
 
             'productionCostCents' => Micros::toCents($this->productionCostMicros),
             'wholesalePriceCents' => Micros::toCents($this->wholesalePriceMicros),
             'retailPriceCents' => Micros::toCents($this->retailPriceMicros),
+            // Os mesmos dois precos sem IVA, que e a receita das contas de
+            // lucro. O IVA vai a parte e por diferenca dos CENTIMOS, para as
+            // duas linhas que a pagina mostra somarem o preco que la esta.
+            'wholesalePriceExVatCents' => Micros::toCents($this->wholesalePriceExVatMicros()),
+            'retailPriceExVatCents' => Micros::toCents($this->retailPriceExVatMicros()),
+            'retailVatCents' => Micros::toCents($this->retailPriceMicros) - Micros::toCents($this->retailPriceExVatMicros()),
             'channelFeeCents' => Micros::toCents($this->channelFeeMicros),
             'wholesaleProfitCents' => Micros::toCents($this->wholesaleProfitMicros()),
             'directProfitCents' => Micros::toCents($this->directProfitMicros()),

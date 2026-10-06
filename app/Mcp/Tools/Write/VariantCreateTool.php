@@ -64,7 +64,7 @@ class VariantCreateTool extends WriteTool
         $data = $this->runner->validate(StoreVariantRequest::class, $input, $user, ['product' => $product]);
 
         if (! $request->boolean('confirm')) {
-            $concerns = $this->guard->concerns(null, $this->effectiveCents($data), $this->costProbe($data));
+            $concerns = $this->guard->concerns(null, $this->effectiveCents($data), $this->costProbe($data, $product));
 
             if ($concerns !== []) {
                 return Response::error(PriceGuard::message($concerns));

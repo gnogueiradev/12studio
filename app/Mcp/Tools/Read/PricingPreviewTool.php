@@ -19,7 +19,7 @@ use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
 #[Name('pricing_preview')]
 #[Title('Preço sugerido de uma variante')]
-#[Description('Calcula o custo de produção e os preços sugeridos (retalho e revenda) de uma variante, com a mesma calculadora do backoffice: filamento, energia, depreciação e manutenção da impressora, mão de obra, embalagem e componentes. Compara com o preço atual. Não altera nada. Precisa de a variante ter peso, tempo de impressão e material preenchidos.')]
+#[Description('Calcula o custo de produção e os preços sugeridos (retalho e revenda) de uma variante, com a mesma calculadora do backoffice: filamento, energia, depreciação e manutenção da impressora, mão de obra, embalagem e componentes. Os preços vêm com IVA incluído; os custos e as margens são sem IVA (a loja entrega o que cobra e deduz o que paga), por isso a resposta traz também os preços sem IVA. Compara com o preço atual. Não altera nada. Precisa de a variante ter peso, tempo de impressão e material preenchidos.')]
 #[IsReadOnly]
 #[IsIdempotent]
 class PricingPreviewTool extends StudioTool
@@ -64,6 +64,11 @@ class PricingPreviewTool extends StudioTool
             'suggested' => [
                 'retail_price' => McpFormat::micros($result->retailPriceMicros),
                 'wholesale_price' => McpFormat::micros($result->wholesalePriceMicros),
+                // Os mesmos dois sem IVA: e sobre estes, e nao sobre os de
+                // cima, que as margens la em baixo estao calculadas.
+                'retail_price_ex_vat' => McpFormat::micros($result->retailPriceExVatMicros()),
+                'wholesale_price_ex_vat' => McpFormat::micros($result->wholesalePriceExVatMicros()),
+                'vat_percent' => $result->vatRateBp / 100,
             ],
             'costs' => [
                 'filament' => McpFormat::micros($result->filamentCostMicros),

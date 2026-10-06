@@ -7,10 +7,12 @@ use App\Support\Micros;
 use App\Support\PricingInput;
 use App\Support\PricingResult;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\PricesWithoutVat;
 use Tests\TestCase;
 
 class PricingBatchTest extends TestCase
 {
+    use PricesWithoutVat;
     use RefreshDatabase;
 
     private PricingCalculator $calculator;
@@ -18,6 +20,9 @@ class PricingBatchTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
+
+        // A formula por baixo do IVA: ver o trait. O IVA esta no PricingVatTest.
+        $this->pricesWithoutVat();
 
         $this->calculator = app(PricingCalculator::class);
     }
@@ -39,6 +44,7 @@ class PricingBatchTest extends TestCase
             printerPurchasePriceCents: 40_000,
             printerLifetimeHours: 4_000,
             printerMaintenanceMicrosPerHour: 40_000,
+            vatRateBp: 0,
             packagingCostCents: $packagingCents,
             componentsCostCents: $componentsCents,
             quantity: $quantity,

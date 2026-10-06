@@ -46,6 +46,8 @@ class PricingSettings
 
     public const KEY_SALES_CHANNEL_PERCENTAGE_FEE_BP = 'pricing.sales_channel_percentage_fee_bp';
 
+    public const KEY_COST_VAT_RATE_BP = 'pricing.cost_vat_rate_bp';
+
     /** Todas as chaves que esta seccao possui — usado pelo "repor omissoes". */
     public const KEYS = [
         self::KEY_ELECTRICITY_PRICE_MICROS_PER_KWH,
@@ -58,6 +60,7 @@ class PricingSettings
         self::KEY_MINIMUM_WHOLESALE_PRICE_CENTS,
         self::KEY_SALES_CHANNEL_FIXED_FEE_CENTS,
         self::KEY_SALES_CHANNEL_PERCENTAGE_FEE_BP,
+        self::KEY_COST_VAT_RATE_BP,
     ];
 
     public function __construct(
@@ -122,6 +125,16 @@ class PricingSettings
     }
 
     /**
+     * O IVA que vem dentro dos custos escritos pelo admin, e que a calculadora
+     * lhes tira. Zero = os custos ja estao sem IVA. O IVA da VENDA nao e daqui:
+     * e de cada produto, e chega ao calculo pelo PricingInput.
+     */
+    public function costVatRateBp(): int
+    {
+        return $this->int(self::KEY_COST_VAT_RATE_BP, 'cost_vat_rate_bp');
+    }
+
+    /**
      * A maquina imaginaria, para quando nao ha nenhuma impressora ativa.
      *
      * Nao sao definicoes e nao aparecem no formulario: leem o config direto.
@@ -168,6 +181,7 @@ class PricingSettings
      *     minimum_wholesale_price: string,
      *     channel_fixed_fee: string,
      *     channel_percentage_fee: string,
+     *     cost_vat_percent: string,
      * }
      */
     public function toForm(): array
@@ -183,6 +197,7 @@ class PricingSettings
             'minimum_wholesale_price' => Money::toDecimal($this->minimumWholesalePriceCents()),
             'channel_fixed_fee' => Money::toDecimal($this->salesChannelFixedFeeCents()),
             'channel_percentage_fee' => Rate::toPercent($this->salesChannelPercentageFeeBp()),
+            'cost_vat_percent' => Rate::toPercent($this->costVatRateBp()),
         ];
     }
 
@@ -206,10 +221,11 @@ class PricingSettings
             self::KEY_MINIMUM_WHOLESALE_PRICE_CENTS => Money::fromDecimal((string) $form['minimum_wholesale_price']),
             self::KEY_SALES_CHANNEL_FIXED_FEE_CENTS => Money::fromDecimal((string) $form['channel_fixed_fee']),
             self::KEY_SALES_CHANNEL_PERCENTAGE_FEE_BP => Rate::fromPercent((string) $form['channel_percentage_fee']),
+            self::KEY_COST_VAT_RATE_BP => Rate::fromPercent((string) $form['cost_vat_percent']),
         ];
     }
 
-    /** Volta aos valores de config/pricing.php apagando as dez chaves. */
+    /** Volta aos valores de config/pricing.php apagando todas as chaves. */
     public function resetToDefaults(): void
     {
         foreach (self::KEYS as $key) {

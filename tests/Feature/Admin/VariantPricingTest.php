@@ -9,6 +9,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Testing\TestResponse;
 use Inertia\Testing\AssertableInertia;
+use Tests\Concerns\PricesWithoutVat;
 use Tests\TestCase;
 
 /**
@@ -21,6 +22,7 @@ use Tests\TestCase;
  */
 class VariantPricingTest extends TestCase
 {
+    use PricesWithoutVat;
     use RefreshDatabase;
 
     private User $admin;
@@ -33,10 +35,13 @@ class VariantPricingTest extends TestCase
     {
         parent::setUp();
 
+        // A formula por baixo do IVA: ver o trait. O IVA esta no PricingVatPageTest.
+        $this->pricesWithoutVat();
+
         $this->admin = User::factory()->admin()->create();
         // O painel vive dentro de um produto: sem ele nao ha pagina que o
         // hospede, mesmo quando o calculo nao depende de nada dele.
-        $this->product = Product::factory()->create();
+        $this->product = Product::factory()->create(['vat_rate' => 0]);
 
         PrinterProfile::factory()->isDefault()->create([
             'name' => 'Bambu Lab A1',

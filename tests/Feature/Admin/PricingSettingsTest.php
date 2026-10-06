@@ -8,10 +8,12 @@ use App\Models\User;
 use App\Services\PricingSettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia;
+use Tests\Concerns\PricesWithoutVat;
 use Tests\TestCase;
 
 class PricingSettingsTest extends TestCase
 {
+    use PricesWithoutVat;
     use RefreshDatabase;
 
     private User $admin;
@@ -39,6 +41,7 @@ class PricingSettingsTest extends TestCase
             'minimum_wholesale_price' => '1.50',
             'channel_fixed_fee' => '0.00',
             'channel_percentage_fee' => '0',
+            'cost_vat_percent' => '23',
         ];
     }
 
@@ -54,6 +57,7 @@ class PricingSettingsTest extends TestCase
                 ->where('pricing.wholesale_margin_percent', '40.00')
                 ->where('pricing.reseller_margin_percent', '40.00')
                 ->where('pricing.minimum_wholesale_price', '1.50')
+                ->where('pricing.cost_vat_percent', '23.00')
             );
     }
 
@@ -76,6 +80,9 @@ class PricingSettingsTest extends TestCase
      */
     public function test_saving_the_pricing_settings_changes_the_calculated_price(): void
     {
+        // Os numeros sao os da formula por baixo do IVA: ver o trait.
+        $this->pricesWithoutVat();
+
         PrinterProfile::factory()->isDefault()->create([
             'average_power_watts' => 145,
             'purchase_price_cents' => 40_000,
@@ -102,6 +109,7 @@ class PricingSettingsTest extends TestCase
             ->patch(route('admin.definicoes.precos'), [
                 ...$this->validPayload(),
                 'electricity_price' => '0,2840',
+                'cost_vat_percent' => '0',
             ]);
 
         $this->actingAs($this->admin)

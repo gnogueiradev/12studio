@@ -422,7 +422,7 @@ export default function VariantForm({
             <div className="grid grid-cols-2 gap-4 border-t border-border/60 pt-6">
                 <div className="grid gap-2">
                     <Label htmlFor="wholesale_price">
-                        Preço de revenda (€)
+                        Preço de revenda (€, IVA incluído)
                     </Label>
                     <Input
                         id="wholesale_price"
@@ -473,6 +473,7 @@ export default function VariantForm({
                         ? pricing.result.productionCostCents
                         : null
                 }
+                vatRateBp={pricing.result?.vatRateBp ?? 0}
                 normalCents={normalCents}
                 saleCents={saleCents}
                 wholesaleCents={

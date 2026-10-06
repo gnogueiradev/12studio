@@ -3,6 +3,7 @@
 namespace App\Mcp\Tools\Write\Concerns;
 
 use App\Models\Material;
+use App\Models\Product;
 use App\Models\Variant;
 use App\Support\Money;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
@@ -95,9 +96,12 @@ trait DescribesVariants
      * Variante nao gravada com os valores de producao novos, so para o
      * PriceGuard calcular o custo com eles.
      *
+     * Leva o produto porque a comparacao com o custo faz-se sem IVA, e a taxa
+     * e dele: uma sonda sem produto nao sabia quanto do preco e imposto.
+     *
      * @param  array<string, mixed>  $data
      */
-    protected function costProbe(array $data): Variant
+    protected function costProbe(array $data, Product $product): Variant
     {
         $probe = new Variant([
             'filament_weight_grams' => $data['filament_weight_grams'] ?? null,
@@ -110,6 +114,7 @@ trait DescribesVariants
 
         $materialId = $data['material_id'] ?? null;
         $probe->setRelation('material', $materialId === null ? null : Material::query()->find((int) $materialId));
+        $probe->setRelation('product', $product);
 
         return $probe;
     }

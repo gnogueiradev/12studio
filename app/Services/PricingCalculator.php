@@ -12,14 +12,16 @@ use App\Support\Rate;
  *
  * A cadeia e sempre a mesma:
  *
- *   filamento + eletricidade + depreciacao + manutencao + mao de obra
- *   + embalagem + componentes                                    = SUBTOTAL
+ *   (filamento + eletricidade + depreciacao + manutencao
+ *    + embalagem + componentes) / (1 + IVA dos custos)
+ *   + mao de obra                                                = SUBTOTAL
  *   subtotal / (1 - taxa de falhas)                              = CUSTO REAL
- *   custo real / (1 - margem de revenda)   -> arredonda p/ cima  = REVENDA
+ *   custo real / (1 - margem de revenda) x (1 + IVA da venda)
+ *                                          -> arredonda p/ cima  = REVENDA
  *   revenda / (1 - margem do revendedor)   -> arredonda p/ cima  = CLIENTE
  *
- * Duas coisas nesta formula sao contra-intuitivas e valem os dois paragrafos
- * que se seguem, porque ja aqui esteve a versao ingenua de ambas:
+ * Tres coisas nesta formula sao contra-intuitivas e valem os tres paragrafos
+ * que se seguem, porque ja aqui esteve a versao ingenua de todas:
  *
  * 1. A TAXA DE FALHAS DIVIDE, NAO SOMA. Somar 5% (custo x 1,05) recupera menos
  *    do que se perdeu: a peca que falhou tambem gastou filamento, luz e horas
@@ -33,6 +35,20 @@ use App\Support\Rate;
  *    1,70x sobre o custo sao 41,2% de margem sobre a venda, o que so se
  *    descobre fazendo a conta ao contrario. Pedir a margem e dividir por
  *    (1 - margem) diz exatamente o que se queria dizer.
+ *
+ * 3. O IVA NAO E MEU, NEM A ENTRADA NEM A SAIDA. A loja cobra IVA nas vendas
+ *    e deduz o das compras, por isso a conta faz-se toda SEM IVA: tira-se o
+ *    das parcelas que se compraram e so se soma o da venda no ultimo passo,
+ *    para chegar ao preco da montra. Aqui viveu a versao que ignorava os dois
+ *    — custos com IVA, preco tratado como se fosse todo receita — e a margem
+ *    de 40% que ela mostrava era sobre dinheiro que se entrega ao Estado.
+ *    A mao de obra e a unica parcela que nao perde nada: o meu trabalho nao
+ *    traz IVA para tirar, mas o cliente paga IVA sobre ele. E essa a unica
+ *    diferenca de preco entre as duas versoes; o resto anula-se.
+ *
+ *    Os dois PRECOS saem daqui com IVA incluido, e e com IVA que se
+ *    arredondam: e o numero que vai para a etiqueta. O que e sem IVA sao os
+ *    custos e os lucros — ver PricingResult.
  *
  * O que NAO e configuravel, e vive aqui: o degrau de 0,50 EUR do preco de
  * revenda e as tres faixas de arredondamento do preco ao cliente. Sao regras
@@ -62,6 +78,8 @@ class PricingCalculator
     {
         $divisor = $input->costDivisor();
         $quantity = max(1, $input->quantity);
+        $costVatBp = $this->costVatRateBp();
+        $vatBp = max(0, $input->vatRateBp);
 
         /*
          * Parcelas ao nivel do TRABALHO: em modo lote descrevem a mesa toda.
@@ -72,6 +90,9 @@ class PricingCalculator
          * caso de referencia e erra em qualquer outro — 400 EUR / 3000 h sao
          * 133_333,33 micros/h, e o terco perdido reaparece multiplicado pelas
          * horas da peca.
+         *
+         * Aqui ainda vao COM o IVA com que foram escritas. Sai-lhes mais
+         * abaixo, na mesma divisao que as leva do trabalho para a unidade.
          */
 
         // Sem divisao nenhuma: um centimo sao 10.000 micros e um kg sao 1000 g,
@@ -110,13 +131,14 @@ class PricingCalculator
          * Parcelas ja POR UNIDADE. A embalagem e os componentes nao se dividem
          * pela mesa: doze pecas levam doze sacos e doze imanes.
          */
-        $packaging = Micros::fromCents($input->packagingCostCents);
-        $components = Micros::fromCents($input->componentsCostCents);
+        $packaging = self::unitNet(Micros::fromCents($input->packagingCostCents), 1, $costVatBp);
+        $components = self::unitNet(Micros::fromCents($input->componentsCostCents), 1, $costVatBp);
 
-        $unitFilament = Micros::divRound($filament, $divisor);
-        $unitElectricity = Micros::divRound($electricity, $divisor);
-        $unitDepreciation = Micros::divRound($depreciation, $divisor);
-        $unitMaintenance = Micros::divRound($maintenance, $divisor);
+        $unitFilament = self::unitNet($filament, $divisor, $costVatBp);
+        $unitElectricity = self::unitNet($electricity, $divisor, $costVatBp);
+        $unitDepreciation = self::unitNet($depreciation, $divisor, $costVatBp);
+        $unitMaintenance = self::unitNet($maintenance, $divisor, $costVatBp);
+        // A unica que nao se comprou a ninguem: nao ha IVA para lhe tirar.
         $unitLabor = Micros::divRound($labor, $divisor);
 
         // O subtotal soma as parcelas JA DIVIDIDAS, e nao o total do trabalho a
@@ -137,9 +159,13 @@ class PricingCalculator
 
         $wholesaleMarginBp = $this->marginBp($this->settings->targetWholesaleMarginBp());
         $rawWholesale = max(
-            Micros::divRound($production * Rate::PER_UNIT, Rate::PER_UNIT - $wholesaleMarginBp),
+            // A margem e o IVA na mesma divisao: custo / (1 - margem) e o que
+            // tenho de receber, x (1 + IVA) e o que tenho de pedir para o
+            // receber. Com o IVA a zero e a conta de sempre.
+            Micros::divRound($production * (Rate::PER_UNIT + $vatBp), Rate::PER_UNIT - $wholesaleMarginBp),
             // O chao aplica-se ANTES do arredondamento e ao custo da UNIDADE:
-            // e ele que protege as pecas pequenas, nao a margem.
+            // e ele que protege as pecas pequenas, nao a margem. E um preco
+            // como os outros, portanto com IVA incluido.
             Micros::fromCents($this->settings->minimumWholesalePriceCents()),
         );
         $wholesale = Micros::ceilTo($rawWholesale, self::WHOLESALE_STEP);
@@ -148,12 +174,17 @@ class PricingCalculator
         // que garante que quem me compra para revender consegue mesmo viver da
         // diferenca. Vender eu proprio ao mesmo preco e uma escolha — nao ha
         // dois precos publicos para a mesma peca.
+        //
+        // O IVA nao volta a entrar: a revenda ja o traz, e a margem do
+        // revendedor e um racio entre dois precos com a mesma taxa — da o
+        // mesmo com ou sem ele.
         $resellerMarginBp = $this->marginBp($this->settings->targetResellerMarginBp());
         $rawRetail = Micros::divRound($wholesale * Rate::PER_UNIT, Rate::PER_UNIT - $resellerMarginBp);
         $retail = Micros::ceilTo($rawRetail, self::retailStep($rawRetail));
 
         // Comissoes do canal: fora do custo industrial de proposito (nao custam
-        // nada produzir), so no lucro liquido.
+        // nada produzir), so no lucro liquido. Sobre o preco COM IVA, que e
+        // sobre o que os marketplaces as cobram.
         $channelFee = Micros::fromCents($this->settings->salesChannelFixedFeeCents())
             + Micros::applyBp($retail, $this->settings->salesChannelPercentageFeeBp());
 
@@ -178,6 +209,25 @@ class PricingCalculator
             failureRateBp: $failureRateBp,
             targetWholesaleMarginBp: $wholesaleMarginBp,
             targetResellerMarginBp: $resellerMarginBp,
+            vatRateBp: $vatBp,
+            costVatRateBp: $costVatBp,
+        );
+    }
+
+    /**
+     * Uma parcela COMPRADA: do trabalho para a unidade e sem o IVA que veio
+     * com ela, as duas coisas na mesma divisao.
+     *
+     * Uma so de proposito, pela regra das parcelas la em cima: dividir pela
+     * mesa e depois pelo IVA eram dois arredondamentos onde chega um. E com a
+     * taxa a zero o factor comum cai dos dois lados e isto e exatamente o
+     * divRound($micros, $divisor) que ca estava antes de haver IVA.
+     */
+    private static function unitNet(int $jobMicros, int $divisor, int $costVatBp): int
+    {
+        return Micros::divRound(
+            $jobMicros * Rate::PER_UNIT,
+            $divisor * (Rate::PER_UNIT + $costVatBp),
         );
     }
 
@@ -209,6 +259,16 @@ class PricingCalculator
     private function failureRateBp(): int
     {
         return max(0, min($this->settings->failureRateBp(), Rate::PER_UNIT - 1));
+    }
+
+    /**
+     * O IVA dos custos nunca negativo. Aqui nao ha divisao por zero a evitar —
+     * o denominador e 1 + taxa — mas uma taxa negativa escrita a mao na tabela
+     * `settings` inflacionava todos os custos em silencio.
+     */
+    private function costVatRateBp(): int
+    {
+        return max(0, $this->settings->costVatRateBp());
     }
 
     /** Mesma guarda, pelo mesmo motivo: preco = custo / (1 - margem). */

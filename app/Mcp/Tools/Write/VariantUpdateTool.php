@@ -100,7 +100,7 @@ class VariantUpdateTool extends WriteTool
         $newEffective = $this->effectiveCents($data);
 
         if ($newEffective !== $variant->price_cents && ! $request->boolean('confirm')) {
-            $concerns = $this->guard->concerns($variant, $newEffective, $this->costProbe($data));
+            $concerns = $this->guard->concerns($variant, $newEffective, $this->costProbe($data, $variant->product));
 
             if ($concerns !== []) {
                 return Response::error(PriceGuard::message($concerns));

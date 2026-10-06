@@ -184,8 +184,9 @@ class ProductController extends Controller
             'editing' => $editing,
             // Sem peso nem tempo no URL o `isCalculable()` diz que nao, e isto
             // sai a `result: null` — que e exatamente como o painel de custo
-            // tem de abrir numa variante nova.
-            'pricing' => $this->preview->fromRequest($request),
+            // tem de abrir numa variante nova. Com o produto, para o preco
+            // sugerido levar a taxa de IVA dele e nao a da loja.
+            'pricing' => $this->preview->fromRequest($request, $product),
         ]);
     }
 
@@ -326,7 +327,12 @@ class ProductController extends Controller
             ->orderByDesc('is_default')
             ->orderBy('sku')
             ->get()
-            ->map(function (Variant $variant): array {
+            ->map(function (Variant $variant) use ($product): array {
+                // O preco sugerido precisa da taxa de IVA do produto, que ja
+                // ca esta: sem isto era uma consulta por variante para o ir
+                // buscar outra vez.
+                $variant->setRelation('product', $product);
+
                 $suggested = $this->preview->forVariant($variant);
 
                 return [
