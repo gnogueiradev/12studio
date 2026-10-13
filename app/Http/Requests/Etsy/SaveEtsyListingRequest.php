@@ -62,6 +62,8 @@ class SaveEtsyListingRequest extends AdminFormRequest
             'return_policy_id' => $id,
             'readiness_state_id' => $id,
             'shop_section_id' => $id,
+            // O 12studio acompanha este anuncio sozinho (stock, precos)?
+            'sync_enabled' => ['sometimes', 'boolean'],
 
             // Os atributos da categoria (ver etsy_taxonomy).
             'properties' => ['nullable', 'array', 'max:30'],

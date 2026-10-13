@@ -7,6 +7,8 @@ import { apagar } from '@/routes/admin/produtos';
 type Props = {
     productId: number;
     productName: string;
+    /** O anúncio que o produto tem na Etsy, se tiver: vai atrás. */
+    etsyListingId: number | null;
 };
 
 /**
@@ -15,7 +17,11 @@ type Props = {
  * engano. Fica guardado na mesma, e é por isso que o diálogo diz onde o ir
  * buscar em vez de avisar que não há volta.
  */
-export function DeleteProduct({ productId, productName }: Props) {
+export function DeleteProduct({
+    productId,
+    productName,
+    etsyListingId,
+}: Props) {
     const [confirming, setConfirming] = useState(false);
     const [processing, setProcessing] = useState(false);
 
@@ -51,6 +57,13 @@ export function DeleteProduct({ productId, productName }: Props) {
                             Fica guardado: encontra-lo em "Apagados", no fundo
                             da lista de produtos, e volta como rascunho.
                         </p>
+                        {etsyListingId !== null && (
+                            <p className="mt-2 font-medium text-destructive">
+                                O anúncio que tem na Etsy ({etsyListingId}) é
+                                apagado também, e esse não se recupera:
+                                recuperar o produto não o traz de volta.
+                            </p>
+                        )}
                     </>
                 }
                 confirmLabel="Apagar produto"

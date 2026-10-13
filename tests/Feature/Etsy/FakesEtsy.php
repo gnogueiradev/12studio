@@ -2,15 +2,19 @@
 
 namespace Tests\Feature\Etsy;
 
+use App\Etsy\EtsyListingSync;
 use App\Etsy\EtsySettings;
 use App\Models\Color;
 use App\Models\EtsyConnection;
+use App\Models\EtsyListing;
 use App\Models\Material;
 use App\Models\Product;
+use App\Models\ProductImage;
 use App\Models\Variant;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Sleep;
 
 /**
@@ -255,11 +259,30 @@ trait FakesEtsy
     }
 
     /**
+     * Um produto cujo anuncio ja foi enviado para a Etsy (o 7100), com uma
+     * fotografia la, e que esta la no estado pedido. Precisa do
+     * Storage::fake('public'). Deixa a contagem dos pedidos a zero.
+     */
+    protected function etsyPushedProduct(string $state = 'active', ?Product $product = null): Product
+    {
+        $product ??= $this->etsyReadyProduct();
+        $image = ProductImage::factory()->for($product)->create(['sort_order' => 1]);
+        Storage::disk('public')->put($image->path, 'bytes-da-foto');
+
+        $this->fakeEtsyListingWrites();
+        app(EtsyListingSync::class)->push($product);
+        EtsyListing::query()->where('product_id', $product->id)->update(['state' => $state]);
+        $this->fakeEtsyListingWrites();
+
+        return $product;
+    }
+
+    /**
      * As escritas de um envio de anuncio, todas com resposta: criar o
      * rascunho, atualiza-lo, o inventario (que devolve os ids que a Etsy deu
      * a cada variacao), fotografias, video e apagar.
      *
-     * @param  array<string, mixed>  $overrides  Por chave: create, update, inventory, image, video.
+     * @param  array<string, mixed>  $overrides  Por chave: create, update, inventory, image, video, delete.
      */
     protected function fakeEtsyListingWrites(array $overrides = []): void
     {
@@ -289,8 +312,11 @@ trait FakesEtsy
                 $method === 'PUT' && str_contains($url, '/properties/') => Http::response(['property_id' => (int) basename($url)]),
                 $method === 'POST' && str_ends_with($url, '/shops/4242/listings') => $overrides['create']
                     ?? Http::response(['listing_id' => 7100, 'state' => 'draft', 'url' => 'https://www.etsy.com/listing/7100']),
+                // Mudar o estado (publicar, desativar) devolve o estado pedido.
                 $method === 'PATCH' && preg_match('#/shops/4242/listings/\d+$#', $url) === 1 => $overrides['update']
-                    ?? Http::response(['listing_id' => 7100, 'state' => 'draft']),
+                    ?? Http::response(['listing_id' => (int) basename($url), 'state' => $request->data()['state'] ?? 'draft']),
+                $method === 'DELETE' && preg_match('#/application/listings/\d+$#', $url) === 1 => $overrides['delete']
+                    ?? Http::response('', 204),
                 $method === 'PUT' && str_contains($url, '/inventory') => $overrides['inventory']
                     ?? Http::response(['products' => array_map(fn (array $product, int $index): array => [
                         'product_id' => 9301 + $index,

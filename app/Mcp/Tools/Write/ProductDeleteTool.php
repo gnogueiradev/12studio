@@ -51,6 +51,7 @@ class ProductDeleteTool extends WriteTool
         }
 
         $before = $product->status;
+        $etsyListingId = $product->etsyListing?->etsy_listing_id;
         $this->products->delete($product);
 
         $this->changes = [
@@ -60,7 +61,8 @@ class ProductDeleteTool extends WriteTool
         ];
 
         return Response::structured([
-            'message' => "Produto \"{$product->name}\" apagado. Recupera-se com product_restore.",
+            'message' => "Produto \"{$product->name}\" apagado. Recupera-se com product_restore."
+                .($etsyListingId === null ? '' : " O anúncio {$etsyListingId} está a ser apagado da Etsy; se falhar, sai um aviso e apaga-se com etsy_listing_delete."),
             'id' => $product->id,
             'deleted' => true,
         ]);
@@ -74,8 +76,10 @@ class ProductDeleteTool extends WriteTool
             ->distinct()
             ->count('order_id');
 
+        $etsyListingId = $product->etsyListing?->etsy_listing_id;
+
         return sprintf(
-            'Vais apagar "%s" (%s; %s). Sai das listas e da loja, mas fica guardado: as encomendas e o stock não mexem e recupera-se com product_restore. '
+            'Vais apagar "%s" (%s; %s). Sai das listas e da loja, mas fica guardado: as encomendas e o stock não mexem e recupera-se com product_restore. %s'
             .'Nada foi gravado. Mostra isto ao utilizador e, só se ele confirmar, repete com "confirm": true.',
             $product->name,
             $variants === 1 ? '1 variante' : "{$variants} variantes",
@@ -84,6 +88,8 @@ class ProductDeleteTool extends WriteTool
                 1 => 'aparece em 1 encomenda',
                 default => "aparece em {$orders} encomendas",
             },
+            // A unica parte que nao tem volta.
+            $etsyListingId === null ? '' : "O anúncio {$etsyListingId} que tem na Etsy é APAGADO também, e esse não se recupera (recuperar o produto não o traz de volta). ",
         );
     }
 }

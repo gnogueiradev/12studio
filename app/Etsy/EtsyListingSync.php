@@ -272,6 +272,10 @@ class EtsyListingSync
                 }
             }
 
+            if (array_key_exists('sync_enabled', $data)) {
+                $listing->sync_enabled = (bool) $data['sync_enabled'];
+            }
+
             $listing->save();
 
             foreach ((array) ($data['variants'] ?? []) as $row) {

@@ -62,6 +62,7 @@ class EtsyListingSaveTool extends WriteTool
                 'etsy_price' => $schema->string()->description('Preço próprio na Etsy, em euros ("27,90"). Vazio = o do site (mais a margem global, se houver).'),
                 'enabled' => $schema->boolean()->description('false para esta variante não ser anunciada na Etsy.'),
             ]))->description('Só as variantes que mudam.'),
+            'sync_enabled' => $schema->boolean()->description('false para o 12studio deixar de acompanhar este anúncio sozinho (stock, preços, textos). Os envios pedidos continuam a funcionar.'),
             'excluded_image_ids' => $schema->array()->items($schema->integer())->description('Ids das fotografias do produto que não vão para a Etsy (lista completa; [] = vão todas).'),
             'confirm' => $schema->boolean()->description('Só depois de o utilizador confirmar um preço que a primeira resposta recusou.'),
         ];
@@ -88,7 +89,7 @@ class EtsyListingSaveTool extends WriteTool
         $this->sync->saveContent($product, $data);
 
         $fields = array_values(array_filter(
-            [...EtsyListingSync::CONTENT_FIELDS, 'variants', 'excluded_image_ids'],
+            [...EtsyListingSync::CONTENT_FIELDS, 'sync_enabled', 'variants', 'excluded_image_ids'],
             fn (string $field): bool => array_key_exists($field, $data),
         ));
 

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Etsy\EtsyException;
 use App\Etsy\EtsyInsights;
+use App\Etsy\EtsyListingLifecycle;
 use App\Etsy\EtsyListingPayload;
 use App\Etsy\EtsyListingSync;
 use App\Etsy\EtsyPricePolicy;
@@ -42,6 +43,7 @@ class EtsyProductController extends Controller
     public function __construct(
         private EtsyTokens $tokens,
         private EtsyListingSync $sync,
+        private EtsyListingLifecycle $lifecycle,
         private EtsyPricePolicy $policy,
         private EtsyShipping $shipping,
         private EtsyShop $shop,
@@ -94,6 +96,12 @@ class EtsyProductController extends Controller
                 'pending' => $listing?->last_push_hash !== $payload->hash(),
                 'videoUrl' => $listing?->video_path === null ? null : Storage::disk('public')->url($listing->video_path),
                 'videoOnEtsy' => $listing?->etsy_video_id !== null,
+                // O 12studio acompanha-o sozinho? Foi ele que o tirou de venda?
+                'syncEnabled' => $listing->sync_enabled ?? true,
+                'autoDeactivated' => $listing?->auto_deactivated_at !== null,
+                'imagesOnEtsy' => $listing === null ? 0 : $listing->images->whereNotNull('etsy_image_id')->count(),
+                // O que impede publicar, ja por palavras (null = pode).
+                'publishBlocker' => $listing?->isOnEtsy() ? $this->lifecycle->publishBlocker($product) : null,
             ],
             'own' => $this->content($listing),
             'effective' => [
@@ -166,6 +174,33 @@ class EtsyProductController extends Controller
         }
 
         return back();
+    }
+
+    public function publish(AdminActionRequest $request, Product $product): RedirectResponse
+    {
+        return $this->attempt(function () use ($product): string {
+            $listing = $this->lifecycle->publish($product);
+
+            return "O anúncio {$listing->etsy_listing_id} está à venda na Etsy. O stock e os preços seguem para lá sozinhos.";
+        }, 'Anúncio publicado.');
+    }
+
+    public function deactivate(AdminActionRequest $request, Product $product): RedirectResponse
+    {
+        return $this->attempt(function () use ($product): null {
+            $this->lifecycle->deactivate($product);
+
+            return null;
+        }, 'O anúncio já não está à venda na Etsy. Volta quando o publicares outra vez.');
+    }
+
+    public function destroy(AdminActionRequest $request, Product $product): RedirectResponse
+    {
+        return $this->attempt(function () use ($product): null {
+            $this->lifecycle->delete($product);
+
+            return null;
+        }, 'Anúncio apagado da Etsy. O que preparaste aqui ficou: um novo envio cria um rascunho novo.');
     }
 
     public function uploadVideo(UploadEtsyVideoRequest $request, Product $product): RedirectResponse

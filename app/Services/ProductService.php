@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Etsy\EtsyHooks;
 use App\Models\Product;
 use App\Models\Tag;
 use App\Support\ColorMaterialMatrix;
@@ -17,6 +18,7 @@ class ProductService
         private VariantService $variantService,
         private ImageService $imageService,
         private TagService $tagService,
+        private EtsyHooks $etsy,
     ) {}
 
     /**
@@ -127,6 +129,10 @@ class ProductService
             $product->update(['status' => 'archived']);
             $product->delete();
         });
+
+        // O anuncio dele sai da Etsy — la nao se recupera, e quem apaga foi
+        // avisado disso. Vai numa tarefa: a Etsy em baixo nao desfaz o apagar.
+        $this->etsy->productDeleted($product);
     }
 
     /**

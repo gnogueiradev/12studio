@@ -242,6 +242,105 @@ class EtsyProductPageTest extends TestCase
         Storage::disk('public')->assertMissing('etsy-videos/vaso.mp4');
     }
 
+    // ── Publicar, desativar, apagar ────────────────────────────────────────
+
+    public function test_the_page_says_where_the_listing_stands(): void
+    {
+        $product = $this->etsyPushedProduct('inactive', $this->product);
+        EtsyListing::query()->where('product_id', $product->id)->update(['auto_deactivated_at' => now(), 'sync_enabled' => false]);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.produtos.etsy.show', $product))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('listing.state', 'inactive')
+                ->where('listing.syncEnabled', false)
+                ->where('listing.autoDeactivated', true)
+                ->where('listing.imagesOnEtsy', 1));
+    }
+
+    public function test_publishing_from_the_page(): void
+    {
+        $product = $this->etsyPushedProduct('draft', $this->product);
+
+        $this->actingAs($this->admin)
+            ->from(route('admin.produtos.etsy.show', $product))
+            ->post(route('admin.produtos.etsy.publicar', $product))
+            ->assertRedirect(route('admin.produtos.etsy.show', $product))
+            ->assertSessionHas('inertia.flash_data.toast.type', 'success');
+
+        $this->assertSame('active', EtsyListing::query()->where('product_id', $product->id)->sole()->state);
+    }
+
+    public function test_what_stops_a_publication_comes_back_as_a_message(): void
+    {
+        $product = $this->etsyPushedProduct('draft', $this->product);
+        $product->update(['name' => 'Vaso Espiral XL']);
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.produtos.etsy.publicar', $product))
+            ->assertSessionHas('inertia.flash_data.toast.type', 'error');
+
+        $this->assertSame('draft', EtsyListing::query()->where('product_id', $product->id)->sole()->state);
+    }
+
+    public function test_deactivating_from_the_page(): void
+    {
+        $product = $this->etsyPushedProduct('active', $this->product);
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.produtos.etsy.desativar', $product))
+            ->assertSessionHas('inertia.flash_data.toast.type', 'success');
+
+        $this->assertSame('inactive', EtsyListing::query()->where('product_id', $product->id)->sole()->state);
+    }
+
+    public function test_deleting_the_listing_from_the_page(): void
+    {
+        $product = $this->etsyPushedProduct('active', $this->product);
+
+        $this->actingAs($this->admin)
+            ->delete(route('admin.produtos.etsy.apagar', $product))
+            ->assertSessionHas('inertia.flash_data.toast.type', 'success');
+
+        $request = $this->etsyRequests()->filter(fn (Request $r): bool => $r->method() === 'DELETE')->sole();
+        $this->assertStringEndsWith('/application/listings/7100', $request->url());
+        $this->assertNull(EtsyListing::query()->where('product_id', $product->id)->sole()->etsy_listing_id);
+    }
+
+    public function test_the_sync_can_be_switched_off_on_the_page(): void
+    {
+        $product = $this->etsyPushedProduct('active', $this->product);
+
+        $this->actingAs($this->admin)
+            ->put(route('admin.produtos.etsy.guardar', $product), ['sync_enabled' => false])
+            ->assertSessionHasNoErrors();
+
+        $this->assertFalse(EtsyListing::query()->where('product_id', $product->id)->sole()->sync_enabled);
+    }
+
+    public function test_the_product_page_knows_about_the_listing_before_deleting(): void
+    {
+        $product = $this->etsyPushedProduct('active', $this->product);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.produtos.edit', $product))
+            ->assertInertia(fn (Assert $page) => $page->where('editing.etsyListingId', 7100));
+    }
+
+    public function test_only_admins_change_the_state_of_a_listing(): void
+    {
+        $product = $this->etsyPushedProduct('active', $this->product);
+
+        foreach ([User::factory()->create(), User::factory()->production()->create()] as $user) {
+            $this->actingAs($user)->post(route('admin.produtos.etsy.publicar', $product))->assertForbidden();
+            $this->actingAs($user)->post(route('admin.produtos.etsy.desativar', $product))->assertForbidden();
+            $this->actingAs($user)->delete(route('admin.produtos.etsy.apagar', $product))->assertForbidden();
+        }
+
+        $this->assertSame(0, $this->writes());
+        $this->assertSame(7100, EtsyListing::query()->where('product_id', $product->id)->sole()->etsy_listing_id);
+    }
+
     // ── Quem entra ─────────────────────────────────────────────────────────
 
     public function test_only_admins_reach_the_listing_of_a_product(): void

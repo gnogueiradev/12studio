@@ -178,6 +178,7 @@ export function ProductSidebar({
                 <DeleteProduct
                     productId={editing.product.id}
                     productName={editing.product.name}
+                    etsyListingId={editing.etsyListingId}
                 />
             )}
         </aside>

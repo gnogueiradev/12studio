@@ -320,6 +320,11 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
             Route::post('enviar', [Admin\EtsyProductController::class, 'push'])->name('enviar');
             Route::post('video', [Admin\EtsyProductController::class, 'uploadVideo'])->name('video');
             Route::delete('video/remover', [Admin\EtsyProductController::class, 'removeVideo'])->name('video.remover');
+            // Publicar custa a taxa da Etsy; apagar, la, nao se recupera. O
+            // ecra pergunta antes das tres.
+            Route::post('publicar', [Admin\EtsyProductController::class, 'publish'])->name('publicar');
+            Route::post('desativar', [Admin\EtsyProductController::class, 'deactivate'])->name('desativar');
+            Route::delete('apagar', [Admin\EtsyProductController::class, 'destroy'])->name('apagar');
         });
 
         // Fotografias: shallow como as variantes, mas com URIs proprios por
