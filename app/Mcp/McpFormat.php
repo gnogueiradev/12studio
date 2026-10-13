@@ -63,9 +63,21 @@ final class McpFormat
         }
 
         $tag = self::UNTRUSTED_TAG;
+        $clean = $text;
+
         // Apanha <dados_cliente>, </dados_cliente> e a forma escapada do JSON
-        // <\/dados_cliente>, que um cliente pode escrever tal e qual.
-        $clean = preg_replace('/<\s*\\\\?\s*\/?\s*'.$tag.'\s*>/i', '', $text) ?? '';
+        // <\/dados_cliente>, que um cliente pode escrever tal e qual. Ate nao
+        // sobrar nenhuma: tirada uma so vez, "</dados_</dados_cliente>cliente>"
+        // deixava para tras precisamente a etiqueta que se queria tirar.
+        do {
+            $before = $clean;
+            $clean = preg_replace('/<\s*\\\\?\s*\/?\s*'.$tag.'\s*>/i', '', $clean) ?? '';
+        } while ($clean !== $before);
+
+        // E, por cima disso, nenhum "<" nem ">" sobrevive: sem eles nao ha
+        // etiqueta que se consiga escrever, desta ou de outra forma em que
+        // ainda ninguem pensou. Ficam os parecidos, para o texto se ler.
+        $clean = strtr($clean, ['<' => '‹', '>' => '›']);
 
         return "<{$tag}>".Str::limit(trim($clean), 1000)."</{$tag}>";
     }

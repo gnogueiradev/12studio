@@ -25,7 +25,9 @@ class McpAuditor
     private const SECRET_KEYS = ['password', 'password_confirmation', 'token', 'secret', 'api_key'];
 
     /** Chaves com dados pessoais: ficam mascaradas. */
-    private const PERSONAL_KEYS = ['email', 'phone', 'nif', 'line1', 'line2', 'postal_code', 'address'];
+    // O seguimento conta: com o numero, o site da transportadora mostra para
+    // onde foi a encomenda. E este rasto vai para o #seguranca do Discord.
+    private const PERSONAL_KEYS = ['email', 'phone', 'nif', 'line1', 'line2', 'postal_code', 'address', 'tracking_number', 'tracking_url'];
 
     /** Tamanho maximo de cada valor de texto guardado. */
     private const MAX_STRING = 300;

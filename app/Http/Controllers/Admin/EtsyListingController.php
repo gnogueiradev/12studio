@@ -66,7 +66,7 @@ class EtsyListingController extends Controller
                 'listingId' => $row['listing']['listing_id'] ?? null,
                 'title' => (string) ($row['listing']['title'] ?? ''),
                 'state' => (string) ($row['listing']['state'] ?? ''),
-                'url' => $row['listing']['url'] ?? null,
+                'url' => EtsyPresenter::link($row['listing']['url'] ?? null),
                 'priceCents' => EtsyPresenter::cents($row['listing']['price'] ?? null),
                 'currency' => EtsyPresenter::currency($row['listing']['price'] ?? null),
                 'quantity' => $row['listing']['quantity'] ?? null,

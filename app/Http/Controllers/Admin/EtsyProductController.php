@@ -7,6 +7,7 @@ use App\Etsy\EtsyInsights;
 use App\Etsy\EtsyListingLifecycle;
 use App\Etsy\EtsyListingPayload;
 use App\Etsy\EtsyListingSync;
+use App\Etsy\EtsyPresenter;
 use App\Etsy\EtsyPricePolicy;
 use App\Etsy\EtsyShipping;
 use App\Etsy\EtsyShop;
@@ -89,7 +90,8 @@ class EtsyProductController extends Controller
                 'onEtsy' => $listing?->isOnEtsy() ?? false,
                 'etsyListingId' => $listing?->etsy_listing_id,
                 'state' => $listing?->state,
-                'url' => $listing?->url,
+                // Conferido outra vez a saida: e o que vai para um `href`.
+                'url' => EtsyPresenter::link($listing?->url),
                 'lastPushedAt' => $listing?->last_pushed_at?->toIso8601String(),
                 'lastError' => $listing?->last_error,
                 // Mudou alguma coisa desde o ultimo envio?

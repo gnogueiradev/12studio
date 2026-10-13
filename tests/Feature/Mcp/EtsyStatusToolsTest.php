@@ -137,9 +137,11 @@ class EtsyStatusToolsTest extends TestCase
             'last_name' => 'Silva',
         ])]);
 
+        // De outra pessoa so o nome curto, como nas encomendas.
         $this->mcp()->tool(EtsyUserGetTool::class, ['user_id' => 55])
             ->assertOk()
-            ->assertSee('Ana Silva');
+            ->assertSee('Ana S.')
+            ->assertDontSee('Ana Silva');
 
         $this->assertCount(0, $this->etsyRequests('/user/addresses'));
     }

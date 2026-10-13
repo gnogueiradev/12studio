@@ -31,6 +31,31 @@ class EtsyPresenter
         return (int) round(((int) $money['amount']) * 100 / $divisor);
     }
 
+    /**
+     * Um endereco que a Etsy mandou, so se for mesmo um endereco https da
+     * Etsy. O que vem da API e tratado como vindo de fora: isto acaba num
+     * `href` do backoffice, e um `javascript:` ali corria com a sessao do
+     * administrador. Tudo o resto vira null — o ecra fica sem ligacao, que e
+     * o pior que pode acontecer.
+     */
+    public static function link(mixed $url): ?string
+    {
+        if (! is_string($url) || ! str_starts_with($url, 'https://') || strlen($url) > 500) {
+            return null;
+        }
+
+        // Barras invertidas, espacos e caracteres de controlo nao tem lugar
+        // num endereco — e um browser le "evil.example\.etsy.com" como
+        // evil.example, onde o PHP ve um servidor acabado em .etsy.com.
+        if (preg_match('/[\\\\\s\x00-\x1f\x7f]/', $url) === 1) {
+            return null;
+        }
+
+        $host = parse_url($url, PHP_URL_HOST);
+
+        return is_string($host) && ($host === 'etsy.com' || str_ends_with($host, '.etsy.com')) ? $url : null;
+    }
+
     public static function currency(mixed $money): ?string
     {
         return is_array($money) && is_string($money['currency_code'] ?? null) ? $money['currency_code'] : null;
@@ -65,7 +90,7 @@ class EtsyPresenter
             'shop_id' => $listing['shop_id'] ?? null,
             'title' => self::text($listing['title'] ?? null, $trusted),
             'state' => $listing['state'] ?? null,
-            'url' => $listing['url'] ?? null,
+            'url' => self::link($listing['url'] ?? null),
             'price' => self::money($listing['price'] ?? null),
             'quantity' => $listing['quantity'] ?? null,
             // A referencia tambem e texto livre de quem escreveu o anuncio.
