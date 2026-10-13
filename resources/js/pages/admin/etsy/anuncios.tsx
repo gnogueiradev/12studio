@@ -2,6 +2,7 @@ import { Head, Link, router } from '@inertiajs/react';
 import { Box, ExternalLink, ShieldAlert } from 'lucide-react';
 import { useState } from 'react';
 import { ConfirmDialog } from '@/components/admin/confirm-dialog';
+import { EtsyNav } from '@/components/admin/etsy/etsy-nav';
 import { PageHeader } from '@/components/admin/page-header';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -14,7 +15,6 @@ import {
 } from '@/components/ui/select';
 import { formatCentsIn } from '@/lib/money';
 import { cn } from '@/lib/utils';
-import { index as settingsIndex } from '@/routes/admin/etsy';
 import { desligar, index, ligar } from '@/routes/admin/etsy/anuncios';
 import { edit as editProduct } from '@/routes/admin/produtos';
 
@@ -95,11 +95,8 @@ export default function EtsyListings({
                 <PageHeader
                     title="Anúncios na Etsy"
                     description="O que a loja tem na Etsy, e a que produto do 12studio pertence cada anúncio."
-                >
-                    <Button variant="outline" asChild>
-                        <Link href={settingsIndex()}>Ligação</Link>
-                    </Button>
-                </PageHeader>
+                />
+                <EtsyNav current="anuncios" />
 
                 {!connected && (
                     <Alert className="mt-5 max-w-3xl">

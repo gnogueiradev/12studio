@@ -232,6 +232,48 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
             ->withTrashed()
             ->name('etsy.anuncios.desligar');
 
+        // Envios. Os ids (`profile`, `destination`, ...) sao os da Etsy, nao
+        // modelos nossos: nada disto vive na base de dados. Um URI por acao,
+        // pela mesma razao das definicoes (o Wayfinder).
+        Route::prefix('etsy/envios')->name('etsy.envios.')->group(function (): void {
+            Route::get('/', [Admin\EtsyShippingController::class, 'index'])->name('index');
+            Route::patch('predefinicoes', [Admin\EtsyShippingController::class, 'saveDefaults'])->name('predefinicoes');
+
+            Route::post('perfis/guardar', [Admin\EtsyShippingController::class, 'saveProfile'])->name('perfis.guardar');
+            Route::delete('perfis/{profile}/apagar', [Admin\EtsyShippingController::class, 'deleteProfile'])
+                ->whereNumber('profile')->name('perfis.apagar');
+            Route::post('perfis/{profile}/aplicar', [Admin\EtsyShippingController::class, 'assign'])
+                ->whereNumber('profile')->name('perfis.aplicar');
+
+            Route::post('perfis/{profile}/destinos/guardar', [Admin\EtsyShippingController::class, 'saveDestination'])
+                ->whereNumber('profile')->name('destinos.guardar');
+            Route::delete('perfis/{profile}/destinos/{destination}/apagar', [Admin\EtsyShippingController::class, 'deleteDestination'])
+                ->whereNumber(['profile', 'destination'])->name('destinos.apagar');
+
+            Route::post('perfis/{profile}/upgrades/guardar', [Admin\EtsyShippingController::class, 'saveUpgrade'])
+                ->whereNumber('profile')->name('upgrades.guardar');
+            Route::delete('perfis/{profile}/upgrades/{upgrade}/apagar', [Admin\EtsyShippingController::class, 'deleteUpgrade'])
+                ->whereNumber(['profile', 'upgrade'])->name('upgrades.apagar');
+
+            Route::post('processamento/guardar', [Admin\EtsyShippingController::class, 'saveProcessing'])->name('processamento.guardar');
+            Route::delete('processamento/{definition}/apagar', [Admin\EtsyShippingController::class, 'deleteProcessing'])
+                ->whereNumber('definition')->name('processamento.apagar');
+
+            Route::post('devolucoes/guardar', [Admin\EtsyShippingController::class, 'saveReturnPolicy'])->name('devolucoes.guardar');
+            Route::delete('devolucoes/{policy}/apagar', [Admin\EtsyShippingController::class, 'deleteReturnPolicy'])
+                ->whereNumber('policy')->name('devolucoes.apagar');
+        });
+
+        // A loja em si: textos publicos, seccoes, e a seccao de cada categoria.
+        Route::prefix('etsy/loja')->name('etsy.loja.')->group(function (): void {
+            Route::get('/', [Admin\EtsyShopController::class, 'index'])->name('index');
+            Route::patch('textos', [Admin\EtsyShopController::class, 'updateTexts'])->name('textos');
+            Route::patch('categorias', [Admin\EtsyShopController::class, 'saveSectionMap'])->name('categorias');
+            Route::post('seccoes/guardar', [Admin\EtsyShopController::class, 'saveSection'])->name('seccoes.guardar');
+            Route::delete('seccoes/{section}/apagar', [Admin\EtsyShopController::class, 'deleteSection'])
+                ->whereNumber('section')->name('seccoes.apagar');
+        });
+
         // O formulario do produto tem pagina, ao contrario do dos materiais e
         // do das impressoras: sao seis seccoes, uma galeria, uma matriz de
         // variantes e uma ficha de variante por dentro — dentro de um modal, a
