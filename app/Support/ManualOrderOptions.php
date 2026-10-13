@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Models\Order;
 use App\Models\User;
 use App\Models\Variant;
 
@@ -27,6 +28,10 @@ class ManualOrderOptions
             'customers' => self::customers(),
             'variants' => self::variants(),
             'defaultVatRate' => (int) config('shop.default_vat_rate', 23),
+            // O que se pode escolher a mao. A Etsy fica de fora: as encomendas
+            // dela entram sozinhas.
+            'salesChannels' => Order::MANUAL_SALES_CHANNELS,
+            'paymentMethods' => Order::MANUAL_PAYMENT_METHODS,
         ];
     }
 

@@ -22,7 +22,7 @@ use Illuminate\Support\Carbon;
 class StockMovement extends Model
 {
     public const REASONS = [
-        'sale', 'restock_cancel', 'manual_adjust', 'manual_order', 'initial',
+        'sale', 'restock_cancel', 'manual_adjust', 'manual_order', 'etsy_order', 'initial',
     ];
 
     /**

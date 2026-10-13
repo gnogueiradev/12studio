@@ -2,6 +2,7 @@ import { Head, router } from '@inertiajs/react';
 import { ChevronDown, PlugZap, Send, ShieldAlert, Store } from 'lucide-react';
 import { useState } from 'react';
 import { ConfirmDialog } from '@/components/admin/confirm-dialog';
+import { EtsyNotice } from '@/components/admin/etsy/etsy-nav';
 import { PageHeader } from '@/components/admin/page-header';
 import { Panel } from '@/components/admin/panel';
 import { StatusBadge } from '@/components/admin/status-badge';
@@ -88,6 +89,7 @@ export default function EtsySettings(props: Props) {
                     title="Etsy"
                     description="A loja da Etsy ligada ao 12studio: os produtos daqui tornam-se anúncios lá, e as encomendas de lá entram aqui."
                 />
+                <EtsyNotice />
 
                 <Guide
                     defaultOpen={!configured}

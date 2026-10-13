@@ -82,7 +82,13 @@ class OrderTransitionTool extends WriteTool
 
         return Response::structured([
             'message' => "Encomenda {$order->order_number}: {$before} → {$order->status}."
-                .($order->status === 'shipped' && $order->email !== null ? ' Email de expedição enviado ao cliente.' : ''),
+                .match (true) {
+                    $order->status !== 'shipped' => '',
+                    // Na Etsy quem avisa o comprador e a Etsy.
+                    $order->isFromEtsy() => ' O 12studio não envia email ao comprador da Etsy.',
+                    $order->email !== null => ' Email de expedição enviado ao cliente.',
+                    default => '',
+                },
             'order' => OrderPresenter::detail($order),
         ]);
     }

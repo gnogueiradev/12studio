@@ -36,7 +36,7 @@ import {
     pagamento,
 } from '@/routes/admin/encomendas';
 import { producao } from '@/routes/admin/itens';
-import type { OrderDetail, OrderItemRow } from '@/types/order';
+import type { OrderDetail, OrderEtsySide, OrderItemRow } from '@/types/order';
 import {
     ORDER_STATUSES,
     nextProductionStatus,
@@ -454,6 +454,8 @@ export default function OrdersShow({ order, tagSuggestions }: Props) {
                     </div>
                 )}
 
+                {order.etsy !== null && <EtsySide etsy={order.etsy} />}
+
                 <OrderProgress steps={order.progress} />
 
                 <div className="flex flex-wrap items-start gap-5">
@@ -771,16 +773,23 @@ export default function OrdersShow({ order, tagSuggestions }: Props) {
                                                 <SelectValue />
                                             </SelectTrigger>
                                             <SelectContent>
-                                                {PAYMENT_METHODS.map(
-                                                    (method) => (
-                                                        <SelectItem
-                                                            key={method.value}
-                                                            value={method.value}
-                                                        >
-                                                            {method.label}
-                                                        </SelectItem>
-                                                    ),
-                                                )}
+                                                {/* "Etsy" só existe nas
+                                                    encomendas que vieram de
+                                                    lá: não se escolhe à mão. */}
+                                                {PAYMENT_METHODS.filter(
+                                                    (method) =>
+                                                        method.value !==
+                                                            'etsy' ||
+                                                        order.salesChannel ===
+                                                            'etsy',
+                                                ).map((method) => (
+                                                    <SelectItem
+                                                        key={method.value}
+                                                        value={method.value}
+                                                    >
+                                                        {method.label}
+                                                    </SelectItem>
+                                                ))}
                                             </SelectContent>
                                         </Select>
                                     </div>
@@ -1121,6 +1130,114 @@ export default function OrdersShow({ order, tagSuggestions }: Props) {
                 )}
             </div>
         </>
+    );
+}
+
+/**
+ * O lado da Etsy de uma encomenda que veio de lá: o que o comprador escreveu,
+ * o que a Etsy diz do pagamento, e o que ficou por acertar. O comprador é
+ * avisado pela Etsy — daqui não sai email nenhum para ele.
+ */
+function EtsySide({ etsy }: { etsy: OrderEtsySide }) {
+    return (
+        <section className="flex flex-col gap-3 rounded-xl border border-border/60 bg-card px-4 py-4 text-sm">
+            <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <h2 className="text-[13.5px] font-semibold">
+                    Venda na Etsy · recibo {etsy.receiptId}
+                </h2>
+                <a
+                    href={etsy.url}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-xs text-muted-foreground underline underline-offset-4 hover:text-foreground"
+                >
+                    Abrir na Etsy
+                </a>
+            </div>
+
+            {etsy.needsReview && (
+                <p className="rounded-lg border border-warning/50 bg-warning-soft px-3 py-2 text-warning-soft-foreground">
+                    Esta venda precisa de um olhar
+                    {etsy.unmatchedLines.length > 0
+                        ? `: ${etsy.unmatchedLines
+                              .map(
+                                  (line) =>
+                                      `${line.quantity}× ${line.sku ?? line.title}`,
+                              )
+                              .join(
+                                  ', ',
+                              )} não casou com nenhuma variante do 12studio e entrou como linha livre, sem mexer no stock.`
+                        : ' — vê o que mudou na Etsy.'}
+                </p>
+            )}
+
+            {etsy.buyerMessage !== null && (
+                <div>
+                    <div className="text-xs text-muted-foreground">
+                        Mensagem do comprador
+                    </div>
+                    <p className="whitespace-pre-line">{etsy.buyerMessage}</p>
+                </div>
+            )}
+
+            {etsy.giftMessage !== null && (
+                <div>
+                    <div className="text-xs text-muted-foreground">
+                        É uma oferta — mensagem para acompanhar
+                    </div>
+                    <p className="whitespace-pre-line">{etsy.giftMessage}</p>
+                </div>
+            )}
+
+            <dl className="grid gap-x-6 gap-y-2 sm:grid-cols-4">
+                <div>
+                    <dt className="text-xs text-muted-foreground">
+                        Pago pelo comprador
+                    </dt>
+                    <dd className="tabular-nums">
+                        {etsy.grossCents === null
+                            ? '—'
+                            : formatCents(etsy.grossCents)}
+                    </dd>
+                </div>
+                <div>
+                    <dt className="text-xs text-muted-foreground">
+                        Taxa de processamento
+                    </dt>
+                    <dd className="tabular-nums">
+                        {etsy.feesCents === null
+                            ? '—'
+                            : `−${formatCents(etsy.feesCents)}`}
+                    </dd>
+                </div>
+                <div>
+                    <dt className="text-xs text-muted-foreground">
+                        Líquido do pagamento
+                    </dt>
+                    <dd className="tabular-nums">
+                        {etsy.netCents === null
+                            ? '—'
+                            : formatCents(etsy.netCents)}
+                    </dd>
+                </div>
+                <div>
+                    <dt className="text-xs text-muted-foreground">
+                        Estado na Etsy
+                    </dt>
+                    <dd>{etsy.etsyStatus ?? '—'}</dd>
+                </div>
+            </dl>
+
+            <p className="text-xs text-pretty text-muted-foreground">
+                A taxa de transação e a de publicação não vêm no pagamento:
+                estão no extrato da Etsy.
+                {etsy.taxCents !== null &&
+                    etsy.taxCents > 0 &&
+                    ` A Etsy cobrou ainda ${formatCents(etsy.taxCents)} de imposto ao comprador, que entrega ela.`}{' '}
+                O comprador é avisado pela Etsy; o 12studio não lhe envia
+                emails.
+            </p>
+        </section>
     );
 }
 

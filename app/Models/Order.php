@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 
 /**
@@ -92,10 +93,19 @@ class Order extends Model
     ];
 
     public const PAYMENT_METHODS = [
+        'card', 'multibanco', 'mbway', 'cash', 'bank_transfer', 'vinted', 'etsy', 'other',
+    ];
+
+    public const SALES_CHANNELS = ['website', 'vinted', 'instagram', 'etsy', 'manual'];
+
+    // O que se pode escolher ao registar uma encomenda A MAO. Sem a Etsy: as
+    // encomendas dela entram sozinhas (EtsyOrderImporter), e uma registada a
+    // mao entrava duas vezes e descia o stock duas vezes.
+    public const MANUAL_PAYMENT_METHODS = [
         'card', 'multibanco', 'mbway', 'cash', 'bank_transfer', 'vinted', 'other',
     ];
 
-    public const SALES_CHANNELS = ['website', 'vinted', 'instagram', 'manual'];
+    public const MANUAL_SALES_CHANNELS = ['website', 'vinted', 'instagram', 'manual'];
 
     /**
      * Get the attributes that should be cast.
@@ -150,9 +160,24 @@ class Order extends Model
         return $this->hasMany(StockReservation::class);
     }
 
+    /**
+     * O recibo da Etsy de onde esta encomenda veio, se veio de la.
+     *
+     * @return HasOne<EtsyReceipt, $this>
+     */
+    public function etsyReceipt(): HasOne
+    {
+        return $this->hasOne(EtsyReceipt::class);
+    }
+
     public function isPaid(): bool
     {
         return $this->payment_status === 'paid';
+    }
+
+    public function isFromEtsy(): bool
+    {
+        return $this->sales_channel === 'etsy';
     }
 
     public function isGuest(): bool

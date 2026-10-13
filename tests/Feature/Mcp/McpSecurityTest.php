@@ -109,6 +109,8 @@ class McpSecurityTest extends TestCase
             'etsy_taxonomy', 'etsy_market_listings', 'etsy_market_shops', 'etsy_reviews_list',
             'etsy_shipping_list', 'etsy_sections_list',
             'etsy_listing_preview', 'etsy_pricing_preview',
+            'etsy_receipts_list', 'etsy_receipt_get', 'etsy_transactions_list',
+            'etsy_payments_list', 'etsy_ledger_list',
         ], $tools->pluck('name')->all());
 
         // Todas marcadas como so leitura, para o cliente nao pedir confirmacao.
@@ -121,7 +123,7 @@ class McpSecurityTest extends TestCase
 
         $tools = collect($this->mcp($token, $this->listTools())->assertOk()->json('result.tools'))->keyBy('name');
 
-        $this->assertCount(63, $tools);
+        $this->assertCount(69, $tools);
         $this->assertFalse($tools['variant_update']['annotations']['readOnlyHint'] ?? false);
         // Arquivar e apagar levam o aviso de destrutivo; editar um preco nao.
         $this->assertTrue($tools['product_archive']['annotations']['destructiveHint'] ?? false);

@@ -55,16 +55,24 @@ $alertOnFailure(Schedule::command('alerts:mcp-reads')
     ->withoutOverlapping(), 'alerts:mcp-reads');
 
 // Etsy: os anuncios de acordo com os produtos. O stock avisa sozinho quando
-// mexe; isto apanha o que nao avisa (precos, nomes, um produto arquivado). De
-// noite confere os estados com a Etsy, antes do backup das 04:00. Com a
-// integracao desligada o comando sai logo.
+// mexe; isto apanha o que nao avisa (precos, nomes, um produto arquivado). Com
+// a integracao desligada o comando sai logo.
 $alertOnFailure(Schedule::command('etsy:sync')
     ->everyFifteenMinutes()
     ->withoutOverlapping(), 'etsy:sync');
 
+// De quatro em quatro horas, e nao so de noite: os termos da API da Etsy nao
+// deixam mostrar o estado de um anuncio com mais de seis horas.
 $alertOnFailure(Schedule::command('etsy:sync --full')
-    ->dailyAt('03:30')
+    ->everyFourHours(30)
     ->withoutOverlapping(), 'etsy:sync --full');
+
+// As encomendas da Etsy: entram sozinhas, descem o stock e aparecem no
+// quadro de producao. E esta a janela em que uma peca pode ser vendida nos
+// dois lados; o envio de stock para a Etsy importa primeiro, por isso mesmo.
+$alertOnFailure(Schedule::command('etsy:import-orders')
+    ->everyFiveMinutes()
+    ->withoutOverlapping(), 'etsy:import-orders');
 
 // Batimento: o /up (healthcheck do Docker) avisa se isto parar.
 Schedule::call(fn () => app(SystemAlerts::class)->heartbeat())

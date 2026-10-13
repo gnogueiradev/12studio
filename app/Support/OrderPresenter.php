@@ -2,6 +2,7 @@
 
 namespace App\Support;
 
+use App\Models\EtsyReceipt;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\OrderItemStatusHistory;
@@ -66,6 +67,42 @@ class OrderPresenter
             'progress' => self::progress($order),
             'items' => $order->items->map(self::item(...))->all(),
             'timeline' => self::timeline($order),
+            'etsy' => self::etsy($order),
+        ];
+    }
+
+    /**
+     * O lado da Etsy de uma encomenda que veio de la: o recibo, o que o
+     * comprador escreveu, e o que a Etsy diz do pagamento.
+     *
+     * @return array<string, mixed>|null
+     */
+    public static function etsy(Order $order): ?array
+    {
+        $receipt = $order->isFromEtsy() ? $order->etsyReceipt : null;
+
+        if ($receipt === null) {
+            return null;
+        }
+
+        $totals = $receipt->totals ?? [];
+        $cents = fn (string $key): ?int => is_numeric($totals[$key] ?? null) ? (int) $totals[$key] : null;
+
+        return [
+            'receiptId' => $receipt->etsy_receipt_id,
+            'url' => $receipt->etsyUrl(),
+            'etsyStatus' => $receipt->etsy_status,
+            'needsReview' => $receipt->status === EtsyReceipt::STATUS_NEEDS_REVIEW,
+            'buyerMessage' => $receipt->buyer_message,
+            'giftMessage' => $receipt->gift_message,
+            'unmatchedLines' => $receipt->unmatched_lines ?? [],
+            'grossCents' => $cents('gross_cents'),
+            // So a taxa de processamento do pagamento; as outras taxas da
+            // Etsy estao no extrato dela.
+            'feesCents' => $cents('fees_cents'),
+            'netCents' => $cents('net_cents'),
+            'taxCents' => $cents('tax_cents'),
+            'shippedOnEtsyAt' => $receipt->shipped_on_etsy_at?->format('Y-m-d H:i'),
         ];
     }
 

@@ -198,6 +198,99 @@ class EtsyApi
         $this->client->delete("/shops/{$shopId}/listings/{$listingId}/videos/{$videoId}");
     }
 
+    // ── Encomendas: recibos, linhas, pagamentos, extrato ───────────────────
+
+    /**
+     * Os recibos (encomendas) da loja (getShopReceipts).
+     *
+     * @param  array<string, mixed>  $query  min_last_modified, min_created, was_paid, was_shipped, sort_on, limit, offset…
+     * @return array<array-key, mixed>
+     */
+    public function receipts(int $shopId, array $query = []): array
+    {
+        return $this->client->get("/shops/{$shopId}/receipts", $query);
+    }
+
+    /**
+     * Um recibo, com as linhas, os envios e os reembolsos (getShopReceipt).
+     *
+     * @return array<array-key, mixed>
+     */
+    public function receipt(int $shopId, int $receiptId): array
+    {
+        return $this->client->get("/shops/{$shopId}/receipts/{$receiptId}");
+    }
+
+    /**
+     * @return array<array-key, mixed>
+     */
+    public function receiptTransactions(int $shopId, int $receiptId): array
+    {
+        return $this->client->get("/shops/{$shopId}/receipts/{$receiptId}/transactions");
+    }
+
+    /**
+     * @param  array<string, mixed>  $query  limit, offset
+     * @return array<array-key, mixed>
+     */
+    public function listingTransactions(int $shopId, int $listingId, array $query = []): array
+    {
+        return $this->client->get("/shops/{$shopId}/listings/{$listingId}/transactions", $query);
+    }
+
+    /**
+     * @param  array<string, mixed>  $query  limit, offset
+     * @return array<array-key, mixed>
+     */
+    public function shopTransactions(int $shopId, array $query = []): array
+    {
+        return $this->client->get("/shops/{$shopId}/transactions", $query);
+    }
+
+    /**
+     * @return array<array-key, mixed>
+     */
+    public function transaction(int $shopId, int $transactionId): array
+    {
+        return $this->client->get("/shops/{$shopId}/transactions/{$transactionId}");
+    }
+
+    /**
+     * O pagamento de um recibo: bruto, taxa de processamento e liquido
+     * (getShopPaymentByReceiptId).
+     *
+     * @return array<array-key, mixed>
+     */
+    public function receiptPayments(int $shopId, int $receiptId): array
+    {
+        return $this->client->get("/shops/{$shopId}/receipts/{$receiptId}/payments");
+    }
+
+    /**
+     * Pagamentos pelos seus ids (getPayments). A Etsy nao os da por datas:
+     * para isso vai-se ao extrato.
+     *
+     * @param  array<int, int>  $paymentIds
+     * @return array<array-key, mixed>
+     */
+    public function payments(int $shopId, array $paymentIds): array
+    {
+        return $this->client->get("/shops/{$shopId}/payments", ['payment_ids' => $paymentIds]);
+    }
+
+    /**
+     * O extrato da conta de pagamentos, entre duas datas
+     * (getShopPaymentAccountLedgerEntries). E aqui que estao TODAS as taxas:
+     * transacao, publicacao, processamento.
+     *
+     * @param  array<string, mixed>  $query  min_created, max_created, limit, offset
+     * @return array<array-key, mixed>
+     */
+    public function ledgerEntries(int $shopId, array $query): array
+    {
+        return $this->client->get("/shops/{$shopId}/payment-account/ledger-entries", $query);
+    }
+
     // ── A loja: textos e seccoes ───────────────────────────────────────────
 
     /**

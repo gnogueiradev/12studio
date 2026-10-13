@@ -41,7 +41,7 @@ class OrderSetPaymentStatusTool extends WriteTool
         return [
             ...$this->orderLookupSchema($schema),
             'payment_status' => $schema->string()->enum(self::ALLOWED)->required(),
-            'payment_method' => $schema->string()->enum(Order::PAYMENT_METHODS),
+            'payment_method' => $schema->string()->enum(Order::MANUAL_PAYMENT_METHODS),
             'note' => $schema->string()->max(300),
         ];
     }

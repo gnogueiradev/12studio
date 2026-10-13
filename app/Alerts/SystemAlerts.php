@@ -161,6 +161,24 @@ class SystemAlerts
     }
 
     /**
+     * A importacao de encomendas da Etsy nao conseguiu falar com ela. Corre
+     * de 5 em 5 minutos: avisa uma vez de seis em seis horas enquanto durar.
+     */
+    public function etsyImportFailed(string $reason): void
+    {
+        try {
+            if (! Cache::add('alerts:etsy-import-failed', true, now()->addHours(6))) {
+                return;
+            }
+
+            $this->sender->send(AlertChannel::SYSTEM, DiscordMessage::make('🛍️ Etsy — a importação de encomendas falhou', DiscordMessage::WARNING)
+                ->description(Str::limit($reason, 1500))
+                ->field('O que acontece', 'As vendas feitas na Etsy não entram até isto passar; entram todas a seguir, sozinhas. Enquanto durar, o stock do 12studio não sabe delas.', inline: false));
+        } catch (Throwable) {
+        }
+    }
+
+    /**
      * O scheduler bate a cada minuto. Se o ultimo aviso foi "parado", este
      * batimento avisa que voltou.
      */

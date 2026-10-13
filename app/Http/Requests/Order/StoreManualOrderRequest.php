@@ -59,9 +59,9 @@ class StoreManualOrderRequest extends FormRequest
             'phone' => ['nullable', 'string', 'max:30'],
             'nif' => ['nullable', 'string', 'max:20'],
 
-            'sales_channel' => ['required', Rule::in(Order::SALES_CHANNELS)],
+            'sales_channel' => ['required', Rule::in(Order::MANUAL_SALES_CHANNELS)],
             'external_order_reference' => ['nullable', 'string', 'max:100'],
-            'payment_method' => ['required', Rule::in(Order::PAYMENT_METHODS)],
+            'payment_method' => ['required', Rule::in(Order::MANUAL_PAYMENT_METHODS)],
             'payment_status' => ['required', Rule::in(['pending', 'paid'])],
 
             'shipping_price' => ['required', 'numeric', 'min:0', 'max:9999.99'],
