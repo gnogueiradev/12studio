@@ -219,7 +219,14 @@ export type OrderEtsySide = {
     netCents: number | null;
     /** Imposto cobrado ao comprador e entregue pela Etsy. */
     taxCents: number | null;
+    /** Quando a Etsy passou a mostrá-la como enviada. */
     shippedOnEtsyAt: string | null;
+    /** Quando o envio foi dito à Etsy a partir daqui. */
+    shipmentSentAt: string | null;
+    /** O que a Etsy respondeu, se recusou o envio. */
+    shipmentProblem: string | null;
+    /** As transportadoras que a Etsy conhece; as outras vão como "other". */
+    carriers: string[];
 };
 
 export type OrderDetail = {

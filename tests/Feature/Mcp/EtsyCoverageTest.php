@@ -85,10 +85,7 @@ class EtsyCoverageTest extends TestCase
      * Ferramentas do mapa que ainda nao existem, com a fase do plano em que
      * entram. Quando uma fase fecha, as linhas dela saem daqui.
      */
-    private const PENDING = [
-        // Fase 5 — envio
-        'etsy_receipt_update', 'etsy_order_ship',
-    ];
+    private const PENDING = [];
 
     public function test_the_map_still_has_the_forty_one_capabilities(): void
     {

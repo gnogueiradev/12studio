@@ -196,6 +196,9 @@ final class EtsyReceiptPresenter
             'net' => $cents('net_cents'),
             'tax_collected_by_etsy' => $cents('tax_cents'),
             'shipped_on_etsy_at' => $row->shipped_on_etsy_at?->format('Y-m-d H:i'),
+            // O envio foi dito a Etsy daqui? Se a Etsy recusou, porque.
+            'shipment_sent_to_etsy' => $row->tracking_pushed_at !== null,
+            'shipment_problem' => $row->tracking_push_error,
             'url' => $row->etsyUrl(),
         ];
     }

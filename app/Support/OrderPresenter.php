@@ -2,6 +2,8 @@
 
 namespace App\Support;
 
+use App\Etsy\EtsyException;
+use App\Etsy\EtsyShipping;
 use App\Models\EtsyReceipt;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -103,7 +105,27 @@ class OrderPresenter
             'netCents' => $cents('net_cents'),
             'taxCents' => $cents('tax_cents'),
             'shippedOnEtsyAt' => $receipt->shipped_on_etsy_at?->format('Y-m-d H:i'),
+            // O envio dito a Etsy daqui, e o que ela respondeu se recusou.
+            'shipmentSentAt' => $receipt->tracking_pushed_at?->format('Y-m-d H:i'),
+            'shipmentProblem' => $receipt->tracking_push_error,
+            'carriers' => self::etsyCarriers(),
         ];
+    }
+
+    /**
+     * Os nomes das transportadoras que a Etsy conhece, para o campo da
+     * transportadora os sugerir (as outras vao como "other"). Em cache; se a
+     * Etsy nao responder, a pagina abre na mesma sem sugestoes.
+     *
+     * @return array<int, string>
+     */
+    private static function etsyCarriers(): array
+    {
+        try {
+            return array_values(array_filter(array_column(app(EtsyShipping::class)->carriers(), 'name'), 'is_string'));
+        } catch (EtsyException) {
+            return [];
+        }
     }
 
     /**

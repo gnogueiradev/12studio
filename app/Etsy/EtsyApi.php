@@ -222,6 +222,31 @@ class EtsyApi
     }
 
     /**
+     * Diz a Etsy que um recibo foi enviado (createReceiptShipment). Em JSON.
+     * Sem `tracking_code` e `carrier_name` so o marca como enviado. Cada
+     * chamada aceite e um email da Etsy ao comprador: quem chama NAO repete
+     * isto sozinho.
+     *
+     * @param  array<string, mixed>  $shipment  tracking_code, carrier_name, note_to_buyer, send_bcc
+     * @return array<array-key, mixed>
+     */
+    public function createReceiptShipment(int $shopId, int $receiptId, array $shipment): array
+    {
+        return $this->client->postJson("/shops/{$shopId}/receipts/{$receiptId}/tracking", $shipment);
+    }
+
+    /**
+     * As marcas de um recibo (updateShopReceipt): was_paid, was_shipped.
+     *
+     * @param  array<string, bool>  $data
+     * @return array<array-key, mixed>
+     */
+    public function updateReceipt(int $shopId, int $receiptId, array $data): array
+    {
+        return $this->client->putForm("/shops/{$shopId}/receipts/{$receiptId}", $data);
+    }
+
+    /**
      * @return array<array-key, mixed>
      */
     public function receiptTransactions(int $shopId, int $receiptId): array
