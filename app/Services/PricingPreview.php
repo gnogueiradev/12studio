@@ -41,6 +41,35 @@ class PricingPreview
      */
     public function fromRequest(PricingPreviewRequest $request, ?Product $product = null): array
     {
+        $simulation = $this->simulate($request, $product);
+
+        return [
+            'result' => $simulation['result']?->toArray(),
+            'printerProfileId' => $simulation['printer']?->id,
+            'hourlyCostMicros' => $simulation['hourlyCostMicros'],
+            'usingFallbackRate' => $simulation['printer'] === null,
+        ];
+    }
+
+    /**
+     * O calculo de um pedido, com o resultado ainda em objeto.
+     *
+     * O fromRequest() achata-o para o Inertia; o MCP quer os acessores do
+     * PricingResult (margens, precos sem IVA) e a impressora usada pelo nome.
+     * Os dois passam por aqui para a peca solta do Claude e a da pagina
+     * /admin/calculadora nao poderem dar numeros diferentes.
+     *
+     * `printer` a null quer dizer que nao ha impressora ativa nenhuma e que a
+     * maquina veio do config.
+     *
+     * @return array{
+     *     result: PricingResult|null,
+     *     printer: PrinterProfile|null,
+     *     hourlyCostMicros: int,
+     * }
+     */
+    public function simulate(PricingPreviewRequest $request, ?Product $product = null): array
+    {
         $printer = $this->printers->resolve($request->printerProfileId());
 
         // Sem impressora ativa nenhuma, os numeros da maquina vem do config e a
@@ -64,17 +93,16 @@ class PricingPreview
                 vatRateBp: $this->vatRateBp($product),
                 mode: $request->mode(),
                 quantity: $request->quantity(),
-            )->toArray()
+            )
             : null;
 
         return [
             'result' => $result,
-            'printerProfileId' => $printer?->id,
+            'printer' => $printer,
             // O agregado, so para a pagina poder escrever "0,16 EUR/h". O
             // calculo a serio nao passa por ele: parte dos MINUTOS e faz uma
             // divisao so por parcela. Ver PrinterProfile::hourlyCostMicros().
             'hourlyCostMicros' => $machine->hourlyCostMicros($this->settings->electricityPriceMicrosPerKwh()),
-            'usingFallbackRate' => $printer === null,
         ];
     }
 

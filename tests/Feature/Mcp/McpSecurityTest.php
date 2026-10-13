@@ -102,9 +102,9 @@ class McpSecurityTest extends TestCase
         $tools = collect($this->mcp($token, $this->listTools())->assertOk()->json('result.tools'));
 
         $this->assertEqualsCanonicalizing([
-            'whoami', 'products_list', 'product_get', 'pricing_preview', 'stock_low',
-            'stock_movements', 'categories_list', 'tags_list', 'colors_list',
-            'materials_list', 'orders_list', 'order_get',
+            'whoami', 'products_list', 'product_get', 'pricing_preview', 'pricing_calculate',
+            'stock_low', 'stock_movements', 'categories_list', 'tags_list', 'colors_list',
+            'materials_list', 'printers_list', 'orders_list', 'order_get',
         ], $tools->pluck('name')->all());
 
         // Todas marcadas como so leitura, para o cliente nao pedir confirmacao.
@@ -117,7 +117,7 @@ class McpSecurityTest extends TestCase
 
         $tools = collect($this->mcp($token, $this->listTools())->assertOk()->json('result.tools'))->keyBy('name');
 
-        $this->assertCount(33, $tools);
+        $this->assertCount(35, $tools);
         $this->assertFalse($tools['variant_update']['annotations']['readOnlyHint'] ?? false);
         // Arquivar leva o aviso de destrutivo; editar um preco nao.
         $this->assertTrue($tools['product_archive']['annotations']['destructiveHint'] ?? false);

@@ -7,7 +7,9 @@ use App\Mcp\Tools\Read\ColorsListTool;
 use App\Mcp\Tools\Read\MaterialsListTool;
 use App\Mcp\Tools\Read\OrderGetTool;
 use App\Mcp\Tools\Read\OrdersListTool;
+use App\Mcp\Tools\Read\PricingCalculateTool;
 use App\Mcp\Tools\Read\PricingPreviewTool;
+use App\Mcp\Tools\Read\PrintersListTool;
 use App\Mcp\Tools\Read\ProductGetTool;
 use App\Mcp\Tools\Read\ProductsListTool;
 use App\Mcp\Tools\Read\StockLowTool;
@@ -65,7 +67,7 @@ class StudioServer extends Server
     /**
      * O tools/list e paginado (15 por omissao). Nem todos os clientes seguem
      * o nextCursor, e uma ferramenta na pagina 2 e uma ferramenta que o
-     * Claude nunca ve — com ~22, cabem todas numa pagina.
+     * Claude nunca ve — com ~35, cabem todas numa pagina.
      */
     public int $defaultPaginationLength = 50;
 
@@ -78,12 +80,14 @@ class StudioServer extends Server
         ProductsListTool::class,
         ProductGetTool::class,
         PricingPreviewTool::class,
+        PricingCalculateTool::class,
         StockLowTool::class,
         StockMovementsTool::class,
         CategoriesListTool::class,
         TagsListTool::class,
         ColorsListTool::class,
         MaterialsListTool::class,
+        PrintersListTool::class,
         OrdersListTool::class,
         OrderGetTool::class,
         // Escrita (so aparecem a chaves com mcp:write)

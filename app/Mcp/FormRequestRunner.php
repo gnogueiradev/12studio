@@ -44,6 +44,31 @@ final class FormRequestRunner
      */
     public function validate(string $class, array $input, User $user, array $routeParameters = []): array
     {
+        /** @var array<string, mixed> $validated */
+        $validated = $this->resolve($class, $input, $user, $routeParameters)->validated();
+
+        return $validated;
+    }
+
+    /**
+     * O pedido ja validado, em vez de so os campos.
+     *
+     * Para os FormRequest que sao mais do que regras: o PricingPreviewRequest
+     * sabe juntar horas e minutos, ler o preco/kg do material e dizer se ha
+     * conta a fazer — e quem o consome pede-lhe isso, nao um array.
+     *
+     * @template TRequest of FormRequest
+     *
+     * @param  class-string<TRequest>  $class
+     * @param  array<string, mixed>  $input
+     * @param  array<string, mixed>  $routeParameters
+     * @return TRequest
+     *
+     * @throws ValidationException
+     * @throws AuthorizationException
+     */
+    public function resolve(string $class, array $input, User $user, array $routeParameters = []): FormRequest
+    {
         $base = Request::create('/mcp', 'POST', $input);
 
         /** @var TRequest $request */
@@ -63,9 +88,6 @@ final class FormRequestRunner
 
         $request->validateResolved();
 
-        /** @var array<string, mixed> $validated */
-        $validated = $request->validated();
-
-        return $validated;
+        return $request;
     }
 }
