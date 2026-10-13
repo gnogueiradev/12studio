@@ -58,7 +58,9 @@ final class OrderPresenter
             'external_reference' => McpFormat::untrusted($order->external_order_reference),
             'next_statuses' => BackofficeOrderPresenter::availableStatuses($order),
             'customer' => [
-                'name' => McpFormat::untrusted($order->customer_name),
+                // De um comprador da Etsy so o nome curto, tambem no detalhe:
+                // os termos dela pedem o minimo, e isto vai para a Anthropic.
+                'name' => McpFormat::untrusted($order->isFromEtsy() ? McpFormat::shortName($order->customer_name) : $order->customer_name),
                 'email' => McpFormat::mask($order->email),
                 'phone' => McpFormat::mask($order->phone),
                 'city' => McpFormat::untrusted(is_string($city) ? $city : null),

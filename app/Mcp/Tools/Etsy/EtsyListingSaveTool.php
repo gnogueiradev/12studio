@@ -23,7 +23,7 @@ use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
 
 #[Name('etsy_listing_save')]
 #[Title('Acertar o anúncio de um produto para a Etsy')]
-#[Description('Guarda NO 12STUDIO o que o anúncio de um produto diz de próprio na Etsy: título, descrição (texto simples), etiquetas (até 13, 20 caracteres cada), materiais, categoria ("taxonomy_id", ver etsy_taxonomy), atributos da categoria ("properties"), secção da loja, perfis de envio/processamento/devolução, o preço Etsy de cada variante ("variants": variant_id + etsy_price em euros, IVA incluído; "enabled": false para não a anunciar) e as fotografias que NÃO vão ("excluded_image_ids" — a lista completa das excluídas). Manda só o que muda; um valor vazio tira o conteúdo próprio e volta a valer o do produto. NÃO envia nada para a Etsy: isso é etsy_listing_push. Um preço suspeito — mais de 50% de diferença do site, ou abaixo do custo — é recusado até o utilizador confirmar e repetires com "confirm": true.')]
+#[Description('Guarda NO 12STUDIO o que o anúncio de um produto diz de próprio na Etsy: título, descrição (texto simples), etiquetas (até 13, 20 caracteres cada), materiais, categoria ("taxonomy_id", ver etsy_taxonomy), atributos da categoria ("properties"), secção da loja, perfis de envio/processamento/devolução, o preço Etsy de cada variante ("variants": variant_id + etsy_price em euros, IVA incluído; "enabled": false para não a anunciar) e as fotografias que NÃO vão ("excluded_image_ids" — a lista completa das excluídas). Manda só o que muda; um valor vazio tira o conteúdo próprio e volta a valer o do produto. NÃO envia nada para a Etsy: isso é etsy_listing_push — COM UMA EXCEÇÃO: num anúncio que já está à venda e que o 12studio mantém em dia, o que guardares segue para a Etsy sozinho em minutos; nesse caso a primeira chamada só avisa e é preciso "confirm": true. Um preço suspeito — mais de 50% de diferença do site, ou abaixo do custo — é recusado até o utilizador confirmar e repetires com "confirm": true.')]
 #[IsDestructive(false)]
 #[IsIdempotent]
 class EtsyListingSaveTool extends WriteTool
@@ -86,6 +86,17 @@ class EtsyListingSaveTool extends WriteTool
             }
         }
 
+        $listing = $product->etsyListing;
+        $turnsSyncOff = array_key_exists('sync_enabled', $data) && ! $data['sync_enabled'];
+        $live = $listing !== null && $listing->goesLiveByItself() && ! $turnsSyncOff;
+
+        // Num anuncio a venda que o 12studio acompanha, guardar JA E enviar:
+        // a sincronizacao leva-o para a Etsy em minutos, sem passar pelo
+        // etsy_listing_push (e pela confirmacao dele).
+        if ($live && ! $request->boolean('confirm')) {
+            return Response::error("O anúncio {$listing->etsy_listing_id} de \"{$product->name}\" está à venda na Etsy e o 12studio mantém-no em dia: o que guardares aqui segue para lá sozinho, em minutos, e os compradores veem-no. Nada foi gravado. Mostra isto ao utilizador e, só se ele confirmar, repete com \"confirm\": true.");
+        }
+
         $this->sync->saveContent($product, $data);
 
         $fields = array_values(array_filter(
@@ -98,7 +109,9 @@ class EtsyListingSaveTool extends WriteTool
         $payload = $this->sync->payload($product->fresh() ?? $product);
 
         return Response::structured([
-            'message' => "Guardado no 12studio para \"{$product->name}\". Nada foi para a Etsy: envia com etsy_listing_push.",
+            'message' => $live
+                ? "Guardado para \"{$product->name}\". O anúncio está à venda e sincronizado: segue para a Etsy sozinho, em minutos (ou já, com etsy_listing_push)."
+                : "Guardado no 12studio para \"{$product->name}\". Nada foi para a Etsy: envia com etsy_listing_push.",
             'saved' => $fields,
             'ready' => $payload->isReady(),
             'blockers' => $payload->blockers,

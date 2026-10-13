@@ -10,6 +10,7 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\OrderItemStatusHistory;
 use App\Models\OrderStatusHistory;
+use App\Models\StockMovement;
 use App\Models\Tag;
 use App\Models\User;
 use App\Models\Variant;
@@ -256,6 +257,15 @@ class OrderService
                 if ($variant instanceof Variant && $fulfillmentMode === 'in_stock'
                     && ! $this->stockService->decrement($variant, $item->qty, $data['stock_reason'], $order)) {
                     $short[] = $variant->sku;
+
+                    // Nao chega para tudo, mas o que houver e desta encomenda:
+                    // sai da prateleira, senao continuava a venda.
+                    $variant->refresh();
+                    $available = min($item->qty, $variant->stock - $variant->reserved_stock);
+
+                    if ($available > 0) {
+                        $this->stockService->decrement($variant, $available, $data['stock_reason'], $order, null, 'Só havia parte do que foi vendido.');
+                    }
                 }
             }
 
@@ -719,10 +729,46 @@ class OrderService
     }
 
     /**
-     * Cancelar devolve a prateleira o que dela saiu — e so isso: itens
-     * made_to_order/custom nunca chegaram a descontar stock.
+     * Cancelar devolve a prateleira o que dela saiu — e so isso.
+     *
+     * "O que saiu" le-se dos movimentos de stock desta encomenda, e nao das
+     * quantidades das linhas: uma encomenda que entrou de um mercado sem
+     * haver stock (`stock_issue`) tem linhas mas nunca descontou nada, e
+     * devolver-lhe a quantidade da linha punha na prateleira pecas que nunca
+     * existiram. Pela mesma conta, cancelar duas vezes nao devolve duas: o
+     * saldo dos movimentos ja esta a zero.
      */
     private function restoreStock(Order $order, ?User $by): void
+    {
+        $taken = StockMovement::query()
+            ->where('order_id', $order->getKey())
+            ->selectRaw('variant_id, sum(delta) as net')
+            ->groupBy('variant_id')
+            ->pluck('net', 'variant_id');
+
+        // Sem movimento nenhum ligado a encomenda. Se entrou marcada por falta
+        // de stock, e porque nada saiu: nao ha o que devolver. Senao sao
+        // dados sem esse registo, e vale a regra antiga — a quantidade das
+        // linhas em stock —, para um cancelamento nunca deixar de repor.
+        if ($taken->isEmpty()) {
+            if (! $order->stock_issue) {
+                $this->restoreStockByLines($order, $by);
+            }
+
+            return;
+        }
+
+        foreach ($taken as $variantId => $net) {
+            $variant = Variant::query()->find($variantId);
+
+            // Saldo negativo = ainda ha pecas desta encomenda fora da prateleira.
+            if ($variant instanceof Variant && (int) $net < 0) {
+                $this->stockService->increment($variant, -(int) $net, 'restock_cancel', $order, $by, 'Encomenda cancelada.');
+            }
+        }
+    }
+
+    private function restoreStockByLines(Order $order, ?User $by): void
     {
         $items = $order->items()
             ->whereNotNull('variant_id')
@@ -732,14 +778,7 @@ class OrderService
 
         foreach ($items as $item) {
             if ($item->variant instanceof Variant) {
-                $this->stockService->increment(
-                    $item->variant,
-                    $item->qty,
-                    'restock_cancel',
-                    $order,
-                    $by,
-                    'Encomenda cancelada.',
-                );
+                $this->stockService->increment($item->variant, $item->qty, 'restock_cancel', $order, $by, 'Encomenda cancelada.');
             }
         }
     }

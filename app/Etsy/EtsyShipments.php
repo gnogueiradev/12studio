@@ -118,8 +118,17 @@ class EtsyShipments
                 'resend' => (bool) ($options['resend'] ?? false),
                 'note_to_buyer' => $options['note_to_buyer'] ?? null,
             ]);
-        } catch (EtsyApiException $exception) {
+        } catch (EtsyApiException) {
             // A Etsy respondeu, e respondeu que nao: ja ficou no recibo.
+        } catch (EtsyException $exception) {
+            // A Etsy nem respondeu, e ca nao se mexeu em nada: esta tentativa
+            // nao conta. Se ficasse como "ja tentado", o aviso automatico
+            // calava-se quando a encomenda fosse enviada mais tarde.
+            // Pela base de dados, e nao por este modelo: quem gravou o erro
+            // foi outra instancia, e para esta "nada mudou".
+            EtsyReceipt::query()->whereKey($receipt->getKey())->update(['tracking_push_error' => null]);
+
+            throw $exception;
         }
 
         if (in_array($order->status, ['paid', 'in_production', 'ready_to_ship'], true)) {
@@ -142,10 +151,21 @@ class EtsyShipments
      */
     public function markReceipt(int $receiptId, ?bool $paid = null, ?bool $shipped = null): array
     {
-        return $this->api->updateReceipt($this->connection()->shop_id, $receiptId, array_filter([
+        $response = $this->api->updateReceipt($this->connection()->shop_id, $receiptId, array_filter([
             'was_paid' => $paid,
             'was_shipped' => $shipped,
         ], fn (?bool $value): bool => $value !== null));
+
+        // A Etsy ja a mostra enviada: fica dito ca, para o "enviada" do
+        // 12studio nao lhe mandar outro aviso (e outro email ao comprador).
+        if ($shipped === true) {
+            EtsyReceipt::query()
+                ->where('etsy_receipt_id', $receiptId)
+                ->whereNull('shipped_on_etsy_at')
+                ->update(['shipped_on_etsy_at' => now()]);
+        }
+
+        return $response;
     }
 
     /**

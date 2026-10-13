@@ -46,6 +46,18 @@ trait FakesEtsy
 
     private bool $etsyReceiptsFaked = false;
 
+    /**
+     * O estado em que o anuncio 7100 esta NA ETSY. Null = igual ao que o
+     * 12studio julga (o caso normal); com valor, e o dono a ter mexido la a
+     * mao, ou o anuncio a ter esgotado ou expirado sem nos sabermos.
+     */
+    private ?string $etsyRemoteState = null;
+
+    /** Para o anuncio 7100 responder outra coisa (um 404, por exemplo). */
+    private mixed $etsyRemoteListing = null;
+
+    private bool $etsyRemoteListingFaked = false;
+
     protected function configureEtsy(bool $enabled = true): void
     {
         config([
@@ -285,8 +297,36 @@ trait FakesEtsy
         app(EtsyListingSync::class)->push($product);
         EtsyListing::query()->where('product_id', $product->id)->update(['state' => $state]);
         $this->fakeEtsyListingWrites();
+        $this->fakeEtsyRemoteListing();
 
         return $product;
+    }
+
+    /**
+     * O anuncio 7100 como a Etsy o mostra a quem pergunta por ele. A
+     * sincronizacao pergunta antes de decidir tirar ou repor um anuncio de
+     * venda: o estado que ca esta pode ter horas.
+     */
+    protected function fakeEtsyRemoteListing(): void
+    {
+        if ($this->etsyRemoteListingFaked) {
+            return;
+        }
+
+        $this->etsyRemoteListingFaked = true;
+
+        Http::fake(['etsy.test/v3/application/listings/7100*' => function (Request $request) {
+            if ($request->method() !== 'GET' || str_contains($request->url(), '/7100/')) {
+                return null;
+            }
+
+            return $this->etsyRemoteListing ?? Http::response($this->etsyListing([
+                'listing_id' => 7100,
+                'state' => $this->etsyRemoteState
+                    ?? EtsyListing::query()->where('etsy_listing_id', 7100)->value('state')
+                    ?? 'active',
+            ]));
+        }]);
     }
 
     /**

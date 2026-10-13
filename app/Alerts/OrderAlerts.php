@@ -128,7 +128,9 @@ class OrderAlerts
 
             if ($to === 'shipped') {
                 $message->field('Envio', $order->shipping_method_name)
-                    ->field('Tracking', $order->tracking_url ?? $order->tracking_number, inline: false)
+                    // De uma encomenda da Etsy o seguimento nao sai: com o
+                    // numero, o site da transportadora diz para onde foi.
+                    ->field('Tracking', $order->isFromEtsy() ? null : ($order->tracking_url ?? $order->tracking_number), inline: false)
                     ->field('Email de envio', match (true) {
                         // Na Etsy quem avisa o comprador e a Etsy.
                         $order->isFromEtsy() => 'Não se aplica — a Etsy avisa o comprador',
@@ -216,7 +218,7 @@ class OrderAlerts
     {
         $this->guard(function () use ($order, $skus): void {
             $message = DiscordMessage::make("⚠️ Vendida sem stock — {$order->order_number}", DiscordMessage::DANGER)
-                ->description('A venda já aconteceu e está paga, mas o stock não chega. A encomenda entrou marcada; o stock não foi mexido.')
+                ->description('A venda já aconteceu e está paga, mas o stock não chega para tudo. A encomenda entrou marcada; da prateleira saiu só o que havia.')
                 ->field('Canal', Labels::of(Labels::SALES_CHANNELS, $order->sales_channel))
                 ->field('Referências em falta', implode(', ', $skus), inline: false);
 

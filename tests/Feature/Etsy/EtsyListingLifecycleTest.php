@@ -408,11 +408,9 @@ class EtsyListingLifecycleTest extends TestCase
     public function test_a_listing_deleted_by_hand_on_etsy_is_noticed(): void
     {
         $this->etsyPushedProduct('active');
-        Http::fake([
-            'etsy.test/v3/application/listings/batch*' => Http::response(['count' => 0, 'results' => []]),
-            // Nao veio no lote: pergunta-se por ele antes de o dar como perdido.
-            'etsy.test/v3/application/listings/7100*' => Http::response(['error' => 'Listing not found'], 404),
-        ]);
+        Http::fake(['etsy.test/v3/application/listings/batch*' => Http::response(['count' => 0, 'results' => []])]);
+        // Nao veio no lote: pergunta-se por ele antes de o dar como perdido.
+        $this->etsyRemoteListing = Http::response(['error' => 'Listing not found'], 404);
 
         $result = $this->lifecycle()->refreshRemote();
 
@@ -425,10 +423,8 @@ class EtsyListingLifecycleTest extends TestCase
     public function test_a_listing_missing_from_the_batch_but_still_there_is_kept(): void
     {
         $this->etsyPushedProduct('active');
-        Http::fake([
-            'etsy.test/v3/application/listings/batch*' => Http::response(['count' => 0, 'results' => []]),
-            'etsy.test/v3/application/listings/7100*' => Http::response($this->etsyListing(['listing_id' => 7100, 'state' => 'inactive'])),
-        ]);
+        Http::fake(['etsy.test/v3/application/listings/batch*' => Http::response(['count' => 0, 'results' => []])]);
+        $this->etsyRemoteState = 'inactive';
 
         $result = $this->lifecycle()->refreshRemote();
 

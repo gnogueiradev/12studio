@@ -32,7 +32,8 @@ class DeleteEtsyListing implements ShouldQueue
     {
         $listing = EtsyListing::query()->find($this->listingId);
 
-        if ($listing !== null) {
+        // Recuperado entretanto (apagado por engano): ja nao ha o que apagar.
+        if ($listing !== null && $listing->product->trashed()) {
             $lifecycle->deleteQuietly($listing);
         }
     }
