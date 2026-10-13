@@ -18,7 +18,12 @@ import { index as settingsIndex } from '@/routes/admin/etsy';
 import { desligar, index, ligar } from '@/routes/admin/etsy/anuncios';
 import { edit as editProduct } from '@/routes/admin/produtos';
 
-type ProductRef = { id: number; name: string };
+type ProductRef = {
+    id: number;
+    name: string;
+    /** Só vem nos ligados: o produto foi apagado e a página dele já não abre. */
+    deleted?: boolean;
+};
 
 type ListingRow = {
     listingId: number;
@@ -287,12 +292,23 @@ function ListingItem({
             {listing.linkedProduct !== null ? (
                 <span className="flex flex-none items-center gap-2 text-[13px]">
                     <span className="text-muted-foreground">Ligado a</span>
-                    <Link
-                        href={editProduct(listing.linkedProduct.id)}
-                        className="font-medium underline-offset-4 hover:underline"
-                    >
-                        {listing.linkedProduct.name}
-                    </Link>
+                    {listing.linkedProduct.deleted ? (
+                        // Sem ligação: a página de um apagado dá 404. Fica o
+                        // "Desligar", que é o que há a fazer aqui.
+                        <span className="font-medium">
+                            {listing.linkedProduct.name}{' '}
+                            <span className="font-normal text-muted-foreground">
+                                (apagado)
+                            </span>
+                        </span>
+                    ) : (
+                        <Link
+                            href={editProduct(listing.linkedProduct.id)}
+                            className="font-medium underline-offset-4 hover:underline"
+                        >
+                            {listing.linkedProduct.name}
+                        </Link>
+                    )}
                     <Button
                         variant="ghost"
                         size="sm"

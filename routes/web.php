@@ -226,7 +226,10 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
             ->name('etsy.anuncios.index');
         Route::post('etsy/anuncios/{product}/ligar', [Admin\EtsyListingController::class, 'link'])
             ->name('etsy.anuncios.ligar');
+        // withTrashed: o anuncio de um produto apagado tem de poder ser
+        // libertado sem primeiro restaurar o produto.
         Route::delete('etsy/anuncios/{product}/desligar', [Admin\EtsyListingController::class, 'unlink'])
+            ->withTrashed()
             ->name('etsy.anuncios.desligar');
 
         // O formulario do produto tem pagina, ao contrario do dos materiais e

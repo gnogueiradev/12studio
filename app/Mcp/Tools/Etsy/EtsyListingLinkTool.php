@@ -48,10 +48,16 @@ class EtsyListingLinkTool extends WriteTool
 
     protected function etsy(Request $request, User $user): Response|ResponseFactory
     {
-        $product = Product::query()->find((int) $request->get('product_id'));
+        // Com os apagados: o anuncio de um produto apagado tem de poder ser
+        // libertado. Ligar, esse, so a produtos que existem.
+        $product = Product::withTrashed()->find((int) $request->get('product_id'));
 
         if ($product === null) {
             return Response::error('Produto não encontrado.');
+        }
+
+        if ($product->trashed() && ! $request->boolean('unlink')) {
+            return Response::error('Este produto foi apagado. Recupera-o primeiro com product_restore.');
         }
 
         $before = EtsyListing::query()->where('product_id', $product->id)->value('etsy_listing_id');

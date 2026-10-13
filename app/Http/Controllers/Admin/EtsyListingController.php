@@ -120,10 +120,15 @@ class EtsyListingController extends Controller
     }
 
     /**
-     * @return array{id: int, name: string}|null
+     * `deleted` para o ecra nao oferecer uma ligacao para a pagina de um
+     * produto apagado, que ja nao abre.
+     *
+     * @return array{id: int, name: string, deleted: bool}|null
      */
     private function reference(?Product $product): ?array
     {
-        return $product === null ? null : ['id' => $product->id, 'name' => $product->name];
+        return $product === null
+            ? null
+            : ['id' => $product->id, 'name' => $product->name, 'deleted' => $product->trashed()];
     }
 }

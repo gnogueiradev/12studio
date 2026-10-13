@@ -264,6 +264,39 @@ class EtsyListingLinkTest extends TestCase
         $this->assertSame(0, EtsyListing::query()->count());
     }
 
+    public function test_a_deleted_product_can_still_be_unlinked(): void
+    {
+        $this->fakeListing();
+        $this->sync()->link($this->product, 7001);
+        $this->product->delete();
+
+        // Ligou-se o anuncio ao duplicado e apagou-se o duplicado: o anuncio
+        // tem de poder ser libertado, senao so restaurando o produto.
+        $this->actingAs($this->admin)
+            ->from(route('admin.etsy.anuncios.index'))
+            ->delete(route('admin.etsy.anuncios.desligar', $this->product->id))
+            ->assertRedirect(route('admin.etsy.anuncios.index'));
+
+        $this->assertSame(0, EtsyListing::query()->count());
+    }
+
+    public function test_a_listing_linked_to_a_deleted_product_says_so(): void
+    {
+        EtsyListing::query()->create(['product_id' => $this->product->id, 'etsy_listing_id' => 7001, 'state' => 'draft']);
+        $this->product->delete();
+
+        Http::fake(['etsy.test/v3/application/shops/4242/listings*' => Http::response(['count' => 1, 'results' => [
+            $this->etsyListing(),
+        ]])]);
+
+        // Para o ecra nao oferecer uma ligacao a uma pagina que ja nao abre.
+        $this->actingAs($this->admin)
+            ->get(route('admin.etsy.anuncios.index', ['state' => 'draft']))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('listings.0.linkedProduct.name', 'Vaso Espiral')
+                ->where('listings.0.linkedProduct.deleted', true));
+    }
+
     public function test_a_refused_link_comes_back_as_a_message_not_a_crash(): void
     {
         $this->fakeListing(['shop_id' => 1]);

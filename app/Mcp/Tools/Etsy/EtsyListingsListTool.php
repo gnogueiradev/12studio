@@ -67,10 +67,12 @@ class EtsyListingsListTool extends StudioTool
     }
 
     /**
-     * @return array{id: int, name: string}|null
+     * @return array{id: int, name: string, deleted: bool}|null
      */
     private function reference(?Product $product): ?array
     {
-        return $product === null ? null : ['id' => $product->id, 'name' => $product->name];
+        return $product === null
+            ? null
+            : ['id' => $product->id, 'name' => $product->name, 'deleted' => $product->trashed()];
     }
 }

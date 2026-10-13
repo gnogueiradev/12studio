@@ -68,7 +68,8 @@ class EtsyPresenter
             'url' => $listing['url'] ?? null,
             'price' => self::money($listing['price'] ?? null),
             'quantity' => $listing['quantity'] ?? null,
-            'skus' => array_values(array_filter((array) ($listing['skus'] ?? []), 'is_string')),
+            // A referencia tambem e texto livre de quem escreveu o anuncio.
+            'skus' => self::texts($listing['skus'] ?? null, $trusted),
             'has_variations' => $listing['has_variations'] ?? null,
             'taxonomy_id' => $listing['taxonomy_id'] ?? null,
             'tags' => self::texts($listing['tags'] ?? null, $trusted),
@@ -106,7 +107,7 @@ class EtsyPresenter
             ], self::rows($listing['videos'] ?? null)),
             'inventory' => array_map(fn (array $product): array => [
                 'product_id' => $product['product_id'] ?? null,
-                'sku' => $product['sku'] ?? null,
+                'sku' => self::text($product['sku'] ?? null, $trusted),
                 'properties' => array_map(fn (array $property): array => [
                     'property_id' => $property['property_id'] ?? null,
                     'name' => self::text($property['property_name'] ?? null, $trusted),

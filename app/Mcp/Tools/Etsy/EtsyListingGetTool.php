@@ -77,7 +77,11 @@ class EtsyListingGetTool extends StudioTool
 
         return Response::structured([
             'is_our_shop' => $ours,
-            'linked_product' => $link === null ? null : ['id' => $link->product->id, 'name' => $link->product->name],
+            'linked_product' => $link === null ? null : [
+                'id' => $link->product->id,
+                'name' => $link->product->name,
+                'deleted' => $link->product->trashed(),
+            ],
             'listing' => EtsyPresenter::listingDetail($remote, trusted: $ours),
         ]);
     }
