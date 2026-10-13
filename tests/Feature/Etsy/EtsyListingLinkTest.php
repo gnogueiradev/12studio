@@ -44,9 +44,27 @@ class EtsyListingLinkTest extends TestCase
         return app(EtsyListingSync::class);
     }
 
+    /** @var array<string, mixed> */
+    private array $listingOverrides = [];
+
+    private bool $listingFaked = false;
+
+    /**
+     * O anuncio 7001, como a Etsy o devolve. Chamar outra vez muda o que ela
+     * devolve dai em diante (um segundo Http::fake para o mesmo endereco
+     * ficava atras do primeiro e nunca respondia).
+     */
     private function fakeListing(array $overrides = []): void
     {
-        Http::fake(['etsy.test/v3/application/listings/7001*' => Http::response($this->etsyListing($overrides))]);
+        $this->listingOverrides = $overrides;
+
+        if ($this->listingFaked) {
+            return;
+        }
+
+        $this->listingFaked = true;
+
+        Http::fake(['etsy.test/v3/application/listings/7001*' => fn () => Http::response($this->etsyListing($this->listingOverrides))]);
     }
 
     // ── Ligar ──────────────────────────────────────────────────────────────
@@ -171,6 +189,74 @@ class EtsyListingLinkTest extends TestCase
         // O que era do anuncio antigo nao fica pendurado no novo.
         $this->assertSame(0, EtsyVariant::query()->where('variant_id', $variant->id)->count());
         $this->assertSame(0, $listing->images()->count());
+    }
+
+    public function test_a_reference_used_twice_on_the_listing_is_not_guessed(): void
+    {
+        $variant = Variant::factory()->for($this->product)->create(['sku' => 'VASO-1']);
+        $twice = ['inventory' => ['products' => [
+            ['product_id' => 9101, 'sku' => 'VASO-1', 'offerings' => [['offering_id' => 9201]]],
+            ['product_id' => 9102, 'sku' => 'vaso-1', 'offerings' => [['offering_id' => 9202]]],
+        ]]];
+        $this->fakeListing($twice);
+
+        $this->sync()->link($this->product, 7001);
+
+        // Na Etsy e comum a referencia nao variar com a variacao. Ligar a
+        // variante a uma das duas ao acaso punha o stock no sitio errado.
+        $this->assertSame(0, EtsyVariant::query()->where('variant_id', $variant->id)->count());
+
+        $report = $this->sync()->skuReport($this->product, $this->etsyListing($twice));
+        $this->assertSame(['VASO-1'], $report['ambiguous']);
+        $this->assertSame([], $report['matched']);
+    }
+
+    public function test_linking_the_same_listing_again_only_refreshes_it(): void
+    {
+        $variant = Variant::factory()->for($this->product)->create(['sku' => 'VASO-1']);
+        $this->fakeListing();
+        $listing = $this->sync()->link($this->product, 7001);
+
+        // Entretanto o dono trabalhou o anuncio ca.
+        $listing->update(['title' => 'O meu título', 'property_map' => ['color' => 513]]);
+        EtsyVariant::query()->where('variant_id', $variant->id)->update(['etsy_price_cents' => 2990, 'enabled' => false]);
+
+        $this->fakeListing(['state' => 'active', 'title' => 'Título que está na Etsy']);
+        $again = $this->sync()->link($this->product, 7001);
+
+        // Voltar a ligar o MESMO anuncio atualiza o estado; nao deita fora o
+        // trabalho feito ca nem os precos proprios.
+        $this->assertSame('active', $again->state);
+        $this->assertSame('O meu título', $again->title);
+        $this->assertSame(['color' => 513], $again->property_map);
+
+        $link = EtsyVariant::query()->where('variant_id', $variant->id)->sole();
+        $this->assertSame(2990, $link->etsy_price_cents);
+        $this->assertFalse($link->enabled);
+        $this->assertSame(9101, $link->etsy_product_id);
+    }
+
+    public function test_linking_another_listing_starts_clean(): void
+    {
+        $variant = Variant::factory()->for($this->product)->create(['sku' => 'VASO-1']);
+        $this->fakeListing();
+        $listing = $this->sync()->link($this->product, 7001);
+        $listing->update([
+            'property_map' => ['color' => 513], 'properties' => [['property_id' => 200, 'value_ids' => [1], 'values' => ['Black']]],
+            'etsy_video_id' => 5001, 'last_push_hash' => 'abc', 'last_pushed_at' => now(),
+        ]);
+        EtsyVariant::query()->where('variant_id', $variant->id)->update(['etsy_price_cents' => 2990]);
+
+        Http::fake(['etsy.test/v3/application/listings/7002*' => Http::response($this->etsyListing(['listing_id' => 7002]))]);
+        $other = $this->sync()->link($this->product, 7002);
+
+        // O que era do anuncio antigo — ids, mapa de propriedades, atributos,
+        // o video que la estava — nao serve o novo.
+        $this->assertNull($other->property_map);
+        $this->assertNull($other->properties);
+        $this->assertNull($other->etsy_video_id);
+        $this->assertNull($other->last_push_hash);
+        $this->assertNull(EtsyVariant::query()->where('variant_id', $variant->id)->sole()->etsy_price_cents);
     }
 
     public function test_unlinking_forgets_the_link_and_leaves_etsy_alone(): void

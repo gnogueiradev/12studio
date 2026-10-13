@@ -4,18 +4,20 @@ import { index as connection } from '@/routes/admin/etsy';
 import { index as listings } from '@/routes/admin/etsy/anuncios';
 import { index as shipping } from '@/routes/admin/etsy/envios';
 import { index as shop } from '@/routes/admin/etsy/loja';
+import { index as pricing } from '@/routes/admin/etsy/precos';
 
-type Section = 'anuncios' | 'envios' | 'loja';
+type Section = 'anuncios' | 'precos' | 'envios' | 'loja';
 
 const SECTIONS: { key: Section; label: string; href: () => { url: string } }[] =
     [
         { key: 'anuncios', label: 'Anúncios', href: listings },
+        { key: 'precos', label: 'Preços', href: pricing },
         { key: 'envios', label: 'Envios', href: shipping },
         { key: 'loja', label: 'Loja', href: shop },
     ];
 
 /**
- * As três divisões da Etsy no backoffice, lado a lado. A ligação em si (chaves
+ * As quatro divisões da Etsy no backoffice, lado a lado. A ligação em si (chaves
  * e OAuth) fica em Definições, com a password pedida outra vez — aqui só há
  * uma porta para lá.
  */

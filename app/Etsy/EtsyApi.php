@@ -105,6 +105,77 @@ class EtsyApi
         return $this->client->patchForm("/shops/{$shopId}/listings/{$listingId}", $data);
     }
 
+    /**
+     * Cria um anuncio, sempre em rascunho (createDraftListing). Quem chama
+     * NAO repete isto sozinho: um rascunho criado duas vezes sao dois
+     * anuncios.
+     *
+     * @param  array<string, mixed>  $data
+     * @return array<array-key, mixed>
+     */
+    public function createDraftListing(int $shopId, array $data): array
+    {
+        return $this->client->postForm("/shops/{$shopId}/listings", $data);
+    }
+
+    /**
+     * O inventario inteiro de um anuncio (updateListingInventory): cada
+     * variacao com a referencia, o preco, a quantidade e o perfil de
+     * processamento. Substitui o que la esta. Em JSON, ao contrario do resto.
+     *
+     * @param  array<string, mixed>  $inventory
+     * @param  array<string, mixed>  $query  max_variations_supported, quando sao tres.
+     * @return array<array-key, mixed>
+     */
+    public function updateListingInventory(int $listingId, array $inventory, array $query = []): array
+    {
+        return $this->client->putJson("/listings/{$listingId}/inventory", $inventory, $query);
+    }
+
+    /**
+     * Um atributo da categoria no anuncio (updateListingProperty).
+     *
+     * @param  array<string, mixed>  $data  value_ids, values, scale_id
+     * @return array<array-key, mixed>
+     */
+    public function updateListingProperty(int $shopId, int $listingId, int $propertyId, array $data): array
+    {
+        return $this->client->putForm("/shops/{$shopId}/listings/{$listingId}/properties/{$propertyId}", $data);
+    }
+
+    /**
+     * Carrega uma fotografia para um anuncio (uploadListingImage).
+     *
+     * @param  resource|string  $contents
+     * @param  array<string, mixed>  $fields  rank, alt_text, overwrite
+     * @return array<array-key, mixed>
+     */
+    public function uploadListingImage(int $shopId, int $listingId, mixed $contents, string $filename, array $fields = []): array
+    {
+        return $this->client->postMultipart("/shops/{$shopId}/listings/{$listingId}/images", 'image', $contents, $filename, $fields);
+    }
+
+    public function deleteListingImage(int $shopId, int $listingId, int $imageId): void
+    {
+        $this->client->delete("/shops/{$shopId}/listings/{$listingId}/images/{$imageId}");
+    }
+
+    /**
+     * Carrega o video de um anuncio (uploadListingVideo). Um por anuncio.
+     *
+     * @param  resource|string  $contents
+     * @return array<array-key, mixed>
+     */
+    public function uploadListingVideo(int $shopId, int $listingId, mixed $contents, string $filename): array
+    {
+        return $this->client->postMultipart("/shops/{$shopId}/listings/{$listingId}/videos", 'video', $contents, $filename, ['name' => $filename]);
+    }
+
+    public function deleteListingVideo(int $shopId, int $listingId, int $videoId): void
+    {
+        $this->client->delete("/shops/{$shopId}/listings/{$listingId}/videos/{$videoId}");
+    }
+
     // ── A loja: textos e seccoes ───────────────────────────────────────────
 
     /**

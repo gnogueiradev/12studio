@@ -274,6 +274,14 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
                 ->whereNumber('section')->name('seccoes.apagar');
         });
 
+        // Precos e margens na Etsy. A pagina e so contas nossas; as
+        // definicoes (margem, taxas, predefinicoes de um anuncio novo)
+        // gravam-se ca.
+        Route::prefix('etsy/precos')->name('etsy.precos.')->group(function (): void {
+            Route::get('/', [Admin\EtsyPricingController::class, 'index'])->name('index');
+            Route::patch('definicoes', [Admin\EtsyPricingController::class, 'update'])->name('definicoes');
+        });
+
         // O formulario do produto tem pagina, ao contrario do dos materiais e
         // do das impressoras: sao seis seccoes, uma galeria, uma matriz de
         // variantes e uma ficha de variante por dentro — dentro de um modal, a
@@ -302,6 +310,17 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         // arquiva, e continua a arquivar.
         Route::delete('produtos/{product}/apagar', [Admin\ProductController::class, 'delete'])
             ->name('produtos.apagar');
+
+        // O anuncio do produto na Etsy. Guardar fica ca; so o `enviar`
+        // escreve na Etsy. Um produto apagado nao tem pagina (o binding
+        // normal nao o encontra).
+        Route::prefix('produtos/{product}/etsy')->name('produtos.etsy.')->group(function (): void {
+            Route::get('/', [Admin\EtsyProductController::class, 'show'])->name('show');
+            Route::put('guardar', [Admin\EtsyProductController::class, 'save'])->name('guardar');
+            Route::post('enviar', [Admin\EtsyProductController::class, 'push'])->name('enviar');
+            Route::post('video', [Admin\EtsyProductController::class, 'uploadVideo'])->name('video');
+            Route::delete('video/remover', [Admin\EtsyProductController::class, 'removeVideo'])->name('video.remover');
+        });
 
         // Fotografias: shallow como as variantes, mas com URIs proprios por
         // acao — o Wayfinder duplica chaves quando dois verbos partilham o

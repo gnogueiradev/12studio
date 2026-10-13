@@ -15,12 +15,28 @@ use App\Services\SettingService;
  */
 class EtsySettings
 {
-    /** Nome curto => chave na tabela `settings`. */
+    /** Nome curto => chave na tabela `settings`. Ids de coisas da Etsy. */
     private const IDS = [
         'default_shipping_profile_id' => 'etsy.default_shipping_profile_id',
         'ready_to_ship_profile_id' => 'etsy.ready_to_ship_profile_id',
         'made_to_order_profile_id' => 'etsy.made_to_order_profile_id',
         'default_return_policy_id' => 'etsy.default_return_policy_id',
+        'default_taxonomy_id' => 'etsy.default_taxonomy_id',
+    ];
+
+    /** Numeros nossos (>= 0), com o valor de config/etsy.php por omissao. */
+    private const NUMBERS = [
+        'markup_bp' => 'etsy.markup_bp',
+        'fee_percentage_bp' => 'etsy.fee_percentage_bp',
+        'fee_fixed_cents' => 'etsy.fee_fixed_cents',
+        'mto_quantity' => 'etsy.mto_quantity',
+        'stock_buffer' => 'etsy.stock_buffer',
+    ];
+
+    /** Escolhas de uma lista fechada de config/etsy.php. */
+    private const CHOICES = [
+        'who_made' => 'etsy.who_made',
+        'when_made' => 'etsy.when_made',
     ];
 
     private const KEY_SECTION_MAP = 'etsy.section_map';
@@ -46,9 +62,72 @@ class EtsySettings
             $id === null ? $this->settings->forget($key) : $this->settings->set($key, $id);
         }
 
+        foreach (self::NUMBERS as $name => $key) {
+            if (array_key_exists($name, $values) && is_numeric($values[$name])) {
+                $this->settings->set($key, max(0, (int) $values[$name]));
+            }
+        }
+
+        foreach (self::CHOICES as $name => $key) {
+            if (array_key_exists($name, $values) && in_array($values[$name], (array) config("etsy.listing.{$name}"), true)) {
+                $this->settings->set($key, $values[$name]);
+            }
+        }
+
         if (array_key_exists('section_map', $values)) {
             $this->settings->set(self::KEY_SECTION_MAP, $this->cleanMap($values['section_map']));
         }
+    }
+
+    // ── Anuncios e precos ──────────────────────────────────────────────────
+
+    /** A categoria da Etsy de um anuncio que nao escolheu a sua. */
+    public function defaultTaxonomyId(): ?int
+    {
+        return $this->id('default_taxonomy_id');
+    }
+
+    public function whoMade(): string
+    {
+        return $this->choice('who_made', 'i_did');
+    }
+
+    public function whenMade(): string
+    {
+        return $this->choice('when_made', 'made_to_order');
+    }
+
+    /**
+     * A margem global sobre o preco do site, em pontos base. Zero por
+     * omissao: enquanto o dono nao decidir, a Etsy leva o preco do site.
+     */
+    public function markupBp(): int
+    {
+        return $this->number('markup_bp', 0);
+    }
+
+    /** A parte das taxas da Etsy que e percentagem do que o comprador paga. */
+    public function feePercentageBp(): int
+    {
+        return $this->number('fee_percentage_bp', (int) config('etsy.fees.percentage_bp', 0));
+    }
+
+    /** A parte das taxas da Etsy que e fixa por venda. */
+    public function feeFixedCents(): int
+    {
+        return $this->number('fee_fixed_cents', (int) config('etsy.fees.fixed_cents', 0));
+    }
+
+    /** Quantas unidades anuncia um produto feito por encomenda. */
+    public function mtoQuantity(): int
+    {
+        return max(1, $this->number('mto_quantity', (int) config('etsy.mto_quantity', 10)));
+    }
+
+    /** Unidades em stock que ficam por anunciar, de reserva. */
+    public function stockBuffer(): int
+    {
+        return $this->number('stock_buffer', 0);
     }
 
     public function defaultShippingProfileId(): ?int
@@ -130,6 +209,20 @@ class EtsySettings
         $value = $this->settings->get(self::IDS[$name]);
 
         return is_numeric($value) && (int) $value > 0 ? (int) $value : null;
+    }
+
+    private function number(string $name, int $default): int
+    {
+        $value = $this->settings->get(self::NUMBERS[$name]);
+
+        return is_numeric($value) ? max(0, (int) $value) : $default;
+    }
+
+    private function choice(string $name, string $default): string
+    {
+        $value = $this->settings->get(self::CHOICES[$name]);
+
+        return is_string($value) && in_array($value, (array) config("etsy.listing.{$name}"), true) ? $value : $default;
     }
 
     /**

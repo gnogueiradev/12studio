@@ -121,3 +121,65 @@ export function etsyRefused(page: unknown): boolean {
 
     return flash?.toast?.type === 'error';
 }
+
+const WHO_MADE_LABELS: Record<string, string> = {
+    i_did: 'Fui eu',
+    someone_else: 'Outra pessoa',
+    collective: 'Um coletivo de que faço parte',
+};
+
+/** Quem fez a peça, como a Etsy pergunta. */
+export function whoMadeLabel(value: string): string {
+    return WHO_MADE_LABELS[value] ?? value;
+}
+
+/**
+ * Quando foi feita. A Etsy dá os intervalos em código (`2020_2026`,
+ * `before_2007`, `1990s`) e muda-os de ano a ano: traduz-se a forma, em vez
+ * de ter aqui uma lista que ficava velha.
+ */
+export function whenMadeLabel(value: string): string {
+    if (value === 'made_to_order') {
+        return 'Feito por encomenda';
+    }
+
+    const range = /^(\d{4})_(\d{4})$/.exec(value);
+
+    if (range) {
+        return `${range[1]}–${range[2]}`;
+    }
+
+    const before = /^before_(\d{4})$/.exec(value);
+
+    if (before) {
+        return `Antes de ${before[1]}`;
+    }
+
+    const decade = /^(\d{4})s$/.exec(value);
+
+    return decade ? `Anos ${decade[1]}` : value;
+}
+
+const PRICE_SOURCE_LABELS: Record<string, string> = {
+    own: 'preço próprio',
+    markup: 'site + margem',
+    site: 'preço do site',
+};
+
+/** De onde vem o preço que a variante leva para a Etsy. */
+export function priceSourceLabel(source: string): string {
+    return PRICE_SOURCE_LABELS[source] ?? source;
+}
+
+const LISTING_STATE_LABELS: Record<string, string> = {
+    draft: 'Rascunho',
+    active: 'À venda',
+    inactive: 'Inativo',
+    sold_out: 'Esgotado',
+    expired: 'Expirado',
+    deleted: 'Apagado',
+};
+
+export function listingStateLabel(state: string | null): string {
+    return state === null ? '—' : (LISTING_STATE_LABELS[state] ?? state);
+}

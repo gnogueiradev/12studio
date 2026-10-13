@@ -17,6 +17,7 @@ import { formatCentsIn } from '@/lib/money';
 import { cn } from '@/lib/utils';
 import { desligar, index, ligar } from '@/routes/admin/etsy/anuncios';
 import { edit as editProduct } from '@/routes/admin/produtos';
+import { show as productListing } from '@/routes/admin/produtos/etsy';
 
 type ProductRef = {
     id: number;
@@ -305,6 +306,15 @@ function ListingItem({
                         >
                             {listing.linkedProduct.name}
                         </Link>
+                    )}
+                    {!listing.linkedProduct.deleted && (
+                        <Button variant="ghost" size="sm" asChild>
+                            <Link
+                                href={productListing(listing.linkedProduct.id)}
+                            >
+                                Preparar envio
+                            </Link>
+                        </Button>
                     )}
                     <Button
                         variant="ghost"

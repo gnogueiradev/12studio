@@ -2,7 +2,12 @@
 
 namespace Tests\Feature\Etsy;
 
+use App\Etsy\EtsySettings;
+use App\Models\Color;
 use App\Models\EtsyConnection;
+use App\Models\Material;
+use App\Models\Product;
+use App\Models\Variant;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
@@ -21,6 +26,13 @@ trait FakesEtsy
     protected const ETSY_API = 'https://etsy.test/v3/application';
 
     protected const ETSY_TOKEN_URL = 'https://etsy.test/v3/public/oauth/token';
+
+    /** @var array<string, mixed> As respostas trocadas do fakeEtsyListingWrites. */
+    private array $etsyWriteOverrides = [];
+
+    private bool $etsyWritesFaked = false;
+
+    private int $etsyImageId = 8100;
 
     protected function configureEtsy(bool $enabled = true): void
     {
@@ -204,6 +216,109 @@ trait FakesEtsy
                 'currency_code' => 'EUR',
             ]),
         ]);
+    }
+
+    /**
+     * Um produto pronto a ir para a Etsy: duas variantes (Preto e Branco, no
+     * mesmo material), em stock, com as predefinicoes da loja escolhidas.
+     *
+     * @param  array<string, mixed>  $attributes
+     */
+    protected function etsyReadyProduct(array $attributes = []): Product
+    {
+        $material = Material::factory()->create(['name' => 'PLA']);
+        $product = Product::factory()->create([
+            'name' => 'Vaso Espiral',
+            'description' => '<p>Um vaso <strong>impresso</strong> em PLA.</p><ul><li>Feito no Porto</li><li>Leve</li></ul>',
+            'fulfillment_mode' => 'in_stock',
+            'vat_rate' => 23,
+            ...$attributes,
+        ]);
+
+        Variant::factory()->for($product)->stock(5)->create([
+            'sku' => 'VASO-P', 'price_cents' => 2490, 'is_default' => true, 'material_id' => $material->id,
+            'color_id' => Color::factory()->create(['name' => 'Preto'])->id,
+        ]);
+        Variant::factory()->for($product)->stock(3)->create([
+            'sku' => 'VASO-B', 'price_cents' => 2690, 'material_id' => $material->id,
+            'color_id' => Color::factory()->create(['name' => 'Branco'])->id,
+        ]);
+
+        app(EtsySettings::class)->save([
+            'default_shipping_profile_id' => 555,
+            'ready_to_ship_profile_id' => 801,
+            'made_to_order_profile_id' => 802,
+            'default_taxonomy_id' => 1234,
+        ]);
+
+        return $product;
+    }
+
+    /**
+     * As escritas de um envio de anuncio, todas com resposta: criar o
+     * rascunho, atualiza-lo, o inventario (que devolve os ids que a Etsy deu
+     * a cada variacao), fotografias, video e apagar.
+     *
+     * @param  array<string, mixed>  $overrides  Por chave: create, update, inventory, image, video.
+     */
+    protected function fakeEtsyListingWrites(array $overrides = []): void
+    {
+        // Chamar outra vez troca as respostas e recomeca a contagem dos
+        // pedidos (o fake() limpa o Http::recorded()), sem empilhar um
+        // segundo conjunto de respostas atras do primeiro — que era o que
+        // continuava a responder.
+        $this->etsyWriteOverrides = $overrides;
+        Http::fake([]);
+
+        if ($this->etsyWritesFaked) {
+            return;
+        }
+
+        $this->etsyWritesFaked = true;
+
+        Http::fake(function (Request $request) {
+            $url = $request->url();
+            $method = $request->method();
+            $overrides = $this->etsyWriteOverrides;
+
+            if (! str_contains($url, 'etsy.test') || $method === 'GET') {
+                return null;
+            }
+
+            return match (true) {
+                $method === 'PUT' && str_contains($url, '/properties/') => Http::response(['property_id' => (int) basename($url)]),
+                $method === 'POST' && str_ends_with($url, '/shops/4242/listings') => $overrides['create']
+                    ?? Http::response(['listing_id' => 7100, 'state' => 'draft', 'url' => 'https://www.etsy.com/listing/7100']),
+                $method === 'PATCH' && preg_match('#/shops/4242/listings/\d+$#', $url) === 1 => $overrides['update']
+                    ?? Http::response(['listing_id' => 7100, 'state' => 'draft']),
+                $method === 'PUT' && str_contains($url, '/inventory') => $overrides['inventory']
+                    ?? Http::response(['products' => array_map(fn (array $product, int $index): array => [
+                        'product_id' => 9301 + $index,
+                        'sku' => $product['sku'] ?? '',
+                        'offerings' => [['offering_id' => 9401 + $index, ...($product['offerings'][0] ?? [])]],
+                    ], (array) ($request->data()['products'] ?? []), array_keys((array) ($request->data()['products'] ?? [])))]),
+                $method === 'POST' && str_ends_with($url, '/images') => $overrides['image']
+                    ?? Http::response(['listing_image_id' => ++$this->etsyImageId]),
+                $method === 'POST' && str_ends_with($url, '/videos') => $overrides['video']
+                    ?? Http::response(['video_id' => 5001]),
+                $method === 'DELETE' => Http::response('', 204),
+                default => null,
+            };
+        });
+    }
+
+    /**
+     * O valor de um campo de um pedido multipart (os uploads).
+     */
+    protected function multipartField(Request $request, string $name): ?string
+    {
+        foreach ($request->data() as $part) {
+            if (is_array($part) && ($part['name'] ?? null) === $name) {
+                return (string) $part['contents'];
+            }
+        }
+
+        return null;
     }
 
     /**
