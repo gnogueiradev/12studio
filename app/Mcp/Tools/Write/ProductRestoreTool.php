@@ -18,7 +18,7 @@ use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
 
 #[Name('product_restore')]
 #[Title('Restaurar produto')]
-#[Description('Tira um produto do arquivo. Volta como rascunho (draft), não à venda: para o publicar, usa product_update com status "active".')]
+#[Description('Tira um produto do arquivo ou recupera um apagado (os ids dos apagados vêm de products_list com "only_deleted": true). Volta como rascunho (draft), não à venda: para o publicar, usa product_update com status "active".')]
 #[IsDestructive(false)]
 #[IsIdempotent]
 class ProductRestoreTool extends WriteTool
@@ -36,21 +36,30 @@ class ProductRestoreTool extends WriteTool
 
     protected function run(Request $request, User $user): Response|ResponseFactory
     {
-        $product = Product::query()->find((int) $request->get('id'));
+        // Com os apagados: e a unica porta de regresso da reciclagem.
+        $product = Product::withTrashed()->find((int) $request->get('id'));
 
         if ($product === null) {
             return Response::error('Produto não encontrado.');
         }
 
-        if ($product->status !== 'archived') {
-            return Response::error("O produto não está arquivado (está {$product->status}).");
+        $wasDeleted = $product->trashed();
+
+        if (! $wasDeleted && $product->status !== 'archived') {
+            return Response::error("O produto não está arquivado nem apagado (está {$product->status}).");
         }
 
         $this->products->restore($product);
-        $this->changes = ['product_id' => $product->id, 'before' => ['status' => 'archived'], 'after' => ['status' => 'draft']];
+        $this->changes = [
+            'product_id' => $product->id,
+            'before' => ['status' => 'archived', 'deleted' => $wasDeleted],
+            'after' => ['status' => 'draft', 'deleted' => false],
+        ];
 
         return Response::structured([
-            'message' => "Produto \"{$product->name}\" restaurado como rascunho.",
+            'message' => $wasDeleted
+                ? "Produto \"{$product->name}\" recuperado como rascunho."
+                : "Produto \"{$product->name}\" restaurado como rascunho.",
             'id' => $product->id,
             'status' => 'draft',
         ]);

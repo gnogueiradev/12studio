@@ -20,7 +20,7 @@ use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
 #[Name('products_list')]
 #[Title('Listar produtos')]
-#[Description('Lista os produtos da loja, com preço mínimo/máximo e stock disponível. Filtra por estado (draft, active, archived), categoria, etiqueta ou texto no nome/SKU. Por omissão esconde os arquivados. Para ver variantes e preços de cada uma, usa product_get.')]
+#[Description('Lista os produtos da loja, com preço mínimo/máximo e stock disponível. Filtra por estado (draft, active, archived), categoria, etiqueta ou texto no nome/SKU. Por omissão esconde os arquivados; os apagados só aparecem com "only_deleted": true. Para ver variantes e preços de cada uma, usa product_get.')]
 #[IsReadOnly]
 #[IsIdempotent]
 class ProductsListTool extends StudioTool
@@ -34,6 +34,7 @@ class ProductsListTool extends StudioTool
             'status' => $schema->string()->enum(Product::STATUSES)->description('Só produtos neste estado. Sem isto, mostra rascunhos e ativos.'),
             'category_id' => $schema->integer()->description('Só produtos desta categoria (ver categories_list).'),
             'tag' => $schema->string()->max(100)->description('Só produtos com esta etiqueta (nome ou slug).'),
+            'only_deleted' => $schema->boolean()->description('Mostra os produtos apagados em vez dos outros — para encontrar o id a passar ao product_restore.'),
             ...$this->paginationSchema($schema),
         ];
     }
@@ -45,6 +46,7 @@ class ProductsListTool extends StudioTool
             'status' => ['nullable', 'in:'.implode(',', Product::STATUSES)],
             'category_id' => ['nullable', 'integer'],
             'tag' => ['nullable', 'string', 'max:100'],
+            'only_deleted' => ['nullable', 'boolean'],
             'page' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:'.self::PER_PAGE_MAX],
         ]);
@@ -52,12 +54,17 @@ class ProductsListTool extends StudioTool
         $search = trim((string) ($filters['search'] ?? ''));
         $tag = trim((string) ($filters['tag'] ?? ''));
 
+        // Um apagado esta sempre arquivado (ProductService::delete), por isso
+        // na reciclagem o filtro de estado por omissao escondia-os a todos.
+        $onlyDeleted = (bool) ($filters['only_deleted'] ?? false);
+
         $query = Product::query()
             ->with(['category', 'variants'])
+            ->when($onlyDeleted, fn (Builder $query) => $query->onlyTrashed())
             ->when(
                 isset($filters['status']),
                 fn (Builder $query) => $query->where('status', $filters['status']),
-                fn (Builder $query) => $query->where('status', '!=', 'archived'),
+                fn (Builder $query) => $query->when(! $onlyDeleted, fn (Builder $inner) => $inner->where('status', '!=', 'archived')),
             )
             ->when(isset($filters['category_id']), fn (Builder $query) => $query->where('category_id', $filters['category_id']))
             ->when($tag !== '', fn (Builder $query) => $query->whereHas(

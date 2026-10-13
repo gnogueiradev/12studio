@@ -29,6 +29,7 @@ use App\Mcp\Tools\Write\Orders\OrderSetPaymentStatusTool;
 use App\Mcp\Tools\Write\Orders\OrderTransitionTool;
 use App\Mcp\Tools\Write\ProductArchiveTool;
 use App\Mcp\Tools\Write\ProductCreateTool;
+use App\Mcp\Tools\Write\ProductDeleteTool;
 use App\Mcp\Tools\Write\ProductRestoreTool;
 use App\Mcp\Tools\Write\ProductUpdateTool;
 use App\Mcp\Tools\Write\StockAdjustTool;
@@ -55,7 +56,7 @@ Backoffice da 12studio, uma loja portuguesa de peças impressas em 3D.
 
 Convenções:
 - Preços em euros, com IVA incluído. Envia-os como texto ("12,50" ou "12.50"); as respostas trazem também o valor em cêntimos.
-- Nada se apaga: produtos, variantes, cores e materiais arquivam-se e restauram-se.
+- Nada se apaga de vez: produtos, variantes, cores e materiais arquivam-se e restauram-se. Um produto também se pode apagar (product_delete): sai das listas mas fica guardado, e recupera-se com product_restore.
 - Um produto tem estados draft (rascunho), active (à venda) e archived.
 
 Segurança:
@@ -95,6 +96,7 @@ class StudioServer extends Server
         ProductUpdateTool::class,
         ProductArchiveTool::class,
         ProductRestoreTool::class,
+        ProductDeleteTool::class,
         VariantCreateTool::class,
         VariantUpdateTool::class,
         VariantSetDefaultTool::class,

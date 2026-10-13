@@ -2,6 +2,7 @@
 
 namespace App\Mcp\Tools\Write;
 
+use App\Mcp\Tools\Write\Concerns\RefusesDeletedProducts;
 use App\Mcp\Tools\WriteTool;
 use App\Models\User;
 use App\Models\Variant;
@@ -21,6 +22,8 @@ use Laravel\Mcp\Server\Tools\Annotations\IsDestructive;
 #[IsDestructive(false)]
 class StockAdjustTool extends WriteTool
 {
+    use RefusesDeletedProducts;
+
     /** Diferenca maxima por chamada: acima disto e engano, nao uma contagem. */
     public const MAX_DELTA = 1000;
 
@@ -55,6 +58,10 @@ class StockAdjustTool extends WriteTool
 
         if ($variant === null) {
             return Response::error('Variante não encontrada.');
+        }
+
+        if ($refusal = $this->refusalIfProductDeleted($variant)) {
+            return $refusal;
         }
 
         $before = $variant->stock;

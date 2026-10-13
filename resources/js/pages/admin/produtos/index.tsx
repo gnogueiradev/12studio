@@ -14,7 +14,7 @@ import {
 import { formatCents } from '@/lib/money';
 import { label } from '@/lib/options';
 import { cn } from '@/lib/utils';
-import { create, edit, index } from '@/routes/admin/produtos';
+import { create, edit, index, restaurar } from '@/routes/admin/produtos';
 import type { ProductRow } from '@/types/catalog';
 import { PRODUCT_STATUSES } from '@/types/catalog';
 import type { Paginated } from '@/types/pagination';
@@ -33,6 +33,8 @@ type Filters = {
     tag: string;
     /** '8', '20' ou '50'; '' são os 20 por omissão do servidor. */
     per_page: string;
+    /** A vista dos apagados, em vez da lista normal. */
+    apagados: boolean;
 };
 
 type Props = {
@@ -40,6 +42,8 @@ type Props = {
     filters: Filters;
     /** Contagem por estado, já sem o filtro de estado aplicado. */
     statusCounts: Record<string, number>;
+    /** Quantos estão apagados, sem filtros: é a porta para os ir ver. */
+    deletedCount: number;
 };
 
 /** Tempo de silêncio antes de a pesquisa ir ao servidor. */
@@ -53,7 +57,10 @@ function visit(filters: Filters, page?: number) {
         index().url,
         {
             ...Object.fromEntries(
-                Object.entries(filters).filter(([, value]) => value !== ''),
+                Object.entries(filters)
+                    .filter(([, value]) => value !== '' && value !== false)
+                    // `apagados=1` e não `=true`: é o que o URL mostra.
+                    .map(([key, value]) => [key, value === true ? 1 : value]),
             ),
             ...(page !== undefined && page > 1 ? { page } : {}),
         },
@@ -110,10 +117,58 @@ function pageWindow(current: number, last: number): (number | null)[] {
     );
 }
 
+/** O miolo de uma linha: igual na lista e nos apagados, muda o que a embrulha. */
+function ProductRowBody({ product }: { product: ProductRow }) {
+    return (
+        <>
+            <span className="grid size-9.5 flex-none place-items-center overflow-hidden rounded-[9px] bg-secondary text-muted-foreground/60">
+                {product.imageUrl === null ? (
+                    <Box className="size-4.5" strokeWidth={1.2} />
+                ) : (
+                    <img
+                        src={product.imageUrl}
+                        alt=""
+                        className="size-full object-cover"
+                    />
+                )}
+            </span>
+
+            <span className="min-w-0 flex-[1_1_150px]">
+                <span className="flex flex-wrap items-center gap-2">
+                    <span className="text-sm font-medium text-pretty">
+                        {product.name}
+                    </span>
+                    {/* Um apagado está sempre arquivado; dizê-lo era ruído. */}
+                    {product.status !== 'active' && !product.deleted && (
+                        <span className="rounded-full border border-border px-2 py-0.5 text-[10.5px] text-muted-foreground">
+                            {label(PRODUCT_STATUSES, product.status)}
+                        </span>
+                    )}
+                </span>
+                <span className="mt-0.5 block text-[11.5px] text-muted-foreground">
+                    {productMeta(product)}
+                </span>
+            </span>
+
+            <span
+                className={cn(
+                    'flex min-w-17.5 flex-none items-center justify-end gap-2 text-right text-sm font-semibold tabular-nums',
+                    product.priceCents === null && 'text-muted-foreground',
+                )}
+            >
+                {product.priceCents === null
+                    ? '—'
+                    : formatCents(product.priceCents)}
+            </span>
+        </>
+    );
+}
+
 export default function ProductsIndex({
     products,
     filters,
     statusCounts,
+    deletedCount,
 }: Props) {
     const [search, setSearch] = useState(filters.search);
 
@@ -172,7 +227,36 @@ export default function ProductsIndex({
                 </PageHeader>
 
                 <div className="mt-5 flex flex-wrap items-center gap-x-5 gap-y-3.5 border-b border-border pb-3">
-                    <div className="flex flex-wrap gap-4.5">
+                    {/*
+                     * Nos apagados não há abas: um apagado não é um estado do
+                     * produto, e as chips aqui só contavam "arquivados".
+                     */}
+                    {filters.apagados && (
+                        <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1">
+                            <span className="border-b-2 border-gold pt-0.5 pb-1.5 text-[13.5px] font-semibold">
+                                Apagados{' '}
+                                <span className="font-normal text-muted-foreground tabular-nums">
+                                    {deletedCount}
+                                </span>
+                            </span>
+                            <button
+                                type="button"
+                                onClick={() =>
+                                    applyFilters({ apagados: false })
+                                }
+                                className="text-[13px] text-muted-foreground underline-offset-4 hover:text-foreground hover:underline"
+                            >
+                                Voltar aos produtos
+                            </button>
+                        </div>
+                    )}
+
+                    <div
+                        className={cn(
+                            'flex flex-wrap gap-4.5',
+                            filters.apagados && 'hidden',
+                        )}
+                    >
                         {tabs.map((tab) => {
                             const active = filters.status === tab.value;
 
@@ -212,62 +296,42 @@ export default function ProductsIndex({
 
                 {products.data.length === 0 ? (
                     <p className="py-9 text-center text-[13px] text-muted-foreground">
-                        Nenhum produto com estes filtros.
+                        {filters.apagados
+                            ? 'Nenhum produto apagado.'
+                            : 'Nenhum produto com estes filtros.'}
                     </p>
                 ) : (
                     <ul>
                         {products.data.map((product) => (
                             <li key={product.id}>
-                                <Link
-                                    href={edit(product.id)}
-                                    className="flex w-full flex-wrap items-center gap-x-3.5 gap-y-2 border-b border-border/60 px-0.5 py-2.75 text-left transition-colors hover:bg-secondary/40 focus-visible:bg-secondary/40 focus-visible:outline-none"
-                                >
-                                    <span className="grid size-9.5 flex-none place-items-center overflow-hidden rounded-[9px] bg-secondary text-muted-foreground/60">
-                                        {product.imageUrl === null ? (
-                                            <Box
-                                                className="size-4.5"
-                                                strokeWidth={1.2}
-                                            />
-                                        ) : (
-                                            <img
-                                                src={product.imageUrl}
-                                                alt=""
-                                                className="size-full object-cover"
-                                            />
-                                        )}
-                                    </span>
-
-                                    <span className="min-w-0 flex-[1_1_150px]">
-                                        <span className="flex flex-wrap items-center gap-2">
-                                            <span className="text-sm font-medium text-pretty">
-                                                {product.name}
-                                            </span>
-                                            {product.status !== 'active' && (
-                                                <span className="rounded-full border border-border px-2 py-0.5 text-[10.5px] text-muted-foreground">
-                                                    {label(
-                                                        PRODUCT_STATUSES,
-                                                        product.status,
-                                                    )}
-                                                </span>
-                                            )}
-                                        </span>
-                                        <span className="mt-0.5 block text-[11.5px] text-muted-foreground">
-                                            {productMeta(product)}
-                                        </span>
-                                    </span>
-
-                                    <span
-                                        className={cn(
-                                            'flex min-w-17.5 flex-none items-center justify-end gap-2 text-right text-sm font-semibold tabular-nums',
-                                            product.priceCents === null &&
-                                                'text-muted-foreground',
-                                        )}
+                                {product.deleted ? (
+                                    // Sem ligação: a página de um apagado não
+                                    // existe até ele voltar.
+                                    <div className="flex w-full flex-wrap items-center gap-x-3.5 gap-y-2 border-b border-border/60 px-0.5 py-2.75">
+                                        <ProductRowBody product={product} />
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            onClick={() =>
+                                                router.patch(
+                                                    restaurar(product.id).url,
+                                                    {},
+                                                    { preserveScroll: true },
+                                                )
+                                            }
+                                        >
+                                            Restaurar
+                                        </Button>
+                                    </div>
+                                ) : (
+                                    <Link
+                                        href={edit(product.id)}
+                                        className="flex w-full flex-wrap items-center gap-x-3.5 gap-y-2 border-b border-border/60 px-0.5 py-2.75 text-left transition-colors hover:bg-secondary/40 focus-visible:bg-secondary/40 focus-visible:outline-none"
                                     >
-                                        {product.priceCents === null
-                                            ? '—'
-                                            : formatCents(product.priceCents)}
-                                    </span>
-                                </Link>
+                                        <ProductRowBody product={product} />
+                                    </Link>
+                                )}
                             </li>
                         ))}
                     </ul>
@@ -305,6 +369,24 @@ export default function ProductsIndex({
                             </SelectContent>
                         </Select>
                     </label>
+
+                    {/*
+                     * A porta para os apagados fica aqui em baixo, discreta e
+                     * só quando há algum: apagar foi tirar da vista, e uma aba
+                     * ao lado das outras voltava a pô-los lá.
+                     */}
+                    {!filters.apagados && deletedCount > 0 && (
+                        <button
+                            type="button"
+                            onClick={() =>
+                                applyFilters({ apagados: true, status: '' })
+                            }
+                            className="underline-offset-4 hover:text-foreground hover:underline"
+                        >
+                            Apagados{' '}
+                            <span className="tabular-nums">{deletedCount}</span>
+                        </button>
+                    )}
 
                     {last > 1 && (
                         <nav

@@ -113,10 +113,23 @@ class StoreManualOrderRequest extends FormRequest
                         );
                     }
 
+                    $variant = $hasVariant
+                        ? Variant::query()->with('product')->find((int) $item['variant_id'])
+                        : null;
+
+                    // A variante de um produto apagado continua a existir por
+                    // id — o seletor ja nao a mostra, mas um rascunho de
+                    // encomenda guardado antes ainda a traz.
+                    if ($variant !== null && $variant->product->trashed()) {
+                        $validator->errors()->add(
+                            "items.{$index}.variant_id",
+                            'Este produto foi apagado. Recupera-o antes de o vender.',
+                        );
+                    }
+
                     // Preco alterado face ao catalogo exige justificacao —
                     // e o que permite auditar margens mais tarde.
                     if ($hasVariant && blank($item['price_override_reason'] ?? null)) {
-                        $variant = Variant::query()->find((int) $item['variant_id']);
                         $unitPriceCents = (int) round(((float) ($item['unit_price'] ?? 0)) * 100);
 
                         if ($variant !== null && $variant->price_cents !== $unitPriceCents) {

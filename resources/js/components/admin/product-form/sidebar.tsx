@@ -1,3 +1,4 @@
+import { DeleteProduct } from '@/components/admin/product-form/delete-product';
 import { TagInput } from '@/components/admin/tag-input';
 import InputError from '@/components/input-error';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -154,6 +155,13 @@ export function ProductSidebar({
                 </p>
                 <InputError message={errors.tags} />
             </section>
+
+            {editing !== null && (
+                <DeleteProduct
+                    productId={editing.product.id}
+                    productName={editing.product.name}
+                />
+            )}
         </aside>
     );
 }

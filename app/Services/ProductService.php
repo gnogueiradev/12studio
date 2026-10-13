@@ -97,7 +97,36 @@ class ProductService
      */
     public function restore(Product $product): void
     {
-        $product->update(['status' => 'draft']);
+        DB::transaction(function () use ($product): void {
+            // Serve os dois regressos: do arquivo e da reciclagem. Um apagado
+            // volta pela mesma porta e pela mesma razao — como rascunho.
+            if ($product->trashed()) {
+                $product->restore();
+            }
+
+            $product->update(['status' => 'draft']);
+        });
+    }
+
+    /**
+     * Apagar: o produto sai da listagem e de todo o lado, mas a linha fica.
+     *
+     * Continua a valer a regra global — nada com historial comercial se apaga
+     * fisicamente. As variantes, os movimentos de stock e os itens de
+     * encomenda nao mexem; SKUs e slug continuam reservados.
+     *
+     * Arquiva ALEM de apagar, e nao por excesso de zelo: o seletor de
+     * encomendas manuais, o stock baixo e o painel filtram por estado e chegam
+     * ao produto pela variante, que continua a ve-lo (Variant::product() traz
+     * os apagados). Com o estado em `archived` excluem-no sem saber que a
+     * reciclagem existe.
+     */
+    public function delete(Product $product): void
+    {
+        DB::transaction(function () use ($product): void {
+            $product->update(['status' => 'archived']);
+            $product->delete();
+        });
     }
 
     /**

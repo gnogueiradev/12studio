@@ -43,6 +43,7 @@ class DestructiveActionAuthorizationTest extends TestCase
         return [
             'apagar produto' => ['delete', 'produtos'],
             'restaurar produto' => ['patch', 'produtos-restaurar'],
+            'apagar produto de vez' => ['delete', 'produtos-apagar'],
             'apagar variante' => ['delete', 'variantes'],
             'apagar cliente' => ['delete', 'clientes'],
             'apagar categoria' => ['delete', 'categorias'],
@@ -114,8 +115,9 @@ class DestructiveActionAuthorizationTest extends TestCase
             ->delete('_test/produto-sem-cadeado/'.$product->getKey())
             ->assertForbidden();
 
-        // Neste projeto "apagar" um produto e arquiva-lo (ProductService::archive)
-        // — nao ha soft delete. O que interessa e que o estado nao mexeu.
+        // O `destroy` do resource arquiva (ProductService::archive); apagar a
+        // serio e outra rota (`produtos.apagar`), guardada pelo provider acima.
+        // O que interessa aqui e que o estado nao mexeu.
         $this->assertSame('active', $product->refresh()->status);
     }
 
@@ -142,6 +144,7 @@ class DestructiveActionAuthorizationTest extends TestCase
         return match ($key) {
             'produtos' => '/admin/produtos/'.Product::factory()->create()->getKey(),
             'produtos-restaurar' => '/admin/produtos/'.Product::factory()->create()->getKey().'/restaurar',
+            'produtos-apagar' => '/admin/produtos/'.Product::factory()->create()->getKey().'/apagar',
             'variantes' => '/admin/variantes/'.Variant::factory()->create()->getKey(),
             'clientes' => '/admin/clientes/'.User::factory()->create()->getKey(),
             'categorias' => '/admin/categorias/'.Category::factory()->create()->getKey(),
