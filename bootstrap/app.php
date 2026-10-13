@@ -15,12 +15,17 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Route;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
+        // Os avisos de fora (a Etsy) entram sem o grupo `web`: sao servidores,
+        // nao browsers — sem sessao, sem cookies, sem CSRF. Guarda-os a
+        // assinatura de cada pedido.
+        then: fn () => Route::group([], __DIR__.'/../routes/webhooks.php'),
     )
     ->withMiddleware(function (Middleware $middleware): void {
         // Em producao a app corre ATRAS do Nginx Proxy Manager, que termina o
@@ -97,6 +102,6 @@ return Application::configure(basePath: dirname(__DIR__))
             // por engano, um trace). O oauth/authorize fica de fora de
             // proposito: e uma pagina para pessoas, e um visitante sem sessao
             // tem de ser mandado para o login, nao receber um 401 em JSON.
-            fn (Request $request) => $request->is('api/*', 'mcp', 'mcp/*', 'oauth/token', 'oauth/register') || $request->expectsJson(),
+            fn (Request $request) => $request->is('api/*', 'mcp', 'mcp/*', 'oauth/token', 'oauth/register', 'webhooks/*') || $request->expectsJson(),
         );
     })->create();
