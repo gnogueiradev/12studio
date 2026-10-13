@@ -30,6 +30,7 @@ export const PAYMENT_METHODS = [
     { value: 'cash', label: 'Dinheiro' },
     { value: 'bank_transfer', label: 'Transferência' },
     { value: 'vinted', label: 'Vinted' },
+    { value: 'etsy', label: 'Etsy' },
     { value: 'other', label: 'Outro' },
 ] as const;
 
@@ -37,6 +38,7 @@ export const SALES_CHANNELS = [
     { value: 'website', label: 'Loja online' },
     { value: 'vinted', label: 'Vinted' },
     { value: 'instagram', label: 'Instagram' },
+    { value: 'etsy', label: 'Etsy' },
     { value: 'manual', label: 'Manual' },
 ] as const;
 
@@ -199,6 +201,27 @@ export type ProgressStep = {
     at: string | null;
 };
 
+/** O recibo da Etsy de onde uma encomenda veio. */
+export type OrderEtsySide = {
+    receiptId: number;
+    /** A venda no gestor da loja, na Etsy. */
+    url: string;
+    etsyStatus: string | null;
+    /** Entrou com alguma coisa que só uma pessoa resolve. */
+    needsReview: boolean;
+    buyerMessage: string | null;
+    giftMessage: string | null;
+    /** Linhas que não casaram com nenhuma variante do 12studio. */
+    unmatchedLines: { sku: string | null; title: string; quantity: number }[];
+    grossCents: number | null;
+    /** Só a taxa de processamento do pagamento. */
+    feesCents: number | null;
+    netCents: number | null;
+    /** Imposto cobrado ao comprador e entregue pela Etsy. */
+    taxCents: number | null;
+    shippedOnEtsyAt: string | null;
+};
+
 export type OrderDetail = {
     id: number;
     orderNumber: string;
@@ -237,6 +260,8 @@ export type OrderDetail = {
     cancelledAt: string | null;
     /** Encomendas do cliente registado, esta incluída; null sem cliente. */
     customerOrdersCount: number | null;
+    /** O lado da Etsy, nas encomendas que vieram de lá. */
+    etsy: OrderEtsySide | null;
     /** Estados de fulfilment ainda alcançáveis a partir do atual. */
     availableStatuses: string[];
     progress: ProgressStep[];

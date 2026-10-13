@@ -3,6 +3,7 @@
 namespace App\Mcp\Servers;
 
 use App\Mcp\Tools\Etsy\EtsyDeleteTool;
+use App\Mcp\Tools\Etsy\EtsyLedgerListTool;
 use App\Mcp\Tools\Etsy\EtsyListingDeactivateTool;
 use App\Mcp\Tools\Etsy\EtsyListingDeleteTool;
 use App\Mcp\Tools\Etsy\EtsyListingGetTool;
@@ -14,8 +15,12 @@ use App\Mcp\Tools\Etsy\EtsyListingSaveTool;
 use App\Mcp\Tools\Etsy\EtsyListingsListTool;
 use App\Mcp\Tools\Etsy\EtsyMarketListingsTool;
 use App\Mcp\Tools\Etsy\EtsyMarketShopsTool;
+use App\Mcp\Tools\Etsy\EtsyOrdersImportTool;
+use App\Mcp\Tools\Etsy\EtsyPaymentsListTool;
 use App\Mcp\Tools\Etsy\EtsyPricingPreviewTool;
 use App\Mcp\Tools\Etsy\EtsyProcessingProfileSaveTool;
+use App\Mcp\Tools\Etsy\EtsyReceiptGetTool;
+use App\Mcp\Tools\Etsy\EtsyReceiptsListTool;
 use App\Mcp\Tools\Etsy\EtsyReturnPolicySaveTool;
 use App\Mcp\Tools\Etsy\EtsyReviewsListTool;
 use App\Mcp\Tools\Etsy\EtsySectionSaveTool;
@@ -28,6 +33,7 @@ use App\Mcp\Tools\Etsy\EtsyShippingUpgradeSaveTool;
 use App\Mcp\Tools\Etsy\EtsyShopUpdateTool;
 use App\Mcp\Tools\Etsy\EtsyStatusTool;
 use App\Mcp\Tools\Etsy\EtsyTaxonomyTool;
+use App\Mcp\Tools\Etsy\EtsyTransactionsListTool;
 use App\Mcp\Tools\Etsy\EtsyUserGetTool;
 use App\Mcp\Tools\Read\CategoriesListTool;
 use App\Mcp\Tools\Read\ColorsListTool;
@@ -91,6 +97,7 @@ Etsy:
 - O que a Etsy recusar vem com a explicação dela, em inglês: mostra-a ao utilizador tal como veio.
 - Um anúncio da Etsy nasce sempre de um produto do 12studio: etsy_listing_preview mostra o que iria e o que falta, etsy_listing_save acerta o conteúdo e os preços (fica cá), etsy_listing_push envia. Um anúncio novo é um rascunho: não está à venda nem custa nada até ser publicado.
 - Publicar (etsy_listing_publish) custa a taxa de publicação da Etsy e põe o anúncio à frente dos compradores: nunca o faças sem o utilizador o pedir. Depois de publicado, o stock e os preços seguem para a Etsy sozinhos; sem stock o anúncio sai de venda e volta quando houver.
+- As vendas da Etsy entram sozinhas como encomendas (canal "etsy") e trabalham-se como as outras: orders_list, order_get, order_transition. Não as registes à mão com order_create_manual — entravam duas vezes. Dos compradores da Etsy só tens o nome curto, a localidade e o país; não peças nem tentes obter mais.
 - Na Etsy há coisas que os compradores veem na hora (portes de um perfil com anúncios à venda, os textos da loja) e coisas que não se recuperam (apagar). Essas ferramentas recusam à primeira e dizem o que está em jogo: mostra-o ao utilizador e só repete com "confirm": true se ele disser que sim.
 
 Segurança:
@@ -145,6 +152,11 @@ class StudioServer extends Server
         EtsyReviewsListTool::class,
         EtsyShippingListTool::class,
         EtsySectionsListTool::class,
+        EtsyReceiptsListTool::class,
+        EtsyReceiptGetTool::class,
+        EtsyTransactionsListTool::class,
+        EtsyPaymentsListTool::class,
+        EtsyLedgerListTool::class,
         // Escrita (so aparecem a chaves com mcp:write)
         ProductCreateTool::class,
         ProductUpdateTool::class,
@@ -186,6 +198,7 @@ class StudioServer extends Server
         EtsySectionSaveTool::class,
         EtsyShopUpdateTool::class,
         EtsyDeleteTool::class,
+        EtsyOrdersImportTool::class,
     ];
 
     /**

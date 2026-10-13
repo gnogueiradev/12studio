@@ -86,9 +86,6 @@ class EtsyCoverageTest extends TestCase
      * entram. Quando uma fase fecha, as linhas dela saem daqui.
      */
     private const PENDING = [
-        // Fase 4 — encomendas
-        'etsy_receipts_list', 'etsy_receipt_get', 'etsy_transactions_list',
-        'etsy_payments_list', 'etsy_ledger_list',
         // Fase 5 — envio
         'etsy_receipt_update', 'etsy_order_ship',
     ];

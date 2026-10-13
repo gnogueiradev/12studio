@@ -95,6 +95,10 @@ final class OrderPresenter
             'internal_note' => McpFormat::untrusted($order->admin_note),
             'stock_issue' => $order->stock_issue,
             'tags' => $order->tags->pluck('name')->values()->all(),
+            // So nas encomendas que vieram da Etsy.
+            'etsy' => $order->isFromEtsy() && $order->etsyReceipt !== null
+                ? EtsyReceiptPresenter::ofOrder($order->etsyReceipt)
+                : null,
         ];
     }
 

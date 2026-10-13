@@ -40,6 +40,9 @@ type Props = {
     customers: CustomerOption[];
     variants: VariantOption[];
     defaultVatRate: number;
+    /** O que se pode escolher à mão: a Etsy fica de fora, entra sozinha. */
+    salesChannels: string[];
+    paymentMethods: string[];
     /** Presente quando a página foi aberta a retomar um rascunho. */
     draft?: OrderDraft;
 };
@@ -128,6 +131,8 @@ export default function OrdersCreate({
     customers,
     variants,
     defaultVatRate,
+    salesChannels,
+    paymentMethods,
     draft,
 }: Props) {
     const { data, setData, post, put, transform, processing, errors } =
@@ -341,7 +346,11 @@ export default function OrdersCreate({
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {SALES_CHANNELS.map((channel) => (
+                                        {SALES_CHANNELS.filter((channel) =>
+                                            salesChannels.includes(
+                                                channel.value,
+                                            ),
+                                        ).map((channel) => (
                                             <SelectItem
                                                 key={channel.value}
                                                 value={channel.value}
@@ -791,20 +800,19 @@ export default function OrdersCreate({
                                                     <SelectValue />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    {PAYMENT_METHODS.map(
-                                                        (method) => (
-                                                            <SelectItem
-                                                                key={
-                                                                    method.value
-                                                                }
-                                                                value={
-                                                                    method.value
-                                                                }
-                                                            >
-                                                                {method.label}
-                                                            </SelectItem>
-                                                        ),
-                                                    )}
+                                                    {PAYMENT_METHODS.filter(
+                                                        (method) =>
+                                                            paymentMethods.includes(
+                                                                method.value,
+                                                            ),
+                                                    ).map((method) => (
+                                                        <SelectItem
+                                                            key={method.value}
+                                                            value={method.value}
+                                                        >
+                                                            {method.label}
+                                                        </SelectItem>
+                                                    ))}
                                                 </SelectContent>
                                             </Select>
                                             <InputError

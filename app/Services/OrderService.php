@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Alerts\Labels;
 use App\Alerts\OrderAlerts;
 use App\Mail\OrderShippedMail;
 use App\Models\Order;
@@ -12,6 +13,7 @@ use App\Models\Tag;
 use App\Models\User;
 use App\Models\Variant;
 use App\Support\Money;
+use Closure;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
@@ -163,6 +165,117 @@ class OrderService
             if (($data['payment_status'] ?? 'pending') !== 'pending') {
                 $this->setPaymentStatus($order, (string) $data['payment_status'], $admin);
             }
+
+            return $order->refresh();
+        });
+    }
+
+    /**
+     * Encomenda que chega ja feita e ja paga de um mercado (a Etsy): o preco,
+     * o comprador e o pagamento sao os de la, nao se discutem ca.
+     *
+     * Difere da manual em tres coisas. Nao ha autor: foi a importacao. Faltar
+     * stock NAO a trava — a venda ja aconteceu e o dinheiro ja foi cobrado —,
+     * a encomenda entra marcada com `stock_issue` para alguem resolver. E as
+     * linhas trazem o preco que o mercado cobrou, com ou sem variante nossa.
+     *
+     * `$record` corre dentro da mesma transacao, depois de a encomenda
+     * existir: e onde quem importa grava a sua ancora (o recibo), para a
+     * encomenda e a ancora nascerem juntas ou nenhuma.
+     *
+     * @param  array{
+     *     sales_channel: string,
+     *     payment_method: string,
+     *     external_order_reference: string,
+     *     customer_name: string,
+     *     shipping_address: array<string, mixed>|null,
+     *     shipping_cents: int,
+     *     adjustment_cents: int,
+     *     adjustment_reason: string|null,
+     *     stock_reason: string,
+     *     note: string,
+     *     lines: array<int, array{variant: Variant|null, product_name: string, sku: string|null, qty: int, unit_price_cents: int, personalization: array<string, string>|null}>,
+     * }  $data
+     * @param  (Closure(Order): void)|null  $record
+     */
+    public function createFromMarketplace(array $data, ?Closure $record = null): Order
+    {
+        return DB::transaction(function () use ($data, $record): Order {
+            $subtotal = array_sum(array_map(fn (array $line): int => $line['unit_price_cents'] * $line['qty'], $data['lines']));
+
+            $order = Order::query()->create([
+                'order_number' => $this->nextOrderNumber(),
+                'customer_name' => $data['customer_name'],
+                'status' => 'pending_payment',
+                'payment_method' => $data['payment_method'],
+                'payment_status' => 'pending',
+                'sales_channel' => $data['sales_channel'],
+                'external_order_reference' => $data['external_order_reference'],
+                'subtotal_cents' => $subtotal,
+                'shipping_cents' => $data['shipping_cents'],
+                'adjustment_cents' => $data['adjustment_cents'],
+                'adjustment_reason' => $data['adjustment_reason'],
+                'total_cents' => $subtotal + $data['shipping_cents'] + $data['adjustment_cents'],
+                'currency' => 'EUR',
+                'shipping_address' => $data['shipping_address'],
+                'guest_access_token' => Str::random(64),
+            ]);
+
+            /** @var array<int, string> $short */
+            $short = [];
+
+            foreach ($data['lines'] as $line) {
+                $variant = $line['variant'];
+                $product = $variant?->product;
+                // Sem variante nossa nao se sabe o que e: vai para a producao,
+                // que e onde alguem olha para ela.
+                $fulfillmentMode = $product === null ? 'made_to_order' : $product->fulfillment_mode;
+                $catalogPrice = $variant?->price_cents;
+
+                $item = $order->items()->create([
+                    'variant_id' => $variant?->getKey(),
+                    'product_name' => $product === null ? $line['product_name'] : $product->name,
+                    'variant_label' => $variant?->size_label,
+                    'sku' => $variant === null ? $line['sku'] : $variant->sku,
+                    'unit_price_cents' => $line['unit_price_cents'],
+                    'catalog_unit_price_cents' => $catalogPrice,
+                    'price_override_reason' => $catalogPrice !== null && $catalogPrice !== $line['unit_price_cents']
+                        ? 'Preço cobrado na '.Labels::of(Labels::SALES_CHANNELS, $data['sales_channel'])
+                        : null,
+                    'personalization_surcharge_cents' => 0,
+                    'qty' => $line['qty'],
+                    'line_total_cents' => $line['unit_price_cents'] * $line['qty'],
+                    'vat_rate' => $product === null ? (int) config('shop.default_vat_rate', 23) : $product->vat_rate,
+                    'personalization' => $line['personalization'] ?: null,
+                    'fulfillment_mode' => $fulfillmentMode,
+                    'production_status' => $fulfillmentMode === 'in_stock' ? 'not_required' : 'awaiting_production',
+                ]);
+
+                if ($variant instanceof Variant && $fulfillmentMode === 'in_stock'
+                    && ! $this->stockService->decrement($variant, $item->qty, $data['stock_reason'], $order)) {
+                    $short[] = $variant->sku;
+                }
+            }
+
+            if ($short !== []) {
+                $order->update(['stock_issue' => true]);
+            }
+
+            $this->recordOrderHistory($order, null, 'pending_payment', null, $data['note']);
+
+            if ($record !== null) {
+                $record($order);
+            }
+
+            $this->alerts->created($order, null);
+
+            if ($short !== []) {
+                $this->alerts->soldWithoutStock($order, $short);
+            }
+
+            // Pelas mesmas invariantes de sempre: e o pagamento que decide se
+            // a encomenda vai para a producao ou direta para expedicao.
+            $this->setPaymentStatus($order, 'paid', null, 'Paga na '.Labels::of(Labels::SALES_CHANNELS, $data['sales_channel']).'.');
 
             return $order->refresh();
         });

@@ -23,6 +23,28 @@ const SECTIONS: { key: Section; label: string; href: () => { url: string } }[] =
  */
 export function EtsyNav({ current }: { current: Section }) {
     return (
+        <>
+            <EtsyNavLinks current={current} />
+            <EtsyNotice />
+        </>
+    );
+}
+
+/**
+ * O aviso que os termos da API da Etsy mandam mostrar em quem a usa: o
+ * 12studio fala com a Etsy, não é da Etsy. Em inglês, tal como ela o escreve.
+ */
+export function EtsyNotice() {
+    return (
+        <p className="mt-2 text-[11.5px] text-muted-foreground">
+            The term 'Etsy' is a trademark of Etsy, Inc. This Application uses
+            Etsy's API, but is not endorsed or certified by Etsy.
+        </p>
+    );
+}
+
+function EtsyNavLinks({ current }: { current: Section }) {
+    return (
         <nav
             aria-label="Etsy"
             className="mt-4 flex flex-wrap items-center gap-x-5 gap-y-2 text-[13.5px]"

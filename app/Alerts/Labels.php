@@ -35,6 +35,7 @@ final class Labels
         'cash' => 'Dinheiro',
         'bank_transfer' => 'Transferência',
         'vinted' => 'Vinted',
+        'etsy' => 'Etsy',
         'other' => 'Outro',
     ];
 
@@ -42,6 +43,7 @@ final class Labels
         'website' => 'Loja online',
         'vinted' => 'Vinted',
         'instagram' => 'Instagram',
+        'etsy' => 'Etsy',
         'manual' => 'Manual',
     ];
 

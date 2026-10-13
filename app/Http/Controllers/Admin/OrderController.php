@@ -9,6 +9,7 @@ use App\Http\Requests\Order\UpdateOrderDetailsRequest;
 use App\Http\Requests\Order\UpdateOrderPaymentRequest;
 use App\Http\Requests\Order\UpdateOrderStatusRequest;
 use App\Mail\OrderConfirmationMail;
+use App\Models\EtsyConnection;
 use App\Models\Order;
 use App\Models\OrderDraft;
 use App\Models\Tag;
@@ -106,6 +107,8 @@ class OrderController extends Controller
                 ->where('created_by_user_id', $request->user()?->getKey())
                 ->count(),
             'tagOptions' => $this->tagService->optionsFor(Tag::SCOPE_ORDER),
+            // Ha loja da Etsy de onde importar? (O botao "Importar da Etsy".)
+            'etsyConnected' => (bool) config('etsy.enabled') && EtsyConnection::query()->whereNull('broken_at')->exists(),
         ]);
     }
 

@@ -49,6 +49,7 @@ class EtsyListingSync
         private EtsyTokens $tokens,
         private EtsyListingMatcher $matcher,
         private EtsyListingBuilder $builder,
+        private EtsyOrderImporter $importer,
     ) {}
 
     // ── Ler e ligar ────────────────────────────────────────────────────────
@@ -375,13 +376,21 @@ class EtsyListingSync
     public function push(Product $product): EtsyListing
     {
         $shopId = $this->connection()->shop_id;
+        $listing = EtsyListing::query()->firstOrNew(['product_id' => $product->getKey()]);
+
+        // Um anuncio a venda pode ter vendido desde a ultima vez que
+        // olhamos. Primeiro entram as encomendas (e desce o stock ca); so
+        // depois se diz a Etsy quanto ha — senao repunha-se la o que ela
+        // acabou de vender. Um rascunho nao vende: nao ha o que perguntar.
+        if ($listing->etsy_listing_id !== null && in_array($listing->state, ['active', 'sold_out'], true)) {
+            $this->importer->run();
+        }
+
         $payload = $this->builder->build($product);
 
         if (! $payload->isReady()) {
             throw new EtsyException('Ainda não dá para enviar este anúncio. '.implode(' ', $payload->blockers));
         }
-
-        $listing = EtsyListing::query()->firstOrNew(['product_id' => $product->getKey()]);
 
         try {
             $this->pushListing($shopId, $listing, $payload);

@@ -12,6 +12,10 @@ use Throwable;
  *
  * Os dados do cliente vao completos (nome, email, telefone, morada) — decisao
  * do dono. Cada mensagem leva o link para a encomenda no backoffice.
+ *
+ * A excecao sao as encomendas da Etsy: do comprador nao sai nada. Os termos
+ * da API dela nao deixam passar dados de membros a terceiros, e o Discord e
+ * um terceiro. Quem precisa da morada abre a encomenda pelo link.
  */
 class OrderAlerts
 {
@@ -55,7 +59,7 @@ class OrderAlerts
                 : "💶 Pagamento de {$order->order_number}: ".Labels::of(Labels::PAYMENT_STATUSES, $order->payment_status);
 
             $message = DiscordMessage::make($title, $level)
-                ->field('Cliente', $order->customer_name)
+                ->field('Cliente', $this->customer($order))
                 ->field('Total', $this->money($order->total_cents))
                 ->field('Antes', Labels::of(Labels::PAYMENT_STATUSES, $previous))
                 ->field('Método', Labels::of(Labels::PAYMENT_METHODS, $order->payment_method))
@@ -70,7 +74,7 @@ class OrderAlerts
     {
         $this->guard(function () use ($order, $previousTotal, $by): void {
             $message = DiscordMessage::make("✏️ Total ajustado — {$order->order_number}", DiscordMessage::INFO)
-                ->field('Cliente', $order->customer_name)
+                ->field('Cliente', $this->customer($order))
                 ->field('Antes', $this->money($previousTotal))
                 ->field('Agora', $this->money($order->total_cents))
                 ->field('Motivo', $order->adjustment_reason, inline: false)
@@ -91,7 +95,7 @@ class OrderAlerts
             if ($forced) {
                 $message = DiscordMessage::make("⚠️ Avançada sem pagamento — {$order->order_number}", DiscordMessage::WARNING)
                     ->description('A encomenda avançou com o pagamento por regularizar.')
-                    ->field('Cliente', $order->customer_name)
+                    ->field('Cliente', $this->customer($order))
                     ->field('Total', $this->money($order->total_cents))
                     ->field('De → para', Labels::of(Labels::ORDER_STATUSES, $from).' → '.Labels::of(Labels::ORDER_STATUSES, $to))
                     ->field('Por', $this->sender->actor($by))
@@ -116,7 +120,7 @@ class OrderAlerts
             }
 
             $message = DiscordMessage::make($title, $level)
-                ->field('Cliente', $order->customer_name)
+                ->field('Cliente', $this->customer($order))
                 ->field('Total', $this->money($order->total_cents))
                 ->field('Antes', Labels::of(Labels::ORDER_STATUSES, $from))
                 ->field('Por', $this->sender->actor($by))
@@ -125,7 +129,12 @@ class OrderAlerts
             if ($to === 'shipped') {
                 $message->field('Envio', $order->shipping_method_name)
                     ->field('Tracking', $order->tracking_url ?? $order->tracking_number, inline: false)
-                    ->field('Email de envio', $order->email === null ? 'Sem email — cliente não foi avisado' : "Enviado para {$order->email}", inline: false);
+                    ->field('Email de envio', match (true) {
+                        // Na Etsy quem avisa o comprador e a Etsy.
+                        $order->isFromEtsy() => 'Não se aplica — a Etsy avisa o comprador',
+                        $order->email === null => 'Sem email — cliente não foi avisado',
+                        default => "Enviado para {$order->email}",
+                    }, inline: false);
             }
 
             if ($to === 'cancelled') {
@@ -160,7 +169,7 @@ class OrderAlerts
                 $backwards ? DiscordMessage::WARNING : DiscordMessage::INFO,
             )
                 ->field('Encomenda', $order->order_number)
-                ->field('Cliente', $order->customer_name)
+                ->field('Cliente', $this->customer($order))
                 ->field('Antes', Labels::of(Labels::PRODUCTION_STATUSES, $from))
                 ->field('Quantidade', (string) $item->qty)
                 ->field('Por', $this->sender->actor($by))
@@ -189,15 +198,63 @@ class OrderAlerts
         $this->guard(function () use ($order, $days): void {
             $message = DiscordMessage::make("⏰ Há {$days} dias em produção — {$order->order_number}", DiscordMessage::WARNING)
                 ->description($this->itemLines($order))
-                ->field('Cliente', $order->customer_name)
+                ->field('Cliente', $this->customer($order))
                 ->field('Total', $this->money($order->total_cents));
 
             $this->send(AlertChannel::STOCK, $message, $order);
         });
     }
 
+    /**
+     * Vendido num mercado sem haver na prateleira. A encomenda entrou na
+     * mesma — a venda ja aconteceu — e alguem tem de resolver: produzir, ou
+     * falar com o comprador pela Etsy.
+     *
+     * @param  array<int, string>  $skus
+     */
+    public function soldWithoutStock(Order $order, array $skus): void
+    {
+        $this->guard(function () use ($order, $skus): void {
+            $message = DiscordMessage::make("⚠️ Vendida sem stock — {$order->order_number}", DiscordMessage::DANGER)
+                ->description('A venda já aconteceu e está paga, mas o stock não chega. A encomenda entrou marcada; o stock não foi mexido.')
+                ->field('Canal', Labels::of(Labels::SALES_CHANNELS, $order->sales_channel))
+                ->field('Referências em falta', implode(', ', $skus), inline: false);
+
+            $this->send(AlertChannel::ORDERS, $message, $order);
+        });
+    }
+
+    /**
+     * Um recibo da Etsy que so uma pessoa resolve: uma linha que nao casou
+     * com nenhuma variante, outra moeda, um cancelamento depois do envio.
+     */
+    public function etsyNeedsReview(int $receiptId, string $reason, ?Order $order = null): void
+    {
+        $this->guard(function () use ($receiptId, $reason, $order): void {
+            $message = DiscordMessage::make(
+                '🔎 Encomenda da Etsy por rever — '.($order === null ? "recibo {$receiptId}" : $order->order_number),
+                DiscordMessage::WARNING,
+            )
+                ->description($reason)
+                ->field('Recibo na Etsy', (string) $receiptId);
+
+            $order === null
+                ? $this->sender->send(AlertChannel::ORDERS, $message->url("https://www.etsy.com/your/orders/sold?order_id={$receiptId}"))
+                : $this->send(AlertChannel::ORDERS, $message, $order);
+        });
+    }
+
+    private function customer(Order $order): string
+    {
+        return $order->isFromEtsy() ? 'Comprador da Etsy' : $order->customer_name;
+    }
+
     private function customerFields(DiscordMessage $message, Order $order): DiscordMessage
     {
+        if ($order->isFromEtsy()) {
+            return $message->field('Cliente', 'Comprador da Etsy — os dados estão na encomenda');
+        }
+
         return $message
             ->field('Cliente', $order->customer_name)
             ->field('Email', $order->email)

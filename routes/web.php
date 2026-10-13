@@ -274,6 +274,10 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
                 ->whereNumber('section')->name('seccoes.apagar');
         });
 
+        // As encomendas da Etsy entram sozinhas; isto e o "importar agora".
+        Route::post('etsy/encomendas/importar', [Admin\EtsyOrderController::class, 'import'])
+            ->name('etsy.encomendas.importar');
+
         // Precos e margens na Etsy. A pagina e so contas nossas; as
         // definicoes (margem, taxas, predefinicoes de um anuncio novo)
         // gravam-se ca.

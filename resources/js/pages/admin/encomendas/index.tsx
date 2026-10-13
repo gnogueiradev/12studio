@@ -27,6 +27,7 @@ import { label } from '@/lib/options';
 import type { Option } from '@/lib/options';
 import { create, index, show } from '@/routes/admin/encomendas';
 import { index as drafts } from '@/routes/admin/encomendas/rascunhos';
+import { importar as importEtsyOrders } from '@/routes/admin/etsy/encomendas';
 import type { OrderRow } from '@/types/order';
 import {
     ORDER_STATUS_CHIPS,
@@ -54,6 +55,8 @@ type Props = {
     draftsCount: number;
     /** Só as que alguma encomenda usa — as outras dariam zero resultados. */
     tagOptions: Option[];
+    /** Há loja da Etsy ligada de onde importar. */
+    etsyConnected: boolean;
 };
 
 // O Radix Select não aceita value="" — sentinela para "sem filtro".
@@ -79,8 +82,10 @@ export default function OrdersIndex({
     statusCounts,
     draftsCount,
     tagOptions,
+    etsyConnected,
 }: Props) {
     const [search, setSearch] = useState(filters.search);
+    const [importing, setImporting] = useState(false);
 
     const applyFilters = (changes: Partial<Filters>) =>
         visit({ ...filters, search, ...changes });
@@ -213,8 +218,29 @@ export default function OrdersIndex({
             <div className="flex h-full w-full max-w-[1400px] flex-1 flex-col gap-4 p-6 pb-10">
                 <PageHeader
                     title="Encomendas"
-                    description="Loja online, Vinted, Instagram e vendas presenciais no mesmo sítio."
+                    description="Loja online, Etsy, Vinted, Instagram e vendas presenciais no mesmo sítio."
                 >
+                    {etsyConnected && (
+                        <Button
+                            variant="outline"
+                            className="rounded-full"
+                            disabled={importing}
+                            title="As vendas da Etsy entram sozinhas de 5 em 5 minutos; isto é para não esperar."
+                            onClick={() => {
+                                setImporting(true);
+                                router.post(
+                                    importEtsyOrders().url,
+                                    {},
+                                    {
+                                        preserveScroll: true,
+                                        onFinish: () => setImporting(false),
+                                    },
+                                );
+                            }}
+                        >
+                            Importar da Etsy
+                        </Button>
+                    )}
                     {draftsCount > 0 && (
                         <Button
                             asChild

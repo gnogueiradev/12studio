@@ -155,4 +155,12 @@ return [
     // prateleira a esvaziar, mas a Etsy quer um numero.
     'mto_quantity' => 10,
 
+    /*
+    | A importacao de encomendas. 100 e o maximo que a Etsy da por pagina.
+    */
+
+    'orders' => [
+        'page_size' => 100,
+    ],
+
 ];

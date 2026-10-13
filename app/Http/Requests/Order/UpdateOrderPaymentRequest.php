@@ -20,7 +20,12 @@ class UpdateOrderPaymentRequest extends FormRequest
     {
         return [
             'payment_status' => ['required', Rule::in(Order::PAYMENT_STATUSES)],
-            'payment_method' => ['nullable', Rule::in(Order::PAYMENT_METHODS)],
+            // Sem a Etsy: so a importacao da esse metodo a uma encomenda — e
+            // a que ja o tem pode mante-lo (o formulario manda sempre o campo).
+            'payment_method' => ['nullable', Rule::in([
+                ...Order::MANUAL_PAYMENT_METHODS,
+                ...($this->route('order') instanceof Order && $this->route('order')->isFromEtsy() ? ['etsy'] : []),
+            ])],
             'note' => ['nullable', 'string', 'max:300'],
         ];
     }

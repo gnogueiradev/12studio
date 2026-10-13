@@ -38,6 +38,14 @@ trait FakesEtsy
 
     private int $etsyImageId = 8100;
 
+    /** @var array<int, array<string, mixed>> Os recibos do fakeEtsyReceipts. */
+    private array $etsyReceipts = [];
+
+    /** @var array<string, mixed> */
+    private array $etsyReceiptOverrides = [];
+
+    private bool $etsyReceiptsFaked = false;
+
     protected function configureEtsy(bool $enabled = true): void
     {
         config([
@@ -220,6 +228,10 @@ trait FakesEtsy
                 'currency_code' => 'EUR',
             ]),
         ]);
+
+        // Enviar para um anuncio a venda importa primeiro as encomendas: sem
+        // mais nada, a loja nao tem nenhuma.
+        $this->fakeEtsyReceipts($this->etsyReceipts, $this->etsyReceiptOverrides);
     }
 
     /**
@@ -330,6 +342,159 @@ trait FakesEtsy
                 $method === 'DELETE' => Http::response('', 204),
                 default => null,
             };
+        });
+    }
+
+    /**
+     * Um recibo como a Etsy o devolve (ShopReceipt): pago, por enviar, duas
+     * unidades do VASO-P para Portugal. Traz o que a Etsy manda mesmo quando
+     * nao o queremos (o email do comprador), para os testes provarem que nao
+     * fica ca.
+     *
+     * @param  array<string, mixed>  $overrides
+     * @return array<string, mixed>
+     */
+    protected function etsyReceipt(array $overrides = []): array
+    {
+        $money = fn (int $cents): array => ['amount' => $cents, 'divisor' => 100, 'currency_code' => $overrides['currency'] ?? 'EUR'];
+        $at = now()->timestamp;
+        $receiptId = (int) ($overrides['receipt_id'] ?? 3001);
+
+        unset($overrides['currency']);
+
+        return [
+            'receipt_id' => $receiptId,
+            'receipt_type' => 0,
+            'seller_user_id' => 9001,
+            'seller_email' => 'loja@example.com',
+            'buyer_user_id' => 77001,
+            'buyer_email' => 'comprador@example.com',
+            'name' => 'Ana Maria Silva',
+            'first_line' => 'Rua das Flores 12',
+            'second_line' => '2.º Esq',
+            'city' => 'Porto',
+            'state' => null,
+            'zip' => '4000-123',
+            'country_iso' => 'PT',
+            'formatted_address' => "Ana Maria Silva\nRua das Flores 12\n2.º Esq\n4000-123 Porto\nPortugal",
+            'status' => 'paid',
+            'payment_method' => 'cc',
+            'payment_email' => 'comprador@example.com',
+            'message_from_buyer' => 'Pode embrulhar para oferta?',
+            'message_from_seller' => null,
+            'message_from_payment' => null,
+            'is_paid' => true,
+            'is_shipped' => false,
+            'create_timestamp' => $at,
+            'created_timestamp' => $at,
+            'update_timestamp' => $at,
+            'updated_timestamp' => $at,
+            'is_gift' => false,
+            'gift_message' => '',
+            'gift_sender' => '',
+            'grandtotal' => $money(5430),
+            'subtotal' => $money(4980),
+            'total_price' => $money(4980),
+            'total_shipping_cost' => $money(450),
+            'total_tax_cost' => $money(0),
+            'total_vat_cost' => $money(0),
+            'discount_amt' => $money(0),
+            'gift_wrap_price' => $money(0),
+            'shipments' => [],
+            'refunds' => [],
+            'transactions' => [[
+                'transaction_id' => $receiptId + 1000,
+                'title' => 'Vaso Espiral',
+                'receipt_id' => $receiptId,
+                'listing_id' => 7100,
+                'product_id' => 9301,
+                'sku' => 'VASO-P',
+                'quantity' => 2,
+                'price' => $money(2490),
+                'shipping_cost' => $money(450),
+                'is_digital' => false,
+                'transaction_type' => 'listing',
+                'paid_timestamp' => $at,
+                'shipped_timestamp' => null,
+                'variations' => [
+                    ['property_id' => 513, 'value_id' => null, 'formatted_name' => 'Cor', 'formatted_value' => 'Preto'],
+                ],
+            ]],
+            ...$overrides,
+        ];
+    }
+
+    /**
+     * Os recibos que a Etsy tem, e o pagamento de cada um. Chamar outra vez
+     * troca os recibos (e recomeca a contagem dos pedidos) sem empilhar
+     * respostas. O filtro `min_last_modified` e a paginacao funcionam como
+     * la.
+     *
+     * @param  array<int, array<string, mixed>>  $receipts
+     * @param  array<string, mixed>  $overrides  Por chave: list, payments.
+     */
+    protected function fakeEtsyReceipts(array $receipts = [], array $overrides = []): void
+    {
+        $this->etsyReceipts = $receipts;
+        $this->etsyReceiptOverrides = $overrides;
+        Http::fake([]);
+
+        if ($this->etsyReceiptsFaked) {
+            return;
+        }
+
+        $this->etsyReceiptsFaked = true;
+
+        Http::fake(function (Request $request) {
+            $url = $request->url();
+            $path = (string) parse_url($url, PHP_URL_PATH);
+
+            if (! str_contains($url, 'etsy.test') || $request->method() !== 'GET' || ! str_contains($path, '/shops/4242/receipts')) {
+                return null;
+            }
+
+            parse_str((string) parse_url($url, PHP_URL_QUERY), $query);
+
+            if (preg_match('#/receipts/(\d+)/payments$#', $path, $match) === 1) {
+                return $this->etsyReceiptOverrides['payments'] ?? Http::response(['count' => 1, 'results' => [[
+                    'payment_id' => (int) $match[1] + 3000,
+                    'receipt_id' => (int) $match[1],
+                    'amount_gross' => ['amount' => 5430, 'divisor' => 100, 'currency_code' => 'EUR'],
+                    'amount_fees' => ['amount' => 247, 'divisor' => 100, 'currency_code' => 'EUR'],
+                    'amount_net' => ['amount' => 5183, 'divisor' => 100, 'currency_code' => 'EUR'],
+                    'currency' => 'EUR',
+                    'status' => 'settled',
+                    'payment_adjustments' => [],
+                ]]]);
+            }
+
+            if (preg_match('#/receipts/(\d+)/transactions$#', $path, $match) === 1) {
+                $receipt = collect($this->etsyReceipts)->firstWhere('receipt_id', (int) $match[1]);
+                $rows = (array) ($receipt['transactions'] ?? []);
+
+                return Http::response(['count' => count($rows), 'results' => $rows]);
+            }
+
+            if (preg_match('#/receipts/(\d+)$#', $path, $match) === 1) {
+                $receipt = collect($this->etsyReceipts)->firstWhere('receipt_id', (int) $match[1]);
+
+                return $receipt === null ? Http::response(['error' => 'Receipt not found'], 404) : Http::response($receipt);
+            }
+
+            if (isset($this->etsyReceiptOverrides['list'])) {
+                return $this->etsyReceiptOverrides['list'];
+            }
+
+            $since = (int) ($query['min_last_modified'] ?? 0);
+            $matching = collect($this->etsyReceipts)
+                ->filter(fn (array $receipt): bool => (int) $receipt['update_timestamp'] >= $since)
+                ->sortBy('update_timestamp')
+                ->values();
+
+            return Http::response([
+                'count' => $matching->count(),
+                'results' => $matching->slice((int) ($query['offset'] ?? 0), (int) ($query['limit'] ?? 25))->values()->all(),
+            ]);
         });
     }
 
