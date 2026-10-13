@@ -75,9 +75,10 @@ class EtsyListingLifecycle
         $this->setRemoteState($listing, 'active');
         $listing->update(['auto_deactivated_at' => null, 'last_error' => null]);
 
-        // Um esgotado volta com a quantidade a 1 (e a Etsy que o faz): o
-        // inventario certo vai a seguir.
-        if ($previous === 'sold_out') {
+        // Um esgotado volta com a quantidade a 1 (e a Etsy que o faz), e num
+        // expirado nao se mexeu enquanto esteve parado: o inventario e o
+        // conteudo certos vao a seguir.
+        if (in_array($previous, ['sold_out', 'expired'], true)) {
             $this->sync->push($product);
         }
 
@@ -109,7 +110,7 @@ class EtsyListingLifecycle
 
         return match (true) {
             ! $payload->isReady() => 'Ainda não dá para publicar este anúncio. '.implode(' ', $payload->blockers),
-            $listing->last_push_hash !== $payload->hash() => 'Há alterações por enviar: o que está na Etsy não é o que o 12studio tem agora. Envia o anúncio primeiro e publica a seguir.',
+            ! in_array($listing->state, ['sold_out', 'expired'], true) && $listing->last_push_hash !== $payload->hash() => 'Há alterações por enviar: o que está na Etsy não é o que o 12studio tem agora. Envia o anúncio primeiro e publica a seguir.',
             $this->sync->pendingUploads($listing)['images'] > 0 => 'As fotografias ainda não estão todas na Etsy'
                 .($listing->last_error === null ? ' (podem estar a subir).' : ": {$listing->last_error}")
                 .' Espera um minuto ou volta a enviar o anúncio.',
@@ -187,15 +188,27 @@ class EtsyListingLifecycle
 
         try {
             $payload = $this->sync->payload($product);
+            $sellable = $product->status !== 'archived' && $payload->totalQuantity() > 0;
+            $changed = $listing->last_push_hash !== $payload->hash();
+            // follows() ja garantiu que, se esta inativo, fomos nos.
+            $returning = $listing->state === 'inactive';
+
+            // Nada a fazer: nem se gasta um pedido a Etsy.
+            if ($sellable ? (! $changed && ! $returning) : $listing->state !== 'active') {
+                return self::UNCHANGED;
+            }
+
+            // Antes de mexer: o estado que ca esta pode ter horas. O dono
+            // pode ter desligado o anuncio na Etsy, ou ele ter esgotado ou
+            // expirado — e ai nao e connosco (repor um expirado era pagar).
+            if (! $this->stateStillHolds($listing)) {
+                return self::SKIPPED;
+            }
 
             // Sem nada para vender (ou com o produto fora do catalogo) nao
             // pode estar a venda. So se muda o estado: um inventario a zero
             // a Etsy nao aceitava.
-            if ($product->status === 'archived' || $payload->totalQuantity() === 0) {
-                if ($listing->state !== 'active') {
-                    return self::UNCHANGED;
-                }
-
+            if (! $sellable) {
                 $this->setRemoteState($listing, 'inactive');
                 $listing->update(['auto_deactivated_at' => now()]);
 
@@ -208,14 +221,14 @@ class EtsyListingLifecycle
 
             $outcome = self::UNCHANGED;
 
-            if ($listing->last_push_hash !== $payload->hash()) {
+            if ($changed) {
                 $listing = $this->sync->push($product);
                 $outcome = self::PUSHED;
             }
 
             // Foi a sincronizacao que o tirou de venda; e ela que o repoe.
             // Depois do inventario, para nao voltar com quantidades velhas.
-            if ($listing->state === 'inactive' && $listing->auto_deactivated_at !== null) {
+            if ($returning) {
                 $this->setRemoteState($listing, 'active');
                 $listing->update(['auto_deactivated_at' => null]);
 
@@ -223,6 +236,10 @@ class EtsyListingLifecycle
             }
 
             return $outcome;
+        } catch (EtsyBusyException) {
+            // Alguem esta a enviar este anuncio agora mesmo: fica para a
+            // volta seguinte, sem alarme.
+            return self::SKIPPED;
         } catch (EtsyException $exception) {
             $this->problem($listing, 'A sincronização com a Etsy falhou', $exception->getMessage());
 
@@ -324,6 +341,35 @@ class EtsyListingLifecycle
     }
 
     // ── Por dentro ─────────────────────────────────────────────────────────
+
+    /**
+     * Pergunta a Etsy em que estado o anuncio esta MESMO. Se bate com o que
+     * ca esta, segue-se. Se nao bate, fica ca o estado verdadeiro e esta
+     * volta nao mexe em nada: a decisao deixou de ser nossa (e por isso a
+     * marca de "fomos nos que o desligamos" tambem sai).
+     */
+    private function stateStillHolds(EtsyListing $listing): bool
+    {
+        $remote = $this->lookUp($listing);
+
+        if ($remote === null) {
+            $this->forgetRemote($listing);
+
+            return false;
+        }
+
+        $state = is_string($remote['state'] ?? null) ? Str::limit($remote['state'], 20, '') : $listing->state;
+
+        if ($state === $listing->state) {
+            $listing->update(['remote_checked_at' => now()]);
+
+            return true;
+        }
+
+        $listing->update(['state' => $state, 'auto_deactivated_at' => null, 'remote_checked_at' => now()]);
+
+        return false;
+    }
 
     private function follows(EtsyListing $listing): bool
     {

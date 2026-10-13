@@ -102,6 +102,8 @@ class EtsyProductController extends Controller
                 'imagesOnEtsy' => $listing === null ? 0 : $listing->images->whereNotNull('etsy_image_id')->count(),
                 // O que impede publicar, ja por palavras (null = pode).
                 'publishBlocker' => $listing?->isOnEtsy() ? $this->lifecycle->publishBlocker($product) : null,
+                // Guardar ja e enviar: a sincronizacao leva-o em minutos.
+                'goesLiveByItself' => $listing?->goesLiveByItself() ?? false,
             ],
             'own' => $this->content($listing),
             'effective' => [
@@ -144,9 +146,11 @@ class EtsyProductController extends Controller
 
     public function save(SaveEtsyListingRequest $request, Product $product): RedirectResponse
     {
-        $this->sync->saveContent($product, $request->validated());
+        $listing = $this->sync->saveContent($product, $request->validated());
 
-        $this->toast('Guardado. Ainda nada foi para a Etsy: isso é o "Enviar para a Etsy".');
+        $this->toast($listing->goesLiveByItself()
+            ? 'Guardado. O anúncio está à venda e sincronizado: isto segue para a Etsy sozinho, nos próximos minutos.'
+            : 'Guardado. Ainda nada foi para a Etsy: isso é o "Enviar para a Etsy".');
 
         return back();
     }

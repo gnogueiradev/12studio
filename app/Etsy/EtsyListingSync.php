@@ -13,6 +13,7 @@ use App\Models\Product;
 use App\Support\Money;
 use Closure;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -375,14 +376,38 @@ class EtsyListingSync
      */
     public function push(Product $product): EtsyListing
     {
+        // Um envio de cada vez por produto. Dois ao mesmo tempo (um duplo
+        // clique, o ecra e o MCP) e os dois sem anuncio ainda criavam dois
+        // rascunhos na Etsy.
+        $lock = Cache::lock(self::pushLock((int) $product->getKey()), 120);
+
+        if (! $lock->get()) {
+            throw new EtsyBusyException("\"{$product->name}\" já está a ser enviado para a Etsy. Espera que acabe e tenta outra vez.");
+        }
+
+        try {
+            return $this->send($product);
+        } finally {
+            $lock->release();
+        }
+    }
+
+    public static function pushLock(int $productId): string
+    {
+        return "etsy:push:{$productId}";
+    }
+
+    private function send(Product $product): EtsyListing
+    {
         $shopId = $this->connection()->shop_id;
         $listing = EtsyListing::query()->firstOrNew(['product_id' => $product->getKey()]);
 
-        // Um anuncio a venda pode ter vendido desde a ultima vez que
+        // Um anuncio que la esta pode ter vendido desde a ultima vez que
         // olhamos. Primeiro entram as encomendas (e desce o stock ca); so
         // depois se diz a Etsy quanto ha — senao repunha-se la o que ela
-        // acabou de vender. Um rascunho nao vende: nao ha o que perguntar.
-        if ($listing->etsy_listing_id !== null && in_array($listing->state, ['active', 'sold_out'], true)) {
+        // acabou de vender. Sempre que ha anuncio, mesmo que ca diga
+        // "rascunho": o estado de ca pode ter horas.
+        if ($listing->etsy_listing_id !== null) {
             $this->importer->run();
         }
 

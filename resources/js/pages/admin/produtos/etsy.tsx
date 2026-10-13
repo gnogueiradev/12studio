@@ -99,6 +99,11 @@ type Listing = {
     imagesOnEtsy: number;
     /** O que impede pô-lo à venda, já por palavras. Null = pode. */
     publishBlocker: string | null;
+    /**
+     * À venda e sincronizado: o que se guardar segue para a Etsy sozinho, em
+     * minutos, sem passar pelo “Enviar”.
+     */
+    goesLiveByItself: boolean;
 };
 
 type Difference = { field: string; onEtsy: string; wouldSend: string };
@@ -266,6 +271,8 @@ function Status({ product, connected, listing, blockers, differences }: Props) {
     // Feito à mão na Etsy e nunca enviado daqui: o primeiro envio passa-lhe
     // por cima.
     const adopted = listing.onEtsy && listing.lastPushedAt === null;
+    // Mexer num esgotado ou num expirado pode renová-lo, e renovar paga-se.
+    const lapsed = listing.state === 'sold_out' || listing.state === 'expired';
 
     const send = () => {
         setSending(true);
@@ -356,7 +363,7 @@ function Status({ product, connected, listing, blockers, differences }: Props) {
                     type="button"
                     disabled={!connected || blockers.length > 0 || sending}
                     onClick={() =>
-                        live || adopted ? setConfirming(true) : send()
+                        live || adopted || lapsed ? setConfirming(true) : send()
                     }
                 >
                     {sending && <Spinner />}
@@ -436,12 +443,16 @@ function Status({ product, connected, listing, blockers, differences }: Props) {
                 title={
                     live
                         ? 'Enviar para um anúncio à venda'
-                        : 'Primeiro envio para este anúncio'
+                        : lapsed
+                          ? 'Enviar para um anúncio parado'
+                          : 'Primeiro envio para este anúncio'
                 }
                 description={
                     live
                         ? 'O anúncio está à venda: o título, os preços, as quantidades e as fotografias mudam para os compradores assim que carregares.'
-                        : 'O anúncio já existia na Etsy. Os preços, as quantidades e as fotografias que lá estão são substituídos pelos do produto.'
+                        : lapsed
+                          ? 'O anúncio está esgotado ou expirado na Etsy. Mexer-lhe pode renová-lo, e a Etsy cobra a taxa de publicação por cada renovação.'
+                          : 'O anúncio já existia na Etsy. Os preços, as quantidades e as fotografias que lá estão são substituídos pelos do produto.'
                 }
                 confirmLabel="Enviar para a Etsy"
                 processing={sending}
@@ -1069,8 +1080,12 @@ function ContentForm({
                     )}
                 >
                     {isDirty
-                        ? 'Alterações por guardar — o envio manda o que estiver guardado.'
-                        : 'Guardar fica no 12studio; para a Etsy só vai com o envio.'}
+                        ? listing.goesLiveByItself
+                            ? 'Alterações por guardar. Atenção: o anúncio está à venda e sincronizado — o que guardares segue para a Etsy sozinho, em minutos.'
+                            : 'Alterações por guardar — o envio manda o que estiver guardado.'
+                        : listing.goesLiveByItself
+                          ? 'O anúncio está à venda e sincronizado: o que guardares aqui segue para a Etsy sozinho.'
+                          : 'Guardar fica no 12studio; para a Etsy só vai com o envio.'}
                 </span>
             </div>
         </form>

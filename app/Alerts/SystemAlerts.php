@@ -179,6 +179,27 @@ class SystemAlerts
     }
 
     /**
+     * Um recibo da Etsy que rebentou a importar. Vai o numero do recibo e o
+     * tipo de erro — nunca a mensagem, que pode trazer dados do comprador. A
+     * importacao volta a tenta-lo sozinha; avisa uma vez por dia por recibo.
+     */
+    public function etsyReceiptFailed(int $receiptId, string $kind): void
+    {
+        try {
+            if (! Cache::add("alerts:etsy-receipt-failed:{$receiptId}", true, now()->addDay())) {
+                return;
+            }
+
+            $this->sender->send(AlertChannel::SYSTEM, DiscordMessage::make("🛍️ Etsy — o recibo {$receiptId} não entrou", DiscordMessage::DANGER)
+                ->description('A importação rebentou neste recibo. Os outros entraram, e este volta a ser tentado de 5 em 5 minutos. Enquanto não entrar, o stock não sabe desta venda.')
+                ->field('Erro', $kind)
+                ->field('Onde ver', 'storage/logs, pelo número do recibo', inline: false)
+                ->url("https://www.etsy.com/your/orders/sold?order_id={$receiptId}"));
+        } catch (Throwable) {
+        }
+    }
+
+    /**
      * O scheduler bate a cada minuto. Se o ultimo aviso foi "parado", este
      * batimento avisa que voltou.
      */

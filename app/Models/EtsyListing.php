@@ -104,6 +104,19 @@ class EtsyListing extends Model
     }
 
     /**
+     * O que se guardar ca segue para a Etsy sem ninguem carregar em
+     * "enviar"? E o caso de um anuncio a venda que a sincronizacao acompanha:
+     * em minutos, o que mudou ca esta a frente dos compradores.
+     */
+    public function goesLiveByItself(): bool
+    {
+        return $this->etsy_listing_id !== null
+            && $this->state === 'active'
+            && $this->sync_enabled
+            && $this->last_pushed_at !== null;
+    }
+
+    /**
      * Existe la? (Ligado a um anuncio que ainda nao foi apagado.)
      */
     public function isOnEtsy(): bool

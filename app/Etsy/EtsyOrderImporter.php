@@ -3,6 +3,7 @@
 namespace App\Etsy;
 
 use App\Alerts\OrderAlerts;
+use App\Alerts\SystemAlerts;
 use App\Models\AlertState;
 use App\Models\EtsyConnection;
 use App\Models\EtsyReceipt;
@@ -13,6 +14,7 @@ use App\Services\OrderService;
 use App\Support\Money;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Throwable;
 
@@ -49,6 +51,7 @@ class EtsyOrderImporter
         private EtsyReceiptMapper $mapper,
         private OrderService $orders,
         private OrderAlerts $alerts,
+        private SystemAlerts $system,
     ) {}
 
     /**
@@ -63,7 +66,9 @@ class EtsyOrderImporter
 
         // Uma importacao de cada vez. Se ja ha uma a correr, esta nao tem
         // nada a acrescentar: a outra traz tudo.
-        $lock = Cache::lock(self::LOCK, 120);
+        // Cinco minutos: uma volta com a Etsy lenta pode demorar mais de
+        // dois, e o cadeado nao pode caducar a meio.
+        $lock = Cache::lock(self::LOCK, 300);
 
         if (! $lock->get()) {
             return self::EMPTY;
@@ -95,6 +100,8 @@ class EtsyOrderImporter
         $stored = $this->cursor();
         $cursor = $stored ?? $connection->orders_since->timestamp ?? now()->timestamp;
         $latest = $cursor;
+        // O recibo mais antigo que rebentou nesta volta, se algum.
+        $stuck = null;
         $limit = max(1, min(100, (int) config('etsy.orders.page_size', 100)));
         $offset = 0;
 
@@ -109,14 +116,18 @@ class EtsyOrderImporter
 
             foreach ($page as $receipt) {
                 $result['fetched']++;
-                $latest = max($latest, (int) ($receipt['update_timestamp'] ?? $receipt['updated_timestamp'] ?? 0));
+                $updated = (int) ($receipt['update_timestamp'] ?? $receipt['updated_timestamp'] ?? 0);
+                $latest = max($latest, $updated);
 
                 try {
                     $outcome = $this->importReceipt($receipt, $connection);
                 } catch (Throwable $exception) {
-                    // Um recibo torto nao trava os que vem a seguir.
-                    report($exception);
+                    // Um recibo que rebenta nao trava os que vem a seguir —
+                    // mas tambem nao fica para tras: o cursor nao passa dele,
+                    // e a sondagem seguinte volta a tenta-lo.
+                    $stuck = min($stuck ?? $updated, $updated);
                     $outcome = 'failed';
+                    $this->failed($receipt, $exception);
                 }
 
                 if ($outcome !== null) {
@@ -126,6 +137,10 @@ class EtsyOrderImporter
 
             $offset += $limit;
         } while (count($page) === $limit);
+
+        if ($stuck !== null) {
+            $latest = min($latest, $stuck);
+        }
 
         // Uma sondagem sem novidades nao escreve nada.
         if ($latest !== $stored) {
@@ -267,10 +282,22 @@ class EtsyOrderImporter
                 // Repoe o stock que tinha saido da prateleira.
                 $this->orders->transitionOrder($order, 'cancelled', null, 'Cancelada na Etsy.');
             }
-        } elseif ($data['refund'] === 'full' && $order->payment_status !== 'refunded') {
-            $this->orders->setPaymentStatus($order, 'refunded', null, 'Reembolsada na Etsy.');
-        } elseif ($data['refund'] === 'partial' && $order->payment_status === 'paid') {
-            $this->orders->setPaymentStatus($order, 'partially_refunded', null, 'Reembolso parcial na Etsy.');
+        } elseif ($data['refund'] === 'full' && ! in_array($order->status, ['cancelled', 'refunded'], true)) {
+            if (in_array($order->status, ['shipped', 'delivered'], true)) {
+                // A peca ja saiu: fecha como reembolsada, o stock nao volta.
+                $this->orders->setPaymentStatus($order, 'refunded', null, 'Reembolsada na Etsy.');
+            } else {
+                // O dinheiro voltou todo e a peca nao chegou a sair: e um
+                // cancelamento, e o stock volta a prateleira.
+                $this->orders->transitionOrder($order, 'cancelled', null, 'Reembolsada por inteiro na Etsy antes do envio.');
+            }
+        } elseif ($data['refund'] === 'partial' && $row->etsy_status !== $data['etsy_status']) {
+            // Um reembolso parcial (um desconto dado depois) nao muda o que ha
+            // a fazer: a peca vai na mesma. A encomenda continua paga — marca-la
+            // de outra maneira parava-a a meio da producao — e fica o aviso,
+            // para o dono acertar o total se quiser.
+            $status = EtsyReceipt::STATUS_NEEDS_REVIEW;
+            $this->alerts->etsyNeedsReview($row->etsy_receipt_id, 'Houve um reembolso parcial na Etsy. A encomenda segue como estava; confere o valor na Etsy e ajusta o total cá, se for caso disso.', $order);
         }
 
         $shippedOnEtsy = $row->shipped_on_etsy_at;
@@ -293,6 +320,26 @@ class EtsyOrderImporter
         ]);
 
         return 'updated';
+    }
+
+    /**
+     * Um recibo que rebentou a importar. Fica dito QUAL, e so isso vai para o
+     * Discord: a mensagem da excecao pode trazer o nome e a morada do
+     * comprador (os valores de um INSERT falhado), e esses ficam no log daqui.
+     *
+     * @param  array<array-key, mixed>  $receipt
+     */
+    private function failed(array $receipt, Throwable $exception): void
+    {
+        $receiptId = is_numeric($receipt['receipt_id'] ?? null) ? (int) $receipt['receipt_id'] : 0;
+
+        Log::error('Recibo da Etsy por importar.', [
+            'receipt_id' => $receiptId,
+            'exception' => $exception::class,
+            'message' => $exception->getMessage(),
+        ]);
+
+        $this->system->etsyReceiptFailed($receiptId, class_basename($exception));
     }
 
     /**

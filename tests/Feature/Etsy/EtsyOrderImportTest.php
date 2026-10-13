@@ -7,6 +7,7 @@ use App\Etsy\EtsyListingSync;
 use App\Etsy\EtsyOrderImporter;
 use App\Jobs\SyncEtsyListing;
 use App\Models\AlertState;
+use App\Models\EtsyConnection;
 use App\Models\EtsyReceipt;
 use App\Models\Order;
 use App\Models\Product;
@@ -156,7 +157,9 @@ class EtsyOrderImportTest extends TestCase
 
     public function test_the_cursor_starts_at_the_connection_and_then_follows_etsy(): void
     {
-        $since = now()->subHour()->timestamp;
+        // A hora gravada na ligacao, e nao "agora menos uma hora": entre o
+        // setUp e aqui pode ter passado um segundo.
+        $since = EtsyConnection::query()->sole()->orders_since?->timestamp;
         $receipt = $this->etsyReceipt(['update_timestamp' => now()->addMinutes(3)->timestamp]);
         $this->fakeEtsyReceipts([$receipt]);
 
@@ -228,12 +231,14 @@ class EtsyOrderImportTest extends TestCase
 
         $result = $this->import();
 
-        // A Etsy ja a vendeu e ja cobrou: a encomenda entra, marcada.
+        // A Etsy ja a vendeu e ja cobrou: a encomenda entra, marcada. A
+        // unidade que havia e dela: sai da prateleira, para nao ser vendida
+        // outra vez.
         $this->assertSame(1, $result['imported']);
         $order = $this->order();
         $this->assertTrue($order->stock_issue);
-        $this->assertSame(1, $this->stock('VASO-P'));
-        $this->assertSame(0, StockMovement::query()->where('order_id', $order->id)->count());
+        $this->assertSame(0, $this->stock('VASO-P'));
+        $this->assertSame(-1, (int) StockMovement::query()->where('order_id', $order->id)->sum('delta'));
         $this->assertAlerted(AlertChannel::ORDERS, 'stock');
     }
 
@@ -433,7 +438,7 @@ class EtsyOrderImportTest extends TestCase
         $this->assertAlerted(AlertChannel::ORDERS, 'Etsy');
     }
 
-    public function test_a_full_refund_closes_the_order_as_refunded(): void
+    public function test_a_full_refund_before_shipping_cancels_and_gives_the_stock_back(): void
     {
         $this->fakeEtsyReceipts([$this->etsyReceipt()]);
         $this->import();
@@ -441,20 +446,29 @@ class EtsyOrderImportTest extends TestCase
         $this->fakeEtsyReceipts([$this->etsyReceipt(['status' => 'fully refunded', 'update_timestamp' => now()->addMinute()->timestamp])]);
         $this->import();
 
-        $this->assertSame('refunded', $this->order()->payment_status);
-        $this->assertSame('refunded', $this->order()->status);
+        // Devolvido o dinheiro todo sem a peca ter saido: e um cancelamento,
+        // e a peca volta a prateleira.
+        $this->assertSame('cancelled', $this->order()->status);
+        $this->assertSame(5, $this->stock('VASO-P'));
     }
 
-    public function test_a_partial_refund_is_only_noted(): void
+    public function test_a_partial_refund_asks_for_a_look_and_does_not_stop_the_order(): void
     {
+        $this->fakeDiscord();
         $this->fakeEtsyReceipts([$this->etsyReceipt()]);
         $this->import();
 
         $this->fakeEtsyReceipts([$this->etsyReceipt(['status' => 'partially refunded', 'update_timestamp' => now()->addMinute()->timestamp])]);
         $this->import();
 
-        $this->assertSame('partially_refunded', $this->order()->payment_status);
-        $this->assertSame('ready_to_ship', $this->order()->status);
+        // Um desconto dado depois: a peca vai na mesma. Marca-la como "nao
+        // paga" parava-a a meio da producao.
+        $order = $this->order();
+        $this->assertSame('paid', $order->payment_status);
+        $this->assertSame('ready_to_ship', $order->status);
+        $this->assertSame('needs_review', EtsyReceipt::query()->sole()->status);
+        $this->assertSame('partially refunded', EtsyReceipt::query()->sole()->etsy_status);
+        $this->assertAlerted(AlertChannel::ORDERS, 'Etsy');
     }
 
     public function test_shipped_on_etsy_is_mirrored_here(): void
@@ -495,9 +509,22 @@ class EtsyOrderImportTest extends TestCase
         $this->assertSame(3, $inventory['products'][0]['offerings'][0]['quantity']);
     }
 
-    public function test_a_draft_cannot_have_sold_anything_so_nothing_is_asked(): void
+    public function test_even_what_we_think_is_a_draft_asks_for_the_orders_first(): void
     {
+        // O estado que ca esta pode ter horas: publicado a mao na Etsy, um
+        // "rascunho" ja pode ter vendido.
         $this->product->etsyListing()->update(['state' => 'draft']);
+        $this->fakeEtsyListingWrites();
+        $this->fakeEtsyReceipts([$this->etsyReceipt()]);
+
+        app(EtsyListingSync::class)->push($this->product->fresh());
+
+        $this->assertSame('3001', $this->order()->external_order_reference);
+    }
+
+    public function test_a_product_that_is_not_on_etsy_yet_asks_nothing(): void
+    {
+        $this->product->etsyListing()->update(['etsy_listing_id' => null, 'state' => null]);
         $this->fakeEtsyListingWrites();
         $this->fakeEtsyReceipts([$this->etsyReceipt()]);
 

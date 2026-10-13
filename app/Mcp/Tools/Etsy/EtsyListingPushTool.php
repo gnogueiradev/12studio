@@ -22,7 +22,7 @@ use Laravel\Mcp\Server\Tools\Annotations\IsOpenWorld;
 
 #[Name('etsy_listing_push')]
 #[Title('Enviar o anúncio de um produto para a Etsy')]
-#[Description('Cria ou atualiza na Etsy o anúncio de um produto do 12studio: o anúncio (um RASCUNHO, se for novo — não fica à venda nem custa nada), o inventário (cada variação com referência, preço e quantidade), os atributos, as fotografias da galeria e o vídeo. O que a Etsy tiver de diferente é substituído pelo que o 12studio manda — vê primeiro com etsy_listing_preview ("compare": true). Não publica: um rascunho continua rascunho. Pede "confirm": true quando o anúncio já está à venda (os compradores veem a mudança na hora) e no primeiro envio para um anúncio que já existia na Etsy (o que lá foi posto à mão é substituído). Se faltar alguma coisa, não envia nada e diz o quê.')]
+#[Description('Cria ou atualiza na Etsy o anúncio de um produto do 12studio: o anúncio (um RASCUNHO, se for novo — não fica à venda nem custa nada), o inventário (cada variação com referência, preço e quantidade), os atributos, as fotografias da galeria e o vídeo. O que a Etsy tiver de diferente é substituído pelo que o 12studio manda — vê primeiro com etsy_listing_preview ("compare": true). Não publica: um rascunho continua rascunho. Pede "confirm": true quando o anúncio já está à venda (os compradores veem a mudança na hora), quando está esgotado ou expirado (mexer-lhe pode renová-lo, e paga-se) e no primeiro envio para um anúncio que já existia na Etsy (o que lá foi posto à mão é substituído). Se faltar alguma coisa, não envia nada e diz o quê.')]
 #[IsDestructive(false)]
 #[IsIdempotent]
 #[IsOpenWorld]
@@ -62,6 +62,15 @@ class EtsyListingPushTool extends WriteTool
         $before = $listing?->etsy_listing_id;
 
         if ($before !== null && ! $request->boolean('confirm')) {
+            if (in_array($listing->state, ['sold_out', 'expired'], true)) {
+                return $this->askFirst(sprintf(
+                    'O anúncio %d de "%s" está %s na Etsy: mexer-lhe pode renová-lo, e renovar paga a taxa de publicação.',
+                    $before,
+                    $product->name,
+                    $listing->state === 'sold_out' ? 'esgotado' : 'expirado',
+                ));
+            }
+
             if ($listing->state === 'active') {
                 return $this->askFirst("O anúncio {$before} de \"{$product->name}\" está à venda na Etsy: enviar muda já o que os compradores veem (título, preços, quantidades, fotografias). O que mudaria vê-se com etsy_listing_preview e \"compare\": true.");
             }
