@@ -123,6 +123,90 @@ trait FakesEtsy
     }
 
     /**
+     * Um perfil de envio como a Etsy o devolve, com um destino (Portugal) e
+     * um upgrade.
+     *
+     * @param  array<string, mixed>  $overrides
+     * @return array<string, mixed>
+     */
+    protected function etsyShippingProfile(array $overrides = []): array
+    {
+        $price = fn (int $cents): array => ['amount' => $cents, 'divisor' => 100, 'currency_code' => 'EUR'];
+
+        return [
+            'shipping_profile_id' => 555,
+            'title' => 'CTT normal',
+            'origin_country_iso' => 'PT',
+            'origin_postal_code' => '4000-123',
+            'shipping_profile_destinations' => [[
+                'shipping_profile_destination_id' => 601,
+                'shipping_profile_id' => 555,
+                'destination_country_iso' => 'PT',
+                'destination_region' => 'none',
+                'primary_cost' => $price(450),
+                'secondary_cost' => $price(100),
+                'min_delivery_days' => 1,
+                'max_delivery_days' => 3,
+                'shipping_carrier_id' => null,
+                'mail_class' => null,
+            ]],
+            'shipping_profile_upgrades' => [[
+                'upgrade_id' => 701,
+                'shipping_profile_id' => 555,
+                'upgrade_name' => 'Expresso',
+                'type' => 0,
+                'price' => $price(300),
+                'secondary_price' => $price(0),
+                'min_delivery_days' => 1,
+                'max_delivery_days' => 1,
+            ]],
+            ...$overrides,
+        ];
+    }
+
+    /**
+     * As leituras de configuracao da loja (perfis de envio e de
+     * processamento, devolucoes, seccoes, transportadoras, a propria loja),
+     * todas com uma resposta. As escritas ficam por fingir a quem as testa.
+     *
+     * @param  array<string, mixed>  $overrides  Por chave: profiles, processing, policies, sections, carriers, shop.
+     */
+    protected function fakeEtsyShopConfig(array $overrides = []): void
+    {
+        $list = fn (array $results): array => ['count' => count($results), 'results' => $results];
+
+        $get = fn (array $body) => fn ($request) => $request->method() === 'GET' ? Http::response($body) : null;
+
+        Http::fake([
+            'etsy.test/v3/application/shops/4242/shipping-profiles' => $get($list($overrides['profiles'] ?? [$this->etsyShippingProfile()])),
+            'etsy.test/v3/application/shops/4242/readiness-state-definitions*' => $get($list($overrides['processing'] ?? [
+                ['readiness_state_id' => 801, 'readiness_state' => 'ready_to_ship', 'min_processing_time' => 1, 'max_processing_time' => 2, 'processing_time_unit' => 'days'],
+                ['readiness_state_id' => 802, 'readiness_state' => 'made_to_order', 'min_processing_time' => 3, 'max_processing_time' => 5, 'processing_time_unit' => 'days'],
+            ])),
+            'etsy.test/v3/application/shops/4242/policies/return' => $get($list($overrides['policies'] ?? [
+                ['return_policy_id' => 901, 'shop_id' => 4242, 'accepts_returns' => true, 'accepts_exchanges' => false, 'return_deadline' => 14],
+            ])),
+            'etsy.test/v3/application/shops/4242/sections' => $get($list($overrides['sections'] ?? [
+                ['shop_section_id' => 31, 'title' => 'Vasos', 'rank' => 1, 'active_listing_count' => 4],
+                ['shop_section_id' => 32, 'title' => 'Suportes', 'rank' => 2, 'active_listing_count' => 0],
+            ])),
+            'etsy.test/v3/application/shipping-carriers*' => $get($list($overrides['carriers'] ?? [
+                ['shipping_carrier_id' => 12, 'name' => 'CTT', 'domestic_classes' => [['mail_class_key' => 'ctt_normal', 'name' => 'Correio Normal']], 'international_classes' => []],
+            ])),
+            'etsy.test/v3/application/shops/4242' => $get($overrides['shop'] ?? [
+                'shop_id' => 4242,
+                'shop_name' => 'DozeStudio',
+                'title' => 'Peças impressas em 3D',
+                'announcement' => 'Bem-vindos!',
+                'sale_message' => 'Obrigado pela compra.',
+                'digital_sale_message' => null,
+                'policy_additional' => null,
+                'currency_code' => 'EUR',
+            ]),
+        ]);
+    }
+
+    /**
      * Os pedidos feitos a Etsy cujo URL contem $needle, por ordem.
      *
      * @return Collection<int, Request>
