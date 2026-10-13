@@ -65,6 +65,10 @@ class EtsyListingPreviewTool extends StudioTool
             'url' => $listing?->url,
             'last_pushed_at' => $listing?->last_pushed_at?->toIso8601String(),
             'last_error' => $listing?->last_error,
+            // O 12studio acompanha este anuncio sozinho? E foi ele que o tirou
+            // de venda (sem stock, produto arquivado)?
+            'sync_enabled' => $listing->sync_enabled ?? true,
+            'auto_deactivated' => $listing?->auto_deactivated_at !== null,
             // Mudou alguma coisa desde o ultimo envio?
             'pending_changes' => $listing?->last_push_hash !== $payload->hash(),
             'ready' => $payload->isReady(),

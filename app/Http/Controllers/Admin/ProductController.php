@@ -257,6 +257,9 @@ class ProductController extends Controller
             // A semente do campo SKU quando se cria uma variante nova na
             // gaveta. A mesma numeracao da matriz — ver VariantSku.
             'suggestedSku' => VariantSku::next($product),
+            // Para o dialogo de apagar avisar: o anuncio da Etsy vai atras, e
+            // la nao se recupera.
+            'etsyListingId' => $product->etsyListing?->etsy_listing_id,
             'updatedAt' => $product->updated_at?->format('d/m/Y H:i'),
         ];
     }

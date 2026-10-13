@@ -26,8 +26,11 @@ import { centsToInput, formatCents } from '@/lib/money';
 import { cn } from '@/lib/utils';
 import { edit as editProduct, index } from '@/routes/admin/produtos';
 import {
+    apagar,
+    desativar,
     enviar,
     guardar,
+    publicar,
     video as uploadVideo,
 } from '@/routes/admin/produtos/etsy';
 import { remover as removeVideo } from '@/routes/admin/produtos/etsy/video';
@@ -89,6 +92,13 @@ type Listing = {
     pending: boolean;
     videoUrl: string | null;
     videoOnEtsy: boolean;
+    /** O 12studio mantém-no em dia sozinho (stock, preços, textos)? */
+    syncEnabled: boolean;
+    /** Foi a sincronização que o tirou de venda (sem stock, arquivado)? */
+    autoDeactivated: boolean;
+    imagesOnEtsy: number;
+    /** O que impede pô-lo à venda, já por palavras. Null = pode. */
+    publishBlocker: string | null;
 };
 
 type Difference = { field: string; onEtsy: string; wouldSend: string };
@@ -187,6 +197,14 @@ export default function ProductEtsyListing(props: Props) {
                 <div className="mt-6 grid gap-6">
                     <Status {...props} />
 
+                    {listing.onEtsy && (
+                        <Sale
+                            product={product}
+                            connected={connected}
+                            listing={listing}
+                        />
+                    )}
+
                     {blockers.length > 0 && (
                         <Alert variant="destructive">
                             <ShieldAlert />
@@ -223,6 +241,7 @@ export default function ProductEtsyListing(props: Props) {
                             props.own,
                             props.variants,
                             props.images,
+                            listing.syncEnabled,
                         ])}
                         {...props}
                     />
@@ -432,6 +451,150 @@ function Status({ product, connected, listing, blockers, differences }: Props) {
     );
 }
 
+type SaleAction = 'publicar' | 'desativar' | 'apagar';
+
+/**
+ * Pôr à venda, tirar de venda, apagar. As três perguntam antes: publicar
+ * custa a taxa da Etsy, e apagar, lá, não tem volta.
+ */
+function Sale({
+    product,
+    connected,
+    listing,
+}: Pick<Props, 'product' | 'connected' | 'listing'>) {
+    const [asking, setAsking] = useState<SaleAction | null>(null);
+    const [busy, setBusy] = useState(false);
+
+    const live = listing.state === 'active';
+    // Repor um esgotado ou um expirado é renovar, e renovar paga-se.
+    const renewal = listing.state === 'sold_out' || listing.state === 'expired';
+
+    const run = () => {
+        if (asking === null) {
+            return;
+        }
+
+        const options = {
+            preserveScroll: true,
+            onFinish: () => {
+                setBusy(false);
+                setAsking(null);
+            },
+        };
+
+        setBusy(true);
+
+        if (asking === 'apagar') {
+            router.delete(apagar(product.id).url, options);
+        } else {
+            router.post(
+                (asking === 'publicar' ? publicar : desativar)(product.id).url,
+                {},
+                options,
+            );
+        }
+    };
+
+    const dialogs: Record<
+        SaleAction,
+        { title: string; description: string; confirm: string }
+    > = {
+        publicar: {
+            title: renewal ? 'Renovar o anúncio' : 'Pôr à venda na Etsy',
+            description: renewal
+                ? 'O anúncio volta a estar à venda e a Etsy cobra a taxa de publicação outra vez (é uma renovação).'
+                : 'O anúncio passa a estar à vista dos compradores e a Etsy cobra a taxa de publicação. A partir daí o stock e os preços seguem para lá sozinhos.',
+            confirm: renewal ? 'Renovar e pagar a taxa' : 'Publicar',
+        },
+        desativar: {
+            title: 'Tirar de venda',
+            description:
+                'Os compradores deixam de ver o anúncio. Continua a existir na Etsy, com as suas estatísticas, e só volta quando o publicares outra vez — a sincronização não o liga sozinha.',
+            confirm: 'Tirar de venda',
+        },
+        apagar: {
+            title: 'Apagar o anúncio da Etsy',
+            description:
+                'Na Etsy não se recupera: vão-se as estatísticas, os favoritos e o endereço do anúncio. O produto não muda, e o que preparaste aqui (texto, preços) fica para um anúncio novo.',
+            confirm: 'Apagar da Etsy',
+        },
+    };
+
+    return (
+        <Panel
+            title="À venda"
+            description="Publicar é o único passo que custa dinheiro. Depois de publicado, o 12studio mantém o stock e os preços em dia."
+        >
+            {listing.autoDeactivated && (
+                <p className="mb-3 text-sm text-pretty text-warning">
+                    O 12studio tirou este anúncio de venda — não havia stock, ou
+                    o produto foi arquivado. Volta sozinho quando houver o que
+                    vender.
+                </p>
+            )}
+
+            {!listing.syncEnabled && (
+                <p className="mb-3 text-sm text-pretty text-muted-foreground">
+                    A sincronização deste anúncio está desligada: o stock e os
+                    preços só seguem quando carregares em “Enviar para a Etsy”.
+                </p>
+            )}
+
+            <div className="flex flex-wrap items-center gap-3">
+                {live ? (
+                    <Button
+                        type="button"
+                        variant="outline"
+                        disabled={!connected || busy}
+                        onClick={() => setAsking('desativar')}
+                    >
+                        Tirar de venda
+                    </Button>
+                ) : (
+                    <Button
+                        type="button"
+                        disabled={
+                            !connected ||
+                            busy ||
+                            listing.publishBlocker !== null
+                        }
+                        onClick={() => setAsking('publicar')}
+                    >
+                        {renewal ? 'Renovar' : 'Pôr à venda'}
+                    </Button>
+                )}
+                <Button
+                    type="button"
+                    variant="ghost"
+                    disabled={!connected || busy}
+                    onClick={() => setAsking('apagar')}
+                >
+                    Apagar da Etsy
+                </Button>
+            </div>
+
+            {!live && listing.publishBlocker !== null && (
+                <p className="mt-3 text-sm text-pretty text-muted-foreground">
+                    {listing.publishBlocker}
+                </p>
+            )}
+
+            {asking !== null && (
+                <ConfirmDialog
+                    open
+                    onOpenChange={(open) => !open && setAsking(null)}
+                    title={dialogs[asking].title}
+                    description={dialogs[asking].description}
+                    confirmLabel={dialogs[asking].confirm}
+                    destructive={asking !== 'publicar'}
+                    processing={busy}
+                    onConfirm={run}
+                />
+            )}
+        </Panel>
+    );
+}
+
 type FormData = {
     title: string;
     description: string;
@@ -446,10 +609,12 @@ type FormData = {
     shop_section_id: number | null;
     variants: { variant_id: number; etsy_price: string; enabled: boolean }[];
     excluded_image_ids: number[];
+    sync_enabled: boolean;
 };
 
 function ContentForm({
     product,
+    listing,
     own,
     effective,
     variants,
@@ -479,6 +644,7 @@ function ContentForm({
             excluded_image_ids: images
                 .filter((image) => image.excluded)
                 .map((image) => image.id),
+            sync_enabled: listing.syncEnabled,
         });
 
     // Os erros de campos dentro de listas vêm com o caminho ("variants.0.…").
@@ -871,6 +1037,25 @@ function ContentForm({
                 )}
                 <InputError message={errors.excluded_image_ids} />
             </Panel>
+
+            <label className="flex items-start gap-2.5 text-sm">
+                <Checkbox
+                    className="mt-0.5"
+                    checked={data.sync_enabled}
+                    onCheckedChange={(checked) =>
+                        setData('sync_enabled', checked === true)
+                    }
+                />
+                <span>
+                    Manter este anúncio em dia sozinho
+                    <span className="block text-xs text-pretty text-muted-foreground">
+                        Depois do primeiro envio, o stock, os preços e os textos
+                        seguem para a Etsy quando mudam cá; sem stock, um
+                        anúncio à venda sai de venda e volta quando houver. Um
+                        rascunho nunca é publicado sozinho.
+                    </span>
+                </span>
+            </label>
 
             <div className="flex items-center gap-3">
                 <Button type="submit" disabled={processing || !isDirty}>

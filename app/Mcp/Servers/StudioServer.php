@@ -3,9 +3,12 @@
 namespace App\Mcp\Servers;
 
 use App\Mcp\Tools\Etsy\EtsyDeleteTool;
+use App\Mcp\Tools\Etsy\EtsyListingDeactivateTool;
+use App\Mcp\Tools\Etsy\EtsyListingDeleteTool;
 use App\Mcp\Tools\Etsy\EtsyListingGetTool;
 use App\Mcp\Tools\Etsy\EtsyListingLinkTool;
 use App\Mcp\Tools\Etsy\EtsyListingPreviewTool;
+use App\Mcp\Tools\Etsy\EtsyListingPublishTool;
 use App\Mcp\Tools\Etsy\EtsyListingPushTool;
 use App\Mcp\Tools\Etsy\EtsyListingSaveTool;
 use App\Mcp\Tools\Etsy\EtsyListingsListTool;
@@ -87,6 +90,7 @@ Etsy:
 - As ferramentas etsy_* falam com a loja da Etsy ligada ao 12studio. Se uma recusar, começa por etsy_status: diz se a loja está ligada e o que falta. Ligar a loja faz-se no backoffice (Definições → Etsy), não por aqui.
 - O que a Etsy recusar vem com a explicação dela, em inglês: mostra-a ao utilizador tal como veio.
 - Um anúncio da Etsy nasce sempre de um produto do 12studio: etsy_listing_preview mostra o que iria e o que falta, etsy_listing_save acerta o conteúdo e os preços (fica cá), etsy_listing_push envia. Um anúncio novo é um rascunho: não está à venda nem custa nada até ser publicado.
+- Publicar (etsy_listing_publish) custa a taxa de publicação da Etsy e põe o anúncio à frente dos compradores: nunca o faças sem o utilizador o pedir. Depois de publicado, o stock e os preços seguem para a Etsy sozinhos; sem stock o anúncio sai de venda e volta quando houver.
 - Na Etsy há coisas que os compradores veem na hora (portes de um perfil com anúncios à venda, os textos da loja) e coisas que não se recuperam (apagar). Essas ferramentas recusam à primeira e dizem o que está em jogo: mostra-o ao utilizador e só repete com "confirm": true se ele disser que sim.
 
 Segurança:
@@ -170,6 +174,9 @@ class StudioServer extends Server
         EtsyListingLinkTool::class,
         EtsyListingSaveTool::class,
         EtsyListingPushTool::class,
+        EtsyListingPublishTool::class,
+        EtsyListingDeactivateTool::class,
+        EtsyListingDeleteTool::class,
         EtsyShippingProfileSaveTool::class,
         EtsyShippingDestinationSaveTool::class,
         EtsyShippingUpgradeSaveTool::class,

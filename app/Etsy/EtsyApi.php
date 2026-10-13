@@ -106,6 +106,28 @@ class EtsyApi
     }
 
     /**
+     * Varios anuncios de uma vez, ate 100 (getListingsByListingIds). Para
+     * conferir os estados sem um pedido por anuncio.
+     *
+     * @param  array<int, int>  $listingIds
+     * @return array<array-key, mixed>
+     */
+    public function listingsByIds(array $listingIds): array
+    {
+        return $this->client->get('/listings/batch', ['listing_ids' => $listingIds]);
+    }
+
+    /**
+     * Apaga um anuncio (deleteListing). Nao se recupera. A Etsy so deixa em
+     * certos estados (rascunho, inativo, esgotado, expirado, ou ativo e
+     * disponivel); fora deles responde 409.
+     */
+    public function deleteListing(int $listingId): void
+    {
+        $this->client->delete("/listings/{$listingId}");
+    }
+
+    /**
      * Cria um anuncio, sempre em rascunho (createDraftListing). Quem chama
      * NAO repete isto sozinho: um rascunho criado duas vezes sao dois
      * anuncios.

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Alerts\StockAlerts;
+use App\Etsy\EtsyHooks;
 use App\Models\Order;
 use App\Models\StockMovement;
 use App\Models\User;
@@ -22,6 +23,7 @@ class StockService
 {
     public function __construct(
         private StockAlerts $alerts,
+        private EtsyHooks $etsy,
     ) {}
 
     /**
@@ -54,6 +56,7 @@ class StockService
         $this->recordMovement($variant, -$qty, $reason, $order, $by, $note);
         $variant->refresh();
         $this->alerts->moved($variant, $variant->stock + $qty, $variant->stock, $reason, $by, $note);
+        $this->etsy->stockMoved($variant);
 
         return true;
     }
@@ -81,6 +84,7 @@ class StockService
         $this->recordMovement($variant, $qty, $reason, $order, $by, $note);
         $variant->refresh();
         $this->alerts->moved($variant, $variant->stock - $qty, $variant->stock, $reason, $by, $note);
+        $this->etsy->stockMoved($variant);
     }
 
     /**

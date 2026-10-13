@@ -140,6 +140,27 @@ class SystemAlerts
     }
 
     /**
+     * Um anuncio da Etsy que a sincronizacao (ou o apagar) nao conseguiu
+     * tratar. O mesmo problema no mesmo anuncio avisa uma vez por dia: a
+     * sincronizacao corre de 15 em 15 minutos, e o mesmo erro 96 vezes era
+     * ruido.
+     */
+    public function etsyListingProblem(int $listingId, string $product, string $what, string $reason): void
+    {
+        try {
+            if (! Cache::add("alerts:etsy-listing:{$listingId}:".sha1($what.'|'.$reason), true, now()->addDay())) {
+                return;
+            }
+
+            $this->sender->send(AlertChannel::SYSTEM, DiscordMessage::make("🛍️ Etsy — {$what}", DiscordMessage::WARNING)
+                ->description(Str::limit($reason, 1500))
+                ->field('Produto', $product)
+                ->field('O que fazer', 'Backoffice → o produto → Abrir o anúncio na Etsy: o erro está lá, com o botão para voltar a enviar.', inline: false));
+        } catch (Throwable) {
+        }
+    }
+
+    /**
      * O scheduler bate a cada minuto. Se o ultimo aviso foi "parado", este
      * batimento avisa que voltou.
      */

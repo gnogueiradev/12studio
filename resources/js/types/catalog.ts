@@ -281,6 +281,8 @@ export type ProductEditing = {
     suggestedSku: string;
     /** Data legível da última gravação, para o subtítulo da página. */
     updatedAt: string | null;
+    /** O anúncio que o produto tem na Etsy: apagar o produto apaga-o lá. */
+    etsyListingId: number | null;
 };
 
 export type ProductImageRow = {
