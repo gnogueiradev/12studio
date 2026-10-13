@@ -218,8 +218,16 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
             ->parameters(['produtos' => 'product'])
             ->except(['show', 'create', 'edit']);
 
+        // withTrashed: restaurar serve os arquivados e os apagados, e um
+        // apagado nao se resolve pelo binding normal.
         Route::patch('produtos/{product}/restaurar', [Admin\ProductController::class, 'restore'])
+            ->withTrashed()
             ->name('produtos.restaurar');
+
+        // Apagar (reciclagem) tem URI proprio: o DELETE do resource acima
+        // arquiva, e continua a arquivar.
+        Route::delete('produtos/{product}/apagar', [Admin\ProductController::class, 'delete'])
+            ->name('produtos.apagar');
 
         // Fotografias: shallow como as variantes, mas com URIs proprios por
         // acao — o Wayfinder duplica chaves quando dois verbos partilham o

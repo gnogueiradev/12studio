@@ -204,6 +204,8 @@ export type ProductRow = {
     printingTimeMinutes: number | null;
     /** Somado em todas as variantes: stock físico menos o reservado. */
     readyStock: number;
+    /** Só é true na vista "Apagados": fora dela um apagado nem chega cá. */
+    deleted: boolean;
 };
 
 export type ProductDetail = {

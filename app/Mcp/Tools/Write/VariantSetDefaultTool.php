@@ -2,6 +2,7 @@
 
 namespace App\Mcp\Tools\Write;
 
+use App\Mcp\Tools\Write\Concerns\RefusesDeletedProducts;
 use App\Mcp\Tools\WriteTool;
 use App\Models\User;
 use App\Models\Variant;
@@ -23,6 +24,8 @@ use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
 #[IsIdempotent]
 class VariantSetDefaultTool extends WriteTool
 {
+    use RefusesDeletedProducts;
+
     public function __construct(
         private VariantService $variants,
     ) {}
@@ -40,6 +43,10 @@ class VariantSetDefaultTool extends WriteTool
 
         if ($variant === null) {
             return Response::error('Variante não encontrada.');
+        }
+
+        if ($refusal = $this->refusalIfProductDeleted($variant)) {
+            return $refusal;
         }
 
         if (! $variant->active) {

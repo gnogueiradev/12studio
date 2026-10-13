@@ -653,6 +653,13 @@ class OrderService
                 // Do catalogo: os dados vem SEMPRE da BD. Um `size_label`
                 // vazio fica vazio — nunca cai para o texto livre da linha.
                 $variant = Variant::query()->with('product')->findOrFail((int) $item['variant_id']);
+
+                // A rede por baixo do StoreManualOrderRequest: a variante de
+                // um produto apagado continua a existir, vende-lo e que nao.
+                if ($variant->product->trashed()) {
+                    throw new RuntimeException("O produto de {$variant->sku} foi apagado.");
+                }
+
                 $catalogPrice = $variant->price_cents;
                 $fulfillmentMode = $variant->product->fulfillment_mode;
                 $vatRate = $variant->product->vat_rate;

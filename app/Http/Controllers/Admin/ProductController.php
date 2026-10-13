@@ -77,6 +77,10 @@ class ProductController extends Controller
             'per_page' => in_array((string) $request->query('per_page', ''), self::PAGE_SIZES, true)
                 ? (string) $request->query('per_page')
                 : '',
+            // A reciclagem. E uma vista a parte e nao mais uma chip de estado:
+            // um apagado nao e um estado do produto, e misturado com os outros
+            // voltava a estar a vista — que e o que apagar veio resolver.
+            'apagados' => $request->boolean('apagados'),
         ];
 
         // Base com todos os filtros MENOS o estado, como nas encomendas e nos
@@ -84,6 +88,7 @@ class ProductController extends Controller
         // todas as chips excepto a activa mostrariam zero e deixavam de servir
         // para navegar.
         $scoped = fn () => Product::query()
+            ->when($filters['apagados'], fn ($query) => $query->onlyTrashed())
             ->when($filters['category_id'] !== '', fn ($query) => $query->where('category_id', $filters['category_id']))
             ->when($filters['fulfillment_mode'] !== '', fn ($query) => $query->where('fulfillment_mode', $filters['fulfillment_mode']))
             // Dentro do $scoped e nao depois: filtrar por etiqueta tem de
@@ -139,12 +144,16 @@ class ProductController extends Controller
                 'filamentWeightGrams' => $product->defaultVariant?->filament_weight_grams,
                 'printingTimeMinutes' => $product->defaultVariant?->printing_time_minutes,
                 'readyStock' => (int) $product->ready_stock,
+                'deleted' => $product->trashed(),
             ]);
 
         return Inertia::render('admin/produtos/index', [
             'products' => $products,
             'filters' => $filters,
             'statusCounts' => $statusCounts,
+            // Sem filtros: e a porta para a reciclagem, e uma porta que so
+            // aparece quando a pesquisa calha em cheio nao se encontra.
+            'deletedCount' => Product::onlyTrashed()->count(),
         ]);
     }
 
@@ -302,6 +311,21 @@ class ProductController extends Controller
         $this->toast('Produto restaurado como rascunho.');
 
         return back();
+    }
+
+    /**
+     * Apagar a serio — a reciclagem. Ver ProductService::delete.
+     *
+     * Vai para a listagem e nao para tras: apaga-se a partir da pagina do
+     * produto, e essa pagina acabou de deixar de existir.
+     */
+    public function delete(AdminActionRequest $request, Product $product): RedirectResponse
+    {
+        $this->productService->delete($product);
+
+        $this->toast('Produto apagado. Fica em "Apagados", na lista de produtos.');
+
+        return to_route('admin.produtos.index');
     }
 
     /**

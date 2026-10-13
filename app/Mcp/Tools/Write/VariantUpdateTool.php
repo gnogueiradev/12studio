@@ -7,6 +7,7 @@ use App\Mcp\FormRequestRunner;
 use App\Mcp\Presenters\CatalogPresenter;
 use App\Mcp\PriceGuard;
 use App\Mcp\Tools\Write\Concerns\DescribesVariants;
+use App\Mcp\Tools\Write\Concerns\RefusesDeletedProducts;
 use App\Mcp\Tools\WriteTool;
 use App\Models\User;
 use App\Models\Variant;
@@ -31,6 +32,7 @@ use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
 class VariantUpdateTool extends WriteTool
 {
     use DescribesVariants;
+    use RefusesDeletedProducts;
 
     /** Campos cujo valor e dinheiro: comparam-se em centimos. */
     private const MONEY_FIELDS = ['normal_price', 'sale_price', 'wholesale_price', 'packaging_cost', 'components_cost'];
@@ -55,6 +57,10 @@ class VariantUpdateTool extends WriteTool
 
         if ($variant === null) {
             return Response::error('Variante não encontrada.');
+        }
+
+        if ($refusal = $this->refusalIfProductDeleted($variant)) {
+            return $refusal;
         }
 
         $sent = Arr::only($request->all(), self::VARIANT_FIELDS);

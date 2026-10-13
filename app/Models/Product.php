@@ -10,6 +10,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Support\Carbon;
 
 /**
@@ -31,6 +32,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $seo_description
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
+ * @property Carbon|null $deleted_at
  * @property-read Category|null $category
  *
  * Agregados da listagem do backoffice. Nao sao colunas: so existem quando a
@@ -49,6 +51,19 @@ class Product extends Model
     use HasFactory;
 
     use HasTags;
+
+    /*
+     * Apagar e sair de vista, nao desaparecer: a linha fica para as encomendas
+     * e os movimentos de stock das variantes continuarem a ter dono. E o
+     * unico modelo com SoftDeletes — os outros arquivam-se por estado, e este
+     * tambem (ver ProductService::delete, que faz as duas coisas).
+     *
+     * Um estado `deleted` em STATUSES dava o mesmo sem coluna nova, mas tinha
+     * de ser excluido a mao em cada consulta (listagem, contagens, categorias,
+     * etiquetas, MCP) e ficava escolhivel no formulario. O scope global
+     * esconde-o tambem das consultas que ainda ninguem escreveu.
+     */
+    use SoftDeletes;
 
     // Convencao qrcode: const arrays em vez de PHP enums.
     public const STATUSES = ['draft', 'active', 'archived'];

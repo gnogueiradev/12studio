@@ -93,10 +93,20 @@ class Variant extends Model
         ];
     }
 
-    /** @return BelongsTo<Product, $this> */
+    /**
+     * Com os apagados: a variante de um produto apagado continua a existir
+     * (as encomendas e os movimentos de stock apontam para ela), e quem le o
+     * historico pergunta-lhe pelo nome do produto. Sem o withTrashed() a
+     * relacao passava a devolver null a meio de um alerta de stock.
+     *
+     * Quem nao pode aceitar um produto apagado — vender, mexer no preco —
+     * pergunta por `$variant->product->trashed()`.
+     *
+     * @return BelongsTo<Product, $this>
+     */
     public function product(): BelongsTo
     {
-        return $this->belongsTo(Product::class);
+        return $this->belongsTo(Product::class)->withTrashed();
     }
 
     /** @return BelongsTo<Color, $this> */
