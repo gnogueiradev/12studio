@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Carbon;
 
 /**
@@ -45,6 +46,7 @@ use Illuminate\Support\Carbon;
  * @property-read Color|null $color
  * @property-read Material|null $material
  * @property-read PrinterProfile|null $printerProfile
+ * @property-read EtsyVariant|null $etsyVariant
  */
 #[Fillable([
     'product_id', 'sku', 'color_id', 'material_id', 'size_label', 'price_cents',
@@ -107,6 +109,17 @@ class Variant extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(Product::class)->withTrashed();
+    }
+
+    /**
+     * O lugar desta variante no anuncio da Etsy do produto, se tiver um: os
+     * ids que a Etsy lhe deu e o preco proprio, quando o ha.
+     *
+     * @return HasOne<EtsyVariant, $this>
+     */
+    public function etsyVariant(): HasOne
+    {
+        return $this->hasOne(EtsyVariant::class);
     }
 
     /** @return BelongsTo<Color, $this> */

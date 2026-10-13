@@ -1,3 +1,4 @@
+import { Link } from '@inertiajs/react';
 import { DeleteProduct } from '@/components/admin/product-form/delete-product';
 import { TagInput } from '@/components/admin/tag-input';
 import InputError from '@/components/input-error';
@@ -11,6 +12,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { formatCents } from '@/lib/money';
+import { show as etsyListing } from '@/routes/admin/produtos/etsy';
 import type { ProductEditing, ProductFormData } from '@/types/catalog';
 import { PRODUCT_STATUSES } from '@/types/catalog';
 
@@ -155,6 +157,22 @@ export function ProductSidebar({
                 </p>
                 <InputError message={errors.tags} />
             </section>
+
+            {editing !== null && (
+                <section className="flex flex-col gap-2 rounded-xl border border-border/60 bg-card px-4 py-4">
+                    <h2 className="text-[13.5px] font-semibold">Etsy</h2>
+                    <p className="text-xs text-pretty text-muted-foreground">
+                        O que este produto diz e custa na Etsy, e o botão que o
+                        envia para lá.
+                    </p>
+                    <Link
+                        href={etsyListing(editing.product.id)}
+                        className="text-[13px] font-medium underline underline-offset-4 hover:text-foreground"
+                    >
+                        Abrir o anúncio na Etsy
+                    </Link>
+                </section>
+            )}
 
             {editing !== null && (
                 <DeleteProduct

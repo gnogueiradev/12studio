@@ -120,10 +120,11 @@ class EtsyClient
     /**
      * Um ficheiro (fotografia, video) e os campos que o acompanham.
      *
+     * @param  resource|string  $contents  Os bytes, ou um stream (um video nao cabe em memoria).
      * @param  array<string, mixed>  $fields
      * @return array<array-key, mixed>
      */
-    public function postMultipart(string $path, string $fileField, string $contents, string $filename, array $fields = []): array
+    public function postMultipart(string $path, string $fileField, mixed $contents, string $filename, array $fields = []): array
     {
         return $this->send(fn (PendingRequest $http): Response => $http
             ->attach($fileField, $contents, $filename)

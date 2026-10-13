@@ -86,8 +86,6 @@ class EtsyCoverageTest extends TestCase
      * entram. Quando uma fase fecha, as linhas dela saem daqui.
      */
     private const PENDING = [
-        // Fase 2 — enviar rascunho
-        'etsy_listing_push', 'etsy_listing_save',
         // Fase 3 — publicar, desativar, apagar
         'etsy_listing_delete',
         // Fase 4 — encomendas

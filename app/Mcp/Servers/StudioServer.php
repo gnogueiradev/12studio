@@ -5,9 +5,13 @@ namespace App\Mcp\Servers;
 use App\Mcp\Tools\Etsy\EtsyDeleteTool;
 use App\Mcp\Tools\Etsy\EtsyListingGetTool;
 use App\Mcp\Tools\Etsy\EtsyListingLinkTool;
+use App\Mcp\Tools\Etsy\EtsyListingPreviewTool;
+use App\Mcp\Tools\Etsy\EtsyListingPushTool;
+use App\Mcp\Tools\Etsy\EtsyListingSaveTool;
 use App\Mcp\Tools\Etsy\EtsyListingsListTool;
 use App\Mcp\Tools\Etsy\EtsyMarketListingsTool;
 use App\Mcp\Tools\Etsy\EtsyMarketShopsTool;
+use App\Mcp\Tools\Etsy\EtsyPricingPreviewTool;
 use App\Mcp\Tools\Etsy\EtsyProcessingProfileSaveTool;
 use App\Mcp\Tools\Etsy\EtsyReturnPolicySaveTool;
 use App\Mcp\Tools\Etsy\EtsyReviewsListTool;
@@ -82,6 +86,7 @@ Convenções:
 Etsy:
 - As ferramentas etsy_* falam com a loja da Etsy ligada ao 12studio. Se uma recusar, começa por etsy_status: diz se a loja está ligada e o que falta. Ligar a loja faz-se no backoffice (Definições → Etsy), não por aqui.
 - O que a Etsy recusar vem com a explicação dela, em inglês: mostra-a ao utilizador tal como veio.
+- Um anúncio da Etsy nasce sempre de um produto do 12studio: etsy_listing_preview mostra o que iria e o que falta, etsy_listing_save acerta o conteúdo e os preços (fica cá), etsy_listing_push envia. Um anúncio novo é um rascunho: não está à venda nem custa nada até ser publicado.
 - Na Etsy há coisas que os compradores veem na hora (portes de um perfil com anúncios à venda, os textos da loja) e coisas que não se recuperam (apagar). Essas ferramentas recusam à primeira e dizem o que está em jogo: mostra-o ao utilizador e só repete com "confirm": true se ele disser que sim.
 
 Segurança:
@@ -128,6 +133,8 @@ class StudioServer extends Server
         EtsyUserGetTool::class,
         EtsyListingsListTool::class,
         EtsyListingGetTool::class,
+        EtsyListingPreviewTool::class,
+        EtsyPricingPreviewTool::class,
         EtsyTaxonomyTool::class,
         EtsyMarketListingsTool::class,
         EtsyMarketShopsTool::class,
@@ -161,6 +168,8 @@ class StudioServer extends Server
         OrderItemSetProductionStatusTool::class,
         // Etsy — escrita
         EtsyListingLinkTool::class,
+        EtsyListingSaveTool::class,
+        EtsyListingPushTool::class,
         EtsyShippingProfileSaveTool::class,
         EtsyShippingDestinationSaveTool::class,
         EtsyShippingUpgradeSaveTool::class,

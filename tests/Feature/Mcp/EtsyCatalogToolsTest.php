@@ -164,7 +164,7 @@ class EtsyCatalogToolsTest extends TestCase
         EtsyListing::query()->create(['product_id' => $product->id, 'etsy_listing_id' => 7001, 'state' => 'draft']);
         Http::fake();
 
-        $this->writer()->tool(EtsyListingLinkTool::class, ['product_id' => $product->id, 'unlink' => true])->assertOk();
+        $this->writer()->tool(EtsyListingLinkTool::class, ['product_id' => $product->id, 'unlink' => true, 'confirm' => true])->assertOk();
 
         $this->assertSame(0, EtsyListing::query()->count());
         Http::assertNothingSent();
@@ -178,9 +178,26 @@ class EtsyCatalogToolsTest extends TestCase
         Http::fake();
 
         // Sem isto o anuncio ficava preso a um produto que ja ninguem ve.
-        $this->writer()->tool(EtsyListingLinkTool::class, ['product_id' => $product->id, 'unlink' => true])->assertOk();
+        $this->writer()->tool(EtsyListingLinkTool::class, ['product_id' => $product->id, 'unlink' => true, 'confirm' => true])->assertOk();
 
         $this->assertSame(0, EtsyListing::query()->count());
+    }
+
+    public function test_undoing_a_link_asks_first(): void
+    {
+        $product = Product::factory()->create(['name' => 'Vaso Espiral']);
+        EtsyListing::query()->create(['product_id' => $product->id, 'etsy_listing_id' => 7001, 'state' => 'draft', 'title' => 'Spiral Vase']);
+        Http::fake(['etsy.test/v3/application/listings/7002*' => Http::response($this->etsyListing(['listing_id' => 7002]))]);
+
+        // Desligar (ou trocar de anuncio) deita fora o conteudo Etsy e os
+        // precos proprios que o produto tinha ca.
+        foreach ([['unlink' => true], ['listing_id' => 7002]] as $arguments) {
+            $this->writer()->tool(EtsyListingLinkTool::class, ['product_id' => $product->id, ...$arguments])
+                ->assertHasErrors()
+                ->assertSee('"confirm": true');
+        }
+
+        $this->assertSame(7001, EtsyListing::query()->sole()->etsy_listing_id);
     }
 
     public function test_a_deleted_product_cannot_be_linked(): void
