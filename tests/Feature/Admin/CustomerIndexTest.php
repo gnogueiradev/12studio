@@ -75,7 +75,12 @@ class CustomerIndexTest extends TestCase
     public function test_the_type_counts_respect_the_other_filters(): void
     {
         User::factory()->create(['name' => 'Ana Marques']);
-        User::factory()->company()->create(['name' => 'Café Bonjardim']);
+        // Email fixo: a pesquisa tambem olha para o email, e o do faker de vez
+        // em quando traz "ana" la dentro (dana, banana...) e a empresa aparecia.
+        User::factory()->company()->create([
+            'name' => 'Café Bonjardim',
+            'email' => 'geral@bonjardim.example.test',
+        ]);
 
         $this->actingAs($this->admin)
             ->get(route('admin.clientes.index', ['search' => 'Ana']))
