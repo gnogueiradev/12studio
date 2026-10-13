@@ -113,6 +113,15 @@ export const TONES: Record<string, Tone> = {
     alert_on: 'success',
     alert_env: 'info',
     alert_off: 'neutral',
+    /*
+     * Ligação à Etsy (Definições → Etsy). "Em pausa" é a loja ligada com a
+     * integração desligada no servidor: está tudo certo e nada sincroniza, e é
+     * por enganar que leva o warning. "Partida" pede que se volte a ligar.
+     */
+    etsy_connected: 'success',
+    etsy_paused: 'warning',
+    etsy_broken: 'danger',
+    etsy_off: 'neutral',
 };
 
 /**

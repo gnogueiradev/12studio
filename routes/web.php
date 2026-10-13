@@ -198,7 +198,26 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
                 ->whereIn('channel', AlertChannel::ALL)
                 ->middleware('throttle:10,1')
                 ->name('alertas.test');
+
+            // A loja da Etsy. Com password pela mesma razao: quem a liga
+            // escolhe para onde vao os produtos e de onde entram encomendas.
+            Route::get('definicoes/etsy', [Admin\EtsySettingsController::class, 'index'])
+                ->name('etsy.index');
+            Route::get('definicoes/etsy/ligar', [Admin\EtsySettingsController::class, 'connect'])
+                ->middleware('throttle:10,1')
+                ->name('etsy.ligar');
+            Route::delete('definicoes/etsy/desligar', [Admin\EtsySettingsController::class, 'disconnect'])
+                ->name('etsy.desligar');
+            Route::post('definicoes/etsy/testar', [Admin\EtsySettingsController::class, 'test'])
+                ->middleware('throttle:10,1')
+                ->name('etsy.testar');
         });
+
+        // O regresso do OAuth da Etsy, fora do grupo da password: o dono vem
+        // de la, e o que o identifica e o `state` que ficou na sessao.
+        Route::get('definicoes/etsy/callback', [Admin\EtsySettingsController::class, 'callback'])
+            ->middleware('throttle:10,1')
+            ->name('etsy.callback');
 
         // O formulario do produto tem pagina, ao contrario do dos materiais e
         // do das impressoras: sao seis seccoes, uma galeria, uma matriz de

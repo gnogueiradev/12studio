@@ -124,6 +124,22 @@ class SystemAlerts
     }
 
     /**
+     * A Etsy recusou o token de renovacao: a ligacao a loja so volta
+     * religando. Sem fila e sem excecoes, como os vizinhos — quem chama esta
+     * a meio de uma sincronizacao e nao pode cair por causa do aviso.
+     */
+    public function etsyConnectionBroken(string $shop, ?string $reason): void
+    {
+        try {
+            $this->sender->sendNow(AlertChannel::SYSTEM, DiscordMessage::make("🔌 Ligação à Etsy partida — {$shop}", DiscordMessage::DANGER)
+                ->description('A Etsy deixou de aceitar a ligação. Até ser refeita, nada é enviado nem importado: os anúncios ficam como estão e as encomendas novas não entram.')
+                ->field('O que a Etsy disse', $reason, inline: false)
+                ->field('O que fazer', 'Backoffice → Definições → Etsy → Voltar a ligar. As encomendas que entraram entretanto são importadas a seguir.', inline: false));
+        } catch (Throwable) {
+        }
+    }
+
+    /**
      * O scheduler bate a cada minuto. Se o ultimo aviso foi "parado", este
      * batimento avisa que voltou.
      */
