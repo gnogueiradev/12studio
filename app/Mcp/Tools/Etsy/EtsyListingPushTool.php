@@ -3,6 +3,7 @@
 namespace App\Mcp\Tools\Etsy;
 
 use App\Etsy\EtsyListingSync;
+use App\Mcp\McpFormat;
 use App\Mcp\Tools\Etsy\Concerns\AsksBeforeEtsy;
 use App\Mcp\Tools\Etsy\Concerns\TalksToEtsy;
 use App\Mcp\Tools\WriteTool;
@@ -109,7 +110,7 @@ class EtsyListingPushTool extends WriteTool
                 ? 'Ainda há ficheiros a subir (ou que a Etsy recusou). Confirma daqui a um minuto com etsy_listing_preview: "last_error" diz se algum falhou.'
                 : null,
             // O anuncio foi; uma fotografia ou o video podem nao ter ido.
-            'problems' => $listing->last_error,
+            'problems' => McpFormat::untrusted($listing->last_error),
             'warnings' => $payload->warnings,
         ]);
     }

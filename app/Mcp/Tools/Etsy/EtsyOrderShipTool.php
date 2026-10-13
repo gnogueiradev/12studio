@@ -3,6 +3,7 @@
 namespace App\Mcp\Tools\Etsy;
 
 use App\Etsy\EtsyShipments;
+use App\Mcp\McpFormat;
 use App\Mcp\Tools\Etsy\Concerns\AsksBeforeEtsy;
 use App\Mcp\Tools\Etsy\Concerns\TalksToEtsy;
 use App\Mcp\Tools\Write\Orders\Concerns\FindsOrders;
@@ -107,19 +108,19 @@ class EtsyOrderShipTool extends WriteTool
         $this->changes = [
             'order_id' => $order->id,
             'before' => ['status' => $before],
-            'after' => ['status' => $order->status, 'told_etsy' => $told, 'tracking_number' => $order->tracking_number],
+            'after' => ['status' => $order->status, 'told_etsy' => $told, 'with_tracking' => filled($order->tracking_number)],
         ];
 
         return Response::structured([
             'message' => $told
                 ? "Encomenda {$order->order_number} enviada. A Etsy foi avisada e manda o email ao comprador."
-                : "Encomenda {$order->order_number} enviada no 12studio, mas a Etsy NÃO aceitou o envio: {$receipt->tracking_push_error} Marca-a como enviada na Etsy, senão o comprador não é avisado.",
+                : "Encomenda {$order->order_number} enviada no 12studio, mas a Etsy NÃO aceitou o envio: ".McpFormat::untrusted($receipt->tracking_push_error).' Marca-a como enviada na Etsy, senão o comprador não é avisado.',
             'order_number' => $order->order_number,
             'status' => $order->status,
             'tracking_number' => $order->tracking_number,
             'carrier' => $order->shipping_method_name,
             'told_etsy' => $told,
-            'problem' => $receipt->tracking_push_error,
+            'problem' => McpFormat::untrusted($receipt->tracking_push_error),
         ]);
     }
 }

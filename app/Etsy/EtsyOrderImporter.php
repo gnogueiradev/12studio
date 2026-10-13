@@ -12,6 +12,7 @@ use App\Models\Order;
 use App\Models\Variant;
 use App\Services\OrderService;
 use App\Support\Money;
+use Illuminate\Database\QueryException;
 use Illuminate\Database\UniqueConstraintViolationException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
@@ -323,9 +324,9 @@ class EtsyOrderImporter
     }
 
     /**
-     * Um recibo que rebentou a importar. Fica dito QUAL, e so isso vai para o
-     * Discord: a mensagem da excecao pode trazer o nome e a morada do
-     * comprador (os valores de um INSERT falhado), e esses ficam no log daqui.
+     * Um recibo que rebentou a importar. Fica dito QUAL — no Discord e no
+     * log — e nunca a mensagem da excecao, que pode trazer o nome e a morada
+     * do comprador (os valores de um INSERT falhado).
      *
      * @param  array<array-key, mixed>  $receipt
      */
@@ -333,10 +334,15 @@ class EtsyOrderImporter
     {
         $receiptId = is_numeric($receipt['receipt_id'] ?? null) ? (int) $receipt['receipt_id'] : 0;
 
+        // Sem a mensagem: a de um INSERT falhado traz os valores (o nome e a
+        // morada do comprador), e o ficheiro de log nao roda sozinho. O sitio
+        // do erro chega para o encontrar; de uma falha da base de dados
+        // fica ainda o que o motor disse, que nao leva valores.
         Log::error('Recibo da Etsy por importar.', [
             'receipt_id' => $receiptId,
             'exception' => $exception::class,
-            'message' => $exception->getMessage(),
+            'at' => basename($exception->getFile()).':'.$exception->getLine(),
+            'database' => $exception instanceof QueryException ? $exception->getPrevious()?->getMessage() : null,
         ]);
 
         $this->system->etsyReceiptFailed($receiptId, class_basename($exception));

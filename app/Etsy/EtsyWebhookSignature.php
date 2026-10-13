@@ -19,6 +19,9 @@ class EtsyWebhookSignature
 {
     private const PREFIX = 'whsec_';
 
+    /** Menos do que isto nao e um segredo: adivinha-se. Os da Etsy tem 24 ou mais. */
+    private const MIN_KEY_BYTES = 16;
+
     /**
      * @param  string  $body  O corpo em BRUTO: reescrever o JSON mudava a assinatura.
      */
@@ -70,6 +73,6 @@ class EtsyWebhookSignature
 
         $key = base64_decode(substr($secret, strlen(self::PREFIX)), true);
 
-        return $key === false || $key === '' ? null : $key;
+        return $key === false || strlen($key) < self::MIN_KEY_BYTES ? null : $key;
     }
 }

@@ -44,8 +44,11 @@ class EtsyWebhookController extends Controller
             $this->header($request, 'webhook-timestamp'),
             $this->header($request, 'webhook-signature'),
         )) {
-            // Sem o corpo nem os cabecalhos: sao de quem tentou.
-            Log::warning('Aviso da Etsy recusado: assinatura invalida ou fora de prazo.', ['ip' => $request->ip()]);
+            // Sem o corpo nem os cabecalhos: sao de quem tentou. E uma linha
+            // por minuto por origem — quem insiste nao enche o log.
+            if (Cache::add('etsy:webhook:refused:'.sha1((string) $request->ip()), true, 60)) {
+                Log::warning('Aviso da Etsy recusado: assinatura invalida ou fora de prazo.', ['ip' => $request->ip()]);
+            }
 
             abort(401);
         }

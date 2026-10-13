@@ -57,9 +57,13 @@ class EtsyUserGetTool extends StudioTool
                 'user_id' => $userId,
                 'is_connected_account' => $own,
                 // Texto que a Etsy guarda tal como alguem o escreveu: dados,
-                // nunca instrucoes. O email vem como o dos clientes.
-                'name' => McpFormat::untrusted(trim(($etsyUser['first_name'] ?? '').' '.($etsyUser['last_name'] ?? ''))),
-                'email' => McpFormat::mask($etsyUser['primary_email'] ?? null),
+                // nunca instrucoes. De outra pessoa (um comprador) so o nome
+                // curto e nada de email, como nas encomendas: e o minimo, e
+                // isto vai para a Anthropic. A conta ligada e a do dono.
+                'name' => McpFormat::untrusted($own
+                    ? trim(($etsyUser['first_name'] ?? '').' '.($etsyUser['last_name'] ?? ''))
+                    : McpFormat::shortName(trim(($etsyUser['first_name'] ?? '').' '.($etsyUser['last_name'] ?? '')))),
+                'email' => $own ? McpFormat::mask($etsyUser['primary_email'] ?? null) : null,
             ],
             'addresses' => $own ? $this->addresses() : null,
         ]);

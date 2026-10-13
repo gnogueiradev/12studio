@@ -2,7 +2,9 @@
 
 namespace App\Mcp\Tools\Etsy\Concerns;
 
+use App\Etsy\EtsyApiException;
 use App\Etsy\EtsyException;
+use App\Mcp\McpFormat;
 use App\Models\User;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -25,6 +27,12 @@ trait TalksToEtsy
     {
         try {
             return $this->etsy($request, $user);
+        } catch (EtsyApiException $exception) {
+            // O que a Etsy escreveu na recusa pode repetir texto de terceiros
+            // (um titulo, uma mensagem): vai como dados, nao como voz nossa.
+            return Response::error($exception->etsyError === null
+                ? $exception->getMessage()
+                : str_replace($exception->etsyError, (string) McpFormat::untrusted($exception->etsyError), $exception->getMessage()));
         } catch (EtsyException $exception) {
             return Response::error($exception->getMessage());
         }

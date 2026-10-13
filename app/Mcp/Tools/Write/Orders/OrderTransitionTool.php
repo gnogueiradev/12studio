@@ -59,6 +59,12 @@ class OrderTransitionTool extends WriteTool
             return Response::error('Por aqui só se avança a encomenda ('.implode(', ', self::ALLOWED).'). Cancelar e reembolsar faz-se no backoffice.');
         }
 
+        // Passar a "enviada" uma encomenda da Etsy faz a Etsy mandar um email
+        // ao comprador. Isso tem ferramenta propria, que pergunta primeiro.
+        if ($status === 'shipped' && $order->isFromEtsy()) {
+            return Response::error("A encomenda {$order->order_number} é da Etsy: ao passá-la a enviada, a Etsy avisa o comprador por email. Usa etsy_order_ship, que mostra o que vai acontecer e pede confirmação.");
+        }
+
         $data = $this->runner->validate(UpdateOrderStatusRequest::class, [
             'status' => $status,
             'note' => $request->get('note'),
@@ -82,13 +88,7 @@ class OrderTransitionTool extends WriteTool
 
         return Response::structured([
             'message' => "Encomenda {$order->order_number}: {$before} → {$order->status}."
-                .match (true) {
-                    $order->status !== 'shipped' => '',
-                    // Na Etsy quem avisa o comprador e a Etsy.
-                    $order->isFromEtsy() => ' O 12studio não envia email ao comprador da Etsy.',
-                    $order->email !== null => ' Email de expedição enviado ao cliente.',
-                    default => '',
-                },
+                .($order->status === 'shipped' && $order->email !== null ? ' Email de expedição enviado ao cliente.' : ''),
             'order' => OrderPresenter::detail($order),
         ]);
     }

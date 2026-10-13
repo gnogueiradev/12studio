@@ -149,7 +149,7 @@ class EtsyListingSync
 
             $where = [
                 'state' => $this->string($remote['state'] ?? null, 20),
-                'url' => $this->string($remote['url'] ?? null, 500),
+                'url' => EtsyPresenter::link($remote['url'] ?? null),
                 'remote_checked_at' => now(),
             ];
 
@@ -567,7 +567,7 @@ class EtsyListingSync
         $listing->fill([
             'etsy_listing_id' => $etsyListingId,
             'state' => $this->string($created['state'] ?? null, 20) ?? 'draft',
-            'url' => $this->string($created['url'] ?? null, 500),
+            'url' => EtsyPresenter::link($created['url'] ?? null),
         ])->save();
     }
 

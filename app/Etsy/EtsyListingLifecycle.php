@@ -281,7 +281,7 @@ class EtsyListingLifecycle
                 }
 
                 $state = is_string($row['state'] ?? null) ? Str::limit($row['state'], 20, '') : $listing->state;
-                $url = is_string($row['url'] ?? null) ? Str::limit($row['url'], 500, '') : $listing->url;
+                $url = EtsyPresenter::link($row['url'] ?? null) ?? $listing->url;
 
                 if ($state !== $listing->state) {
                     $result['changed']++;

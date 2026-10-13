@@ -185,7 +185,7 @@ final class EtsyReceiptPresenter
             'receipt_id' => $row->etsy_receipt_id,
             'status' => $row->etsy_status,
             'needs_review' => $row->status === EtsyReceipt::STATUS_NEEDS_REVIEW,
-            'problem' => $row->last_error,
+            'problem' => McpFormat::untrusted($row->last_error),
             'message_from_buyer' => McpFormat::untrusted($row->buyer_message),
             'gift_message' => McpFormat::untrusted($row->gift_message),
             // Linhas que nao casaram com nenhuma variante do 12studio.
@@ -198,7 +198,8 @@ final class EtsyReceiptPresenter
             'shipped_on_etsy_at' => $row->shipped_on_etsy_at?->format('Y-m-d H:i'),
             // O envio foi dito a Etsy daqui? Se a Etsy recusou, porque.
             'shipment_sent_to_etsy' => $row->tracking_pushed_at !== null,
-            'shipment_problem' => $row->tracking_push_error,
+            // O que a Etsy respondeu: dados, nao instrucoes.
+            'shipment_problem' => McpFormat::untrusted($row->tracking_push_error),
             'url' => $row->etsyUrl(),
         ];
     }
