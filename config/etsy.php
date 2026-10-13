@@ -89,4 +89,8 @@ return [
     // Margem, em segundos, para renovar o token antes de ele expirar.
     'token_leeway' => 120,
 
+    // Quanto se espera, em segundos, pela renovacao que outro processo ja
+    // esta a fazer, antes de desistir com um erro que se sabe mostrar.
+    'token_lock_wait' => 15,
+
 ];

@@ -84,8 +84,12 @@ class EtsyOAuth
         }
 
         // Antes de tudo o resto: um `state` que nao e o nosso e um pedido que
-        // nao comecou aqui, e esse nao liga loja nenhuma a esta conta.
-        if (! hash_equals($pending['state'], (string) $request->query('state', ''))) {
+        // nao comecou aqui, e esse nao liga loja nenhuma a esta conta. Os
+        // parametros vem do URL e podem vir como array (`?state[]=x`): o que
+        // nao for texto e tratado como ausente, nao convertido a forca.
+        $state = $request->query('state');
+
+        if (! is_string($state) || ! hash_equals($pending['state'], $state)) {
             throw new EtsyException('O regresso da Etsy não bate com o pedido de ligação (state diferente). Nada foi ligado — começa outra vez.');
         }
 
@@ -93,10 +97,16 @@ class EtsyOAuth
             throw new EtsyException('A ligação não foi autorizada na Etsy. Nada foi ligado.');
         }
 
-        $code = (string) $request->query('code', '');
+        $code = $request->query('code');
 
-        if ($code === '') {
+        if (! is_string($code) || $code === '') {
             throw new EtsyException('A Etsy não devolveu o código de autorização. Nada foi ligado.');
+        }
+
+        // O interruptor pode ter mudado enquanto o dono esteve na Etsy.
+        // Desligada e desligada: a troca do codigo tambem nao sai.
+        if (! $this->tokens->isEnabled()) {
+            throw EtsyException::disabled();
         }
 
         $tokens = $this->exchange($code, $pending['verifier']);
@@ -152,8 +162,14 @@ class EtsyOAuth
             throw EtsyException::unreachable(Str::limit($exception->getMessage(), 120));
         }
 
-        if (! $response->successful() || ! is_string($response->json('access_token')) || ! is_string($response->json('refresh_token'))) {
-            throw EtsyApiException::fromResponse($response);
+        // Nunca com o corpo da resposta na mensagem (EtsyTokens::tokenRefusal):
+        // este e o endpoint que devolve tokens, e a mensagem acaba num toast.
+        if (! $response->successful()) {
+            throw EtsyTokens::tokenRefusal($response);
+        }
+
+        if (! is_string($response->json('access_token')) || ! is_string($response->json('refresh_token'))) {
+            throw new EtsyException('A Etsy respondeu sem os tokens esperados. Nada foi ligado — tenta outra vez.');
         }
 
         /** @var array<string, mixed> $payload */

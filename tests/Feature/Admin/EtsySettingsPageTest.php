@@ -210,6 +210,62 @@ class EtsySettingsPageTest extends TestCase
         $this->assertSame(0, EtsyConnection::query()->count());
     }
 
+    public function test_a_callback_with_a_malformed_state_is_refused_politely(): void
+    {
+        Http::fake();
+
+        // `?state[]=x`: um array onde se espera texto. Tem de ser uma recusa,
+        // nao um erro 500 com o endereco do callback a caminho do #sistema.
+        $this->actingAs($this->admin)
+            ->withSession(['etsy.oauth' => ['state' => 'estado-certo', 'verifier' => str_repeat('v', 64)]])
+            ->get(route('admin.etsy.callback').'?code=codigo&state[]=estado-certo')
+            ->assertRedirect(route('admin.etsy.index'))
+            ->assertSessionHas('inertia.flash_data.toast.type', 'error');
+
+        $this->assertCount(0, $this->etsyRequests());
+        $this->assertSame(0, EtsyConnection::query()->count());
+    }
+
+    public function test_a_token_answer_missing_a_token_never_shows_what_came(): void
+    {
+        Http::fake(['etsy.test/v3/public/oauth/token' => Http::response([
+            'access_token' => '9001.acesso-que-nao-pode-aparecer',
+            'expires_in' => 3600,
+        ])]);
+
+        // 200 mas sem token de renovacao: nao da para ligar. A mensagem nao
+        // pode trazer o corpo da resposta — vinha la o token de acesso.
+        $response = $this->actingAs($this->admin)
+            ->withSession(['etsy.oauth' => ['state' => 'estado-certo', 'verifier' => str_repeat('v', 64)]])
+            ->get(route('admin.etsy.callback', ['code' => 'codigo-da-etsy', 'state' => 'estado-certo']));
+
+        $response->assertRedirect(route('admin.etsy.index'))
+            ->assertSessionHas('inertia.flash_data.toast.type', 'error')
+            ->assertSessionHas(
+                'inertia.flash_data.toast.message',
+                fn (string $message): bool => ! str_contains($message, 'acesso-que-nao-pode-aparecer'),
+            );
+
+        $this->assertSame(0, EtsyConnection::query()->count());
+    }
+
+    public function test_the_switch_flipped_mid_way_stops_the_exchange(): void
+    {
+        $this->configureEtsy(enabled: false);
+        Http::fake();
+
+        // O dono saiu para a Etsy com a integracao ligada e voltou com ela
+        // desligada. Desligada e desligada: a troca do codigo tambem nao sai.
+        $this->actingAs($this->admin)
+            ->withSession(['etsy.oauth' => ['state' => 'estado-certo', 'verifier' => str_repeat('v', 64)]])
+            ->get(route('admin.etsy.callback', ['code' => 'codigo-da-etsy', 'state' => 'estado-certo']))
+            ->assertRedirect(route('admin.etsy.index'))
+            ->assertSessionHas('inertia.flash_data.toast.type', 'error');
+
+        Http::assertNothingSent();
+        $this->assertSame(0, EtsyConnection::query()->count());
+    }
+
     public function test_refusing_on_etsy_comes_back_without_a_connection(): void
     {
         Http::fake();

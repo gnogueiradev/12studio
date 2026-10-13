@@ -3,12 +3,15 @@
 namespace Tests\Feature\Etsy;
 
 use App\Alerts\AlertChannel;
+use App\Etsy\EtsyApiException;
 use App\Etsy\EtsyException;
 use App\Etsy\EtsyTokens;
 use App\Models\EtsyConnection;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
+use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\Feature\Alerts\FakesDiscord;
 use Tests\TestCase;
 
@@ -157,6 +160,85 @@ class EtsyTokensTest extends TestCase
         // Partida e partida: de cinco em cinco minutos a importacao voltava a
         // tentar, e a avisar, ate alguem religar a loja.
         $this->assertCount(0, $this->etsyRequests('/oauth/token'));
+    }
+
+    /**
+     * So `invalid_grant` quer dizer "este token de renovacao morreu". Um limite
+     * de pedidos, uma chave trocada no .env ou a Etsy em baixo recusam a
+     * renovacao sem que a loja tenha retirado nada — e marcar a ligacao como
+     * partida obrigava o dono a refazer o OAuth por causa de um soluco.
+     *
+     * @return array<string, array{int, array<string, string>}>
+     */
+    public static function refusalsThatAreNotARevocation(): array
+    {
+        return [
+            'limite de pedidos' => [429, ['error' => 'Too many requests']],
+            'chave recusada' => [401, ['error' => 'invalid_client']],
+            'sem permissao' => [403, ['error' => 'Forbidden']],
+            'pedido mal formado' => [400, ['error' => 'invalid_request']],
+            'etsy em baixo' => [503, ['error' => 'Service unavailable']],
+        ];
+    }
+
+    /**
+     * @param  array<string, string>  $body
+     */
+    #[DataProvider('refusalsThatAreNotARevocation')]
+    public function test_a_refused_renewal_that_is_not_a_revocation_leaves_the_connection_alone(int $status, array $body): void
+    {
+        $this->fakeDiscord();
+        $this->connectEtsy(['access_expires_at' => now()->subMinute()]);
+        Http::fake(['etsy.test/v3/public/oauth/token' => Http::response($body, $status)]);
+
+        try {
+            $this->tokens()->accessToken();
+            $this->fail('Devia ter lancado.');
+        } catch (EtsyApiException $exception) {
+            $this->assertSame($status, $exception->status);
+        }
+
+        $connection = EtsyConnection::query()->sole();
+        $this->assertNull($connection->broken_at);
+        $this->assertNotAlerted(AlertChannel::SYSTEM, 'Etsy');
+    }
+
+    public function test_a_renewal_that_keeps_the_same_refresh_token_is_fine(): void
+    {
+        $this->connectEtsy(['access_expires_at' => now()->subMinute()]);
+        Http::fake(['etsy.test/v3/public/oauth/token' => Http::response([
+            'access_token' => '9001.acesso-novo',
+            'expires_in' => 3600,
+        ])]);
+
+        // Se a Etsy nao devolver um token de renovacao novo, o que ca esta
+        // continua a servir — nao e razao para rebentar nem para o perder.
+        $this->assertSame('9001.acesso-novo', $this->tokens()->accessToken());
+        $this->assertSame('9001.renovacao-valida', EtsyConnection::query()->sole()->refresh_token);
+    }
+
+    public function test_waiting_too_long_for_another_renewal_is_an_etsy_error_not_a_crash(): void
+    {
+        config(['etsy.token_lock_wait' => 0]);
+        $this->connectEtsy(['access_expires_at' => now()->subMinute()]);
+        Http::fake();
+
+        // Outro processo esta a renovar e nao larga o cadeado a tempo.
+        $held = Cache::lock('etsy:token', 30);
+        $this->assertTrue($held->get());
+
+        try {
+            $this->tokens()->accessToken();
+            $this->fail('Devia ter lancado.');
+        } catch (EtsyException $exception) {
+            // Uma EtsyException e o que as paginas e o MCP sabem mostrar; a
+            // do cadeado dava um erro 500 numa pagina que "abre sempre".
+            $this->assertStringContainsString('Etsy', $exception->getMessage());
+        } finally {
+            $held->release();
+        }
+
+        Http::assertNothingSent();
     }
 
     public function test_forgetting_removes_the_connection(): void

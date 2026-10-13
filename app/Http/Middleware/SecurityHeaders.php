@@ -27,6 +27,8 @@ class SecurityHeaders
      *   img-src blob: — as pre-visualizacoes de upload da galeria de produto
      *     usam URL.createObjectURL.
      *   img-src data: e font-src data: — icones e fontes embutidos pelo Vite.
+     *   img-src i.etsystatic.com — as miniaturas dos anuncios em Etsy ->
+     *     Anuncios vem do CDN de imagens da Etsy. So esse host, e so imagens.
      *
      * O script-src NAO leva 'unsafe-inline' — seria abdicar da unica coisa
      * para que o CSP aqui serve. O unico script inline da app vai autorizado
@@ -38,7 +40,7 @@ class SecurityHeaders
         "object-src 'none'",
         "frame-ancestors 'none'",
         "form-action 'self'",
-        "img-src 'self' data: blob:",
+        "img-src 'self' data: blob: https://i.etsystatic.com",
         "font-src 'self' data:",
         "style-src 'self' 'unsafe-inline'",
         "script-src 'self' '".self::THEME_SCRIPT_HASH."'",

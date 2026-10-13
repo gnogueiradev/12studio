@@ -123,6 +123,17 @@ class Product extends Model
         return $this->hasOne(Variant::class)->where('is_default', true);
     }
 
+    /**
+     * O anuncio deste produto na Etsy, se tiver um (ou conteudo preparado
+     * para um).
+     *
+     * @return HasOne<EtsyListing, $this>
+     */
+    public function etsyListing(): HasOne
+    {
+        return $this->hasOne(EtsyListing::class);
+    }
+
     public function isActive(): bool
     {
         return $this->status === 'active';

@@ -219,6 +219,19 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
             ->middleware('throttle:10,1')
             ->name('etsy.callback');
 
+        // Os anuncios que a loja tem na Etsy, e a ligacao de cada um a um
+        // produto. Sem password: aqui nao ha segredos, e ligar nao escreve
+        // nada na Etsy.
+        Route::get('etsy/anuncios', [Admin\EtsyListingController::class, 'index'])
+            ->name('etsy.anuncios.index');
+        Route::post('etsy/anuncios/{product}/ligar', [Admin\EtsyListingController::class, 'link'])
+            ->name('etsy.anuncios.ligar');
+        // withTrashed: o anuncio de um produto apagado tem de poder ser
+        // libertado sem primeiro restaurar o produto.
+        Route::delete('etsy/anuncios/{product}/desligar', [Admin\EtsyListingController::class, 'unlink'])
+            ->withTrashed()
+            ->name('etsy.anuncios.desligar');
+
         // O formulario do produto tem pagina, ao contrario do dos materiais e
         // do das impressoras: sao seis seccoes, uma galeria, uma matriz de
         // variantes e uma ficha de variante por dentro — dentro de um modal, a

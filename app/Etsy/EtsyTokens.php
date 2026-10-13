@@ -4,7 +4,9 @@ namespace App\Etsy;
 
 use App\Alerts\SystemAlerts;
 use App\Models\EtsyConnection;
+use Illuminate\Contracts\Cache\LockTimeoutException;
 use Illuminate\Http\Client\ConnectionException;
+use Illuminate\Http\Client\Response;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
@@ -72,18 +74,25 @@ class EtsyTokens
             return $connection->access_token;
         }
 
-        return Cache::lock(self::LOCK, 30)->block(15, function () use ($connection): string {
-            // Relida ja com o cadeado na mao: se outro processo renovou
-            // enquanto este esperava, o token de renovacao que este tinha em
-            // memoria ja foi gasto. Usa-lo outra vez partia a ligacao.
-            $fresh = $connection->fresh() ?? throw EtsyException::notConnected();
+        try {
+            return Cache::lock(self::LOCK, 30)->block((int) config('etsy.token_lock_wait', 15), function () use ($connection): string {
+                // Relida ja com o cadeado na mao: se outro processo renovou
+                // enquanto este esperava, o token de renovacao que este tinha
+                // em memoria ja foi gasto. Usa-lo outra vez partia a ligacao.
+                $fresh = $connection->fresh() ?? throw EtsyException::notConnected();
 
-            if ($fresh->isBroken()) {
-                throw EtsyException::reconnect();
-            }
+                if ($fresh->isBroken()) {
+                    throw EtsyException::reconnect();
+                }
 
-            return $this->stillValid($fresh) ? $fresh->access_token : $this->refresh($fresh);
-        });
+                return $this->stillValid($fresh) ? $fresh->access_token : $this->refresh($fresh);
+            });
+        } catch (LockTimeoutException) {
+            // Outro processo esta a renovar e demorou. Para quem chama e o
+            // mesmo que a Etsy nao ter respondido — e e uma EtsyException que
+            // as paginas e o MCP sabem mostrar, nao um erro 500.
+            throw EtsyException::unreachable('outra renovação do token está a demorar');
+        }
     }
 
     /**
@@ -94,14 +103,22 @@ class EtsyTokens
      * @param  array<string, mixed>  $payload
      * @param  array<string, mixed>  $attributes
      */
-    public function store(array $payload, array $attributes = []): EtsyConnection
+    public function store(array $payload, array $attributes = [], ?EtsyConnection $connection = null): EtsyConnection
     {
-        $connection = $this->connection() ?? new EtsyConnection;
+        // Numa renovacao vem a linha que se renovou; na ligacao da loja nao
+        // vem nenhuma, e reaproveita-se a que houver (ha so uma loja).
+        $connection ??= $this->connection() ?? new EtsyConnection;
+
+        // A Etsy pode nao devolver um token de renovacao novo. O que ca esta
+        // continua a servir; so numa primeira ligacao e que tem de vir.
+        $refreshToken = is_string($payload['refresh_token'] ?? null) && $payload['refresh_token'] !== ''
+            ? $payload['refresh_token']
+            : ($connection->exists ? $connection->refresh_token : throw new EtsyException('A Etsy respondeu sem o token de renovação. Nada foi ligado.'));
 
         $connection->fill([
             ...$attributes,
             'access_token' => (string) $payload['access_token'],
-            'refresh_token' => (string) $payload['refresh_token'],
+            'refresh_token' => $refreshToken,
             'access_expires_at' => now()->addSeconds((int) ($payload['expires_in'] ?? 3600)),
             'broken_at' => null,
             'last_error' => null,
@@ -141,18 +158,44 @@ class EtsyTokens
             /** @var array<string, mixed> $payload */
             $payload = $response->json();
 
-            return $this->store($payload)->access_token;
+            return $this->store($payload, connection: $connection)->access_token;
         }
 
-        // 4xx aqui e a Etsy a dizer que este token de renovacao ja nao serve
-        // (autorizacao retirada, 90 dias sem uso). Insistir nao muda nada.
-        if ($response->clientError()) {
-            $this->markBroken($connection, EtsyApiException::fromResponse($response));
+        $refusal = self::tokenRefusal($response);
+
+        // So `invalid_grant` e a Etsy a dizer que ESTE token de renovacao
+        // morreu (autorizacao retirada, 90 dias sem uso) — e so ai insistir
+        // nao muda nada. Um limite de pedidos, uma chave trocada no .env ou
+        // a Etsy em baixo recusam a renovacao sem a loja ter retirado nada:
+        // marcar a ligacao como partida obrigava a refazer o OAuth por causa
+        // de um soluco. Esses sobem como erro e a proxima chamada tenta.
+        if ($response->status() === 400 && $response->json('error') === 'invalid_grant') {
+            $this->markBroken($connection, $refusal);
 
             throw EtsyException::reconnect();
         }
 
-        throw EtsyApiException::fromResponse($response);
+        throw $refusal;
+    }
+
+    /**
+     * O que o endpoint dos tokens recusou, SEM o corpo da resposta: e o unico
+     * sitio onde um corpo inesperado pode trazer um token la dentro, e a
+     * mensagem desta excecao acaba em toasts e no Discord.
+     */
+    public static function tokenRefusal(Response $response): EtsyApiException
+    {
+        $error = $response->json('error');
+        $description = $response->json('error_description');
+
+        return new EtsyApiException(
+            $response->status(),
+            match (true) {
+                is_string($error) && is_string($description) => Str::limit("{$error}: {$description}", 300),
+                is_string($error) => Str::limit($error, 300),
+                default => null,
+            },
+        );
     }
 
     private function markBroken(EtsyConnection $connection, EtsyApiException $reason): void
