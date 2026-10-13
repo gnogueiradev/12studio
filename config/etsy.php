@@ -34,6 +34,25 @@ return [
     'shared_secret' => env('ETSY_SHARED_SECRET'),
 
     /*
+    |--------------------------------------------------------------------------
+    | Avisos da Etsy (webhooks)
+    |--------------------------------------------------------------------------
+    |
+    | Opcional. Com ele, uma venda entra em segundos em vez de esperar ate 5
+    | minutos pela importacao seguinte. O segredo e o que a Etsy mostra no
+    | portal de webhooks da app, ao criar o endpoint (comeca por "whsec_");
+    | sem ele a porta dos avisos nao existe.
+    |
+    | A tolerancia, em segundos, e ate que idade se aceita um aviso assinado:
+    | e o que impede reenviar mais tarde um aviso verdadeiro.
+    |
+    */
+
+    'webhook_secret' => env('ETSY_WEBHOOK_SECRET'),
+
+    'webhook_tolerance' => 300,
+
+    /*
     | O endereco de retorno do OAuth. Tem de coincidir, letra a letra, com um
     | dos "Callback URLs" da app na Etsy. Vazio = o da rota admin.etsy.callback
     | com o APP_URL — que so serve se o APP_URL for mesmo o dominio publico.

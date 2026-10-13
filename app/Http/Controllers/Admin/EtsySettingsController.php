@@ -7,7 +7,9 @@ use App\Etsy\EtsyApi;
 use App\Etsy\EtsyException;
 use App\Etsy\EtsyOAuth;
 use App\Etsy\EtsyTokens;
+use App\Etsy\EtsyWebhookSignature;
 use App\Http\Controllers\Controller;
+use App\Http\Controllers\EtsyWebhookController;
 use App\Http\Requests\AdminActionRequest;
 use App\Models\EtsyConnection;
 use App\Models\User;
@@ -43,6 +45,13 @@ class EtsySettingsController extends Controller
             'redirectUri' => $this->oauth->redirectUri(),
             'requiredScopes' => array_values((array) config('etsy.scopes')),
             'connection' => $connection === null ? null : $this->present($connection),
+            // Os avisos da Etsy (opcional): o endereco a registar no portal
+            // de webhooks da app, e se o segredo ja esta no .env.
+            'webhook' => [
+                'url' => route('webhooks.etsy'),
+                'configured' => app(EtsyWebhookSignature::class)->isConfigured(),
+                'events' => EtsyWebhookController::EVENTS,
+            ],
         ]);
     }
 

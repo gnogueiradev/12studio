@@ -42,6 +42,16 @@ type Props = {
     redirectUri: string;
     requiredScopes: string[];
     connection: Connection | null;
+    webhook: Webhook;
+};
+
+/** Os avisos da Etsy: opcionais, só adiantam a entrada das encomendas. */
+type Webhook = {
+    /** O endereço a registar no portal de webhooks da app. */
+    url: string;
+    /** Se o `ETSY_WEBHOOK_SECRET` está no `.env`. */
+    configured: boolean;
+    events: string[];
 };
 
 function badge(props: Props): { value: string; label: string } {
@@ -263,8 +273,61 @@ export default function EtsySettings(props: Props) {
                         })
                     }
                 />
+
+                <WebhookPanel webhook={props.webhook} />
             </div>
         </>
+    );
+}
+
+/**
+ * Os avisos da Etsy. Não fazem falta para nada funcionar: as encomendas entram
+ * sozinhas de 5 em 5 minutos. Com eles entram em segundos — o que encurta o
+ * tempo em que a mesma peça pode ser vendida nos dois lados.
+ */
+function WebhookPanel({ webhook }: { webhook: Webhook }) {
+    return (
+        <Panel
+            title="Avisos da Etsy (opcional)"
+            description="Sem isto as encomendas entram de 5 em 5 minutos. Com isto, a Etsy avisa na hora e entram em segundos."
+            aside={
+                <StatusBadge
+                    value={webhook.configured ? 'active' : 'draft'}
+                    label={webhook.configured ? 'Ligados' : 'Por ligar'}
+                />
+            }
+            className="max-w-3xl"
+        >
+            <ol className="flex list-decimal flex-col gap-3 pl-5 text-sm">
+                <li>
+                    Em <strong>etsy.com/developers</strong> → a tua app →{' '}
+                    <strong>Go to Webhook portal</strong> →{' '}
+                    <strong>Add Endpoint</strong>, com este endereço:
+                    <code className="mt-2 block rounded-lg bg-secondary/50 px-3 py-2 font-mono text-xs break-all">
+                        {webhook.url}
+                    </code>
+                </li>
+                <li>
+                    Escolhe os avisos das encomendas:{' '}
+                    <span className="font-mono text-xs">
+                        {webhook.events.join(', ')}
+                    </span>
+                    . Os de anúncios e de inventário não são precisos.
+                </li>
+                <li>
+                    A Etsy mostra um segredo que começa por <code>whsec_</code>.
+                    Põe-no no <code>.env</code> do servidor, em{' '}
+                    <code>ETSY_WEBHOOK_SECRET</code>, e reinicia a aplicação. É
+                    ele que prova que um aviso veio mesmo da Etsy: sem ele, este
+                    endereço responde como se não existisse.
+                </li>
+            </ol>
+            <p className="mt-3 text-xs text-pretty text-muted-foreground">
+                {webhook.configured
+                    ? 'O segredo está no servidor. Podes experimentar no separador “Testing” do portal da Etsy: um aviso de teste aceite aparece lá como entregue.'
+                    : 'O segredo ainda não está no servidor: os avisos são recusados e as encomendas continuam a entrar de 5 em 5 minutos.'}
+            </p>
+        </Panel>
     );
 }
 

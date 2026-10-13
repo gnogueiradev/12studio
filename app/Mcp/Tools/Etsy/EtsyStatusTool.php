@@ -6,6 +6,7 @@ use App\Etsy\EtsyApi;
 use App\Etsy\EtsyClient;
 use App\Etsy\EtsyException;
 use App\Etsy\EtsyTokens;
+use App\Etsy\EtsyWebhookSignature;
 use App\Mcp\Tools\Etsy\Concerns\TalksToEtsy;
 use App\Mcp\Tools\StudioTool;
 use App\Models\EtsyConnection;
@@ -86,6 +87,12 @@ class EtsyStatusTool extends StudioTool
             'shop' => $shop,
             'shop_error' => $shopError,
             'rate_limits' => $this->client->limits(),
+            // Com os avisos da Etsy ligados as vendas entram em segundos; sem
+            // eles entram na mesma, de 5 em 5 minutos.
+            'orders_import' => [
+                'webhook_configured' => app(EtsyWebhookSignature::class)->isConfigured(),
+                'every_minutes' => 5,
+            ],
         ]);
     }
 

@@ -154,6 +154,10 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('mcp-register', fn (Request $request): Limit => Limit::perHour(5)->by('mcp-register:'.$request->ip()));
 
         RateLimiter::for('mcp-token', fn (Request $request): Limit => Limit::perMinute(30)->by('mcp-token:'.$request->ip()));
+
+        // Os avisos da Etsy: porta publica, guardada pela assinatura. O teto
+        // e para quem a tenta adivinhar — a Etsy fica muito abaixo dele.
+        RateLimiter::for('etsy-webhook', fn (Request $request): Limit => Limit::perMinute(120)->by('etsy-webhook:'.$request->ip()));
     }
 
     /**
