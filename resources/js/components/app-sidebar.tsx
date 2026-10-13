@@ -9,6 +9,7 @@ import {
     Palette,
     Printer,
     Settings,
+    ShoppingBag,
     ShoppingCart,
     Store,
     Tags,
@@ -90,6 +91,13 @@ const backofficeNavItems: NavItem[] = [
         title: 'Calculadora',
         href: '/admin/calculadora',
         icon: Calculator,
+    },
+    {
+        // O outro balcão: os anúncios que a loja tem na Etsy. A ligação em si
+        // (chaves, OAuth) fica em Definições, como os alertas.
+        title: 'Etsy',
+        href: '/admin/etsy/anuncios',
+        icon: ShoppingBag,
     },
     {
         title: 'Definições',
