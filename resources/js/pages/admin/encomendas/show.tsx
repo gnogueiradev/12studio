@@ -2,6 +2,7 @@ import { Head, Link, router, useForm } from '@inertiajs/react';
 import { AlertTriangle, ChevronDown, Printer } from 'lucide-react';
 import { useState } from 'react';
 import type { ReactNode } from 'react';
+import { ConfirmDialog } from '@/components/admin/confirm-dialog';
 import { OrderProgress } from '@/components/admin/order-progress';
 import { OrderTimeline } from '@/components/admin/order-timeline';
 import {
@@ -35,6 +36,7 @@ import {
     index,
     pagamento,
 } from '@/routes/admin/encomendas';
+import { envio as sendShipmentToEtsy } from '@/routes/admin/encomendas/etsy';
 import { producao } from '@/routes/admin/itens';
 import type { OrderDetail, OrderEtsySide, OrderItemRow } from '@/types/order';
 import {
@@ -454,7 +456,16 @@ export default function OrdersShow({ order, tagSuggestions }: Props) {
                     </div>
                 )}
 
-                {order.etsy !== null && <EtsySide etsy={order.etsy} />}
+                {order.etsy !== null && (
+                    <EtsySide
+                        etsy={order.etsy}
+                        orderId={order.id}
+                        shipped={
+                            order.status === 'shipped' ||
+                            order.status === 'delivered'
+                        }
+                    />
+                )}
 
                 <OrderProgress steps={order.progress} />
 
@@ -922,6 +933,15 @@ export default function OrdersShow({ order, tagSuggestions }: Props) {
                                         </Label>
                                         <Input
                                             id="shipping_method_name"
+                                            // Numa encomenda da Etsy sugere as
+                                            // transportadoras que ela conhece:
+                                            // as outras vão para lá como
+                                            // "other", sem seguimento automático.
+                                            list={
+                                                order.etsy !== null
+                                                    ? 'etsy-carriers'
+                                                    : undefined
+                                            }
                                             value={
                                                 detailsForm.data
                                                     .shipping_method_name
@@ -933,6 +953,18 @@ export default function OrdersShow({ order, tagSuggestions }: Props) {
                                                 )
                                             }
                                         />
+                                        {order.etsy !== null && (
+                                            <datalist id="etsy-carriers">
+                                                {order.etsy.carriers.map(
+                                                    (carrier) => (
+                                                        <option
+                                                            key={carrier}
+                                                            value={carrier}
+                                                        />
+                                                    ),
+                                                )}
+                                            </datalist>
+                                        )}
                                     </div>
 
                                     <div className="grid gap-1.5">
@@ -1138,7 +1170,35 @@ export default function OrdersShow({ order, tagSuggestions }: Props) {
  * o que a Etsy diz do pagamento, e o que ficou por acertar. O comprador é
  * avisado pela Etsy — daqui não sai email nenhum para ele.
  */
-function EtsySide({ etsy }: { etsy: OrderEtsySide }) {
+function EtsySide({
+    etsy,
+    orderId,
+    shipped,
+}: {
+    etsy: OrderEtsySide;
+    orderId: number;
+    /** A encomenda já passou a enviada no 12studio. */
+    shipped: boolean;
+}) {
+    const [asking, setAsking] = useState(false);
+    const [sending, setSending] = useState(false);
+    const [note, setNote] = useState('');
+
+    const send = () => {
+        setSending(true);
+        router.post(
+            sendShipmentToEtsy(orderId).url,
+            { note_to_buyer: note },
+            {
+                preserveScroll: true,
+                onFinish: () => {
+                    setSending(false);
+                    setAsking(false);
+                },
+            },
+        );
+    };
+
     return (
         <section className="flex flex-col gap-3 rounded-xl border border-border/60 bg-card px-4 py-4 text-sm">
             <div className="flex flex-wrap items-baseline justify-between gap-2">
@@ -1227,6 +1287,69 @@ function EtsySide({ etsy }: { etsy: OrderEtsySide }) {
                     <dd>{etsy.etsyStatus ?? '—'}</dd>
                 </div>
             </dl>
+
+            <div className="flex flex-wrap items-center gap-3 border-t border-border/60 pt-3">
+                <span className="min-w-0 flex-1">
+                    {etsy.shipmentProblem !== null ? (
+                        <span role="alert" className="text-destructive">
+                            A Etsy não aceitou o envio: {etsy.shipmentProblem}{' '}
+                            Marca-a como enviada na Etsy, ou tenta outra vez.
+                        </span>
+                    ) : etsy.shipmentSentAt !== null ? (
+                        `Envio dito à Etsy em ${etsy.shipmentSentAt}. Foi ela que avisou o comprador.`
+                    ) : etsy.shippedOnEtsyAt !== null ? (
+                        `Marcada como enviada na Etsy (${etsy.shippedOnEtsyAt}).`
+                    ) : shipped ? (
+                        'Enviada cá, mas a Etsy ainda não sabe.'
+                    ) : (
+                        'Quando passar a “Enviado”, o 12studio avisa a Etsy — com o seguimento, se o tiver.'
+                    )}
+                </span>
+                {shipped && (
+                    <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setAsking(true)}
+                    >
+                        {etsy.shipmentSentAt === null
+                            ? 'Dizer à Etsy que foi enviada'
+                            : 'Reenviar o seguimento'}
+                    </Button>
+                )}
+            </div>
+
+            <ConfirmDialog
+                open={asking}
+                onOpenChange={setAsking}
+                title="Dizer o envio à Etsy"
+                description={
+                    <>
+                        <p>
+                            A Etsy manda um email ao comprador de cada vez que
+                            isto acontece, com o seguimento que estiver gravado
+                            na encomenda. Guarda primeiro a transportadora e o
+                            número, se os mudaste.
+                        </p>
+                        <label className="mt-3 grid gap-1.5 text-sm">
+                            <span className="text-xs text-muted-foreground">
+                                Mensagem para o comprador (opcional)
+                            </span>
+                            <Textarea
+                                rows={3}
+                                maxLength={500}
+                                value={note}
+                                onChange={(event) =>
+                                    setNote(event.target.value)
+                                }
+                            />
+                        </label>
+                    </>
+                }
+                confirmLabel="Avisar a Etsy"
+                processing={sending}
+                onConfirm={send}
+            />
 
             <p className="text-xs text-pretty text-muted-foreground">
                 A taxa de transação e a de publicação não vêm no pagamento:

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Alerts\Labels;
 use App\Alerts\OrderAlerts;
+use App\Etsy\EtsyHooks;
 use App\Mail\OrderShippedMail;
 use App\Models\Order;
 use App\Models\OrderItem;
@@ -57,6 +58,7 @@ class OrderService
         private StockService $stockService,
         private TagService $tagService,
         private OrderAlerts $alerts,
+        private EtsyHooks $etsy,
     ) {}
 
     /**
@@ -384,6 +386,12 @@ class OrderService
             Mail::to($order->email)->send(new OrderShippedMail($order));
         }
 
+        // Uma encomenda da Etsy: quem avisa o comprador e a Etsy, e e preciso
+        // dizer-lhe que saiu. Numa tarefa, depois do commit.
+        if ($to === 'shipped') {
+            $this->etsy->orderShipped($order);
+        }
+
         return $order;
     }
 
@@ -595,6 +603,22 @@ class OrderService
         $tags = $data['tags'] ?? [];
 
         $order->tags()->sync($this->tagService->idsFor(Tag::SCOPE_ORDER, $tags));
+
+        return $order;
+    }
+
+    /**
+     * So os campos do envio. O updateDetails serve o formulario inteiro (apaga
+     * a nota e resincroniza as etiquetas com o que vier); quem so quer gravar
+     * um numero de seguimento nao pode levar isso atras.
+     *
+     * So mexe nas chaves que vierem.
+     *
+     * @param  array{tracking_number?: string|null, tracking_url?: string|null, shipping_method_name?: string|null}  $data
+     */
+    public function setTracking(Order $order, array $data): Order
+    {
+        $order->update(array_intersect_key($data, array_flip(['tracking_number', 'tracking_url', 'shipping_method_name'])));
 
         return $order;
     }

@@ -15,12 +15,14 @@ use App\Mcp\Tools\Etsy\EtsyListingSaveTool;
 use App\Mcp\Tools\Etsy\EtsyListingsListTool;
 use App\Mcp\Tools\Etsy\EtsyMarketListingsTool;
 use App\Mcp\Tools\Etsy\EtsyMarketShopsTool;
+use App\Mcp\Tools\Etsy\EtsyOrderShipTool;
 use App\Mcp\Tools\Etsy\EtsyOrdersImportTool;
 use App\Mcp\Tools\Etsy\EtsyPaymentsListTool;
 use App\Mcp\Tools\Etsy\EtsyPricingPreviewTool;
 use App\Mcp\Tools\Etsy\EtsyProcessingProfileSaveTool;
 use App\Mcp\Tools\Etsy\EtsyReceiptGetTool;
 use App\Mcp\Tools\Etsy\EtsyReceiptsListTool;
+use App\Mcp\Tools\Etsy\EtsyReceiptUpdateTool;
 use App\Mcp\Tools\Etsy\EtsyReturnPolicySaveTool;
 use App\Mcp\Tools\Etsy\EtsyReviewsListTool;
 use App\Mcp\Tools\Etsy\EtsySectionSaveTool;
@@ -98,6 +100,7 @@ Etsy:
 - Um anúncio da Etsy nasce sempre de um produto do 12studio: etsy_listing_preview mostra o que iria e o que falta, etsy_listing_save acerta o conteúdo e os preços (fica cá), etsy_listing_push envia. Um anúncio novo é um rascunho: não está à venda nem custa nada até ser publicado.
 - Publicar (etsy_listing_publish) custa a taxa de publicação da Etsy e põe o anúncio à frente dos compradores: nunca o faças sem o utilizador o pedir. Depois de publicado, o stock e os preços seguem para a Etsy sozinhos; sem stock o anúncio sai de venda e volta quando houver.
 - As vendas da Etsy entram sozinhas como encomendas (canal "etsy") e trabalham-se como as outras: orders_list, order_get, order_transition. Não as registes à mão com order_create_manual — entravam duas vezes. Dos compradores da Etsy só tens o nome curto, a localidade e o país; não peças nem tentes obter mais.
+- Enviar uma encomenda da Etsy: etsy_order_ship (grava o seguimento, avisa a Etsy e passa-a a enviada). A Etsy manda um email ao comprador de cada vez, por isso só com o utilizador a pedir. O 12studio nunca envia emails seus a compradores da Etsy.
 - Na Etsy há coisas que os compradores veem na hora (portes de um perfil com anúncios à venda, os textos da loja) e coisas que não se recuperam (apagar). Essas ferramentas recusam à primeira e dizem o que está em jogo: mostra-o ao utilizador e só repete com "confirm": true se ele disser que sim.
 
 Segurança:
@@ -199,6 +202,8 @@ class StudioServer extends Server
         EtsyShopUpdateTool::class,
         EtsyDeleteTool::class,
         EtsyOrdersImportTool::class,
+        EtsyOrderShipTool::class,
+        EtsyReceiptUpdateTool::class,
     ];
 
     /**

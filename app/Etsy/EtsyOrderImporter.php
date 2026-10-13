@@ -279,6 +279,9 @@ class EtsyOrderImporter
         // e fica registado para a fase do envio nao a empurrar de volta.
         if ($data['is_shipped'] && $shippedOnEtsy === null) {
             $shippedOnEtsy = now();
+            // Gravado ANTES de a passar a enviada ca: e por isto que o gancho
+            // do "enviada" sabe que nao tem de a mandar de volta para la.
+            $row->update(['shipped_on_etsy_at' => $shippedOnEtsy]);
             $this->shipHere($order->refresh(), $data);
         }
 
