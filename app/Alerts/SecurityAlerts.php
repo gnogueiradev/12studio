@@ -269,6 +269,21 @@ class SecurityAlerts
         });
     }
 
+    /**
+     * A loja da Etsy foi ligada, religada ou desligada. E seguranca e nao
+     * sistema: quem liga uma loja escolhe para onde vao os produtos e de onde
+     * entram encomendas.
+     */
+    public function etsyConnection(string $change, string $shop, User $by): void
+    {
+        $this->guard(fn () => $this->send(
+            DiscordMessage::make("🛍️ Loja da Etsy {$change} — {$shop}", DiscordMessage::WARNING)
+                ->field('Por', $by->name)
+                ->field('IP', request()->ip())
+                ->url(route('admin.etsy.index')),
+        ));
+    }
+
     public function keyExpiring(Token $token, User $user): void
     {
         $this->guard(fn () => $this->send(
