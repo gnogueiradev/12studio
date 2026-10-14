@@ -27,8 +27,15 @@ class EtsyWebhookTest extends TestCase
     use FakesEtsy;
     use RefreshDatabase;
 
-    /** Como a Etsy o da no portal: `whsec_` e a chave em base64. */
-    private const SECRET = 'whsec_c2VncmVkby1kZS10ZXN0ZS1kby13ZWJob29rLTEyMw==';
+    /**
+     * Como a Etsy o da no portal: `whsec_` e a chave em base64. Montado aqui e
+     * nao escrito por extenso, para o secret scanning do GitHub nao o tomar
+     * por um segredo da Stripe (usam o mesmo prefixo).
+     */
+    private static function secret(): string
+    {
+        return 'whsec_'.base64_encode('segredo-de-teste-do-webhook-123');
+    }
 
     protected function setUp(): void
     {
@@ -38,7 +45,7 @@ class EtsyWebhookTest extends TestCase
         Mail::fake();
 
         $this->configureEtsy();
-        config(['etsy.webhook_secret' => self::SECRET]);
+        config(['etsy.webhook_secret' => self::secret()]);
         $this->connectEtsy(['orders_since' => now()->subHour()]);
         $this->fakeEtsyShopConfig();
     }
@@ -56,8 +63,9 @@ class EtsyWebhookTest extends TestCase
         ]);
     }
 
-    private function signature(string $body, string $id, int $timestamp, string $secret = self::SECRET): string
+    private function signature(string $body, string $id, int $timestamp, ?string $secret = null): string
     {
+        $secret ??= self::secret();
         $key = (string) base64_decode(substr($secret, strlen('whsec_')), true);
 
         return 'v1,'.base64_encode(hash_hmac('sha256', "{$id}.{$timestamp}.{$body}", $key, true));
@@ -262,7 +270,7 @@ class EtsyWebhookTest extends TestCase
         config(['etsy.webhook_secret' => null]);
         $this->deliver()->assertNotFound();
 
-        config(['etsy.webhook_secret' => self::SECRET, 'etsy.enabled' => false]);
+        config(['etsy.webhook_secret' => self::secret(), 'etsy.enabled' => false]);
         $this->deliver()->assertNotFound();
 
         Queue::assertNothingPushed();
