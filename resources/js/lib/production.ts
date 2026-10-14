@@ -25,6 +25,20 @@ export function productProduction(variants: VariantRow[]): ProductProduction {
 }
 
 /**
+ * O tempo e a gramagem com que uma variante nova nasce. Com um tamanho só, os
+ * do produto — a peça é a mesma. Com vários, nenhuns: ainda não se sabe de
+ * que tamanho vai ser, e herdar os da principal (10cm) numa de 20cm dava-lhe
+ * o preço calculado de uma de 10cm.
+ */
+export function newVariantProduction(
+    variants: VariantRow[],
+): ProductProduction {
+    return productionBySize(variants).length > 1
+        ? { printingTimeMinutes: null, filamentWeightGrams: null }
+        : productProduction(variants);
+}
+
+/**
  * A chave de um tamanho — a mesma do VariantSizes::key() no servidor: sem
  * espaços nas pontas, em minúsculas. Sem tamanho é ''.
  */

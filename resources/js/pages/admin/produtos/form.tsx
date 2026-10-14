@@ -26,7 +26,7 @@ import {
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { inputToCents } from '@/lib/money';
-import { productionBySize, productProduction } from '@/lib/production';
+import { newVariantProduction, productionBySize } from '@/lib/production';
 import { cn } from '@/lib/utils';
 import { index, store, update } from '@/routes/admin/produtos';
 import type {
@@ -186,7 +186,7 @@ export default function ProductForm({
         post(store().url);
     };
 
-    const production = productProduction(editing?.variants ?? []);
+    const production = newVariantProduction(editing?.variants ?? []);
 
     return (
         <>

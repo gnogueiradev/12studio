@@ -1,6 +1,6 @@
 import { router, useForm } from '@inertiajs/react';
 import { Calculator } from 'lucide-react';
-import { useId, useMemo, useState } from 'react';
+import { useId, useMemo, useRef, useState } from 'react';
 import { ColorSwatch } from '@/components/admin/color-swatch';
 import { ConfirmDialog } from '@/components/admin/confirm-dialog';
 import InputError from '@/components/input-error';
@@ -48,6 +48,12 @@ const toRow = (group: SizeProduction): SizeFormRow => ({
             : String(group.filamentWeightGrams),
 });
 
+const sameRow = (row: SizeFormRow, other: SizeFormRow | undefined) =>
+    other !== undefined &&
+    row.hours === other.hours &&
+    row.minutes === other.minutes &&
+    row.weight_grams === other.weight_grams;
+
 /**
  * A aba "Produção" do produto: o tempo de impressão e a gramagem de cada
  * TAMANHO — um par por tamanho, para todas as variantes dele — e o botão que
@@ -72,18 +78,39 @@ export function VariantProductionTable({ editing }: Props) {
         () => productionBySize(editing.variants),
         [editing.variants],
     );
-    const { data, setData, patch, processing, errors, isDirty, setDefaults } =
-        useForm<ProductionFormData>({ sizes: groups.map(toRow) });
+    const {
+        data,
+        setData,
+        patch,
+        transform,
+        processing,
+        errors,
+        isDirty,
+        setDefaults,
+    } = useForm<ProductionFormData>({ sizes: groups.map(toRow) });
     const [confirming, setConfirming] = useState(false);
     const [applying, setApplying] = useState(false);
     const id = useId();
 
-    // Os erros chegam por caminho ("sizes.1.minutes"); o tipo do useForm só
-    // conhece as chaves de topo.
-    const errorFor = (index: number, field: keyof SizeFormRow) =>
-        (errors as Record<string, string | undefined>)[
-            `sizes.${index}.${field}`
-        ];
+    // O que está gravado, linha a linha: só segue o tamanho que o admin
+    // mexeu. Mandar todos reescrevia os outros — e um tamanho com valores
+    // misturados ficava igualado sem ninguém lhe ter tocado.
+    const saved = useRef<SizeFormRow[]>(data.sizes);
+    // A que linha do ecrã corresponde cada linha enviada: os erros voltam
+    // com a posição no pedido ("sizes.0.minutes"), não com a do ecrã.
+    const [sent, setSent] = useState<number[]>([]);
+
+    // Os erros chegam por caminho; o tipo do useForm só conhece as chaves de
+    // topo.
+    const errorFor = (index: number, field: keyof SizeFormRow) => {
+        const at = sent.indexOf(index);
+
+        return at === -1
+            ? undefined
+            : (errors as Record<string, string | undefined>)[
+                  `sizes.${at}.${field}`
+              ];
+    };
 
     const setField = (
         index: number,
@@ -97,7 +124,15 @@ export function VariantProductionTable({ editing }: Props) {
             ),
         );
 
-    const save = () =>
+    const save = () => {
+        const changed = data.sizes.flatMap((row, index) =>
+            sameRow(row, saved.current[index]) ? [] : [index],
+        );
+        setSent(changed);
+        transform((current) => ({
+            sizes: changed.map((index) => current.sizes[index]),
+        }));
+
         patch(producao(editing.product.id).url, {
             // O servidor devolve `back()`: o modal fica onde está e a coluna
             // "Sugerido" chega recalculada com a prop `editing`.
@@ -106,8 +141,12 @@ export function VariantProductionTable({ editing }: Props) {
             // O que acabou de ser guardado passa a ser a base do "por
             // guardar" — sem isto o botão de aplicar ficava trancado para
             // sempre depois do primeiro guardar.
-            onSuccess: () => setDefaults(),
+            onSuccess: () => {
+                saved.current = data.sizes;
+                setDefaults();
+            },
         });
+    };
 
     const applyPrices = () => {
         setApplying(true);
@@ -248,7 +287,8 @@ export function VariantProductionTable({ editing }: Props) {
                             {group.mixed && (
                                 <span className="text-xs text-warning">
                                     As variantes deste tamanho têm valores
-                                    diferentes — guardar iguala-as.
+                                    diferentes — mudar estes campos e guardar
+                                    iguala-as.
                                 </span>
                             )}
                         </div>
