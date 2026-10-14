@@ -11,11 +11,13 @@ use App\Models\Material;
 use App\Models\Product;
 use App\Models\ProductImage;
 use App\Models\Variant;
+use Closure;
 use Illuminate\Http\Client\Request;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Sleep;
+use Illuminate\Support\Str;
 
 /**
  * A Etsy de faz de conta: liga a integracao a um dominio de teste e fecha a
@@ -30,6 +32,13 @@ trait FakesEtsy
     protected const ETSY_API = 'https://etsy.test/v3/application';
 
     protected const ETSY_TOKEN_URL = 'https://etsy.test/v3/public/oauth/token';
+
+    /**
+     * Os `includes` que o getListing aceita, tal como a Etsy os lista no 400
+     * que da a quem pede outro. O inventario nao e um deles: vem a parte, do
+     * getListingInventory.
+     */
+    protected const ETSY_LISTING_INCLUDES = ['images', 'shop', 'user', 'translations', 'videos', 'personalization', 'buyerprice'];
 
     /** @var array<string, mixed> As respostas trocadas do fakeEtsyListingWrites. */
     private array $etsyWriteOverrides = [];
@@ -315,18 +324,55 @@ trait FakesEtsy
 
         $this->etsyRemoteListingFaked = true;
 
-        Http::fake(['etsy.test/v3/application/listings/7100*' => function (Request $request) {
-            if ($request->method() !== 'GET' || str_contains($request->url(), '/7100/')) {
-                return null;
-            }
-
-            return $this->etsyRemoteListing ?? Http::response($this->etsyListing([
+        Http::fake(['etsy.test/v3/application/listings/7100*' => $this->etsyListingEndpoint(
+            fn () => $this->etsyRemoteListing ?? $this->etsyListing([
                 'listing_id' => 7100,
                 'state' => $this->etsyRemoteState
                     ?? EtsyListing::query()->where('etsy_listing_id', 7100)->value('state')
                     ?? 'active',
-            ]));
-        }]);
+            ]),
+        )]);
+    }
+
+    /**
+     * Um anuncio servido como a Etsy o serve: o getListing sem o inventario
+     * (e com um 400 a um `includes` que nao conhece, como la), e o
+     * inventario a parte, no getListingInventory. O resto dos caminhos do
+     * anuncio fica para outros fakes.
+     *
+     * @param  array<string, mixed>|Closure(): mixed  $listing  O anuncio inteiro (como o etsyListing), ou uma resposta ja feita.
+     */
+    protected function etsyListingEndpoint(array|Closure $listing): Closure
+    {
+        return function (Request $request) use ($listing) {
+            $path = (string) parse_url($request->url(), PHP_URL_PATH);
+
+            if ($request->method() !== 'GET' || preg_match('#/listings/\d+(/inventory)?$#', $path, $match) !== 1) {
+                return null;
+            }
+
+            $body = $listing instanceof Closure ? $listing() : $listing;
+
+            if (! is_array($body)) {
+                return $body;
+            }
+
+            if (isset($match[1])) {
+                return Http::response($body['inventory'] ?? ['products' => []]);
+            }
+
+            parse_str((string) parse_url($request->url(), PHP_URL_QUERY), $query);
+
+            foreach (array_filter(explode(',', Str::lower((string) ($query['includes'] ?? '')))) as $include) {
+                if (! in_array($include, self::ETSY_LISTING_INCLUDES, true)) {
+                    return Http::response(['error' => "Invalid value ({$include}) for enum(".implode(', ', self::ETSY_LISTING_INCLUDES).')'], 400);
+                }
+            }
+
+            unset($body['inventory']);
+
+            return Http::response($body);
+        };
     }
 
     /**

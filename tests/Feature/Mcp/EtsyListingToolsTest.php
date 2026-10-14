@@ -109,7 +109,7 @@ class EtsyListingToolsTest extends TestCase
     public function test_compared_with_etsy_it_lists_what_is_different(): void
     {
         EtsyListing::query()->create(['product_id' => $this->product->id, 'etsy_listing_id' => 7001, 'state' => 'draft']);
-        Http::fake(['etsy.test/v3/application/listings/7001*' => Http::response($this->etsyListing([
+        Http::fake(['etsy.test/v3/application/listings/7001*' => $this->etsyListingEndpoint($this->etsyListing([
             'title' => 'Spiral Vase — 3D printed',
             'skus' => ['VASO-P', 'VASO-B'],
             'inventory' => ['products' => [

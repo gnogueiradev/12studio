@@ -35,8 +35,12 @@ use Illuminate\Support\Str;
  */
 class EtsyListingSync
 {
-    /** O que se pede junto com um anuncio para o conseguir ligar ou comparar. */
-    public const DETAIL_INCLUDES = ['Images', 'Inventory', 'Videos'];
+    /**
+     * O que se pede junto com um anuncio para o conseguir ligar ou comparar.
+     * O inventario tambem faz falta, mas o getListing nao o da: vem num
+     * segundo pedido (withInventory).
+     */
+    public const DETAIL_INCLUDES = ['Images', 'Videos'];
 
     /** Os campos de conteudo que um produto pode ter proprios para a Etsy. */
     public const CONTENT_FIELDS = [
@@ -108,6 +112,20 @@ class EtsyListingSync
         if ((int) ($remote['shop_id'] ?? 0) !== $connection->shop_id) {
             throw new EtsyException("O anúncio {$etsyListingId} não é da loja {$connection->shop_name}: só se ligam anúncios da loja ligada.");
         }
+
+        return $this->withInventory($remote, $etsyListingId);
+    }
+
+    /**
+     * Junta ao anuncio o inventario, onde estaria se o getListing o desse:
+     * em `inventory`, com os `products` dentro.
+     *
+     * @param  array<array-key, mixed>  $remote
+     * @return array<array-key, mixed>
+     */
+    private function withInventory(array $remote, int $etsyListingId): array
+    {
+        $remote['inventory'] = $this->api->listingInventory($etsyListingId);
 
         return $remote;
     }
@@ -478,7 +496,10 @@ class EtsyListingSync
             return [];
         }
 
-        $remote = $this->api->listing($listing->etsy_listing_id, self::DETAIL_INCLUDES);
+        $remote = $this->withInventory(
+            $this->api->listing($listing->etsy_listing_id, self::DETAIL_INCLUDES),
+            $listing->etsy_listing_id,
+        );
         $differences = [];
 
         $note = function (string $field, mixed $onEtsy, mixed $wouldSend) use (&$differences): void {

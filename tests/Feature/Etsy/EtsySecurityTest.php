@@ -103,7 +103,7 @@ class EtsySecurityTest extends TestCase
     public function test_a_script_address_is_not_kept_when_a_listing_is_linked(): void
     {
         $product = Product::factory()->create();
-        Http::fake(['etsy.test/v3/application/listings/7001*' => Http::response($this->etsyListing(['url' => 'javascript:alert(1)']))]);
+        Http::fake(['etsy.test/v3/application/listings/7001*' => $this->etsyListingEndpoint($this->etsyListing(['url' => 'javascript:alert(1)']))]);
 
         $listing = app(EtsyListingSync::class)->link($product, 7001);
 

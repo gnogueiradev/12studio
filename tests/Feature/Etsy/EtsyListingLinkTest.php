@@ -64,7 +64,7 @@ class EtsyListingLinkTest extends TestCase
 
         $this->listingFaked = true;
 
-        Http::fake(['etsy.test/v3/application/listings/7001*' => fn () => Http::response($this->etsyListing($this->listingOverrides))]);
+        Http::fake(['etsy.test/v3/application/listings/7001*' => $this->etsyListingEndpoint(fn () => $this->etsyListing($this->listingOverrides))]);
     }
 
     // ── Ligar ──────────────────────────────────────────────────────────────
@@ -173,7 +173,7 @@ class EtsyListingLinkTest extends TestCase
         $this->fakeListing();
         $this->sync()->link($this->product, 7001);
 
-        Http::fake(['etsy.test/v3/application/listings/7002*' => Http::response($this->etsyListing([
+        Http::fake(['etsy.test/v3/application/listings/7002*' => $this->etsyListingEndpoint($this->etsyListing([
             'listing_id' => 7002,
             'title' => 'Outro anúncio',
             'skus' => [],
@@ -247,7 +247,7 @@ class EtsyListingLinkTest extends TestCase
         ]);
         EtsyVariant::query()->where('variant_id', $variant->id)->update(['etsy_price_cents' => 2990]);
 
-        Http::fake(['etsy.test/v3/application/listings/7002*' => Http::response($this->etsyListing(['listing_id' => 7002]))]);
+        Http::fake(['etsy.test/v3/application/listings/7002*' => $this->etsyListingEndpoint($this->etsyListing(['listing_id' => 7002]))]);
         $other = $this->sync()->link($this->product, 7002);
 
         // O que era do anuncio antigo — ids, mapa de propriedades, atributos,
