@@ -10,9 +10,9 @@ use App\Services\VariantProductionService;
 use Illuminate\Http\RedirectResponse;
 
 /**
- * A seccao "Impressao" da pagina do produto: o tempo e a gramagem da peca, a
- * escrever de uma vez em todas as variantes, e um botao que escreve nelas os
- * precos calculados.
+ * A seccao "Impressao" da pagina do produto: o tempo e a gramagem de cada
+ * tamanho, a escrever de uma vez nas variantes desse tamanho, e um botao que
+ * escreve nelas os precos calculados.
  *
  * Duas accoes e nao uma, porque sao decisoes diferentes: corrigir o que o
  * slicer disse nao e decidir que o preco muda. Ambas respondem com `back()`,
@@ -26,7 +26,7 @@ class VariantProductionController extends Controller
 
     public function update(UpdateVariantProductionRequest $request, Product $product): RedirectResponse
     {
-        $count = $this->production->updateProduction($product, $request->values());
+        $count = $this->production->updateProduction($product, $request->sizes());
 
         $this->toast($count === 1
             ? 'Tempo e gramagem guardados na variante.'
