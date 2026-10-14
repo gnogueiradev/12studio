@@ -74,12 +74,28 @@ class EtsyApi
      * Um anuncio (getListing). Com o token, pela mesma razao: sem ele um
      * rascunho da propria loja vinha como "nao encontrado".
      *
-     * @param  array<int, string>  $includes  Images, Inventory, Videos, Shop, Shipping…
+     * O inventario nao vem por aqui: o getListing so aceita Images, Shop,
+     * User, Translations, Videos, Personalization e BuyerPrice nos
+     * `includes`, e a qualquer outro responde 400. E o listingInventory().
+     *
+     * @param  array<int, string>  $includes  Images, Videos, Shop…
      * @return array<array-key, mixed>
      */
     public function listing(int $listingId, array $includes = []): array
     {
         return $this->client->get("/listings/{$listingId}", $includes === [] ? [] : ['includes' => $includes]);
+    }
+
+    /**
+     * O inventario de um anuncio (getListingInventory): cada variacao com a
+     * referencia, as propriedades e a oferta (preco, quantidade). A mesma
+     * forma que o updateListingInventory recebe e devolve.
+     *
+     * @return array<array-key, mixed>
+     */
+    public function listingInventory(int $listingId): array
+    {
+        return $this->client->get("/listings/{$listingId}/inventory");
     }
 
     /**

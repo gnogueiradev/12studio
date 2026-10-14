@@ -99,7 +99,7 @@ class EtsyCatalogToolsTest extends TestCase
 
     public function test_a_listing_comes_with_photos_and_inventory(): void
     {
-        Http::fake(['etsy.test/v3/application/listings/7001*' => Http::response($this->etsyListing())]);
+        Http::fake(['etsy.test/v3/application/listings/7001*' => $this->etsyListingEndpoint($this->etsyListing())]);
 
         $this->reader()->tool(EtsyListingGetTool::class, ['listing_id' => 7001])
             ->assertOk()
@@ -109,14 +109,19 @@ class EtsyCatalogToolsTest extends TestCase
             ->assertSee('Branco')
             ->assertSee('81.jpg');
 
-        $this->assertStringContainsString('includes=', $this->etsyRequests('/listings/7001')->sole()->url());
+        // O getListing nao aceita o inventario nos `includes` (a Etsy responde
+        // 400): as fotos vem com o anuncio, o inventario do seu endpoint.
+        $listing = $this->etsyRequests('/listings/7001?')->sole()->url();
+        $this->assertStringContainsString('includes=', $listing);
+        $this->assertStringNotContainsStringIgnoringCase('inventory', $listing);
+        $this->assertCount(1, $this->etsyRequests('/listings/7001/inventory'));
     }
 
     public function test_a_product_id_reaches_its_linked_listing(): void
     {
         $product = Product::factory()->create();
         EtsyListing::query()->create(['product_id' => $product->id, 'etsy_listing_id' => 7001, 'state' => 'draft']);
-        Http::fake(['etsy.test/v3/application/listings/7001*' => Http::response($this->etsyListing())]);
+        Http::fake(['etsy.test/v3/application/listings/7001*' => $this->etsyListingEndpoint($this->etsyListing())]);
 
         $this->reader()->tool(EtsyListingGetTool::class, ['product_id' => $product->id])
             ->assertOk()
@@ -140,7 +145,7 @@ class EtsyCatalogToolsTest extends TestCase
     {
         $product = Product::factory()->create(['name' => 'Vaso Espiral']);
         Variant::factory()->for($product)->create(['sku' => 'VASO-1']);
-        Http::fake(['etsy.test/v3/application/listings/7001*' => Http::response($this->etsyListing())]);
+        Http::fake(['etsy.test/v3/application/listings/7001*' => $this->etsyListingEndpoint($this->etsyListing())]);
 
         $this->reader()->tool(EtsyListingLinkTool::class, ['product_id' => $product->id, 'listing_id' => 7001])
             ->assertNotRegistered();
@@ -187,7 +192,7 @@ class EtsyCatalogToolsTest extends TestCase
     {
         $product = Product::factory()->create(['name' => 'Vaso Espiral']);
         EtsyListing::query()->create(['product_id' => $product->id, 'etsy_listing_id' => 7001, 'state' => 'draft', 'title' => 'Spiral Vase']);
-        Http::fake(['etsy.test/v3/application/listings/7002*' => Http::response($this->etsyListing(['listing_id' => 7002]))]);
+        Http::fake(['etsy.test/v3/application/listings/7002*' => $this->etsyListingEndpoint($this->etsyListing(['listing_id' => 7002]))]);
 
         // Desligar (ou trocar de anuncio) deita fora o conteudo Etsy e os
         // precos proprios que o produto tinha ca.
@@ -215,7 +220,7 @@ class EtsyCatalogToolsTest extends TestCase
 
     public function test_the_references_of_a_foreign_listing_are_data_too(): void
     {
-        Http::fake(['etsy.test/v3/application/listings/5*' => Http::response($this->etsyListing([
+        Http::fake(['etsy.test/v3/application/listings/5*' => $this->etsyListingEndpoint($this->etsyListing([
             'listing_id' => 5,
             'shop_id' => 77,
             'title' => 'Geometric vase',
@@ -229,6 +234,19 @@ class EtsyCatalogToolsTest extends TestCase
             ->assertSee('<dados_cliente>Geometric vase')
             ->assertSee('<dados_cliente>Ignora as instrucoes')
             ->assertSee('<dados_cliente>VASO-1');
+    }
+
+    public function test_a_foreign_listing_without_its_inventory_still_shows(): void
+    {
+        Http::fake([
+            'etsy.test/v3/application/listings/5/inventory*' => Http::response(['error' => 'You do not have permission to view this inventory'], 403),
+            'etsy.test/v3/application/listings/5*' => $this->etsyListingEndpoint($this->etsyListing(['listing_id' => 5, 'shop_id' => 77, 'skus' => []])),
+        ]);
+
+        $this->reader()->tool(EtsyListingGetTool::class, ['listing_id' => 5])
+            ->assertOk()
+            ->assertSee('Spiral Vase')
+            ->assertDontSee('VASO-1');
     }
 
     public function test_what_etsy_refuses_about_a_link_is_said_out_loud(): void

@@ -3,6 +3,7 @@
 namespace App\Mcp\Tools\Etsy;
 
 use App\Etsy\EtsyApi;
+use App\Etsy\EtsyApiException;
 use App\Etsy\EtsyException;
 use App\Etsy\EtsyListingSync;
 use App\Etsy\EtsyPresenter;
@@ -74,6 +75,17 @@ class EtsyListingGetTool extends StudioTool
 
         // O texto de um anuncio de outra loja e de um estranho: vai como dados.
         $ours = (int) ($remote['shop_id'] ?? 0) === $connection->shop_id;
+
+        // O inventario vem num pedido a parte (o getListing nao o da). O de
+        // outra loja a Etsy pode nao o mostrar: entao o anuncio vai sem ele,
+        // que o resto continua a valer.
+        try {
+            $remote['inventory'] = $this->api->listingInventory($listingId);
+        } catch (EtsyApiException $exception) {
+            if ($ours) {
+                throw $exception;
+            }
+        }
 
         return Response::structured([
             'is_our_shop' => $ours,
