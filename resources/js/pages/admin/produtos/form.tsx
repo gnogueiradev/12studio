@@ -26,7 +26,7 @@ import {
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { inputToCents } from '@/lib/money';
-import { productProduction } from '@/lib/production';
+import { productionBySize, productProduction } from '@/lib/production';
 import { cn } from '@/lib/utils';
 import { index, store, update } from '@/routes/admin/produtos';
 import type {
@@ -509,10 +509,18 @@ export default function ProductForm({
 
                             {editing !== null && (
                                 <section>
-                                    <SectionTitle note="Igual para todas as variantes">
+                                    <SectionTitle note="Igual em todas as variantes do mesmo tamanho">
                                         Impressão
                                     </SectionTitle>
-                                    <VariantProductionTable editing={editing} />
+                                    <VariantProductionTable
+                                        // Um tamanho novo (ou um que desapareça)
+                                        // remonta a aba: o formulário nasce dos
+                                        // tamanhos que existem.
+                                        key={productionBySize(editing.variants)
+                                            .map((group) => group.key)
+                                            .join('|')}
+                                        editing={editing}
+                                    />
                                 </section>
                             )}
 
