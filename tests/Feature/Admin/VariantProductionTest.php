@@ -12,9 +12,10 @@ use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
 
 /**
- * A aba "Producao" do produto: o tempo de impressao e a gramagem sao do
- * PRODUTO — todas as variantes gastam o mesmo — e os precos calculados a
- * partir deles vao para todas.
+ * A aba "Producao" do produto: o tempo de impressao e a gramagem sao de cada
+ * TAMANHO — as cores e os materiais de um tamanho gastam o mesmo, mas a peca
+ * de 20cm nao e a de 10cm — e os precos calculados a partir deles vao para
+ * todas as variantes.
  *
  * Os numeros sao os da peca de referencia do PricingCalculatorTest: 50 g a
  * 17,00 EUR/kg, 3 h na Bambu Lab A1 -> 4,00 EUR de revenda, 7,00 EUR ao cliente.
@@ -44,11 +45,8 @@ class VariantProductionTest extends TestCase
         $this->product = Product::factory()->create();
     }
 
-    /**
-     * Um par de valores, todas as variantes: a cor e o material mudam entre
-     * elas, o tempo de maquina e o plastico gasto nao.
-     */
-    public function test_it_saves_the_same_print_time_and_weight_on_every_variant(): void
+    /** Sem tamanhos ha um grupo so: o par chega a todas, arquivadas incluidas. */
+    public function test_without_sizes_one_pair_reaches_every_variant(): void
     {
         $white = Variant::factory()->for($this->product)->create();
         $black = Variant::factory()->for($this->product)->create(['printing_time_minutes' => 10]);
@@ -56,11 +54,7 @@ class VariantProductionTest extends TestCase
 
         $this->actingAs($this->admin)
             ->from(route('admin.produtos.edit', $this->product))
-            ->patch(route('admin.produtos.variantes.producao', $this->product), [
-                'hours' => 1,
-                'minutes' => 30,
-                'weight_grams' => 40,
-            ])
+            ->patch(route('admin.produtos.variantes.producao', $this->product), ['sizes' => [self::sizeRow(null, 1, 30, 40)]])
             ->assertRedirect(route('admin.produtos.edit', $this->product));
 
         foreach ([$white, $black, $archived] as $variant) {
@@ -69,17 +63,170 @@ class VariantProductionTest extends TestCase
         }
     }
 
+    /**
+     * A escultura de 10cm e a de 20cm sao pecas diferentes: cada tamanho
+     * guarda o seu tempo e a sua gramagem, em todas as cores desse tamanho.
+     */
+    public function test_each_size_keeps_its_own_print_time_and_weight(): void
+    {
+        $smallWhite = Variant::factory()->for($this->product)->create(['size_label' => '10cm']);
+        $smallBlack = Variant::factory()->for($this->product)->create(['size_label' => '10cm']);
+        $bigWhite = Variant::factory()->for($this->product)->create(['size_label' => '20cm']);
+        $bigArchived = Variant::factory()->for($this->product)->create(['size_label' => '20cm', 'active' => false]);
+
+        $this->actingAs($this->admin)
+            ->patch(route('admin.produtos.variantes.producao', $this->product), ['sizes' => [
+                self::sizeRow('10cm', 2, 8, 40),
+                self::sizeRow('20cm', 6, 51, 189),
+            ]])
+            ->assertSessionHasNoErrors();
+
+        foreach ([$smallWhite, $smallBlack] as $variant) {
+            $this->assertSame(128, $variant->refresh()->printing_time_minutes);
+            $this->assertSame(40, $variant->filament_weight_grams);
+        }
+
+        foreach ([$bigWhite, $bigArchived] as $variant) {
+            $this->assertSame(411, $variant->refresh()->printing_time_minutes);
+            $this->assertSame(189, $variant->filament_weight_grams);
+        }
+    }
+
+    /** O mesmo tamanho escrito com outra caixa e espacos a mais e o mesmo grupo. */
+    public function test_a_size_matches_ignoring_case_and_surrounding_spaces(): void
+    {
+        $tidy = Variant::factory()->for($this->product)->create(['size_label' => '20cm']);
+        $sloppy = Variant::factory()->for($this->product)->create(['size_label' => ' 20CM ']);
+
+        $this->actingAs($this->admin)
+            ->patch(route('admin.produtos.variantes.producao', $this->product), ['sizes' => [
+                self::sizeRow('20cm', 1, 0, 100),
+            ]])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame(100, $tidy->refresh()->filament_weight_grams);
+        $this->assertSame(100, $sloppy->refresh()->filament_weight_grams);
+    }
+
+    /** Um tamanho que nao vem no pedido fica como estava. */
+    public function test_a_size_left_out_of_the_request_is_not_touched(): void
+    {
+        Variant::factory()->for($this->product)->create(['size_label' => '10cm']);
+        $big = Variant::factory()->for($this->product)->create([
+            'size_label' => '20cm',
+            'printing_time_minutes' => 411,
+            'filament_weight_grams' => 189,
+        ]);
+
+        $this->actingAs($this->admin)
+            ->patch(route('admin.produtos.variantes.producao', $this->product), ['sizes' => [
+                self::sizeRow('10cm', 2, 8, 40),
+            ]])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame(411, $big->refresh()->printing_time_minutes);
+        $this->assertSame(189, $big->filament_weight_grams);
+    }
+
+    /**
+     * Um tamanho que o produto nao tem e um engano (ou um formulario velho):
+     * recusa-se, e nada se grava — nem os tamanhos certos do mesmo pedido.
+     */
+    public function test_a_size_the_product_does_not_have_is_refused(): void
+    {
+        $small = Variant::factory()->for($this->product)->create(['size_label' => '10cm']);
+
+        $this->actingAs($this->admin)
+            ->patch(route('admin.produtos.variantes.producao', $this->product), ['sizes' => [
+                self::sizeRow('10cm', 2, 8, 40),
+                self::sizeRow('30cm', 9, 0, 400),
+            ]])
+            ->assertSessionHasErrors(['sizes.1.size_label']);
+
+        $this->assertNull($small->refresh()->filament_weight_grams);
+    }
+
+    /** As variantes sem tamanho tambem so existem se o produto as tiver. */
+    public function test_the_no_size_group_is_refused_when_every_variant_has_a_size(): void
+    {
+        Variant::factory()->for($this->product)->create(['size_label' => '10cm']);
+
+        $this->actingAs($this->admin)
+            ->patch(route('admin.produtos.variantes.producao', $this->product), ['sizes' => [
+                self::sizeRow(null, 1, 0, 10),
+            ]])
+            ->assertSessionHasErrors(['sizes.0.size_label']);
+    }
+
+    /** Dois blocos para o mesmo tamanho: qual deles ganhava? Recusa-se. */
+    public function test_the_same_size_twice_is_refused(): void
+    {
+        Variant::factory()->for($this->product)->create(['size_label' => '10cm']);
+
+        $this->actingAs($this->admin)
+            ->patch(route('admin.produtos.variantes.producao', $this->product), ['sizes' => [
+                self::sizeRow('10cm', 1, 0, 10),
+                self::sizeRow('10CM ', 2, 0, 20),
+            ]])
+            ->assertSessionHasErrors(['sizes.1.size_label']);
+    }
+
+    /** Um tamanho so com variantes arquivadas continua a ser do produto. */
+    public function test_a_size_with_only_archived_variants_still_counts(): void
+    {
+        $archived = Variant::factory()->for($this->product)->create(['size_label' => '30cm', 'active' => false]);
+
+        $this->actingAs($this->admin)
+            ->patch(route('admin.produtos.variantes.producao', $this->product), ['sizes' => [
+                self::sizeRow('30cm', 9, 0, 400),
+            ]])
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame(400, $archived->refresh()->filament_weight_grams);
+    }
+
+    /**
+     * O que isto tudo protege: com o tempo de cada tamanho gravado, os precos
+     * calculados de 10cm e 20cm saem diferentes — antes saiam iguais.
+     */
+    public function test_applying_prices_after_saving_per_size_prices_each_size_apart(): void
+    {
+        $small = Variant::factory()->for($this->product)->create(['size_label' => '10cm', 'material_id' => $this->material->id]);
+        $big = Variant::factory()->for($this->product)->create(['size_label' => '20cm', 'material_id' => $this->material->id]);
+
+        $this->actingAs($this->admin)
+            ->patch(route('admin.produtos.variantes.producao', $this->product), ['sizes' => [
+                self::sizeRow('10cm', 3, 0, 50),
+                self::sizeRow('20cm', 7, 0, 190),
+            ]])
+            ->assertSessionHasNoErrors();
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.produtos.variantes.precos', $this->product))
+            ->assertSessionHasNoErrors();
+
+        $this->assertSame(700, $small->refresh()->price_cents);
+        $this->assertGreaterThan(700, $big->refresh()->price_cents);
+    }
+
+    public function test_a_request_without_sizes_is_refused(): void
+    {
+        Variant::factory()->for($this->product)->create();
+
+        $this->actingAs($this->admin)
+            ->patch(route('admin.produtos.variantes.producao', $this->product), [
+                'hours' => 1, 'minutes' => 0, 'weight_grams' => 10,
+            ])
+            ->assertSessionHasErrors(['sizes']);
+    }
+
     public function test_it_never_touches_the_variants_of_another_product(): void
     {
         $foreign = Variant::factory()->create(['printing_time_minutes' => 10, 'filament_weight_grams' => 5]);
         Variant::factory()->for($this->product)->create();
 
         $this->actingAs($this->admin)
-            ->patch(route('admin.produtos.variantes.producao', $this->product), [
-                'hours' => 2,
-                'minutes' => 0,
-                'weight_grams' => 50,
-            ])
+            ->patch(route('admin.produtos.variantes.producao', $this->product), ['sizes' => [self::sizeRow(null, 2, 0, 50)]])
             ->assertSessionHasNoErrors();
 
         $this->assertSame(10, $foreign->refresh()->printing_time_minutes);
@@ -98,11 +245,7 @@ class VariantProductionTest extends TestCase
         ]);
 
         $this->actingAs($this->admin)
-            ->patch(route('admin.produtos.variantes.producao', $this->product), [
-                'hours' => null,
-                'minutes' => null,
-                'weight_grams' => null,
-            ])
+            ->patch(route('admin.produtos.variantes.producao', $this->product), ['sizes' => [self::sizeRow(null, null, null, null)]])
             ->assertSessionHasNoErrors();
 
         $this->assertNull($variant->refresh()->printing_time_minutes);
@@ -118,11 +261,7 @@ class VariantProductionTest extends TestCase
         $variant = Variant::factory()->for($this->product)->create();
 
         $this->actingAs($this->admin)
-            ->patch(route('admin.produtos.variantes.producao', $this->product), [
-                'hours' => null,
-                'minutes' => 45,
-                'weight_grams' => 10,
-            ])
+            ->patch(route('admin.produtos.variantes.producao', $this->product), ['sizes' => [self::sizeRow(null, null, 45, 10)]])
             ->assertSessionHasNoErrors();
 
         $this->assertSame(45, $variant->refresh()->printing_time_minutes);
@@ -133,12 +272,8 @@ class VariantProductionTest extends TestCase
         Variant::factory()->for($this->product)->create();
 
         $this->actingAs($this->admin)
-            ->patch(route('admin.produtos.variantes.producao', $this->product), [
-                'hours' => 1,
-                'minutes' => 75,
-                'weight_grams' => -5,
-            ])
-            ->assertSessionHasErrors(['minutes', 'weight_grams']);
+            ->patch(route('admin.produtos.variantes.producao', $this->product), ['sizes' => [self::sizeRow(null, 1, 75, -5)]])
+            ->assertSessionHasErrors(['sizes.0.minutes', 'sizes.0.weight_grams']);
     }
 
     /**
@@ -324,11 +459,7 @@ class VariantProductionTest extends TestCase
         $variant = Variant::factory()->for($this->product)->create(['price_cents' => 1_000]);
 
         $this->actingAs($customer)
-            ->patch(route('admin.produtos.variantes.producao', $this->product), [
-                'hours' => 1,
-                'minutes' => 0,
-                'weight_grams' => 10,
-            ])
+            ->patch(route('admin.produtos.variantes.producao', $this->product), ['sizes' => [self::sizeRow(null, 1, 0, 10)]])
             ->assertForbidden();
 
         $this->actingAs($customer)
@@ -337,5 +468,16 @@ class VariantProductionTest extends TestCase
 
         $this->assertNull($variant->refresh()->printing_time_minutes);
         $this->assertSame(1_000, $variant->price_cents);
+    }
+
+    /**
+     * O corpo do pedido: um tamanho por linha. `sizeRow(null, ...)` e o grupo das
+     * variantes sem tamanho — o de quase todos os produtos.
+     *
+     * @return array{size_label: string|null, hours: int|null, minutes: int|null, weight_grams: int|null}
+     */
+    private static function sizeRow(?string $label, ?int $hours, ?int $minutes, ?int $grams): array
+    {
+        return ['size_label' => $label, 'hours' => $hours, 'minutes' => $minutes, 'weight_grams' => $grams];
     }
 }

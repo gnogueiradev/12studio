@@ -39,9 +39,10 @@ export function variantFormFromRow(variant: VariantRow): VariantFormData {
 }
 
 /**
- * Uma variante nova nasce com o tempo e a gramagem do produto: a peça é a mesma
- * em todas, e a secção "Impressão" escreve-os em todas de uma vez — uma ficha a
- * abrir vazia era a única que ficava fora dessa regra.
+ * Uma variante nova nasce com o tempo e a gramagem que lhe dão — os do
+ * produto quando ele tem um tamanho só, nenhuns quando tem vários (ver
+ * `newVariantProduction`). Dentro de um tamanho a peça é a mesma, e a secção
+ * "Impressão" escreve-os nas variantes desse tamanho de uma vez.
  */
 export function newVariantForm(
     suggestedSku: string,

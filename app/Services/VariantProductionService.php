@@ -5,10 +5,11 @@ namespace App\Services;
 use App\Models\Product;
 use App\Models\Variant;
 use App\Support\Money;
+use App\Support\VariantSizes;
 use Illuminate\Support\Facades\DB;
 
 /**
- * A aba "Producao" do produto: o que a peca custa a imprimir, e os precos
+ * A aba "Producao" do produto: o que a peca custa a imprimir em cada tamanho, e os precos
  * que saem dai para cada variante.
  *
  * Duas accoes, deliberadamente separadas. Guardar o tempo e a gramagem nao
@@ -25,19 +26,39 @@ class VariantProductionService
     ) {}
 
     /**
-     * O mesmo tempo e a mesma gramagem em TODAS as variantes do produto,
-     * arquivadas incluidas: a peca e a mesma, muda a cor e o material.
+     * O tempo e a gramagem de cada tamanho em TODAS as variantes desse
+     * tamanho, arquivadas incluidas: entre cores e materiais a peca e a
+     * mesma, entre tamanhos nao. Um tamanho que nao venha fica como esta.
      *
-     * Um so UPDATE em vez de um por variante — nao ha traducao nenhuma a
-     * fazer nestas duas colunas, e o Builder do Eloquent ainda carimba o
-     * updated_at.
+     * Um UPDATE por tamanho, por ids: o tamanho e texto livre e a igualdade e
+     * a do VariantSizes::key() (sem caixa, sem espacos nas pontas), que o
+     * SQLite nao sabe fazer com acentos. O pedido ja garantiu que cada tamanho
+     * e do produto e aparece uma vez.
      *
-     * @param  array{printing_time_minutes: int|null, filament_weight_grams: int|null}  $values
+     * @param  list<array{size_label: string|null, values: array{printing_time_minutes: int|null, filament_weight_grams: int|null}}>  $sizes
      * @return int Quantas variantes ficaram com os valores.
      */
-    public function updateProduction(Product $product, array $values): int
+    public function updateProduction(Product $product, array $sizes): int
     {
-        return $product->variants()->update($values);
+        $variants = $product->variants()->get(['id', 'size_label']);
+
+        return DB::transaction(function () use ($variants, $sizes): int {
+            $count = 0;
+
+            foreach ($sizes as $size) {
+                $key = VariantSizes::key($size['size_label']);
+
+                $ids = $variants
+                    ->filter(fn (Variant $variant): bool => VariantSizes::key($variant->size_label) === $key)
+                    ->modelKeys();
+
+                if ($ids !== []) {
+                    $count += Variant::query()->whereKey($ids)->update($size['values']);
+                }
+            }
+
+            return $count;
+        });
     }
 
     /**
