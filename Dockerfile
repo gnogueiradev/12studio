@@ -4,6 +4,11 @@
 # NUNCA se monta, sob pena de tapar o index.php (ver docker-compose.yml).
 
 FROM webdevops/php-nginx:8.4 AS base
+# CVE-2026-109618 / CVE-2026-109619 (RCE, corrigidos no PHP 8.4.27). A tag
+# 8.4 e flutuante: um servidor com a imagem base antiga em cache construia
+# um PHP vulneravel sem ninguem dar por isso. Falha o build em vez disso — o
+# Jenkins faz --pull, logo isto so dispara se a imagem nova nao tiver chegado.
+RUN php -r 'if (version_compare(PHP_VERSION, "8.4.27", "<")) { fwrite(STDERR, "PHP " . PHP_VERSION . " vulneravel (CVE-2026-109618/109619): refazer o build com --pull\n"); exit(1); }'
 ENV WEB_DOCUMENT_ROOT=/app/public
 # Node para o build do Vite/SSR (nao usado em runtime alem do SSR bundle).
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \

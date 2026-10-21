@@ -75,7 +75,7 @@ pipeline {
             steps {
                 timeout(time: 6, unit: 'MINUTES') {
                     sh '''
-                        docker build --target build -t ${IMAGE_NAME}-test .
+                        docker build --pull --target build -t ${IMAGE_NAME}-test .
                         docker run --rm \
                             -e APP_ENV=testing -e DB_CONNECTION=sqlite -e DB_DATABASE=:memory: \
                             -e SESSION_DRIVER=array -e CACHE_STORE=array -e QUEUE_CONNECTION=sync \
@@ -142,7 +142,7 @@ pipeline {
                     # do build — um deploy mau reverte com um re-tag.
                     docker tag ${IMAGE_NAME}:latest ${IMAGE_NAME}:previous || true
 
-                    docker compose build
+                    docker compose build --pull
 
                     # Smoke da config do nginx ANTES do swap. O entrypoint da
                     # imagem corre o provisioning (go-replace nos templates)
