@@ -15,7 +15,7 @@ export default function StoreLayout({
     const { brand, storePreview } = usePage().props;
 
     return (
-        <div className="flex min-h-screen flex-col bg-background text-foreground">
+        <div className="store-theme flex min-h-screen flex-col bg-background text-foreground">
             {storePreview && (
                 <div
                     role="status"
