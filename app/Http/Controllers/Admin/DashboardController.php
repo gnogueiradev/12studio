@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Variant;
+use App\Services\StoreSettings;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Collection;
 use Inertia\Inertia;
@@ -36,13 +37,13 @@ class DashboardController extends Controller
      */
     private ?Collection $lowStock = null;
 
-    public function __invoke(): Response
+    public function __invoke(StoreSettings $store): Response
     {
         $now = CarbonImmutable::now();
 
         return Inertia::render('admin/dashboard', [
             'today' => $this->today($now),
-            'storeOpen' => (bool) config('access.store_open'),
+            'storeOpen' => $store->isOpen(),
             'kpis' => $this->kpis($now),
             'statusCounts' => $this->statusCounts(),
             'weeklySales' => $this->weeklySales($now),

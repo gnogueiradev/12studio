@@ -9,7 +9,7 @@ use App\Http\Controllers\NotifyController;
 use Illuminate\Support\Facades\Route;
 
 // ── Montra publica ──────────────────────────────────────────────────────────
-Route::get('/', HomeController::class)->name('home');
+Route::get('/', HomeController::class)->middleware('store.open')->name('home');
 
 // Emails deixados na landing "em breve". Throttle porque e o unico POST que um
 // visitante sem sessao alcanca — 6/min chega para quem corrige um erro de
@@ -171,6 +171,12 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
             ->name('definicoes.precos');
         Route::patch('definicoes/marca', [Admin\SettingController::class, 'updateBrand'])
             ->name('definicoes.marca');
+
+        // A montra publica: aberta ou fechada, contactos e redes sociais.
+        Route::get('definicoes/montra', [Admin\StoreSettingsController::class, 'index'])
+            ->name('montra.index');
+        Route::patch('definicoes/montra/guardar', [Admin\StoreSettingsController::class, 'update'])
+            ->name('montra.update');
 
         // Chaves de API do MCP. Cada visita e acao pede a password outra vez:
         // uma chave de escrita e uma sessao de admin que vive fora do browser.

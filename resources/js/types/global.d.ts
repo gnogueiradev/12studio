@@ -16,6 +16,8 @@ declare module '@inertiajs/core' {
             sidebarOpen: boolean;
             /** Código ISO vindo das definições (EUR por omissão). */
             currency: string;
+            /** Só nas páginas da montra: true quando está fechada e é o admin a ver. */
+            storePreview?: boolean;
             [key: string]: unknown;
         };
     }

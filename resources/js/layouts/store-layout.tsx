@@ -1,5 +1,7 @@
 import { Link, usePage } from '@inertiajs/react';
+import { EyeOff } from 'lucide-react';
 import { home } from '@/routes';
+import { index as storeSettings } from '@/routes/admin/montra';
 
 /**
  * Layout da montra publica: header com navegacao, conteudo e footer com os
@@ -10,10 +12,28 @@ export default function StoreLayout({
 }: {
     children: React.ReactNode;
 }) {
-    const { brand } = usePage().props;
+    const { brand, storePreview } = usePage().props;
 
     return (
         <div className="flex min-h-screen flex-col bg-background text-foreground">
+            {storePreview && (
+                <div
+                    role="status"
+                    className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 bg-foreground px-4 py-2 text-center text-sm text-background"
+                >
+                    <EyeOff aria-hidden="true" className="size-4" />
+                    <span>
+                        Montra fechada — só tu vês isto. Os visitantes veem a
+                        página “em breve”.
+                    </span>
+                    <Link
+                        href={storeSettings()}
+                        className="font-medium underline underline-offset-4"
+                    >
+                        Abrir a montra
+                    </Link>
+                </div>
+            )}
             <header className="sticky top-0 z-40 border-b border-border/60 bg-background/95 backdrop-blur">
                 <div className="mx-auto flex h-16 w-full max-w-6xl items-center justify-between px-4">
                     <Link

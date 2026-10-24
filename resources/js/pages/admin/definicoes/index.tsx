@@ -21,6 +21,7 @@ import { index as alertsIndex } from '@/routes/admin/alertas';
 import { index as apiKeysIndex } from '@/routes/admin/chaves-api';
 import { index, update } from '@/routes/admin/definicoes';
 import { index as etsyIndex } from '@/routes/admin/etsy';
+import { index as storeIndex } from '@/routes/admin/montra';
 import type { PricingSettingsForm } from '@/types/pricing';
 
 type Props = {
@@ -81,6 +82,9 @@ export default function SettingsIndex({
                     title="Definições"
                     description="O que podes mudar sem um novo deploy."
                 >
+                    <Button variant="outline" asChild>
+                        <Link href={storeIndex()}>Montra</Link>
+                    </Button>
                     <Button variant="outline" asChild>
                         <Link href={etsyIndex()}>Etsy</Link>
                     </Button>
