@@ -24,7 +24,7 @@ $storefront = function (): void {
     Route::get('/', HomeController::class)->name('home');
 };
 
-Route::middleware(['store.locale', 'store.open'])->group($storefront);
+Route::middleware(['store.locale', 'store.shared', 'store.open'])->group($storefront);
 
 Route::prefix('{locale}')
     ->where(['locale' => implode('|', array_diff(
@@ -32,5 +32,5 @@ Route::prefix('{locale}')
         [config('locales.default')],
     ))])
     ->name('i18n.')
-    ->middleware(['store.locale', 'store.open'])
+    ->middleware(['store.locale', 'store.shared', 'store.open'])
     ->group($storefront);

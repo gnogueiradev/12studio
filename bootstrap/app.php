@@ -12,6 +12,7 @@ use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
 use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\SetStoreLocale;
+use App\Http\Middleware\ShareStorefront;
 use App\Http\Middleware\ThrottlePasswordReset;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
@@ -92,6 +93,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'store.open' => EnsureStoreOpen::class,
             // Idioma da montra pelo prefixo do URL ('/en/...').
             'store.locale' => SetStoreLocale::class,
+            // Menus, contactos e redes que o StoreLayout mostra.
+            'store.shared' => ShareStorefront::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

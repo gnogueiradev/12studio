@@ -102,21 +102,12 @@ class ThemeSettings
         $theme = $this->values();
         $radius = self::RADII[$theme['radius']];
 
-        return '.store-theme{'.$this->declarations($theme['light'], 'light')."--radius:{$radius};}"
+        // O <html> primeiro: e a cor que se ve antes de o CSS carregar e no
+        // "elastico" do scroll do telemovel.
+        return "html{background-color:{$theme['light']['background']}}"
+            ."html.dark{background-color:{$theme['dark']['background']}}"
+            .'.store-theme{'.$this->declarations($theme['light'], 'light')."--radius:{$radius};}"
             .'.dark .store-theme,.dark.store-theme{'.$this->declarations($theme['dark'], 'dark').'}';
-    }
-
-    /**
-     * A cor do <html> antes de o CSS carregar (e no "elastico" do scroll do
-     * telemovel), por modo.
-     *
-     * @return array{light: string, dark: string}
-     */
-    public function pageBackground(): array
-    {
-        $theme = $this->values();
-
-        return ['light' => $theme['light']['background'], 'dark' => $theme['dark']['background']];
     }
 
     /**

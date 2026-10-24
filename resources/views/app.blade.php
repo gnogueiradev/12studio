@@ -40,33 +40,25 @@
             })();
         </script>
 
-        {{--
-            A cor do <html> antes de o CSS carregar (e no "elastico" do scroll
-            do telemovel). Nas paginas da montra segue o tema da loja; no resto
-            sao os valores do app.css.
-
-            O tema da montra (ThemeSettings) so sai quando o dono o mudou, e so
-            nas paginas da montra — as que trazem a prop `locale`. O CSS e
-            montado pelo ThemeSettings a partir de hex validados e chaves fixas:
-            nada escrito por alguem chega aqui em bruto.
-        --}}
-        @php
-            $storePage = isset($page['props']['locale']);
-            $theme = app(\App\Services\ThemeSettings::class);
-            $pageBackground = $storePage
-                ? $theme->pageBackground()
-                : ['light' => '#FAF8F5', 'dark' => '#211E1C'];
-            $themeCss = $storePage ? $theme->css() : '';
-        @endphp
+        {{-- Inline style to set the HTML background color based on our theme in app.css --}}
         <style>
             html {
-                background-color: {{ $pageBackground['light'] }};
+                background-color: #FAF8F5;
             }
 
             html.dark {
-                background-color: {{ $pageBackground['dark'] }};
+                background-color: #211E1C;
             }
         </style>
+
+        {{--
+            O tema da montra (ThemeSettings): so quando o dono o mudou, e so nas
+            paginas da montra — as que trazem a prop `locale`. Vem depois do
+            <style> de cima e sobrepoe-lhe a cor do <html>. O CSS e montado
+            pelo ThemeSettings a partir de hex validados e chaves fixas: nada
+            escrito por alguem chega aqui em bruto.
+        --}}
+        @php($themeCss = isset($page['props']['locale']) ? app(\App\Services\ThemeSettings::class)->css() : '')
         @if ($themeCss !== '')
             <style id="store-theme">{!! $themeCss !!}</style>
         @endif

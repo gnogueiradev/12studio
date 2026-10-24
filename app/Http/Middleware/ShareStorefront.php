@@ -1,0 +1,102 @@
+<?php
+
+namespace App\Http\Middleware;
+
+use App\Models\Category;
+use App\Services\StoreMenus;
+use App\Services\StoreSettings;
+use App\Support\LocalizedUrl;
+use Closure;
+use Illuminate\Http\Request;
+use Inertia\Inertia;
+use Symfony\Component\HttpFoundation\Response;
+
+/**
+ * O que o StoreLayout mostra em todas as paginas da montra (alias
+ * `store.shared`): menus, contactos, redes sociais e as categorias do rodape.
+ *
+ * Numa so prop, `storefront`, e preguicosa: so e montada quando a pagina e
+ * mesmo renderizada, ja com o idioma do SetStoreLocale em vigor. Nao vai para
+ * o backoffice.
+ */
+class ShareStorefront
+{
+    /** Quantas categorias cabem na coluna do rodape. */
+    private const FOOTER_CATEGORIES = 6;
+
+    public function __construct(
+        private StoreMenus $menus,
+        private StoreSettings $store,
+    ) {}
+
+    public function handle(Request $request, Closure $next): Response
+    {
+        Inertia::share('storefront', fn (): array => [
+            'menus' => [
+                'header' => $this->menus->resolved('header'),
+                'footer' => $this->menus->resolved('footer'),
+            ],
+            'contact' => $this->contact(),
+            'social' => $this->social(),
+            'categories' => $this->categories(),
+        ]);
+
+        return $next($request);
+    }
+
+    /**
+     * So os campos preenchidos: a montra nao mostra rotulos sem valor.
+     *
+     * @return array<string, string|int>
+     */
+    private function contact(): array
+    {
+        $form = $this->store->toForm();
+
+        return array_filter([
+            'email' => $form['contact_email'],
+            'phone' => $form['phone'],
+            'address' => $form['address'],
+            'hours' => $form['opening_hours'],
+            'responseHours' => $form['response_hours'],
+        ], fn (mixed $value): bool => $value !== '' && $value !== null);
+    }
+
+    /**
+     * @return array<int, array{network: string, label: string, url: string}>
+     */
+    private function social(): array
+    {
+        $links = [];
+
+        foreach ($this->store->toForm()['social'] as $network => $url) {
+            if ($url !== '') {
+                $links[] = [
+                    'network' => $network,
+                    'label' => StoreSettings::SOCIAL_NETWORKS[$network][0],
+                    'url' => $url,
+                ];
+            }
+        }
+
+        return $links;
+    }
+
+    /**
+     * @return array<int, array{label: string, href: string}>
+     */
+    private function categories(): array
+    {
+        return Category::query()
+            ->where('status', 'visible')
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->limit(self::FOOTER_CATEGORIES)
+            ->get(['name', 'slug'])
+            ->map(fn (Category $category): array => [
+                'label' => $category->name,
+                'href' => LocalizedUrl::path("/categoria/{$category->slug}"),
+            ])
+            ->all();
+    }
+}

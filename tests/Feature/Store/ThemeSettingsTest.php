@@ -35,8 +35,7 @@ class ThemeSettingsTest extends TestCase
 
         $this->get(route('home'))
             ->assertOk()
-            ->assertDontSee('id="store-theme"', false)
-            ->assertSee('background-color: #faf8f5', false);
+            ->assertDontSee('id="store-theme"', false);
     }
 
     public function test_a_custom_theme_reaches_the_store_pages(): void
@@ -56,7 +55,7 @@ class ThemeSettingsTest extends TestCase
 
         $this->get(route('home'))
             ->assertSee('<style id="store-theme">', false)
-            ->assertSee('background-color: #ffffff', false);
+            ->assertSee('html{background-color:#ffffff}', false);
 
         $this->get('/en')->assertSee('<style id="store-theme">', false);
     }
@@ -68,7 +67,7 @@ class ThemeSettingsTest extends TestCase
         $this->actingAs(User::factory()->admin()->create())
             ->get(route('admin.dashboard'))
             ->assertDontSee('id="store-theme"', false)
-            ->assertSee('background-color: #FAF8F5', false);
+            ->assertDontSee('html{background-color:#ffffff}', false);
     }
 
     public function test_values_that_are_not_hex_colours_never_reach_the_page(): void

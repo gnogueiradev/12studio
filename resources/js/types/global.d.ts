@@ -1,5 +1,6 @@
 import type { LocaleProps } from '@/lib/i18n';
 import type { Auth } from '@/types/auth';
+import type { Storefront } from '@/types/store';
 
 declare module 'react' {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -21,6 +22,8 @@ declare module '@inertiajs/core' {
             storePreview?: boolean;
             /** Só nas páginas da montra (SetStoreLocale). */
             locale?: LocaleProps;
+            /** Só nas páginas da montra (ShareStorefront). */
+            storefront?: Storefront;
             [key: string]: unknown;
         };
     }

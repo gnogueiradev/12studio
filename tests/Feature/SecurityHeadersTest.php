@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
 
@@ -13,6 +14,9 @@ use Tests\TestCase;
  */
 class SecurityHeadersTest extends TestCase
 {
+    // A montra le da BD (menus, categorias do rodape) em todas as paginas.
+    use RefreshDatabase;
+
     /**
      * @return array<string, array{string}>
      */
