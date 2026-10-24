@@ -29,7 +29,7 @@ class HomeController extends Controller
                 'slug' => $product->slug,
                 'category' => $product->category?->name,
                 'priceCents' => $product->defaultVariant?->price_cents,
-                'imageUrl' => $product->primaryImage?->url,
+                'image' => $product->primaryImage?->responsive($product->name),
                 'fulfillmentMode' => $product->fulfillment_mode,
             ]);
 

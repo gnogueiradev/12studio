@@ -74,6 +74,13 @@ $alertOnFailure(Schedule::command('etsy:import-orders')
     ->everyFiveMinutes()
     ->withoutOverlapping(), 'etsy:import-orders');
 
+// As versoes reduzidas das fotografias que ainda nao as tem: as carregadas
+// antes de elas existirem, e alguma cujo job tenha falhado. Sem nada em
+// falta, nao poe nada na fila.
+$alertOnFailure(Schedule::command('images:variants')
+    ->dailyAt('04:45')
+    ->withoutOverlapping(), 'images:variants');
+
 // Batimento: o /up (healthcheck do Docker) avisa se isto parar.
 Schedule::call(fn () => app(SystemAlerts::class)->heartbeat())
     ->everyMinute()

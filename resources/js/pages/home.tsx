@@ -1,4 +1,7 @@
 import { Head } from '@inertiajs/react';
+import { ResponsiveImage } from '@/components/store/responsive-image';
+import { usePrice } from '@/lib/money';
+import type { ResponsiveImageData } from '@/types/store';
 
 type ProductCard = {
     id: number;
@@ -6,7 +9,7 @@ type ProductCard = {
     slug: string;
     category: string | null;
     priceCents: number | null;
-    imageUrl: string | null;
+    image: ResponsiveImageData | null;
     fulfillmentMode: string;
 };
 
@@ -14,18 +17,11 @@ type Props = {
     products: ProductCard[];
 };
 
-function formatPrice(cents: number | null): string {
-    if (cents === null) {
-        return '—';
-    }
-
-    return new Intl.NumberFormat('pt-PT', {
-        style: 'currency',
-        currency: 'EUR',
-    }).format(cents / 100);
-}
-
 export default function Home({ products }: Props) {
+    const price = usePrice();
+    const formatPrice = (cents: number | null) =>
+        cents === null ? '—' : price(cents);
+
     return (
         <>
             <Head title="Peças impressas em 3D" />
@@ -52,10 +48,10 @@ export default function Home({ products }: Props) {
                         {products.map((product) => (
                             <article key={product.id} className="group">
                                 <div className="aspect-square overflow-hidden rounded-xl border border-border/60 bg-muted">
-                                    {product.imageUrl ? (
-                                        <img
-                                            src={product.imageUrl}
-                                            alt={product.name}
+                                    {product.image ? (
+                                        <ResponsiveImage
+                                            image={product.image}
+                                            sizes="(min-width: 1024px) 25vw, (min-width: 768px) 33vw, 50vw"
                                             className="size-full object-cover transition-transform group-hover:scale-105"
                                         />
                                     ) : (
