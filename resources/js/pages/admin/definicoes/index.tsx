@@ -1,5 +1,6 @@
 import { Head, Link, useForm } from '@inertiajs/react';
 import { useState } from 'react';
+import { BrandSettingsPanel } from '@/components/admin/brand-settings-panel';
 import { PageHeader } from '@/components/admin/page-header';
 import { Panel } from '@/components/admin/panel';
 import { PricingSettingsPanel } from '@/components/admin/pricing-settings-panel';
@@ -26,6 +27,7 @@ type Props = {
     settings: { currency: string };
     currencies: Option[];
     pricing: PricingSettingsForm;
+    brand: { name: string; tagline: string };
 };
 
 /**
@@ -39,6 +41,7 @@ export default function SettingsIndex({
     settings,
     currencies,
     pricing,
+    brand,
 }: Props) {
     const { data, setData, patch, processing, errors } = useForm({
         currency: settings.currency,
@@ -88,6 +91,8 @@ export default function SettingsIndex({
                         <Link href={apiKeysIndex()}>Chaves de API</Link>
                     </Button>
                 </PageHeader>
+
+                <BrandSettingsPanel brand={brand} />
 
                 <form
                     onSubmit={submit}

@@ -169,6 +169,8 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
             ->name('definicoes.update');
         Route::patch('definicoes/precos', [Admin\SettingController::class, 'updatePricing'])
             ->name('definicoes.precos');
+        Route::patch('definicoes/marca', [Admin\SettingController::class, 'updateBrand'])
+            ->name('definicoes.marca');
 
         // Chaves de API do MCP. Cada visita e acao pede a password outra vez:
         // uma chave de escrita e uma sessao de admin que vive fora do browser.

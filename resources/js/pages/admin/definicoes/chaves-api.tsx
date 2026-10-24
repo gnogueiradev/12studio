@@ -37,6 +37,7 @@ type Props = {
     lifetimes: number[];
     noExpiry: string;
     mcpUrl: string;
+    mcpServerName: string;
     enabled: boolean;
     createdToken: string | null;
 };
@@ -61,6 +62,7 @@ export default function ApiKeysIndex({
     lifetimes,
     noExpiry,
     mcpUrl,
+    mcpServerName,
     enabled,
     createdToken,
 }: Props) {
@@ -161,7 +163,11 @@ export default function ApiKeysIndex({
                 )}
 
                 {createdToken && (
-                    <CreatedToken token={createdToken} mcpUrl={mcpUrl} />
+                    <CreatedToken
+                        token={createdToken}
+                        mcpUrl={mcpUrl}
+                        serverName={mcpServerName}
+                    />
                 )}
 
                 <ClaudeAiConnector mcpUrl={mcpUrl} />
@@ -295,9 +301,17 @@ export default function ApiKeysIndex({
     );
 }
 
-function CreatedToken({ token, mcpUrl }: { token: string; mcpUrl: string }) {
+function CreatedToken({
+    token,
+    mcpUrl,
+    serverName,
+}: {
+    token: string;
+    mcpUrl: string;
+    serverName: string;
+}) {
     const [copied, setCopied] = useState(false);
-    const command = `claude mcp add --transport http 12studio ${mcpUrl} --header "Authorization: Bearer ${token}"`;
+    const command = `claude mcp add --transport http ${serverName} ${mcpUrl} --header "Authorization: Bearer ${token}"`;
 
     const copy = async () => {
         await navigator.clipboard.writeText(command);

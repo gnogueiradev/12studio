@@ -82,7 +82,9 @@ class McpInstallCommand extends Command
             return;
         }
 
-        $clients->createPersonalAccessGrantClient('Chaves de API do 12studio', 'users');
+        // Nome interno, que ninguem ve: sem marca, porque corre no deploy,
+        // antes de a loja ter nome nas definicoes.
+        $clients->createPersonalAccessGrantClient('Chaves de API', 'users');
 
         $this->components->info('Cliente de chaves pessoais: criado.');
     }
