@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Database\Factories\VariantFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -197,5 +198,21 @@ class Variant extends Model
     public function isOnSale(): bool
     {
         return $this->compare_at_cents !== null;
+    }
+
+    /**
+     * Variantes que a montra mostra: ativas, e sem uma cor que saiu da
+     * paleta (uma cor desativada deixa de existir para o cliente).
+     *
+     * @param  Builder<Variant>  $query
+     * @return Builder<Variant>
+     */
+    public function scopeVisibleInStore(Builder $query): Builder
+    {
+        return $query
+            ->where('active', true)
+            ->where(fn (Builder $query) => $query
+                ->whereNull('color_id')
+                ->orWhereHas('color', fn (Builder $color) => $color->where('is_active', true)));
     }
 }

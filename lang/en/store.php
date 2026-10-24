@@ -46,7 +46,28 @@ return [
         'form_soon' => 'Soon you will be able to message us right here. Until then, use email or social media.',
     ],
 
+    'product' => [
+        'from' => 'from :price',
+        'no_image' => 'No image',
+        'colors' => 'Available colours',
+        'badge' => [
+            'new' => 'New',
+            'sale' => 'Sale',
+            'made_to_order' => 'Made to order',
+            'custom' => 'Custom',
+            'sold_out' => 'Sold out',
+        ],
+    ],
+
+    'gallery' => [
+        'title' => 'Gallery',
+        'open' => 'Enlarge image :n of :total',
+        'previous' => 'Previous image',
+        'next' => 'Next image',
+    ],
+
     'preview' => [
+        'draft' => 'Draft — this page is not published yet. Only you can see it.',
         'closed' => 'Shop closed — only you can see this. Visitors see the “coming soon” page.',
         'open_store' => 'Open the shop',
     ],

@@ -53,7 +53,28 @@ return [
         'form_soon' => 'Em breve vais poder escrever-nos diretamente aqui. Até lá, usa o email ou as redes.',
     ],
 
+    'product' => [
+        'from' => 'desde :price',
+        'no_image' => 'Sem imagem',
+        'colors' => 'Cores disponíveis',
+        'badge' => [
+            'new' => 'Novo',
+            'sale' => 'Promoção',
+            'made_to_order' => 'Por encomenda',
+            'custom' => 'Personalizado',
+            'sold_out' => 'Esgotado',
+        ],
+    ],
+
+    'gallery' => [
+        'title' => 'Galeria',
+        'open' => 'Ampliar imagem :n de :total',
+        'previous' => 'Imagem anterior',
+        'next' => 'Imagem seguinte',
+    ],
+
     'preview' => [
+        'draft' => 'Rascunho — esta página ainda não está publicada. Só tu a vês.',
         'closed' => 'Montra fechada — só tu vês isto. Os visitantes veem a página “em breve”.',
         'open_store' => 'Abrir a montra',
     ],

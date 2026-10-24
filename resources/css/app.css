@@ -114,6 +114,7 @@
 
     /* Cores da marca sem slot proprio no shadcn. */
     --color-gold: var(--gold);
+    --color-gold-foreground: var(--gold-foreground);
     --color-brand-taupe: var(--brand-taupe);
 
     --color-destructive-soft: var(--destructive-soft);
@@ -195,6 +196,8 @@
     --ring: #8b7556;
 
     --gold: #c6a77b;
+    /* Texto sobre o dourado: escuro nos dois modos (secoes douradas da montra). */
+    --gold-foreground: #211e1c;
     --brand-taupe: #a99582;
 
     --destructive: #a63d2e;
@@ -269,6 +272,7 @@
     --ring: #c6a77b;
 
     --gold: #c6a77b;
+    --gold-foreground: #211e1c;
     --brand-taupe: #a99582;
 
     /* #D4705E sobre --card (#2A2624) dava 4.48:1 e falhava AA por 0.02. Este
@@ -392,6 +396,19 @@
 
     .rich-text strong {
         @apply font-semibold;
+    }
+
+    /* O texto rico na montra: maior e mais arejado do que no backoffice. */
+    .store-rich-text {
+        @apply text-base leading-relaxed md:text-[1.0625rem];
+    }
+
+    .store-rich-text h2 {
+        @apply mt-8 text-xl font-semibold tracking-tight md:text-2xl;
+    }
+
+    .store-rich-text h3 {
+        @apply mt-6 text-lg;
     }
 
     /* Placeholder do editor vazio: o TipTap deixa um <p> sem conteúdo. */

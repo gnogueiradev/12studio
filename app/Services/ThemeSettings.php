@@ -107,7 +107,7 @@ class ThemeSettings
         return "html{background-color:{$theme['light']['background']}}"
             ."html.dark{background-color:{$theme['dark']['background']}}"
             .'.store-theme{'.$this->declarations($theme['light'], 'light')."--radius:{$radius};}"
-            .'.dark .store-theme,.dark.store-theme{'.$this->declarations($theme['dark'], 'dark').'}';
+            .'.dark .store-theme,.dark.store-theme,.store-theme .dark{'.$this->declarations($theme['dark'], 'dark').'}';
     }
 
     /**
@@ -148,6 +148,8 @@ class ThemeSettings
             'input' => "color-mix(in srgb,{$fg} 15%,{$bg})",
             'ring' => "color-mix(in srgb,{$gold} 70%,{$fg})",
             'gold' => $gold,
+            // Texto sobre o dourado: sempre escuro, seja qual for o modo.
+            'gold-foreground' => "color-mix(in srgb,#000000 82%,{$gold})",
         ];
 
         return implode('', array_map(

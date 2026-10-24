@@ -13,7 +13,7 @@ use Symfony\Component\HttpFoundation\Response;
  * O porteiro da montra publica (alias `store.open`).
  *
  * Fechada: '/' devolve a landing "em breve" e as outras paginas da montra
- * voltam para '/'. O admin passa na mesma — e assim que prepara o lancamento —
+ * dao 404 — a loja ainda nao existe para quem visita. O admin passa na mesma — e assim que prepara o lancamento —
  * e a montra leva `storePreview` para o StoreLayout mostrar que so ele a ve.
  */
 class EnsureStoreOpen
@@ -36,9 +36,7 @@ class EnsureStoreOpen
             return $next($request);
         }
 
-        if (! $request->routeIs('home', 'i18n.home')) {
-            return redirect()->route('home');
-        }
+        abort_unless($request->routeIs('home', 'i18n.home'), 404);
 
         // Pelo Router::toResponse e nao so ->toResponse(): e ele que prepara a
         // resposta (Content-Type incluido) como faria a um controlador, e sem

@@ -46,7 +46,28 @@ return [
         'form_soon' => 'Bientôt, vous pourrez nous écrire directement ici. En attendant, utilisez l’e-mail ou les réseaux.',
     ],
 
+    'product' => [
+        'from' => 'à partir de :price',
+        'no_image' => 'Pas d’image',
+        'colors' => 'Couleurs disponibles',
+        'badge' => [
+            'new' => 'Nouveau',
+            'sale' => 'Promo',
+            'made_to_order' => 'Sur commande',
+            'custom' => 'Sur mesure',
+            'sold_out' => 'Épuisé',
+        ],
+    ],
+
+    'gallery' => [
+        'title' => 'Galerie',
+        'open' => 'Agrandir l’image :n sur :total',
+        'previous' => 'Image précédente',
+        'next' => 'Image suivante',
+    ],
+
     'preview' => [
+        'draft' => 'Brouillon — cette page n’est pas encore publiée. Vous seul la voyez.',
         'closed' => 'Boutique fermée — vous seul la voyez. Les visiteurs voient la page « bientôt ».',
         'open_store' => 'Ouvrir la boutique',
     ],

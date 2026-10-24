@@ -41,3 +41,57 @@ export type Storefront = {
     social: SocialLink[];
     categories: { label: string; href: string }[];
 };
+
+/** Um link de bloco já resolvido (PageRenderer). */
+export type BlockLink = {
+    label: string;
+    /** Já no idioma da página quando é interno. */
+    href: string;
+    external: boolean;
+};
+
+export type BlockStyle = {
+    bg: 'default' | 'muted' | 'accent' | 'dark' | 'gold';
+    spacing: 'sm' | 'md' | 'lg';
+    width: 'contained' | 'full';
+    align: 'start' | 'center';
+};
+
+/** Um bloco como o PageRenderer o entrega. */
+export type StoreBlock = {
+    id: string;
+    type: string;
+    variant: string | null;
+    style: BlockStyle;
+    data: Record<string, unknown>;
+};
+
+/** App\Store\ProductCard::make() */
+export type ProductCardData = {
+    id: number;
+    name: string;
+    slug: string;
+    href: string;
+    category: string | null;
+    price: {
+        from: number | null;
+        to: number | null;
+        compareAt: number | null;
+        varies: boolean;
+    };
+    image: ResponsiveImageData | null;
+    hoverImage: ResponsiveImageData | null;
+    colors: { name: string; hex: string }[];
+    moreColors: number;
+    availability: 'ready' | 'made_to_order' | 'custom' | 'sold_out';
+    isNew: boolean;
+    onSale: boolean;
+};
+
+export type StorePageData = {
+    key: string;
+    title: string;
+    /** O admin a ver uma página que ainda não está publicada. */
+    draft: boolean;
+    blocks: StoreBlock[];
+};

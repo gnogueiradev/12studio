@@ -7,6 +7,7 @@ use App\Models\Color;
 use App\Models\Material;
 use App\Models\Product;
 use App\Models\User;
+use App\Models\Variant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
@@ -822,21 +823,19 @@ class ProductCrudTest extends TestCase
         // A montra so aparece com a loja aberta; fechada, '/' e a landing.
         config(['access.store_open' => true]);
 
-        Product::query()->create([
-            'name' => 'Ativo', 'slug' => 'ativo',
-            'status' => 'active', 'fulfillment_mode' => 'in_stock',
-        ]);
-        Product::query()->create([
-            'name' => 'Rascunho', 'slug' => 'rascunho',
-            'status' => 'draft', 'fulfillment_mode' => 'in_stock',
-        ]);
+        // A grelha "Destaques" do inicio de origem: so os ativos.
+        $active = Product::factory()->create(['name' => 'Ativo', 'featured' => true]);
+        Variant::factory()->for($active)->isDefault()->create();
+        $draft = Product::factory()->create(['name' => 'Rascunho', 'featured' => true, 'status' => 'draft']);
+        Variant::factory()->for($draft)->isDefault()->create();
 
         $this->get(route('home'))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->component('home')
-                ->has('products', 1)
-                ->where('products.0.name', 'Ativo'));
+                ->component('store/page')
+                ->where('page.blocks.3.type', 'product_grid')
+                ->has('page.blocks.3.data.products', 1)
+                ->where('page.blocks.3.data.products.0.name', 'Ativo'));
     }
 
     public function test_non_admins_cannot_touch_products(): void

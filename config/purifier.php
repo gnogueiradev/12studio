@@ -39,6 +39,17 @@ return [
             'URI.AllowedSchemes' => ['http' => true, 'https' => true, 'mailto' => true],
         ],
 
+        // Os blocos de texto da montra (construtor de paginas). A mesma lista
+        // do perfil `product`: os dois usam o mesmo editor.
+        'page' => [
+            'HTML.Doctype' => 'HTML 4.01 Transitional',
+            'HTML.Allowed' => 'p,br,strong,em,u,s,h2,h3,ul,ol,li,blockquote,a[href|title]',
+            'AutoFormat.AutoParagraph' => false,
+            'AutoFormat.RemoveEmpty' => true,
+            'HTML.TargetBlank' => true,
+            'URI.AllowedSchemes' => ['http' => true, 'https' => true, 'mailto' => true, 'tel' => true],
+        ],
+
     ],
 
 ];

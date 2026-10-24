@@ -42,7 +42,7 @@ class StoreLocaleTest extends TestCase
             ->assertOk()
             ->assertSee('<html lang="en"', false)
             ->assertInertia(fn (Assert $page) => $page
-                ->component('home')
+                ->component('store/page')
                 ->where('locale.current', 'en')
                 ->where('i18n.nav.catalog', 'Shop'));
 

@@ -51,7 +51,7 @@ class ThemeSettingsTest extends TestCase
         $this->assertStringContainsString('--primary:#1d4ed8;', $css);
         $this->assertStringContainsString('--radius:1rem;', $css);
         // O que nao foi mexido fica com o valor de origem.
-        $this->assertStringContainsString('.dark .store-theme,.dark.store-theme{--background:#211e1c;', $css);
+        $this->assertStringContainsString('.dark .store-theme,.dark.store-theme,.store-theme .dark{--background:#211e1c;', $css);
 
         $this->get(route('home'))
             ->assertSee('<style id="store-theme">', false)

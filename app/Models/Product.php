@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Concerns\HasTags;
 use Database\Factories\ProductFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -156,5 +157,23 @@ class Product extends Model
     public function isPersonalizable(): bool
     {
         return ! empty($this->personalization_fields);
+    }
+
+    /**
+     * A unica regra do que a montra publica mostra: ativo (o soft delete ja
+     * tira os apagados), numa categoria que nao foi arquivada, e com pelo
+     * menos uma variante a venda (Variant::scopeVisibleInStore).
+     *
+     * @param  Builder<Product>  $query
+     * @return Builder<Product>
+     */
+    public function scopeVisibleInStore(Builder $query): Builder
+    {
+        return $query
+            ->where('status', 'active')
+            ->where(fn (Builder $query) => $query
+                ->whereNull('category_id')
+                ->orWhereHas('category', fn (Builder $category) => $category->whereIn('status', ['visible', 'hidden'])))
+            ->whereHas('variants', fn (Builder $variant) => $variant->visibleInStore());
     }
 }

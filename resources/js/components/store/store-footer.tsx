@@ -22,7 +22,7 @@ export function StoreFooter({ storefront }: { storefront: Storefront }) {
     const year = new Date().getFullYear();
 
     return (
-        <footer className="mt-24 border-t border-border/60 bg-secondary/40">
+        <footer className="border-t border-border/60 bg-secondary/40">
             <div className="mx-auto grid w-full max-w-6xl gap-10 px-4 py-14 sm:grid-cols-2 lg:grid-cols-4">
                 <div className="flex flex-col gap-4">
                     <Link

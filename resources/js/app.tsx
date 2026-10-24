@@ -30,10 +30,9 @@ createInertiaApp({
             // sem header nem footer da loja.
             case name === 'coming-soon':
                 return undefined;
-            // Montra publica (home; /produtos e /carrinho juntam-se nas
-            // Fases 2-3). Tudo o resto — admin/, settings/, dashboard —
-            // usa o AppLayout de sidebar.
-            case name === 'home':
+            // Montra publica: todas as paginas em pages/store/. Tudo o resto
+            // — admin/, settings/, dashboard — usa o AppLayout de sidebar.
+            case name.startsWith('store/'):
                 return StoreLayout;
             case name.startsWith('auth/'):
                 return AuthLayout;

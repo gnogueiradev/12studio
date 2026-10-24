@@ -18,7 +18,7 @@ class ComingSoonTest extends TestCase
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('coming-soon')
-                ->missing('products'));
+                ->missing('page'));
     }
 
     public function test_open_store_shows_the_montra(): void
@@ -28,7 +28,7 @@ class ComingSoonTest extends TestCase
         $this->get(route('home'))
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
-                ->component('home')
-                ->has('products'));
+                ->component('store/page')
+                ->has('page.blocks'));
     }
 }

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Middleware\AddLinkHeadersForPreloadedAssets;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -22,6 +23,9 @@ use Tests\TestCase;
  */
 class ResponseHeaderSizeTest extends TestCase
 {
+    // A montra le da BD (paginas, menus) em cada pedido.
+    use RefreshDatabase;
+
     /**
      * Abaixo do fastcgi_buffer_size default (4096) de proposito: o objetivo e
      * avisar ANTES de o nginx recusar, nao no minuto em que recusa.
