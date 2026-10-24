@@ -67,6 +67,42 @@
         <link rel="icon" href="/favicon.svg" type="image/svg+xml">
         <link rel="apple-touch-icon" href="/apple-touch-icon.png">
 
+        {{--
+            SEO da montra (App\Store\Seo): so nas paginas que o trazem. O
+            JSON-LD sai por @json com JSON_HEX_TAG, para um "</script>" escrito
+            numa descricao nao fechar o bloco; o tipo application/ld+json nao
+            e executado, por isso nao precisa de hash no CSP.
+        --}}
+        @isset($seo)
+            @if ($seo['description'])
+                <meta name="description" content="{{ $seo['description'] }}">
+            @endif
+            @if ($seo['robots'])
+                <meta name="robots" content="{{ $seo['robots'] }}">
+            @endif
+            <link rel="canonical" href="{{ $seo['canonical'] }}">
+            @foreach ($seo['alternates'] as $alternate)
+                <link rel="alternate" hreflang="{{ $alternate['hreflang'] }}" href="{{ $alternate['href'] }}">
+            @endforeach
+            <meta property="og:type" content="{{ $seo['type'] }}">
+            <meta property="og:title" content="{{ $seo['title'] }}">
+            @if ($seo['description'])
+                <meta property="og:description" content="{{ $seo['description'] }}">
+            @endif
+            <meta property="og:url" content="{{ $seo['canonical'] }}">
+            <meta property="og:site_name" content="{{ $seo['siteName'] }}">
+            <meta property="og:locale" content="{{ $seo['ogLocale'] }}">
+            @if ($seo['image'])
+                <meta property="og:image" content="{{ $seo['image'] }}">
+                <meta name="twitter:card" content="summary_large_image">
+            @else
+                <meta name="twitter:card" content="summary">
+            @endif
+            @foreach ($seo['jsonLd'] as $schema)
+                <script type="application/ld+json">@json($schema, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_AMP)</script>
+            @endforeach
+        @endisset
+
         @fonts
 
         @viteReactRefresh

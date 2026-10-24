@@ -95,3 +95,84 @@ export type StorePageData = {
     draft: boolean;
     blocks: StoreBlock[];
 };
+
+/** A prop `catalog` (CatalogController). */
+export type CatalogData = {
+    /** O caminho da listagem, já no idioma ("/en/produtos", "/categoria/vasos"). */
+    path: string;
+    category: string | null;
+    filters: {
+        q: string;
+        cor: number[];
+        material: number[];
+        preco_min: number | null;
+        preco_max: number | null;
+        disponibilidade: 'pronto' | 'encomenda' | null;
+        ordem: string;
+    };
+    filtered: boolean;
+    facets: {
+        categories: { name: string; slug: string }[];
+        colors: { id: number; name: string; hex: string }[];
+        materials: { id: number; name: string }[];
+        price: { min: number; max: number };
+    };
+    total: number;
+};
+
+/** O "carregar mais" do Inertia: a página atual e as que já se juntaram. */
+export type ScrollData<T> = { data: T[] };
+
+export type ProductVariantData = {
+    id: number;
+    colorId: number | null;
+    materialId: number | null;
+    size: string | null;
+    price: number;
+    compareAt: number | null;
+    ready: boolean;
+    specs: {
+        length?: number;
+        width?: number;
+        height?: number;
+        weight?: number;
+    };
+};
+
+export type ProductImageData = ResponsiveImageData & {
+    id: number;
+    colorId: number | null;
+    variantId: number | null;
+};
+
+/** App\Store\ProductDetail::make() */
+export type ProductDetailData = {
+    id: number;
+    name: string;
+    slug: string;
+    href: string;
+    description: string;
+    category: { name: string; href: string } | null;
+    price: ProductCardData['price'];
+    availability: ProductCardData['availability'];
+    leadDays: [number, number] | null;
+    isCustom: boolean;
+    images: ProductImageData[];
+    colors: { id: number; name: string; hex: string }[];
+    materials: { id: number; name: string }[];
+    sizes: string[];
+    variants: ProductVariantData[];
+    defaultVariantId: number | null;
+    personalization: {
+        fields: {
+            key: string;
+            label: string;
+            type: 'text' | 'number';
+            required: boolean;
+            maxLength: number | null;
+        }[];
+        surcharge: number | null;
+    } | null;
+    /** O admin a ver um produto que não está à venda. */
+    preview: boolean;
+};

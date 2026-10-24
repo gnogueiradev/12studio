@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Concerns\HasTags;
+use App\Support\SearchText;
 use Database\Factories\ProductFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Builder;
@@ -31,6 +32,8 @@ use Illuminate\Support\Carbon;
  * @property int|null $personalization_surcharge_cents
  * @property string|null $seo_title
  * @property string|null $seo_description
+ * @property string|null $search_text
+ * @property int $sort_order
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property Carbon|null $deleted_at
@@ -44,7 +47,7 @@ use Illuminate\Support\Carbon;
     'category_id', 'name', 'slug', 'description', 'status', 'featured',
     'vat_rate', 'fulfillment_mode', 'production_time_days', 'allow_backorder',
     'max_open_production_qty', 'personalization_fields',
-    'personalization_surcharge_cents', 'seo_title', 'seo_description',
+    'personalization_surcharge_cents', 'seo_title', 'seo_description', 'sort_order',
 ])]
 class Product extends Model
 {
@@ -71,6 +74,19 @@ class Product extends Model
 
     public const FULFILLMENT_MODES = ['in_stock', 'made_to_order', 'custom'];
 
+    /**
+     * O texto de pesquisa da montra acompanha o nome e a descricao, seja qual
+     * for o caminho da gravacao (backoffice, MCP, Etsy).
+     */
+    protected static function booted(): void
+    {
+        static::saving(function (Product $product): void {
+            if ($product->isDirty(['name', 'description']) || $product->search_text === null) {
+                $product->search_text = SearchText::normalize($product->name, $product->description);
+            }
+        });
+    }
+
     public function tagScope(): string
     {
         return Tag::SCOPE_PRODUCT;
@@ -85,6 +101,7 @@ class Product extends Model
     {
         return [
             'featured' => 'boolean',
+            'sort_order' => 'integer',
             'vat_rate' => 'integer',
             'production_time_days' => 'integer',
             'allow_backorder' => 'boolean',

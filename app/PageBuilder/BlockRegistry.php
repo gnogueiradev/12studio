@@ -23,6 +23,12 @@ class BlockRegistry
         Blocks\ContactBlock::class,
         Blocks\CustomOrderBlock::class,
         Blocks\SpacerBlock::class,
+        // Templates (catalogo e produto).
+        Blocks\CatalogHeaderBlock::class,
+        Blocks\CatalogGridBlock::class,
+        Blocks\BreadcrumbBlock::class,
+        Blocks\ProductMainBlock::class,
+        Blocks\ProductRelatedBlock::class,
     ];
 
     /** @var array<string, Block>|null */

@@ -5,9 +5,11 @@ use App\Http\Controllers\Admin;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\LoginGateController;
 use App\Http\Controllers\NotifyController;
+use App\Http\Controllers\Store\SitemapController;
 use Illuminate\Support\Facades\Route;
 
 // ── Montra publica: routes/store.php, carregado no fim deste ficheiro. ─────
+Route::get('sitemap.xml', SitemapController::class)->name('sitemap');
 
 // Emails deixados na landing "em breve". Throttle porque e o unico POST que um
 // visitante sem sessao alcanca — 6/min chega para quem corrige um erro de

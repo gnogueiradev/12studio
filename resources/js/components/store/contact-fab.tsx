@@ -10,6 +10,7 @@ import {
     SheetTrigger,
 } from '@/components/ui/sheet';
 import { useT } from '@/lib/i18n';
+import { cn } from '@/lib/utils';
 import type { Storefront } from '@/types/store';
 
 /**
@@ -21,14 +22,18 @@ import type { Storefront } from '@/types/store';
 export function ContactFab({
     contact,
     social,
-}: Pick<Storefront, 'contact' | 'social'>) {
+    className,
+}: Pick<Storefront, 'contact' | 'social'> & { className?: string }) {
     const t = useT();
 
     return (
         <Sheet>
             <SheetTrigger asChild>
                 <Button
-                    className="fixed right-4 bottom-4 z-40 h-12 gap-2 rounded-full px-4 shadow-lg md:right-6 md:bottom-6 md:px-5"
+                    className={cn(
+                        'fixed right-4 bottom-4 z-40 h-12 gap-2 rounded-full px-4 shadow-lg md:right-6 md:bottom-6 md:px-5',
+                        className,
+                    )}
                     aria-label={t('contact.fab')}
                 >
                     <MessageCircle aria-hidden="true" className="size-5" />

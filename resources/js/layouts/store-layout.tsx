@@ -4,6 +4,7 @@ import { ContactFab } from '@/components/store/contact-fab';
 import { StoreFooter } from '@/components/store/store-footer';
 import { StoreHeader } from '@/components/store/store-header';
 import { useT } from '@/lib/i18n';
+import { cn } from '@/lib/utils';
 import { index as storeSettings } from '@/routes/admin/montra';
 import type { Storefront } from '@/types/store';
 
@@ -28,11 +29,25 @@ export default function StoreLayout({
 }: {
     children: React.ReactNode;
 }) {
-    const { storePreview, storefront = EMPTY_STOREFRONT } = usePage().props;
+    const {
+        storePreview,
+        storefront = EMPTY_STOREFRONT,
+        product,
+    } = usePage().props;
     const t = useT();
 
+    // Na página de produto, o telemóvel tem uma barra fixa em baixo com o
+    // preço e o "Tenho interesse": o rodapé ganha espaço para ela, e o botão
+    // "Fala connosco" sai do caminho.
+    const productPage = product !== undefined;
+
     return (
-        <div className="store-theme flex min-h-screen flex-col bg-background text-foreground">
+        <div
+            className={cn(
+                'store-theme flex min-h-screen flex-col bg-background text-foreground',
+                productPage && 'pb-20 md:pb-0',
+            )}
+        >
             <a
                 href="#conteudo"
                 className="sr-only z-50 rounded-md bg-primary px-4 py-2 text-primary-foreground focus:not-sr-only focus:fixed focus:top-3 focus:left-3"
@@ -67,6 +82,7 @@ export default function StoreLayout({
             <ContactFab
                 contact={storefront.contact}
                 social={storefront.social}
+                className={productPage ? 'max-md:hidden' : undefined}
             />
         </div>
     );

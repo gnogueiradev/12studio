@@ -36,6 +36,8 @@ class DefaultPages
     {
         return match ($key) {
             'home' => self::home(),
+            'catalog' => self::catalog(),
+            'product' => self::product(),
             'about' => self::about(),
             'custom' => self::custom(),
             'contact' => self::contact(),
@@ -249,6 +251,75 @@ class DefaultPages
         }
 
         return self::block('hero', 'centered', [], $content, ['bg' => 'default', 'spacing' => 'md', 'width' => 'contained', 'align' => 'center']);
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private static function catalog(): array
+    {
+        return [
+            self::block('catalog_header', null, [], [
+                'pt' => ['title' => 'Catálogo', 'text' => 'Todas as nossas peças, impressas por encomenda ou prontas a enviar.'],
+                'es' => ['title' => 'Catálogo', 'text' => 'Todas nuestras piezas, impresas bajo pedido o listas para enviar.'],
+                'en' => ['title' => 'Shop', 'text' => 'All our pieces, printed to order or ready to ship.'],
+                'fr' => ['title' => 'Catalogue', 'text' => 'Toutes nos pièces, imprimées à la commande ou prêtes à partir.'],
+            ], ['bg' => 'default', 'spacing' => 'sm', 'width' => 'contained', 'align' => 'start']),
+            self::block('catalog_grid', 'filters_side', [], [
+                'pt' => ['empty_title' => 'Nenhuma peça com estes filtros', 'empty_text' => 'Experimenta limpar os filtros — ou pede-nos uma peça personalizada.'],
+                'es' => ['empty_title' => 'Ninguna pieza con estos filtros', 'empty_text' => 'Prueba a quitar los filtros, o pídenos una pieza personalizada.'],
+                'en' => ['empty_title' => 'No pieces match these filters', 'empty_text' => 'Try clearing the filters — or ask us for a custom piece.'],
+                'fr' => ['empty_title' => 'Aucune pièce avec ces filtres', 'empty_text' => 'Essayez d’effacer les filtres — ou demandez-nous une pièce sur mesure.'],
+            ]),
+            self::block('banner', null, [], [
+                'pt' => ['title' => 'Não encontras o que procuras?', 'text' => 'Fazemos peças à medida.', 'link' => self::link('Pedir peça personalizada', '/personalizado')],
+                'es' => ['title' => '¿No encuentras lo que buscas?', 'text' => 'Hacemos piezas a medida.', 'link' => self::link('Pedir una pieza personalizada', '/personalizado')],
+                'en' => ['title' => 'Can’t find what you are looking for?', 'text' => 'We make pieces to measure.', 'link' => self::link('Request a custom piece', '/personalizado')],
+                'fr' => ['title' => 'Vous ne trouvez pas votre bonheur ?', 'text' => 'Nous fabriquons des pièces sur mesure.', 'link' => self::link('Demander une pièce sur mesure', '/personalizado')],
+            ], ['bg' => 'accent', 'spacing' => 'md', 'width' => 'contained', 'align' => 'center']),
+        ];
+    }
+
+    /**
+     * @return array<int, array<string, mixed>>
+     */
+    private static function product(): array
+    {
+        return [
+            self::block('breadcrumb'),
+            self::block('product_main', 'gallery_left', ['thumbnails' => 'bottom', 'show_specs' => true], [
+                'pt' => [
+                    'shipping_title' => 'Envio e devoluções',
+                    'shipping_text' => '<p>Cada peça é embalada com cuidado. Os custos e o prazo de envio são combinados contigo antes do pagamento.</p>',
+                    'custom_note' => 'Peça feita à medida para ti: por ser personalizada, não tem direito de livre resolução.',
+                    'interest_note' => 'Sem compromisso — respondemos com disponibilidade, prazo e formas de pagamento.',
+                ],
+                'es' => [
+                    'shipping_title' => 'Envíos y devoluciones',
+                    'shipping_text' => '<p>Cada pieza se embala con cuidado. Los gastos y el plazo de envío se acuerdan contigo antes del pago.</p>',
+                    'custom_note' => 'Pieza hecha a medida para ti: al ser personalizada, no tiene derecho de desistimiento.',
+                    'interest_note' => 'Sin compromiso: te respondemos con disponibilidad, plazo y formas de pago.',
+                ],
+                'en' => [
+                    'shipping_title' => 'Shipping and returns',
+                    'shipping_text' => '<p>Every piece is carefully packed. Shipping costs and times are agreed with you before payment.</p>',
+                    'custom_note' => 'Made to measure for you: as a personalised item, it is not covered by the right of withdrawal.',
+                    'interest_note' => 'No obligation — we reply with availability, lead time and payment options.',
+                ],
+                'fr' => [
+                    'shipping_title' => 'Livraison et retours',
+                    'shipping_text' => '<p>Chaque pièce est emballée avec soin. Les frais et délais de livraison sont convenus avec vous avant le paiement.</p>',
+                    'custom_note' => 'Pièce faite sur mesure pour vous : étant personnalisée, elle n’ouvre pas droit à la rétractation.',
+                    'interest_note' => 'Sans engagement — nous répondons avec la disponibilité, le délai et les moyens de paiement.',
+                ],
+            ]),
+            self::block('product_related', null, ['limit' => 4], [
+                'pt' => ['title' => 'Também podes gostar'],
+                'es' => ['title' => 'También te puede gustar'],
+                'en' => ['title' => 'You may also like'],
+                'fr' => ['title' => 'Vous aimerez aussi'],
+            ]),
+        ];
     }
 
     /**

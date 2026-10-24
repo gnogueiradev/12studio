@@ -1,6 +1,9 @@
 import type { ComponentType } from 'react';
 import type { StoreBlock } from '@/types/store';
 import { BannerBlock } from './banner';
+import { BreadcrumbBlock } from './breadcrumb';
+import { CatalogGridBlock } from './catalog-grid';
+import { CatalogHeaderBlock } from './catalog-header';
 import { CategoriesBlock } from './categories';
 import { ContactBlock } from './contact';
 import { CustomOrderBlock } from './custom-order';
@@ -8,6 +11,8 @@ import { FaqBlock } from './faq';
 import { GalleryBlock } from './gallery';
 import { HeroBlock } from './hero';
 import { ProductGridBlock } from './product-grid';
+import { ProductMainBlock } from './product-main';
+import { ProductRelatedBlock } from './product-related';
 import { SpacerBlock } from './spacer';
 import { StepsBlock } from './steps';
 import { TestimonialsBlock } from './testimonials';
@@ -36,6 +41,11 @@ export const BLOCK_COMPONENTS: Record<string, ComponentType<BlockProps>> = {
     contact: ContactBlock,
     custom_order: CustomOrderBlock,
     spacer: SpacerBlock,
+    catalog_header: CatalogHeaderBlock,
+    catalog_grid: CatalogGridBlock,
+    breadcrumb: BreadcrumbBlock,
+    product_main: ProductMainBlock,
+    product_related: ProductRelatedBlock,
 };
 
 /** Os blocos de uma página, por ordem. Um tipo sem componente não aparece. */

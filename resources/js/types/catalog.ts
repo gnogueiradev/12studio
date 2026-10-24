@@ -223,6 +223,9 @@ export type ProductDetail = {
     productionTimeDays: number | null;
     allowBackorder: boolean;
     maxOpenProductionQty: number | null;
+    sortOrder: number;
+    seoTitle: string | null;
+    seoDescription: string | null;
 };
 
 /**
@@ -248,6 +251,11 @@ export type ProductFormData = {
     production_time_days: number | null;
     allow_backorder: boolean;
     max_open_production_qty: number | null;
+    /** Ordem nos destaques da montra (menor primeiro). */
+    sort_order: number;
+    /** O que os motores de busca mostram; vazio = nome e descrição. */
+    seo_title: string;
+    seo_description: string;
     /** Só ao criar: viajam no mesmo POST, em multipart. */
     images: File[];
     /** Só ao criar: cor × material × tamanho, multiplicados no servidor. */

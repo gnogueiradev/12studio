@@ -26,8 +26,9 @@ class StorePage
     /**
      * @param  array<string, mixed>  $props  Props extra (o produto, os filtros do catalogo).
      * @param  array<string, mixed>  $subject
+     * @param  array<string, mixed>|null  $seo  As meta tags (Seo::make); por omissao, as da pagina.
      */
-    public function render(Page $page, Request $request, array $props = [], ?Product $product = null, array $subject = []): Response
+    public function render(Page $page, Request $request, array $props = [], ?Product $product = null, array $subject = [], ?array $seo = null): Response
     {
         $admin = (bool) $request->user()?->isAdmin();
         $live = $page->isLive();
@@ -45,15 +46,33 @@ class StorePage
         $default = (string) config('locales.default');
         $context = new RenderContext($locale, $default, $request, $product, $subject);
 
+        $title = $props['title'] ?? $this->title($page, $locale, $default);
+        unset($props['title']);
+
+        $seo ??= Seo::make(
+            path: $page->path() ?? '/',
+            title: $title,
+            description: $this->description($page, $locale, $default),
+            jsonLd: $page->key === 'home' ? [Seo::organization()] : [],
+            index: ! $draft,
+        );
+
         return Inertia::render('store/page', [
             'page' => [
                 'key' => $page->key ?? $page->slug,
-                'title' => $this->title($page, $locale, $default),
+                'title' => $title,
                 'draft' => $draft,
                 'blocks' => $this->renderer->render($blocks, $context),
             ],
             ...$props,
-        ]);
+        ])->withViewData(['seo' => $seo]);
+    }
+
+    private function description(Page $page, string $locale, string $default): ?string
+    {
+        $seo = (array) $page->seo;
+
+        return $seo[$locale]['description'] ?? $seo[$default]['description'] ?? null;
     }
 
     private function title(Page $page, string $locale, string $default): string

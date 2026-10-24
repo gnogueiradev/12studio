@@ -35,15 +35,27 @@ class SetStoreLocale
             abort(404);
         }
 
-        app()->setLocale($locale);
-
         // Os controladores nao recebem o idioma como argumento: o mesmo
         // controlador serve '/produtos/x' e '/en/produtos/x'.
         $request->route()?->forgetParameter('locale');
 
+        $this->apply($locale);
+
+        return $next($request);
+    }
+
+    /**
+     * Poe o idioma em vigor e partilha-o com o frontend, com os textos da
+     * montra. Tambem usado pelas paginas de erro (StoreErrorPage), que nao
+     * passam por este middleware.
+     */
+    public function apply(string $locale): void
+    {
+        app()->setLocale($locale);
+
         Inertia::share('locale', [
             'current' => $locale,
-            'default' => $default,
+            'default' => (string) config('locales.default'),
             'available' => collect($this->store->locales())
                 ->map(fn (string $code): array => [
                     'code' => $code,
@@ -57,7 +69,5 @@ class SetStoreLocale
         // quando muda de lingua (a chave muda com ela).
         Inertia::share('i18n', Inertia::once(fn (): array => (array) trans('store', [], $locale))
             ->as("i18n.$locale"));
-
-        return $next($request);
     }
 }

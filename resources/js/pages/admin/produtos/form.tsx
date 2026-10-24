@@ -116,6 +116,9 @@ export default function ProductForm({
         production_time_days: editing?.product.productionTimeDays ?? null,
         allow_backorder: editing?.product.allowBackorder ?? false,
         max_open_production_qty: editing?.product.maxOpenProductionQty ?? null,
+        sort_order: editing?.product.sortOrder ?? 0,
+        seo_title: editing?.product.seoTitle ?? '',
+        seo_description: editing?.product.seoDescription ?? '',
         images: [],
         variants: {
             color_ids: [],

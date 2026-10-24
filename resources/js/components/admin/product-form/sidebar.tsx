@@ -3,6 +3,7 @@ import { DeleteProduct } from '@/components/admin/product-form/delete-product';
 import { TagInput } from '@/components/admin/tag-input';
 import InputError from '@/components/input-error';
 import { Checkbox } from '@/components/ui/checkbox';
+import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
     Select,
@@ -11,6 +12,7 @@ import {
     SelectTrigger,
     SelectValue,
 } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { formatCents } from '@/lib/money';
 import { show as etsyListing } from '@/routes/admin/produtos/etsy';
 import type { ProductEditing, ProductFormData } from '@/types/catalog';
@@ -99,6 +101,35 @@ export function ProductSidebar({
                     Destacado na montra
                 </label>
 
+                {data.featured && (
+                    <div className="grid gap-1.5">
+                        <Label
+                            htmlFor="product-sort-order"
+                            className="text-xs text-muted-foreground"
+                        >
+                            Ordem nos destaques (menor primeiro)
+                        </Label>
+                        <Input
+                            id="product-sort-order"
+                            type="number"
+                            inputMode="numeric"
+                            min={0}
+                            max={9999}
+                            value={data.sort_order}
+                            onChange={(event) =>
+                                setData(
+                                    'sort_order',
+                                    Math.max(
+                                        0,
+                                        Number(event.target.value) || 0,
+                                    ),
+                                )
+                            }
+                        />
+                        <InputError message={errors.sort_order} />
+                    </div>
+                )}
+
                 <p className="text-xs text-pretty text-muted-foreground">
                     {STATUS_NOTES[data.status]}
                 </p>
@@ -156,6 +187,58 @@ export function ProductSidebar({
                     "presente", "minimalista".
                 </p>
                 <InputError message={errors.tags} />
+            </section>
+
+            <section className="flex flex-col gap-3 rounded-xl border border-border/60 bg-card px-4 py-4">
+                <h2 className="text-[13.5px] font-semibold">
+                    Motores de busca
+                </h2>
+                <p className="text-xs text-pretty text-muted-foreground">
+                    O que aparece no Google e quando se partilha o link. Vazio
+                    usa o nome e o início da descrição.
+                </p>
+                <div className="grid gap-1.5">
+                    <Label
+                        htmlFor="product-seo-title"
+                        className="flex justify-between text-xs text-muted-foreground"
+                    >
+                        Título
+                        <span className="tabular-nums">
+                            {data.seo_title.length}/70
+                        </span>
+                    </Label>
+                    <Input
+                        id="product-seo-title"
+                        value={data.seo_title}
+                        maxLength={70}
+                        placeholder={data.name}
+                        onChange={(event) =>
+                            setData('seo_title', event.target.value)
+                        }
+                    />
+                    <InputError message={errors.seo_title} />
+                </div>
+                <div className="grid gap-1.5">
+                    <Label
+                        htmlFor="product-seo-description"
+                        className="flex justify-between text-xs text-muted-foreground"
+                    >
+                        Descrição
+                        <span className="tabular-nums">
+                            {data.seo_description.length}/170
+                        </span>
+                    </Label>
+                    <Textarea
+                        id="product-seo-description"
+                        value={data.seo_description}
+                        maxLength={170}
+                        rows={3}
+                        onChange={(event) =>
+                            setData('seo_description', event.target.value)
+                        }
+                    />
+                    <InputError message={errors.seo_description} />
+                </div>
             </section>
 
             {editing !== null && (

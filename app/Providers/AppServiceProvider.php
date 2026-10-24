@@ -8,6 +8,7 @@ use App\Mcp\CurrentToken;
 use App\Models\User;
 use App\Services\ApiKeyService;
 use App\Services\SettingService;
+use App\Store\StoreErrorPage;
 use Carbon\CarbonImmutable;
 use Carbon\CarbonInterval;
 use Illuminate\Cache\RateLimiting\Limit;
@@ -21,6 +22,7 @@ use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Validation\Rules\Password;
+use Inertia\ExceptionResponse;
 use Inertia\Inertia;
 use Laravel\Passport\Client;
 use Laravel\Passport\Passport;
@@ -58,6 +60,9 @@ class AppServiceProvider extends ServiceProvider
         $this->configurePassport();
         $this->configureRateLimiting();
         $this->configureAlerts();
+
+        // Os erros da montra (404, 500) com o layout dela; o resto fica igual.
+        Inertia::handleExceptionsUsing(fn (ExceptionResponse $response) => app(StoreErrorPage::class)($response));
     }
 
     /**

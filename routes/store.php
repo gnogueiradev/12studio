@@ -1,7 +1,9 @@
 <?php
 
+use App\Http\Controllers\Store\CatalogController;
 use App\Http\Controllers\Store\LandingPageController;
 use App\Http\Controllers\Store\PageController;
+use App\Http\Controllers\Store\ProductController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -25,6 +27,11 @@ $middleware = ['store.locale', 'store.shared', 'store.open'];
 
 $storefront = function (): void {
     Route::get('/', PageController::class)->defaults('page', 'home')->name('home');
+
+    // Catalogo, categorias e produtos (templates do construtor).
+    Route::get('produtos', [CatalogController::class, 'index'])->name('store.catalog');
+    Route::get('categoria/{slug}', [CatalogController::class, 'category'])->name('store.category');
+    Route::get('produtos/{slug}', ProductController::class)->name('store.product');
 
     // Paginas de sistema montadas por blocos (App\PageBuilder).
     foreach ([

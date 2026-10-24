@@ -31,6 +31,14 @@ class ShareStorefront
 
     public function handle(Request $request, Closure $next): Response
     {
+        $this->share();
+
+        return $next($request);
+    }
+
+    /** Tambem usado pelas paginas de erro (StoreErrorPage). */
+    public function share(): void
+    {
         Inertia::share('storefront', fn (): array => [
             'menus' => [
                 'header' => $this->menus->resolved('header'),
@@ -40,8 +48,6 @@ class ShareStorefront
             'social' => $this->social(),
             'categories' => $this->categories(),
         ]);
-
-        return $next($request);
     }
 
     /**
