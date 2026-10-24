@@ -36,7 +36,7 @@ class EnsureStoreOpen
             return $next($request);
         }
 
-        if (! $request->routeIs('home')) {
+        if (! $request->routeIs('home', 'i18n.home')) {
             return redirect()->route('home');
         }
 

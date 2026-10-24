@@ -3,13 +3,11 @@
 use App\Alerts\AlertChannel;
 use App\Http\Controllers\Admin;
 use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\HomeController;
 use App\Http\Controllers\LoginGateController;
 use App\Http\Controllers\NotifyController;
 use Illuminate\Support\Facades\Route;
 
-// ── Montra publica ──────────────────────────────────────────────────────────
-Route::get('/', HomeController::class)->middleware('store.open')->name('home');
+// ── Montra publica: routes/store.php, carregado no fim deste ficheiro. ─────
 
 // Emails deixados na landing "em breve". Throttle porque e o unico POST que um
 // visitante sem sessao alcanca — 6/min chega para quem corrige um erro de
@@ -378,3 +376,5 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
 });
 
 require __DIR__.'/settings.php';
+
+require __DIR__.'/store.php';

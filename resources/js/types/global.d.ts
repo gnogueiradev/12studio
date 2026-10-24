@@ -18,6 +18,8 @@ declare module '@inertiajs/core' {
             currency: string;
             /** Só nas páginas da montra: true quando está fechada e é o admin a ver. */
             storePreview?: boolean;
+            /** Só nas páginas da montra (SetStoreLocale). */
+            locale?: import('@/lib/i18n').LocaleProps;
             [key: string]: unknown;
         };
     }

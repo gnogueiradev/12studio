@@ -1,0 +1,45 @@
+<?php
+
+return [
+    'accepted' => 'Vous devez accepter :attribute.',
+    'array' => 'Le champ :attribute doit être une liste.',
+    'boolean' => 'Le champ :attribute doit être vrai ou faux.',
+    'date' => 'Le champ :attribute n’est pas une date valide.',
+    'after_or_equal' => 'Le champ :attribute doit être une date égale ou postérieure au :date.',
+    'email' => 'Le champ :attribute doit être une adresse e-mail valide.',
+    'extensions' => 'Le champ :attribute doit être un fichier de type : :values.',
+    'file' => 'Le champ :attribute doit être un fichier.',
+    'image' => 'Le champ :attribute doit être une image.',
+    'in' => 'La valeur choisie pour :attribute n’est pas valide.',
+    'integer' => 'Le champ :attribute doit être un nombre entier.',
+    'max' => [
+        'array' => 'Le champ :attribute ne peut pas contenir plus de :max éléments.',
+        'file' => 'Le fichier :attribute ne peut pas dépasser :max kilo-octets.',
+        'numeric' => 'Le champ :attribute ne peut pas être supérieur à :max.',
+        'string' => 'Le champ :attribute ne peut pas dépasser :max caractères.',
+    ],
+    'mimes' => 'Le champ :attribute doit être un fichier de type : :values.',
+    'min' => [
+        'array' => 'Le champ :attribute doit contenir au moins :min éléments.',
+        'file' => 'Le fichier :attribute doit faire au moins :min kilo-octets.',
+        'numeric' => 'Le champ :attribute doit être au moins :min.',
+        'string' => 'Le champ :attribute doit contenir au moins :min caractères.',
+    ],
+    'numeric' => 'Le champ :attribute doit être un nombre.',
+    'regex' => 'Le format de :attribute n’est pas valide.',
+    'required' => 'Le champ :attribute est obligatoire.',
+    'required_if' => 'Le champ :attribute est obligatoire quand :other vaut :value.',
+    'string' => 'Le champ :attribute doit être du texte.',
+    'uploaded' => 'Le fichier :attribute n’a pas pu être envoyé.',
+    'url' => 'Le champ :attribute doit être une adresse valide.',
+
+    'attributes' => [
+        'name' => 'nom',
+        'email' => 'e-mail',
+        'phone' => 'téléphone',
+        'message' => 'message',
+        'quantity' => 'quantité',
+        'consent' => 'la politique de confidentialité',
+        'files' => 'fichiers',
+    ],
+];

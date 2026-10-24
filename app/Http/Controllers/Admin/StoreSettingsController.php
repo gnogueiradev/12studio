@@ -27,6 +27,7 @@ class StoreSettingsController extends Controller
         return Inertia::render('admin/definicoes/montra', [
             'store' => $this->store->toForm(),
             'networks' => $this->store->networkOptions(),
+            'languages' => $this->store->localeOptions(),
         ]);
     }
 

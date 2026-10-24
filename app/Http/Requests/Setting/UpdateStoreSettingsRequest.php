@@ -25,6 +25,8 @@ class UpdateStoreSettingsRequest extends AdminFormRequest
             // nada que se cumpra.
             'response_hours' => ['nullable', 'integer', 'min:1', 'max:168'],
             'social' => ['nullable', 'array'],
+            'locales' => ['nullable', 'array'],
+            'locales.*' => ['string', 'in:'.implode(',', array_keys((array) config('locales.available')))],
         ];
 
         foreach (StoreSettings::SOCIAL_NETWORKS as $network => [, $hosts]) {
@@ -48,6 +50,8 @@ class UpdateStoreSettingsRequest extends AdminFormRequest
             'address' => 'morada',
             'opening_hours' => 'horário',
             'response_hours' => 'tempo de resposta',
+            'locales' => 'idiomas',
+            'locales.*' => 'idioma',
         ];
 
         foreach (StoreSettings::SOCIAL_NETWORKS as $network => [$label]) {

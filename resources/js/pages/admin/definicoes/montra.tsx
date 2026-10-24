@@ -23,11 +23,13 @@ type StoreForm = {
     opening_hours: string;
     response_hours: number | null;
     social: Record<string, string>;
+    locales: string[];
 };
 
 type Props = {
     store: StoreForm;
     networks: Option[];
+    languages: (Option & { locked: boolean })[];
 };
 
 /**
@@ -35,7 +37,11 @@ type Props = {
  * (rodapé, página de contacto, botão "Fala connosco"). Um só formulário: são
  * poucos campos e mudam juntos quando se prepara o lançamento.
  */
-export default function StoreSettingsPage({ store, networks }: Props) {
+export default function StoreSettingsPage({
+    store,
+    networks,
+    languages,
+}: Props) {
     const { data, setData, patch, processing, errors } = useForm<StoreForm>({
         ...store,
     });
@@ -57,6 +63,20 @@ export default function StoreSettingsPage({ store, networks }: Props) {
     const change = <K extends keyof StoreForm>(key: K, value: StoreForm[K]) => {
         setSaved(false);
         setData((current) => ({ ...current, [key]: value }));
+    };
+
+    const toggleLocale = (code: string, on: boolean) => {
+        setSaved(false);
+        setData((current) => ({
+            ...current,
+            // Pela ordem da lista e não pela dos cliques: assim o "por
+            // guardar" não acende só por se desligar e voltar a ligar.
+            locales: languages
+                .map((language) => language.value)
+                .filter((value) =>
+                    value === code ? on : current.locales.includes(value),
+                ),
+        }));
     };
 
     const changeSocial = (network: string, value: string) => {
@@ -226,6 +246,35 @@ export default function StoreSettingsPage({ store, networks }: Props) {
                                 {data.response_hours === 1 ? 'hora' : 'horas'}.”
                             </p>
                         )}
+                    </Panel>
+
+                    <Panel
+                        title="Idiomas"
+                        description="Em que línguas a montra está disponível. O português é o da raiz do site e não se desliga; os outros ficam em /es, /en e /fr."
+                    >
+                        <div className="flex flex-wrap gap-x-6 gap-y-3">
+                            {languages.map((language) => (
+                                <Label
+                                    key={language.value}
+                                    className="flex items-center gap-2 font-normal"
+                                >
+                                    <Checkbox
+                                        checked={data.locales.includes(
+                                            language.value,
+                                        )}
+                                        disabled={language.locked}
+                                        onCheckedChange={(checked) =>
+                                            toggleLocale(
+                                                language.value,
+                                                checked === true,
+                                            )
+                                        }
+                                    />
+                                    {language.label}
+                                </Label>
+                            ))}
+                        </div>
+                        <InputError message={errors.locales} />
                     </Panel>
 
                     <Panel

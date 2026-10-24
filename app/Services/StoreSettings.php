@@ -27,6 +27,8 @@ class StoreSettings
 
     public const KEY_SOCIAL = 'store.social';
 
+    public const KEY_LOCALES = 'store.locales';
+
     /**
      * Redes que a montra sabe mostrar => [rotulo, hosts aceites]. O host
      * confere-se ao gravar: um link do TikTok colado no campo do Instagram
@@ -53,10 +55,38 @@ class StoreSettings
     }
 
     /**
+     * Os idiomas ligados nesta loja, pela ordem do config/locales.php. O de
+     * omissao esta sempre — e o da raiz do site, sem ele nao havia montra.
+     * Sem nada gravado, estao todos.
+     *
+     * @return array<int, string>
+     */
+    public function locales(): array
+    {
+        $all = array_keys((array) config('locales.available'));
+        $default = (string) config('locales.default');
+        $saved = $this->settings->get(self::KEY_LOCALES);
+
+        if (! is_array($saved)) {
+            return $all;
+        }
+
+        return array_values(array_filter(
+            $all,
+            fn (string $locale): bool => $locale === $default || in_array($locale, $saved, true),
+        ));
+    }
+
+    public function hasLocale(string $locale): bool
+    {
+        return in_array($locale, $this->locales(), true);
+    }
+
+    /**
      * Os valores tal como o formulario de Definicoes -> Montra os edita: todas
      * as redes presentes, vazias quando nao ha link.
      *
-     * @return array{open: bool, contact_email: string, phone: string, address: string, opening_hours: string, response_hours: int|null, social: array<string, string>}
+     * @return array{open: bool, contact_email: string, phone: string, address: string, opening_hours: string, response_hours: int|null, social: array<string, string>, locales: array<int, string>}
      */
     public function toForm(): array
     {
@@ -78,6 +108,7 @@ class StoreSettings
             'opening_hours' => $this->string(self::KEY_OPENING_HOURS),
             'response_hours' => is_int($hours) ? $hours : null,
             'social' => $social,
+            'locales' => $this->locales(),
         ];
     }
 
@@ -98,7 +129,7 @@ class StoreSettings
 
         $hours = $form['response_hours'] ?? null;
 
-        return [
+        $values = [
             self::KEY_OPEN => (bool) $form['open'],
             self::KEY_CONTACT_EMAIL => trim((string) ($form['contact_email'] ?? '')),
             self::KEY_PHONE => trim((string) ($form['phone'] ?? '')),
@@ -107,6 +138,17 @@ class StoreSettings
             self::KEY_RESPONSE_HOURS => $hours === null ? null : (int) $hours,
             self::KEY_SOCIAL => $social,
         ];
+
+        // So quando o formulario os traz: um pedido sem `locales` nao desliga
+        // idioma nenhum.
+        if (array_key_exists('locales', $form)) {
+            $values[self::KEY_LOCALES] = array_values(array_unique([
+                (string) config('locales.default'),
+                ...array_map('strval', (array) $form['locales']),
+            ]));
+        }
+
+        return $values;
     }
 
     /**
@@ -119,6 +161,26 @@ class StoreSettings
     {
         return collect(self::SOCIAL_NETWORKS)
             ->map(fn (array $network, string $key): array => ['value' => $key, 'label' => $network[0]])
+            ->values()
+            ->all();
+    }
+
+    /**
+     * Os idiomas como opcoes para o formulario, com o de omissao marcado (nao
+     * se pode desligar).
+     *
+     * @return array<int, array{value: string, label: string, locked: bool}>
+     */
+    public function localeOptions(): array
+    {
+        $default = (string) config('locales.default');
+
+        return collect((array) config('locales.available'))
+            ->map(fn (array $locale, string $code): array => [
+                'value' => $code,
+                'label' => (string) $locale['name'],
+                'locked' => $code === $default,
+            ])
             ->values()
             ->all();
     }
