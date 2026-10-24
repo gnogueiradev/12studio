@@ -1,3 +1,4 @@
+import type { LocaleProps } from '@/lib/i18n';
 import type { Auth } from '@/types/auth';
 
 declare module 'react' {
@@ -19,7 +20,7 @@ declare module '@inertiajs/core' {
             /** Só nas páginas da montra: true quando está fechada e é o admin a ver. */
             storePreview?: boolean;
             /** Só nas páginas da montra (SetStoreLocale). */
-            locale?: import('@/lib/i18n').LocaleProps;
+            locale?: LocaleProps;
             [key: string]: unknown;
         };
     }
