@@ -29,7 +29,7 @@ use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
 #[IsIdempotent]
 class ColorUpdateTool extends WriteTool
 {
-    private const FIELDS = ['name', 'hex_color', 'sort_order', 'material_ids'];
+    private const FIELDS = ['name', 'hex_color', 'sort_order', 'material_ids', 'name_i18n'];
 
     public function __construct(
         private FormRequestRunner $runner,
@@ -43,6 +43,7 @@ class ColorUpdateTool extends WriteTool
             'name' => $schema->string()->max(60),
             'hex_color' => $schema->string()->description('Tom, ex. "#FF7A00".'),
             'sort_order' => $schema->integer()->min(0)->max(65535),
+            'name_i18n' => $schema->object()->description('O nome nos outros idiomas da montra: {"es": "…", "en": "…", "fr": "…"}. Vazio num idioma: fica o português.'),
             'material_ids' => $schema->array()->items($schema->integer())
                 ->description('A lista COMPLETA de materiais em que tens a cor (substitui a atual).'),
             'confirm' => $schema->boolean()->description('Só depois de o utilizador aprovar esconder variantes.'),

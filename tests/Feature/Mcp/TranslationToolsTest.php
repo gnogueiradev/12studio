@@ -6,10 +6,14 @@ use App\Mcp\Servers\StudioServer;
 use App\Mcp\Tools\Read\PageGetTool;
 use App\Mcp\Tools\Read\PagesListTool;
 use App\Mcp\Tools\Read\TranslationsMissingTool;
+use App\Mcp\Tools\Write\Catalog\ColorUpdateTool;
+use App\Mcp\Tools\Write\Catalog\MaterialUpdateTool;
 use App\Mcp\Tools\Write\Translations\CategoryTranslationSetTool;
 use App\Mcp\Tools\Write\Translations\PageContentTranslateTool;
 use App\Mcp\Tools\Write\Translations\ProductTranslationSetTool;
 use App\Models\Category;
+use App\Models\Color;
+use App\Models\Material;
 use App\Models\Product;
 use App\Models\User;
 use App\PageBuilder\PageBuilderService;
@@ -139,6 +143,18 @@ class TranslationToolsTest extends TestCase
             'locale' => 'en',
             'blocks' => [['id' => 'nao-existe', 'content' => ['title' => 'X']]],
         ])->assertHasErrors();
+    }
+
+    public function test_colour_and_material_names_are_translated_through_their_update_tools(): void
+    {
+        $color = Color::factory()->create(['name' => 'Azul']);
+        $material = Material::factory()->create(['name' => 'Madeira']);
+
+        $this->writer()->tool(ColorUpdateTool::class, ['id' => $color->id, 'name_i18n' => ['en' => 'Blue', 'fr' => 'Bleu']])->assertOk();
+        $this->writer()->tool(MaterialUpdateTool::class, ['id' => $material->id, 'name_i18n' => ['es' => 'Madera']])->assertOk();
+
+        $this->assertSame(['en' => 'Blue', 'fr' => 'Bleu'], $color->fresh()->name_i18n);
+        $this->assertSame(['es' => 'Madera'], $material->fresh()->name_i18n);
     }
 
     public function test_translations_missing_includes_pages(): void
