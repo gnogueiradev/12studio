@@ -290,6 +290,46 @@ class PublicConversationTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_attachments_of_internal_notes_are_not_downloadable_by_the_customer(): void
+    {
+        $this->open();
+        $url = session('inertia.flash_data.conversation.url');
+        $conversation = Conversation::query()->firstOrFail();
+        $admin = User::factory()->admin()->create();
+
+        app(ConversationService::class)->reply($conversation, 'Custos', $admin, [$this->binaryStl()], internal: true);
+        $attachment = ConversationAttachment::query()->firstOrFail();
+
+        $this->get($url.'/anexos/'.$attachment->id)->assertNotFound();
+    }
+
+    public function test_a_markdown_name_does_not_become_a_link_in_the_email(): void
+    {
+        $this->open(['name' => '[Confirmar pagamento](https://evil.example)']);
+
+        Mail::assertQueued(ConversationOpenedMail::class, function (ConversationOpenedMail $mail): bool {
+            $html = $mail->render();
+            $this->assertStringNotContainsString('href="https://evil.example"', $html);
+
+            return true;
+        });
+    }
+
+    public function test_conversation_links_keep_working_while_the_store_is_closed(): void
+    {
+        $this->open();
+        $url = session('inertia.flash_data.conversation.url');
+        $attachmentFree = $url;
+
+        config(['access.store_open' => false]);
+
+        $this->get($attachmentFree)->assertOk();
+        $this->post($url.'/responder', ['message' => 'Ainda ai?'])->assertRedirect();
+        $this->get('/conversa')->assertOk();
+        // Abrir uma conversa nova continua fechado com a montra.
+        $this->post('/conversas', $this->form())->assertNotFound();
+    }
+
     public function test_resend_link_answers_the_same_and_mails_a_working_link(): void
     {
         $this->open();
@@ -309,6 +349,19 @@ class PublicConversationTest extends TestCase
 
             return true;
         });
+    }
+
+    public function test_conversations_left_without_activity_are_pruned_too(): void
+    {
+        $this->open(['type' => 'quote', 'consent' => '1', 'files' => [$this->binaryStl()]]);
+        $conversation = Conversation::query()->firstOrFail();
+        app(ConversationService::class)->reply($conversation, 'Respondido', User::factory()->admin()->create());
+        $this->assertSame('answered', $conversation->fresh()->status);
+
+        Carbon::setTestNow(now()->addMonths(25));
+        $this->artisan('model:prune', ['--model' => [ConversationAttachment::class, Conversation::class]]);
+
+        $this->assertNull($conversation->fresh());
     }
 
     public function test_retention_prunes_closed_conversations_and_their_files(): void

@@ -73,10 +73,13 @@ export function ConversationForm({
 
     const submit = (event: React.FormEvent) => {
         event.preventDefault();
-        // A variante pode ter mudado desde que o formulário abriu.
+        // A variante pode ter mudado desde que o formulário abriu; e o
+        // carimbo `started` vem sempre o mais recente das props (um
+        // formulário aberto há mais de 2 h recebe um novo com o erro).
         transform((current) => ({
             ...current,
             variant_id: kind === 'interest' ? variantId : null,
+            started: storefront?.form.started ?? current.started,
         }));
         post(url('/conversas'), {
             preserveScroll: true,

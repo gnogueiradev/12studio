@@ -1,4 +1,4 @@
-import { Head, Link, router, useForm } from '@inertiajs/react';
+import { Head, Link, router, useForm, usePoll } from '@inertiajs/react';
 import {
     ArrowLeft,
     ClipboardList,
@@ -66,6 +66,8 @@ export default function ConversationShow({
     conversation: AdminConversation;
 }) {
     const fileInput = useRef<HTMLInputElement>(null);
+    // Uma resposta do cliente aparece sem recarregar.
+    usePoll(20_000, { only: ['conversation', 'inbox'] });
     const form = useForm<{
         message: string;
         internal: boolean;

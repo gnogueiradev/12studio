@@ -262,7 +262,7 @@ class PageController extends Controller
 
         $products = Product::query()
             ->whereIn('status', ['active', 'draft'])
-            ->when($search !== '', fn ($query) => $query->where('name', 'like', '%'.addcslashes($search, '%_\\').'%'))
+            ->when($search !== '', fn ($query) => $query->whereRaw("name LIKE ? ESCAPE '\\'", ['%'.addcslashes($search, '%_\\').'%']))
             ->with(['images' => fn ($query) => $query->orderByDesc('is_primary')->orderBy('sort_order')])
             ->orderBy('name')
             ->limit(20)

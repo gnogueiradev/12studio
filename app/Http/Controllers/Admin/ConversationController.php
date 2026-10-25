@@ -39,10 +39,12 @@ class ConversationController extends Controller
             ->when($type, fn (Builder $query) => $query->where('type', $type))
             ->when($search !== '', function (Builder $query) use ($search): void {
                 $like = '%'.addcslashes($search, '%_\\').'%';
+                // ESCAPE explicito: o SQLite nao tem caractere de escape por
+                // omissao, e "joao_silva" deixava de se encontrar.
                 $query->where(fn (Builder $query) => $query
-                    ->where('name', 'like', $like)
-                    ->orWhere('email', 'like', $like)
-                    ->orWhere('subject', 'like', $like));
+                    ->whereRaw("name LIKE ? ESCAPE '\\'", [$like])
+                    ->orWhereRaw("email LIKE ? ESCAPE '\\'", [$like])
+                    ->orWhereRaw("subject LIKE ? ESCAPE '\\'", [$like]));
             })
             // As que esperam pela loja primeiro; dentro delas, as mais recentes.
             ->orderByRaw("CASE status WHEN 'open' THEN 0 WHEN 'answered' THEN 1 ELSE 2 END")

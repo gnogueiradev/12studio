@@ -1,4 +1,4 @@
-import { Head, Link, router } from '@inertiajs/react';
+import { Head, Link, router, usePoll } from '@inertiajs/react';
 import { Inbox, Search } from 'lucide-react';
 import { useState } from 'react';
 import { PageHeader } from '@/components/admin/page-header';
@@ -52,6 +52,9 @@ export default function ConversationsIndex({
     counts,
 }: Props) {
     const [query, setQuery] = useState(filters.q);
+
+    // Conversas novas aparecem sem recarregar (e o contador da sidebar).
+    usePoll(30_000, { only: ['conversations', 'counts', 'inbox'] });
 
     const visit = (next: Partial<Props['filters']>) =>
         router.get(

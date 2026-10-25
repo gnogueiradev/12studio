@@ -50,9 +50,11 @@ class ConversationAttachment extends Model
      */
     public function prunable(): Builder
     {
+        $cutoff = Carbon::now()->subMonths(self::KEEP_MONTHS);
+
         return static::query()->whereHas('conversation', fn (Builder $query) => $query
-            ->where('status', 'closed')
-            ->where('closed_at', '<', Carbon::now()->subMonths(self::KEEP_MONTHS)));
+            ->where(fn (Builder $query) => $query->where('status', 'closed')->where('closed_at', '<', $cutoff))
+            ->orWhere('last_message_at', '<', $cutoff));
     }
 
     protected function pruning(): void

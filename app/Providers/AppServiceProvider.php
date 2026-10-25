@@ -14,6 +14,7 @@ use Carbon\CarbonInterval;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Foundation\Events\DiagnosingHealth;
 use Illuminate\Http\Request;
+use Illuminate\Mail\Markdown;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Support\Facades\Date;
 use Illuminate\Support\Facades\DB;
@@ -56,6 +57,11 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
+        // Os emails em markdown levam texto de clientes (o nome numa
+        // conversa): sem isto, "[Clica aqui](https://...)" virava um link
+        // num email assinado pela loja.
+        Markdown::withSecuredEncoding();
+
         $this->configureDefaults();
         $this->configurePassport();
         $this->configureRateLimiting();

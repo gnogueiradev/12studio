@@ -159,6 +159,25 @@ class ContentTranslationsTest extends TestCase
         $this->get('/fr/categoria/vasos')->assertInertia(fn (Assert $page) => $page->where('page.title', 'Pots'));
     }
 
+    public function test_category_descriptions_stay_plain_text(): void
+    {
+        app(TranslationService::class)->setCategory($this->category, 'es', ['name' => 'Llaveros & imanes', 'description' => 'Llaveros & imanes <b>3D</b>']);
+
+        $translation = $this->category->translations()->where('locale', 'es')->sole();
+        $this->assertSame('Llaveros & imanes 3D', $translation->description);
+    }
+
+    public function test_a_partial_update_does_not_mark_an_outdated_translation_as_up_to_date(): void
+    {
+        $service = app(TranslationService::class);
+        $this->translateProduct('en', ['name' => 'Wave Vase', 'description' => '<p>A vase.</p>']);
+        $this->product->update(['description' => '<p>Um vaso novo.</p>']);
+
+        $service->setProduct($this->product->fresh(), 'en', ['seo_title' => 'Wave vase']);
+
+        $this->assertSame('outdated', $service->productStatus($this->product->fresh(), 'en'));
+    }
+
     public function test_colour_and_material_labels_are_edited_in_the_backoffice(): void
     {
         $admin = User::factory()->admin()->create();

@@ -69,7 +69,12 @@ class TranslationService
             $translation = $product->translations()->firstOrNew(['locale' => $locale]);
             $translation->fill($clean);
             $translation->search_text = SearchText::normalize($translation->name, $translation->description);
-            $translation->source_hash = $product->sourceHash();
+
+            // So uma traducao do texto principal (nome e descricao) a poe em
+            // dia: mexer so no SEO ou nos rotulos nao revê o resto.
+            if ($translation->source_hash === null || (array_key_exists('name', $fields) && array_key_exists('description', $fields))) {
+                $translation->source_hash = $product->sourceHash();
+            }
             $translation->save();
 
             return $translation;
@@ -82,12 +87,20 @@ class TranslationService
     public function setCategory(Category $category, string $locale, array $fields): CategoryTranslation
     {
         $this->assertLocale($locale);
-        $clean = $this->clean($fields, ['name', 'description']);
+        // A descricao de uma categoria e texto simples (no portugues tambem).
+        if (array_key_exists('description', $fields) && is_scalar($fields['description'])) {
+            $fields['description'] = html_entity_decode(strip_tags((string) $fields['description']), ENT_QUOTES | ENT_HTML5, 'UTF-8');
+        }
+
+        $clean = $this->clean($fields, ['name'], plain: ['description']);
 
         /** @var CategoryTranslation $translation */
         $translation = $category->translations()->firstOrNew(['locale' => $locale]);
         $translation->fill($clean);
-        $translation->source_hash = $category->sourceHash();
+
+        if ($translation->source_hash === null || (array_key_exists('name', $fields) && array_key_exists('description', $fields))) {
+            $translation->source_hash = $category->sourceHash();
+        }
         $translation->save();
 
         return $translation;
@@ -306,10 +319,12 @@ class TranslationService
     /**
      * @param  array<string, mixed>  $fields
      * @param  array<int, string>  $allowed
+     * @param  array<int, string>  $plain  Campos de texto simples (sem HTMLPurifier).
      * @return array<string, string|null>
      */
-    private function clean(array $fields, array $allowed): array
+    private function clean(array $fields, array $allowed, array $plain = []): array
     {
+        $allowed = [...$allowed, ...$plain];
         $clean = [];
         $errors = [];
 
@@ -328,7 +343,7 @@ class TranslationService
 
             $text = trim((string) $value);
 
-            if ($key === 'description' && $text !== '') {
+            if ($key === 'description' && $text !== '' && ! in_array($key, $plain, true)) {
                 $text = trim((string) Purifier::clean($text, 'product'));
                 $text = trim(strip_tags($text)) === '' ? '' : $text;
             }

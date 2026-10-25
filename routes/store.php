@@ -39,20 +39,6 @@ $storefront = function (): void {
     Route::post('conversas', [ConversationController::class, 'store'])
         ->middleware('throttle:conversations')
         ->name('store.conversations.store');
-    Route::get('conversa', [ConversationController::class, 'lost'])->name('store.conversations.lost');
-    Route::post('conversa/reenviar', [ConversationController::class, 'resend'])
-        ->middleware('throttle:conversation-resend')
-        ->name('store.conversations.resend');
-    Route::get('conversa/{token}', [ConversationController::class, 'show'])
-        ->where('token', '[A-Za-z0-9]{1,64}')
-        ->name('store.conversation');
-    Route::post('conversa/{token}/responder', [ConversationController::class, 'reply'])
-        ->where('token', '[A-Za-z0-9]{1,64}')
-        ->middleware('throttle:conversation-reply')
-        ->name('store.conversation.reply');
-    Route::get('conversa/{token}/anexos/{attachment}', [ConversationController::class, 'attachment'])
-        ->where('token', '[A-Za-z0-9]{1,64}')
-        ->name('store.conversation.attachment');
 
     // Paginas de sistema montadas por blocos (App\PageBuilder).
     foreach ([
@@ -68,6 +54,26 @@ $storefront = function (): void {
     }
 };
 
+// O link privado das conversas: fora do `store.open`. Uma conversa ja aberta
+// continua a funcionar com a montra fechada (antes do lancamento, ferias) — o
+// link nunca expira enquanto a conversa existir.
+$conversations = function (): void {
+    Route::get('conversa', [ConversationController::class, 'lost'])->name('store.conversations.lost');
+    Route::post('conversa/reenviar', [ConversationController::class, 'resend'])
+        ->middleware('throttle:conversation-resend')
+        ->name('store.conversations.resend');
+    Route::get('conversa/{token}', [ConversationController::class, 'show'])
+        ->where('token', '[A-Za-z0-9]{1,64}')
+        ->name('store.conversation');
+    Route::post('conversa/{token}/responder', [ConversationController::class, 'reply'])
+        ->where('token', '[A-Za-z0-9]{1,64}')
+        ->middleware('throttle:conversation-reply')
+        ->name('store.conversation.reply');
+    Route::get('conversa/{token}/anexos/{attachment}', [ConversationController::class, 'attachment'])
+        ->where('token', '[A-Za-z0-9]{1,64}')
+        ->name('store.conversation.attachment');
+};
+
 // Um endereco de landing: minusculas, numeros e hifens (PageBuilderService).
 $slug = '[a-z0-9]+(?:-[a-z0-9]+)*';
 
@@ -75,6 +81,13 @@ $locales = implode('|', array_diff(
     array_keys((array) config('locales.available')),
     [config('locales.default')],
 ));
+
+Route::middleware(['store.locale', 'store.shared'])->group($conversations);
+Route::prefix('{locale}')
+    ->where(['locale' => $locales])
+    ->name('i18n.')
+    ->middleware(['store.locale', 'store.shared'])
+    ->group($conversations);
 
 Route::middleware($middleware)->group($storefront);
 

@@ -139,6 +139,11 @@ export function CustomOrderBlock({ block }: { block: StoreBlock }) {
             return;
         }
 
+        // O carimbo mais recente das props (ver ConversationForm).
+        form.transform((current) => ({
+            ...current,
+            started: storefront?.form.started ?? current.started,
+        }));
         form.post(url('/conversas'), {
             forceFormData: true,
             preserveScroll: true,

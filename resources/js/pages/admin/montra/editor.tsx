@@ -136,15 +136,21 @@ export default function PageEditor(props: Props) {
     );
 
     // ── Autosave ──────────────────────────────────────────────────────────
+    // Cada alteração sobe a versão; uma gravação só diz "guardado" se nada
+    // mudou enquanto ia ao servidor. As gravações vão em fila — nunca duas ao
+    // mesmo tempo, para uma resposta antiga não pisar uma mais recente.
     const first = useRef(true);
-    const pending = useRef<Promise<boolean> | null>(null);
+    const version = useRef(0);
+    const savedVersion = useRef(0);
+    const queue = useRef<Promise<boolean>>(Promise.resolve(true));
     const latest = useRef({ blocks, seo });
 
     useEffect(() => {
         latest.current = { blocks, seo };
     }, [blocks, seo]);
 
-    const save = useCallback(async (): Promise<boolean> => {
+    const saveNow = useCallback(async (): Promise<boolean> => {
+        const sending = version.current;
         setSaveState('saving');
 
         try {
@@ -155,13 +161,14 @@ export default function PageEditor(props: Props) {
                     live: boolean;
                 };
             }>(rascunho(page.id).url, 'PUT', latest.current);
+            savedVersion.current = Math.max(savedVersion.current, sending);
             setStatus({
                 status: response.page.status,
                 hasChanges: response.page.hasChanges,
                 live: response.page.live,
             });
             setErrors({});
-            setSaveState('saved');
+            setSaveState(version.current === sending ? 'saved' : 'dirty');
 
             return true;
         } catch (exception) {
@@ -181,6 +188,12 @@ export default function PageEditor(props: Props) {
         }
     }, [page.id]);
 
+    const save = useCallback((): Promise<boolean> => {
+        queue.current = queue.current.then(saveNow, saveNow);
+
+        return queue.current;
+    }, [saveNow]);
+
     useEffect(() => {
         if (first.current) {
             first.current = false;
@@ -188,9 +201,10 @@ export default function PageEditor(props: Props) {
             return;
         }
 
+        version.current += 1;
         setSaveState('dirty');
         const timer = window.setTimeout(() => {
-            pending.current = save();
+            void save();
         }, AUTOSAVE_DELAY);
 
         return () => window.clearTimeout(timer);
@@ -198,20 +212,51 @@ export default function PageEditor(props: Props) {
 
     /** Grava já o que estiver por gravar (antes de publicar ou sair). */
     const flush = useCallback(async (): Promise<boolean> => {
-        if (saveState === 'dirty' || saveState === 'error') {
+        const ok = await queue.current;
+
+        if (savedVersion.current !== version.current) {
             return save();
         }
 
-        if (saveState === 'saving' && pending.current) {
-            return pending.current;
-        }
+        return ok;
+    }, [save]);
 
-        return true;
-    }, [save, saveState]);
+    // Sair por um link do backoffice (que não passa pelo beforeunload):
+    // grava primeiro e só depois segue. Se não der para gravar, pergunta.
+    const leaving = useRef(false);
+    useEffect(
+        () =>
+            router.on('before', (event) => {
+                const visit = event.detail.visit;
+
+                if (
+                    leaving.current ||
+                    visit.method !== 'get' ||
+                    visit.only.length > 0 ||
+                    savedVersion.current === version.current
+                ) {
+                    return;
+                }
+
+                event.preventDefault();
+                void flush().then((ok) => {
+                    if (
+                        ok ||
+                        window.confirm(
+                            'Há alterações que não foi possível guardar. Sair na mesma?',
+                        )
+                    ) {
+                        leaving.current = true;
+                        router.visit(visit.url.href);
+                    }
+                });
+            }),
+        [flush],
+    );
 
     useEffect(() => {
         const warn = (event: BeforeUnloadEvent) => {
-            if (saveState === 'dirty' || saveState === 'saving') {
+            if (savedVersion.current !== version.current) {
                 event.preventDefault();
             }
         };
@@ -283,6 +328,7 @@ export default function PageEditor(props: Props) {
             onSuccess: (visit) => {
                 const fresh = (visit.props as unknown as Props).page;
                 first.current = true;
+                savedVersion.current = version.current;
                 setBlocks(fresh.blocks);
                 setSeo(fresh.seo);
                 setSaveState('saved');

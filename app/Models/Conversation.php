@@ -145,9 +145,13 @@ class Conversation extends Model
      */
     public function prunable(): Builder
     {
-        return static::query()
-            ->where('status', 'closed')
-            ->where('closed_at', '<', Carbon::now()->subMonths(self::KEEP_MONTHS));
+        $cutoff = Carbon::now()->subMonths(self::KEEP_MONTHS);
+
+        // Fechada ha 24 meses, ou parada ha 24 meses em qualquer estado (uma
+        // respondida a que o cliente nunca voltou nao fica para sempre).
+        return static::query()->where(fn (Builder $query) => $query
+            ->where(fn (Builder $query) => $query->where('status', 'closed')->where('closed_at', '<', $cutoff))
+            ->orWhere('last_message_at', '<', $cutoff));
     }
 
     protected function pruning(): void

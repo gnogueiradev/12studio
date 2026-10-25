@@ -74,6 +74,11 @@ class AdminInboxTest extends TestCase
         $this->actingAs($this->admin)
             ->get(route('admin.conversas.index', ['q' => 'ana@']))
             ->assertInertia(fn (Assert $page) => $page->has('conversations.data', 1));
+
+        $this->conversation(['name' => 'Joao', 'email' => 'joao_silva@example.com']);
+        $this->actingAs($this->admin)
+            ->get(route('admin.conversas.index', ['q' => 'joao_silva']))
+            ->assertInertia(fn (Assert $page) => $page->has('conversations.data', 1));
     }
 
     public function test_only_admins_see_the_inbox(): void

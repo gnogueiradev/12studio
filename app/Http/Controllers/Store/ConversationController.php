@@ -72,7 +72,8 @@ class ConversationController extends Controller
     {
         $conversation = $this->find($token);
 
-        abort_unless($attachment->conversation_id === $conversation->id, 404);
+        // Os anexos das notas internas da loja nunca saem para o cliente.
+        abort_unless($attachment->conversation_id === $conversation->id && ! $attachment->message->internal, 404);
 
         return Storage::disk('local')->download($attachment->path, $attachment->original_name);
     }
