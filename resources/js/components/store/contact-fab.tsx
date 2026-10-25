@@ -1,5 +1,7 @@
+import { Link, usePage } from '@inertiajs/react';
 import { Clock, MessageCircle } from 'lucide-react';
 import { ContactDetails } from '@/components/store/contact-details';
+import { ConversationForm } from '@/components/store/conversation-form';
 import { Button } from '@/components/ui/button';
 import {
     Sheet,
@@ -9,15 +11,14 @@ import {
     SheetTitle,
     SheetTrigger,
 } from '@/components/ui/sheet';
-import { useT } from '@/lib/i18n';
+import { useLocalizedUrl, useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import type { Storefront } from '@/types/store';
 
 /**
  * O botão "Fala connosco", fixo no canto em todas as páginas da montra. Abre
- * um painel com os contactos da loja. O formulário que abre uma conversa
- * entra aqui na fase das conversas — até lá, o painel diz isso mesmo e mostra
- * o email e as redes.
+ * um painel com o formulário rápido (abre uma conversa; numa página de
+ * produto, já vai com ele) e os contactos da loja.
  */
 export function ContactFab({
     contact,
@@ -25,6 +26,14 @@ export function ContactFab({
     className,
 }: Pick<Storefront, 'contact' | 'social'> & { className?: string }) {
     const t = useT();
+    const url = useLocalizedUrl();
+    // Numa página de produto, a pergunta já vai com ele.
+    const product =
+        (
+            usePage().props as {
+                product?: { id: number; name: string };
+            }
+        ).product ?? null;
 
     return (
         <Sheet>
@@ -58,10 +67,18 @@ export function ContactFab({
                 </SheetHeader>
 
                 <div className="flex flex-1 flex-col gap-6 overflow-y-auto p-6">
-                    <p className="rounded-lg bg-accent p-4 text-sm text-accent-foreground">
-                        {t('contact.form_soon')}
-                    </p>
+                    <ConversationForm
+                        kind={product ? 'question' : 'contact'}
+                        product={product}
+                        idPrefix="fab"
+                    />
                     <ContactDetails contact={contact} social={social} />
+                    <Link
+                        href={url('/conversa')}
+                        className="text-sm text-muted-foreground underline"
+                    >
+                        {t('conversation.resend_link')}
+                    </Link>
                 </div>
             </SheetContent>
         </Sheet>

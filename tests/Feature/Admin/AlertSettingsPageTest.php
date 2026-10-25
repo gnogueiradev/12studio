@@ -88,7 +88,7 @@ class AlertSettingsPageTest extends TestCase
             ->assertDontSee('Tok3n-secreto', false)
             ->assertInertia(fn (Assert $page) => $page
                 ->component('admin/definicoes/alertas')
-                ->has('channels', 4)
+                ->has('channels', count(AlertChannel::ALL))
                 ->where('channels.3.key', 'sistema')
                 ->where('channels.3.source', 'backoffice')
                 ->where('channels.3.hint', '…AB12')

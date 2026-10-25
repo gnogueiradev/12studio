@@ -4,7 +4,6 @@ import {
     ChevronRight,
     Clock,
     Eye,
-    Mail,
     Minus,
     Plus,
     Sparkles,
@@ -12,7 +11,7 @@ import {
 } from 'lucide-react';
 import { useMemo, useState, useSyncExternalStore } from 'react';
 import type { ReactNode } from 'react';
-import { ContactDetails } from '@/components/store/contact-details';
+import { ConversationForm } from '@/components/store/conversation-form';
 import { ProductPrice } from '@/components/store/product-card';
 import { ResponsiveImage } from '@/components/store/responsive-image';
 import { Button } from '@/components/ui/button';
@@ -319,45 +318,41 @@ function OptionButton({
 }
 
 /**
- * Até às conversas (fase seguinte), "Tenho interesse" abre um email já com a
- * peça e a variante escolhidas, mais os contactos da loja.
+ * "Tenho interesse" e "Fazer uma pergunta": o mesmo painel, com o produto e a
+ * variante escolhidos. Abre uma conversa (sem conta); a pergunta não leva
+ * quantidade nem personalização.
  */
 function InterestSheet({
     open,
     onOpenChange,
+    mode,
     product,
+    variantId,
     variantLabel,
     price,
+    note,
 }: {
     open: boolean;
     onOpenChange: (open: boolean) => void;
+    mode: 'interest' | 'question';
     product: ProductDetailData;
+    variantId: number | null;
     variantLabel: string;
     price: string | null;
+    note: string;
 }) {
     const t = useT();
-    const { storefront } = usePage().props;
-    const email = storefront?.contact.email;
-
-    const mailto = email
-        ? `mailto:${email}?subject=${encodeURIComponent(
-              t('detail.mail_subject', { product: product.name }),
-          )}&body=${encodeURIComponent(
-              t('detail.mail_body', {
-                  product: product.name,
-                  variant: variantLabel || '—',
-              }) +
-                  '\n\n' +
-                  (typeof window !== 'undefined' ? window.location.href : ''),
-          )}`
-        : null;
 
     return (
         <Sheet open={open} onOpenChange={onOpenChange}>
             <SheetContent className="store-theme flex w-full flex-col gap-0 bg-background text-foreground sm:max-w-md">
                 <SheetHeader className="border-b border-border/60 p-6">
                     <SheetTitle className="text-xl">
-                        {t('detail.interest')}
+                        {t(
+                            mode === 'interest'
+                                ? 'detail.interest'
+                                : 'detail.ask',
+                        )}
                     </SheetTitle>
                     <SheetDescription>
                         {t('detail.interest_intro')}
@@ -385,22 +380,16 @@ function InterestSheet({
                             {price && <p className="mt-1">{price}</p>}
                         </div>
                     </div>
-                    <p className="rounded-lg bg-accent p-4 text-sm text-accent-foreground">
-                        {t('detail.interest_soon')}
-                    </p>
-                    {mailto && (
-                        <Button asChild size="lg">
-                            <a href={mailto}>
-                                <Mail aria-hidden="true" />
-                                {t('detail.write_email')}
-                            </a>
-                        </Button>
-                    )}
-                    {storefront && (
-                        <ContactDetails
-                            contact={storefront.contact}
-                            social={storefront.social}
-                        />
+                    <ConversationForm
+                        key={mode}
+                        kind={mode}
+                        product={{ id: product.id, name: product.name }}
+                        variantId={variantId}
+                        personalization={product.personalization?.fields ?? []}
+                        idPrefix={`product-${mode}`}
+                    />
+                    {mode === 'interest' && note && (
+                        <p className="text-xs text-muted-foreground">{note}</p>
                     )}
                 </div>
             </SheetContent>
@@ -417,6 +406,11 @@ export function ProductMainBlock({ block }: { block: StoreBlock }) {
     };
     const { selected, choose, fits } = useVariantSelection(product);
     const [interestOpen, setInterestOpen] = useState(false);
+    const [mode, setMode] = useState<'interest' | 'question'>('interest');
+    const openSheet = (next: 'interest' | 'question') => {
+        setMode(next);
+        setInterestOpen(true);
+    };
 
     // A galeria da cor escolhida (as fotos dela primeiro e as gerais a
     // seguir); sem fotos dessa cor, todas.
@@ -675,9 +669,17 @@ export function ProductMainBlock({ block }: { block: StoreBlock }) {
                         <Button
                             size="lg"
                             className="h-12 text-base"
-                            onClick={() => setInterestOpen(true)}
+                            onClick={() => openSheet('interest')}
                         >
                             {t('detail.interest')}
+                        </Button>
+                        <Button
+                            variant="outline"
+                            size="lg"
+                            className="h-12 text-base"
+                            onClick={() => openSheet('question')}
+                        >
+                            {t('detail.ask')}
                         </Button>
                         {data.interest_note && (
                             <p className="text-center text-xs text-muted-foreground">
@@ -766,7 +768,7 @@ export function ProductMainBlock({ block }: { block: StoreBlock }) {
                         />
                     )}
                 </div>
-                <Button onClick={() => setInterestOpen(true)}>
+                <Button onClick={() => openSheet('interest')}>
                     {t('detail.interest')}
                 </Button>
             </div>
@@ -774,9 +776,12 @@ export function ProductMainBlock({ block }: { block: StoreBlock }) {
             <InterestSheet
                 open={interestOpen}
                 onOpenChange={setInterestOpen}
+                mode={mode}
                 product={product}
+                variantId={selected?.id ?? null}
                 variantLabel={variantLabel}
                 price={selected ? format(selected.price) : null}
+                note={data.interest_note}
             />
         </section>
     );

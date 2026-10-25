@@ -162,6 +162,22 @@ class AppServiceProvider extends ServiceProvider
 
         // Os avisos da Etsy: porta publica, guardada pela assinatura. O teto
         // e para quem a tenta adivinhar — a Etsy fica muito abaixo dele.
+        // As conversas da montra: portas publicas. Abrir: 5 por minuto e 20
+        // por dia por IP, e 10 por dia por email. Responder: por link.
+        RateLimiter::for('conversations', fn (Request $request): array => [
+            Limit::perMinute(5)->by('conversations:ip:'.$request->ip()),
+            Limit::perDay(20)->by('conversations:day:'.$request->ip()),
+            Limit::perDay(10)->by('conversations:email:'.mb_strtolower(trim((string) $request->input('email')))),
+        ]);
+
+        RateLimiter::for('conversation-reply', fn (Request $request): Limit => Limit::perMinute(10)
+            ->by('conversation-reply:'.hash('sha256', (string) $request->route('token'))));
+
+        RateLimiter::for('conversation-resend', fn (Request $request): array => [
+            Limit::perMinute(3)->by('conversation-resend:'.$request->ip()),
+            Limit::perDay(10)->by('conversation-resend:email:'.mb_strtolower(trim((string) $request->input('email')))),
+        ]);
+
         RateLimiter::for('etsy-webhook', fn (Request $request): Limit => Limit::perMinute(120)->by('etsy-webhook:'.$request->ip()));
     }
 

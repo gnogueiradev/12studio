@@ -24,6 +24,8 @@ declare module '@inertiajs/core' {
             locale?: LocaleProps;
             /** Só nas páginas da montra (ShareStorefront). */
             storefront?: Storefront;
+            /** Só no backoffice: conversas da montra por ler. */
+            inbox?: { unread: number } | null;
             [key: string]: unknown;
         };
     }

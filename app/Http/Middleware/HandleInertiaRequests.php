@@ -2,6 +2,7 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\Conversation;
 use App\Services\BrandSettings;
 use App\Services\SettingService;
 use Illuminate\Http\Request;
@@ -70,6 +71,11 @@ class HandleInertiaRequests extends Middleware
             // Moeda em vigor: o resources/js/lib/money.ts formata por ela em
             // vez do EUR fixo que tinha antes.
             'currency' => $this->settings->currency(),
+            // O contador de conversas por ler, na sidebar. So para o
+            // backoffice, e so quando a pagina e mesmo renderizada.
+            'inbox' => fn (): ?array => $request->user()?->isAdmin()
+                ? ['unread' => Conversation::query()->unread()->count()]
+                : null,
         ];
     }
 

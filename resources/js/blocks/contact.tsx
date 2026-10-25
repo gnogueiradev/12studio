@@ -1,6 +1,7 @@
 import { usePage } from '@inertiajs/react';
 import { Clock } from 'lucide-react';
 import { ContactDetails } from '@/components/store/contact-details';
+import { ConversationForm } from '@/components/store/conversation-form';
 import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import type { StoreBlock } from '@/types/store';
@@ -56,9 +57,11 @@ export function ContactBlock({ block }: { block: StoreBlock }) {
                         </p>
                     )}
                     {data.show_form && (
-                        <p className="mt-2 rounded-lg bg-accent p-4 text-sm text-accent-foreground">
-                            {t('contact.form_soon')}
-                        </p>
+                        <ConversationForm
+                            kind="contact"
+                            idPrefix={`contact-${block.id}`}
+                            className="mt-2"
+                        />
                     )}
                 </div>
                 {hasDetails && storefront && (

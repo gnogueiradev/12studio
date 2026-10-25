@@ -9,6 +9,7 @@ use App\Services\ThemeSettings;
 use App\Support\LocalizedUrl;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Crypt;
 use Inertia\Inertia;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -49,6 +50,10 @@ class ShareStorefront
             'social' => $this->social(),
             'categories' => $this->categories(),
             'logo' => app(ThemeSettings::class)->logoUrl(),
+            // A hora a que a pagina abriu, encriptada: os formularios de
+            // conversa devolvem-na, e um envio rapido demais e de um robo
+            // (OpenConversationRequest).
+            'form' => ['started' => Crypt::encryptString((string) now()->timestamp)],
         ]);
     }
 

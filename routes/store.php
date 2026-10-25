@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Store\CatalogController;
+use App\Http\Controllers\Store\ConversationController;
 use App\Http\Controllers\Store\LandingPageController;
 use App\Http\Controllers\Store\PageController;
 use App\Http\Controllers\Store\ProductController;
@@ -32,6 +33,26 @@ $storefront = function (): void {
     Route::get('produtos', [CatalogController::class, 'index'])->name('store.catalog');
     Route::get('categoria/{slug}', [CatalogController::class, 'category'])->name('store.category');
     Route::get('produtos/{slug}', ProductController::class)->name('store.product');
+
+    // Conversas com a loja (sem conta): abrir pelos formularios da montra, e
+    // depois o link privado. Os limites estao no AppServiceProvider.
+    Route::post('conversas', [ConversationController::class, 'store'])
+        ->middleware('throttle:conversations')
+        ->name('store.conversations.store');
+    Route::get('conversa', [ConversationController::class, 'lost'])->name('store.conversations.lost');
+    Route::post('conversa/reenviar', [ConversationController::class, 'resend'])
+        ->middleware('throttle:conversation-resend')
+        ->name('store.conversations.resend');
+    Route::get('conversa/{token}', [ConversationController::class, 'show'])
+        ->where('token', '[A-Za-z0-9]{1,64}')
+        ->name('store.conversation');
+    Route::post('conversa/{token}/responder', [ConversationController::class, 'reply'])
+        ->where('token', '[A-Za-z0-9]{1,64}')
+        ->middleware('throttle:conversation-reply')
+        ->name('store.conversation.reply');
+    Route::get('conversa/{token}/anexos/{attachment}', [ConversationController::class, 'attachment'])
+        ->where('token', '[A-Za-z0-9]{1,64}')
+        ->name('store.conversation.attachment');
 
     // Paginas de sistema montadas por blocos (App\PageBuilder).
     foreach ([

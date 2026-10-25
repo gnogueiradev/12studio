@@ -217,10 +217,10 @@ function Guide({
                     <p className="text-muted-foreground">
                         Um por tipo de alerta: <strong>#encomendas</strong>,{' '}
                         <strong>#stock-producao</strong>,{' '}
-                        <strong>#seguranca</strong> e <strong>#sistema</strong>.
-                        No Discord, carrega no <strong>+</strong> ao lado de
-                        “Canais de texto”. Se quiseres que só tu os vejas, liga
-                        “Canal privado”.
+                        <strong>#seguranca</strong>, <strong>#sistema</strong> e{' '}
+                        <strong>#conversas</strong>. No Discord, carrega no{' '}
+                        <strong>+</strong> ao lado de “Canais de texto”. Se
+                        quiseres que só tu os vejas, liga “Canal privado”.
                     </p>
                 </section>
 

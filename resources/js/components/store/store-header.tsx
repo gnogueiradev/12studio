@@ -32,7 +32,14 @@ function isCurrent(item: MenuItem, url: string): boolean {
     return path === item.href || path.startsWith(`${item.href}/`);
 }
 
-export function StoreHeader({ items }: { items: MenuItem[] }) {
+export function StoreHeader({
+    items,
+    logo = null,
+}: {
+    items: MenuItem[];
+    /** O logotipo do tema; sem ele, o símbolo e o nome da loja. */
+    logo?: string | null;
+}) {
     const { brand } = usePage().props;
     const { url } = usePage();
     const t = useT();
@@ -63,11 +70,21 @@ export function StoreHeader({ items }: { items: MenuItem[] }) {
                     href={localized(home().url)}
                     className="flex shrink-0 items-center gap-2.5 rounded-md text-lg font-semibold tracking-tight"
                 >
-                    <AppLogoIcon
-                        aria-hidden="true"
-                        className="h-6 w-auto fill-current"
-                    />
-                    {brand.name}
+                    {logo ? (
+                        <img
+                            src={logo}
+                            alt={brand.name}
+                            className="h-8 w-auto max-w-40 object-contain"
+                        />
+                    ) : (
+                        <>
+                            <AppLogoIcon
+                                aria-hidden="true"
+                                className="h-6 w-auto fill-current"
+                            />
+                            {brand.name}
+                        </>
+                    )}
                 </Link>
 
                 <nav

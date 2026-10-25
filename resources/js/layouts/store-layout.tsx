@@ -13,6 +13,8 @@ const EMPTY_STOREFRONT: Storefront = {
     contact: {},
     social: [],
     categories: [],
+    logo: null,
+    form: { started: '' },
 };
 
 /**
@@ -35,6 +37,9 @@ export default function StoreLayout({
         product,
     } = usePage().props;
     const t = useT();
+    const { component } = usePage();
+    // Na conversa, o cliente já está a falar connosco: sem o botão.
+    const conversationPage = component === 'store/conversation';
 
     // Na página de produto, o telemóvel tem uma barra fixa em baixo com o
     // preço e o "Tenho interesse": o rodapé ganha espaço para ela, e o botão
@@ -71,7 +76,10 @@ export default function StoreLayout({
                 </div>
             )}
 
-            <StoreHeader items={storefront.menus.header} />
+            <StoreHeader
+                items={storefront.menus.header}
+                logo={storefront.logo}
+            />
 
             <main id="conteudo" className="flex-1">
                 {children}
@@ -79,11 +87,13 @@ export default function StoreLayout({
 
             <StoreFooter storefront={storefront} />
 
-            <ContactFab
-                contact={storefront.contact}
-                social={storefront.social}
-                className={productPage ? 'max-md:hidden' : undefined}
-            />
+            {!conversationPage && (
+                <ContactFab
+                    contact={storefront.contact}
+                    social={storefront.social}
+                    className={productPage ? 'max-md:hidden' : undefined}
+                />
+            )}
         </div>
     );
 }

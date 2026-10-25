@@ -19,6 +19,7 @@ return [
         'stock' => env('DISCORD_WEBHOOK_STOCK'),
         'seguranca' => env('DISCORD_WEBHOOK_SEGURANCA'),
         'sistema' => env('DISCORD_WEBHOOK_SISTEMA'),
+        'conversas' => env('DISCORD_WEBHOOK_CONVERSAS'),
     ],
 
     /*

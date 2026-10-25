@@ -6,6 +6,7 @@ import {
     Factory,
     FolderTree,
     LayoutGrid,
+    MessagesSquare,
     Package,
     Palette,
     Printer,
@@ -49,6 +50,12 @@ const backofficeNavItems: NavItem[] = [
         title: 'Produção',
         href: '/admin/producao',
         icon: Factory,
+    },
+    {
+        // As mensagens da montra (contacto, interesse, peça personalizada).
+        title: 'Conversas',
+        href: '/admin/conversas',
+        icon: MessagesSquare,
     },
     {
         title: 'Clientes',
@@ -148,7 +155,12 @@ const footerNavItems: NavItem[] = [
 ];
 
 export function AppSidebar() {
-    const { auth } = usePage().props;
+    const { auth, inbox } = usePage().props;
+    const items = navItemsFor(auth.can).map((item) =>
+        item.href === '/admin/conversas' && inbox
+            ? { ...item, badge: inbox.unread }
+            : item,
+    );
     const home = auth.can.backoffice ? '/admin' : '/dashboard';
 
     return (
@@ -166,7 +178,7 @@ export function AppSidebar() {
             </SidebarHeader>
 
             <SidebarContent>
-                <NavMain items={navItemsFor(auth.can)} />
+                <NavMain items={items} />
             </SidebarContent>
 
             <SidebarFooter>

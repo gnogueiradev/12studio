@@ -40,6 +40,10 @@ export type Storefront = {
     };
     social: SocialLink[];
     categories: { label: string; href: string }[];
+    /** O logotipo do tema, ou null (fica o nome da loja). */
+    logo: string | null;
+    /** A hora a que a página abriu, encriptada (anti-spam das conversas). */
+    form: { started: string };
 };
 
 /** Um link de bloco já resolvido (PageRenderer). */

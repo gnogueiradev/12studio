@@ -178,6 +178,22 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         Route::patch('definicoes/montra/guardar', [Admin\StoreSettingsController::class, 'update'])
             ->name('montra.update');
 
+        // Conversas com clientes da montra (caixa de entrada).
+        Route::get('conversas', [Admin\ConversationController::class, 'index'])
+            ->name('conversas.index');
+        Route::get('conversas/anexos/{attachment}', [Admin\ConversationController::class, 'attachment'])
+            ->name('conversas.anexo');
+        Route::get('conversas/{conversation}', [Admin\ConversationController::class, 'show'])
+            ->name('conversas.show');
+        Route::post('conversas/{conversation}/responder', [Admin\ConversationController::class, 'reply'])
+            ->name('conversas.responder');
+        Route::post('conversas/{conversation}/fechar', [Admin\ConversationController::class, 'close'])
+            ->name('conversas.fechar');
+        Route::post('conversas/{conversation}/reabrir', [Admin\ConversationController::class, 'reopen'])
+            ->name('conversas.reabrir');
+        Route::post('conversas/{conversation}/rascunho', [Admin\ConversationController::class, 'toOrderDraft'])
+            ->name('conversas.rascunho');
+
         // ── Construtor da montra (App\PageBuilder). Paginas e landings, menus,
         //    biblioteca de imagens e, so para o dono, o tema. URIs proprios por
         //    acao, pela mesma razao do Wayfinder acima. ─────────────────────
