@@ -5,6 +5,7 @@ namespace Tests\Feature\Store;
 use App\Models\Category;
 use App\Models\Menu;
 use App\Models\User;
+use App\Services\BrandSettings;
 use App\Services\SettingService;
 use App\Services\StoreMenus;
 use App\Services\StoreSettings;
@@ -41,6 +42,14 @@ class StorefrontTest extends TestCase
         $this->get('/en')->assertInertia(fn (Assert $page) => $page
             ->where('storefront.menus.header.0.label', 'Shop')
             ->where('storefront.menus.header.0.href', '/en/produtos'));
+    }
+
+    public function test_a_page_without_its_own_description_uses_the_brand_tagline(): void
+    {
+        $tagline = app(BrandSettings::class)->tagline();
+        $this->assertNotSame('', $tagline);
+
+        $this->get('/')->assertSee('<meta name="description" content="'.e($tagline).'">', false);
     }
 
     public function test_the_default_footer_links_the_complaints_book(): void

@@ -476,7 +476,17 @@ export function CatalogGridBlock({ block }: { block: StoreBlock }) {
                     side && 'lg:grid-cols-[15rem_1fr] lg:gap-10',
                 )}
             >
-                {side && <aside className="hidden lg:block">{panel}</aside>}
+                {side && (
+                    // Uma secao e nao um <aside>: os filtros sao parte do
+                    // conteudo principal, e um landmark complementar dentro
+                    // do <main> confunde os leitores de ecra.
+                    <section
+                        aria-label={t('catalog.filters')}
+                        className="hidden lg:block"
+                    >
+                        {panel}
+                    </section>
+                )}
 
                 <div className="min-w-0">
                     <div className="mb-5 flex flex-wrap items-center gap-2">
@@ -565,6 +575,7 @@ export function CatalogGridBlock({ block }: { block: StoreBlock }) {
                                 <ProductCard
                                     key={product.id}
                                     product={product}
+                                    headingLevel={2}
                                     priority={index < 4}
                                     sizes={
                                         side

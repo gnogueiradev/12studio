@@ -24,7 +24,7 @@ export function ProductPrice({
 
     return (
         <p className={cn('flex flex-wrap items-baseline gap-x-2', className)}>
-            <span className={cn(price.compareAt !== null && 'text-gold')}>
+            <span className={cn(price.compareAt !== null && 'text-gold-text')}>
                 {price.varies ? t('product.from', { price: amount }) : amount}
             </span>
             {price.compareAt !== null && (
@@ -44,12 +44,16 @@ export function ProductCard({
     product,
     sizes = '(min-width: 1024px) 25vw, (min-width: 768px) 33vw, 50vw',
     priority = false,
+    headingLevel = 3,
 }: {
     product: ProductCardData;
     sizes?: string;
     priority?: boolean;
+    /** h2 onde a grelha vem logo a seguir ao título da página (catálogo). */
+    headingLevel?: 2 | 3;
 }) {
     const t = useT();
+    const Heading = headingLevel === 2 ? 'h2' : 'h3';
 
     const badge = product.onSale
         ? t('product.badge.sale')
@@ -108,14 +112,14 @@ export function ProductCard({
                         {product.category}
                     </p>
                 )}
-                <h3 className="text-sm leading-snug font-medium">
+                <Heading className="text-sm leading-snug font-medium">
                     <Link
                         href={product.href}
                         className="outline-none after:absolute after:inset-0 after:rounded-lg after:content-[''] focus-visible:after:ring-2 focus-visible:after:ring-ring focus-visible:after:ring-offset-2 focus-visible:after:ring-offset-background"
                     >
                         {product.name}
                     </Link>
-                </h3>
+                </Heading>
                 <ProductPrice price={product.price} className="text-sm" />
                 {product.colors.length > 1 && (
                     <ul

@@ -32,6 +32,12 @@ final class Seo
         $default = (string) config('locales.default');
         $brand = app(BrandSettings::class)->name();
 
+        // Sem descricao propria (o catalogo, uma pagina sem SEO preenchido),
+        // a frase da marca: uma pagina sem meta description perde no Google.
+        if ($description === null || trim(strip_tags($description)) === '') {
+            $description = app(BrandSettings::class)->tagline();
+        }
+
         $alternates = [];
         foreach (app(StoreSettings::class)->locales() as $code) {
             $alternates[] = [
@@ -43,7 +49,7 @@ final class Seo
 
         return [
             'title' => $title === '' ? $brand : "{$title} - {$brand}",
-            'description' => $description === null || trim($description) === ''
+            'description' => trim($description) === ''
                 ? null
                 : Str::limit(trim((string) preg_replace('/\s+/', ' ', strip_tags($description))), 160),
             'canonical' => url(LocalizedUrl::path($path, $locale)),

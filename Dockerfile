@@ -49,6 +49,7 @@ COPY --from=build /app /app
 # Supervisor: worker das filas, scheduler e SSR ao lado do nginx+fpm.
 COPY docker/queue-worker.conf docker/scheduler.conf docker/inertia-ssr.conf /opt/docker/etc/supervisor.d/
 COPY docker/php.ini /opt/docker/etc/php/php.ini
+COPY docker/nginx-performance.conf /opt/docker/etc/nginx/vhost.common.d/20-performance.conf
 COPY docker/entrypoint-permissions.sh /opt/docker/provision/entrypoint.d/20-permissions.sh
 RUN chmod +x /opt/docker/provision/entrypoint.d/20-permissions.sh \
     && chown -R application:application /app

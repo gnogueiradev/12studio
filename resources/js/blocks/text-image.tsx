@@ -32,7 +32,7 @@ export function TextImageBlock({ block }: { block: StoreBlock }) {
                     )}
                 >
                     {data.eyebrow && (
-                        <p className="text-xs font-medium tracking-[0.2em] text-gold uppercase">
+                        <p className="text-xs font-medium tracking-[0.2em] text-gold-text uppercase">
                             {data.eyebrow}
                         </p>
                     )}

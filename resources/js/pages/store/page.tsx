@@ -1,6 +1,6 @@
 import { Head } from '@inertiajs/react';
 import { FileWarning } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import { BlockList } from '@/blocks';
 import { useT } from '@/lib/i18n';
 import type { PreviewMessage } from '@/types/page-builder';
@@ -46,8 +46,13 @@ function EditorPreview({ initial }: { initial: StoreBlock[] }) {
     const [blocks, setBlocks] = useState(initial);
     const [selected, setSelected] = useState<string | null>(null);
     // "Ver como cliente": o mesmo endereço aberto num separador, fora do
-    // editor. Aí é só o rascunho, com a faixa a dizê-lo.
-    const framed = window.self !== window.top;
+    // editor. Aí é só o rascunho, com a faixa a dizê-lo. No SSR não há
+    // window: o servidor desenha a versão do iframe.
+    const framed = useSyncExternalStore(
+        noSubscription,
+        () => window.self !== window.top,
+        () => true,
+    );
 
     useEffect(() => {
         if (!framed) {
@@ -165,6 +170,11 @@ function EditorPreview({ initial }: { initial: StoreBlock[] }) {
             )}
         </>
     );
+}
+
+/** O "estar dentro de um iframe" não muda depois de a página abrir. */
+function noSubscription(): () => void {
+    return () => {};
 }
 
 /**

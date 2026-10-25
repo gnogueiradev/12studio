@@ -18,7 +18,7 @@ export default function StoreError({ status }: { status: 404 | 500 | 503 }) {
         <>
             <Head title={t(`error.title_${status}`)} />
             <section className="mx-auto flex w-full max-w-2xl flex-col items-center px-4 py-24 text-center md:py-32">
-                <p className="text-sm font-medium tracking-[0.2em] text-gold">
+                <p className="text-sm font-medium tracking-[0.2em] text-gold-text">
                     {status}
                 </p>
                 <h1 className="mt-4 text-3xl font-semibold tracking-tight text-balance md:text-4xl">

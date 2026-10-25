@@ -115,6 +115,10 @@
     /* Cores da marca sem slot proprio no shadcn. */
     --color-gold: var(--gold);
     --color-gold-foreground: var(--gold-foreground);
+    /* O dourado como cor de TEXTO: o --gold puro da 2.1:1 sobre o fundo
+       claro. Misturado com o texto chega aos 4.5:1 nos dois modos, e segue
+       o tema da loja (os dois tokens vem do ThemeSettings). */
+    --color-gold-text: color-mix(in srgb, var(--gold) 45%, var(--foreground));
     --color-brand-taupe: var(--brand-taupe);
 
     --color-destructive-soft: var(--destructive-soft);
