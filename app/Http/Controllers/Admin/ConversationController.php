@@ -27,6 +27,9 @@ class ConversationController extends Controller
 
     public function index(Request $request): Response
     {
+        // Segunda barreira, por cima do middleware 'admin' das rotas.
+        abort_unless($request->user()?->isAdmin(), 403);
+
         $status = in_array($request->query('estado'), Conversation::STATUSES, true) ? (string) $request->query('estado') : null;
         $type = in_array($request->query('tipo'), Conversation::TYPES, true) ? (string) $request->query('tipo') : null;
         $search = trim((string) $request->query('q', ''));
