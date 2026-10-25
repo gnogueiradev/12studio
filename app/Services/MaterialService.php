@@ -59,6 +59,10 @@ class MaterialService
             unset($data['price_per_kg']);
         }
 
+        if (array_key_exists('name_i18n', $data)) {
+            $data['name_i18n'] = Material::cleanLabels(is_array($data['name_i18n']) ? $data['name_i18n'] : null);
+        }
+
         return $data;
     }
 }

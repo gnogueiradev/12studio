@@ -82,8 +82,19 @@ class CatalogQuery
             $query->where('category_id', $this->category->id);
         }
 
+        // No idioma da pagina, com o portugues como alternativa: cada palavra
+        // tem de estar no texto portugues ou no da traducao.
+        $locale = app()->getLocale();
+        $translated = $locale !== config('locales.default');
+
         foreach (SearchText::terms($this->search) as $term) {
-            $query->whereRaw("search_text LIKE ? ESCAPE '\\'", [SearchText::like($term)]);
+            $like = SearchText::like($term);
+
+            $query->where(fn (Builder $query) => $query
+                ->whereRaw("products.search_text LIKE ? ESCAPE '\\'", [$like])
+                ->when($translated, fn (Builder $query) => $query->orWhereHas('translations', fn (Builder $translation) => $translation
+                    ->where('locale', $locale)
+                    ->whereRaw("search_text LIKE ? ESCAPE '\\'", [$like]))));
         }
 
         $variant = function (callable $constraint) use ($query): void {
@@ -162,18 +173,19 @@ class CatalogQuery
             ->whereHas('products', fn (Builder $q) => $q->scopes('visibleInStore'))
             ->orderBy('sort_order')
             ->orderBy('name')
+            ->with(Category::withTranslations())
             ->get(['id', 'name', 'slug']);
 
         return [
             'categories' => $categories->map(fn (Category $category): array => [
-                'name' => $category->name,
+                'name' => (string) $category->translated('name'),
                 'slug' => $category->slug,
             ])->all(),
             'colors' => Color::query()->whereKey($colorIds)->orderBy('sort_order')->orderBy('name')->get()
-                ->map(fn (Color $color): array => ['id' => $color->id, 'name' => $color->name, 'hex' => $color->hex_color])
+                ->map(fn (Color $color): array => ['id' => $color->id, 'name' => $color->translatedName(), 'hex' => $color->hex_color])
                 ->all(),
             'materials' => Material::query()->whereKey($materialIds)->orderBy('sort_order')->orderBy('name')->get()
-                ->map(fn (Material $material): array => ['id' => $material->id, 'name' => $material->name])
+                ->map(fn (Material $material): array => ['id' => $material->id, 'name' => $material->translatedName()])
                 ->all(),
             'price' => [
                 'min' => (int) floor(((int) (clone $variants)->min('price_cents')) / 100),

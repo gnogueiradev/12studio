@@ -129,6 +129,10 @@ class ColorService
     {
         unset($data['material_ids']);
 
+        if (array_key_exists('name_i18n', $data)) {
+            $data['name_i18n'] = Color::cleanLabels(is_array($data['name_i18n']) ? $data['name_i18n'] : null);
+        }
+
         return $data;
     }
 

@@ -44,6 +44,8 @@ class StoreMaterialRequest extends FormRequest
             'min_spools' => ['integer', 'min:0', 'max:65535'],
             'active' => ['boolean'],
             'sort_order' => ['integer', 'min:0', 'max:65535'],
+            'name_i18n' => ['nullable', 'array'],
+            'name_i18n.*' => ['nullable', 'string', 'max:60'],
         ];
     }
 

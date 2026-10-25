@@ -119,7 +119,7 @@ final class ConversationPresenter
 
         return [
             'id' => $product->id,
-            'name' => $product->name,
+            'name' => $admin ? $product->name : (string) $product->translated('name', $conversation->locale),
             'href' => $admin ? route('admin.produtos.edit', $product->id, false) : LocalizedUrl::path('/produtos/'.$product->slug),
             'image' => $image?->responsive($product->name)['src'],
             'variant' => $conversation->variant === null ? null : app(ConversationService::class)->variantLabel($conversation->variant),

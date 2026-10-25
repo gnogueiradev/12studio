@@ -105,9 +105,10 @@ class ShareStorefront
             ->orderBy('sort_order')
             ->orderBy('name')
             ->limit(self::FOOTER_CATEGORIES)
-            ->get(['name', 'slug'])
+            ->with(Category::withTranslations())
+            ->get(['id', 'name', 'slug'])
             ->map(fn (Category $category): array => [
-                'label' => $category->name,
+                'label' => (string) $category->translated('name'),
                 'href' => LocalizedUrl::path("/categoria/{$category->slug}"),
             ])
             ->all();

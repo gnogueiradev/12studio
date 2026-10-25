@@ -43,7 +43,7 @@ class CategoriesBlock extends Block
 
     public function resolve(array $data, RenderContext $context): array
     {
-        $query = Category::query()->where('status', 'visible');
+        $query = Category::query()->where('status', 'visible')->with(Category::withTranslations());
 
         $categories = $data['categories'] === []
             ? $query->orderBy('sort_order')->orderBy('name')->limit((int) $data['limit'])->get()
@@ -63,11 +63,13 @@ class CategoriesBlock extends Block
                 ->latest()
                 ->first();
 
+            $name = (string) $category->translated('name', $context->locale);
+
             return [
-                'name' => $category->name,
-                'description' => $category->description,
+                'name' => $name,
+                'description' => $category->translated('description', $context->locale),
                 'href' => LocalizedUrl::path('/categoria/'.$category->slug, $context->locale),
-                'image' => $product?->primaryImage?->responsive($category->name),
+                'image' => $product?->primaryImage?->responsive($name),
             ];
         });
 

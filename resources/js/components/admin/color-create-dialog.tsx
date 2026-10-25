@@ -1,5 +1,6 @@
 import { useForm } from '@inertiajs/react';
 import { ColorPicker } from '@/components/admin/color-picker';
+import { LabelTranslations } from '@/components/admin/label-translations';
 import { ToggleChip } from '@/components/admin/toggle-chip';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
@@ -59,6 +60,7 @@ export function ColorCreateDialog({
             sort_order: editing?.sortOrder ?? 0,
             material_ids:
                 editing?.materials.map((material) => material.id) ?? [],
+            name_i18n: { ...(editing?.nameI18n ?? {}) },
         });
 
     // Os filamentos não entram aqui: uma cor por declarar é um estado legítimo,
@@ -141,6 +143,12 @@ export function ColorCreateDialog({
                         />
                         <InputError message={errors.name} />
                     </div>
+
+                    <LabelTranslations
+                        idPrefix="color-name"
+                        value={data.name_i18n}
+                        onChange={(value) => setData('name_i18n', value)}
+                    />
 
                     <div className="grid gap-2">
                         <Label>Tom</Label>

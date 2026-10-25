@@ -51,11 +51,11 @@ class BreadcrumbBlock extends Block
         $category = $context->product->category ?? ($context->subject['category'] ?? null);
 
         if ($category instanceof Category) {
-            $items[] = ['label' => $category->name, 'href' => LocalizedUrl::path('/categoria/'.$category->slug, $context->locale)];
+            $items[] = ['label' => (string) $category->translated('name', $context->locale), 'href' => LocalizedUrl::path('/categoria/'.$category->slug, $context->locale)];
         }
 
         if ($context->product !== null) {
-            $items[] = ['label' => $context->product->name, 'href' => null];
+            $items[] = ['label' => (string) $context->product->translated('name', $context->locale), 'href' => null];
         } elseif ($category instanceof Category) {
             $items[count($items) - 1]['href'] = null;
         }

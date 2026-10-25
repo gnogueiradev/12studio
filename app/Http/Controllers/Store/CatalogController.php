@@ -38,6 +38,7 @@ class CatalogController extends Controller
         $category = Category::query()
             ->where('slug', $slug)
             ->whereIn('status', ['visible', 'hidden'])
+            ->with(Category::withTranslations())
             ->firstOrFail();
 
         return $this->render($request, $category);
@@ -55,11 +56,11 @@ class CatalogController extends Controller
             ->through(fn (Product $product): array => ProductCard::make($product, $locale));
 
         $path = $category === null ? '/produtos' : '/categoria/'.$category->slug;
-        $title = $category->name ?? (string) (((array) $page->seo)[$locale]['title'] ?? trans('store.nav.catalog'));
+        $title = $category?->translated('name', $locale) ?? (string) (((array) $page->seo)[$locale]['title'] ?? trans('store.nav.catalog'));
 
         $breadcrumb = [['label' => trans('store.nav.catalog'), 'href' => LocalizedUrl::path('/produtos')]];
         if ($category !== null) {
-            $breadcrumb[] = ['label' => $category->name, 'href' => null];
+            $breadcrumb[] = ['label' => (string) $category->translated('name', $locale), 'href' => null];
         }
 
         return $this->store->render(
@@ -81,7 +82,7 @@ class CatalogController extends Controller
             seo: Seo::make(
                 path: $path,
                 title: $title,
-                description: $category?->description,
+                description: $category?->translated('description', $locale),
                 jsonLd: $category === null ? [] : [Seo::breadcrumb($breadcrumb)],
                 // Uma pesquisa ou combinacao de filtros nao e uma pagina para
                 // indexar: o canonical aponta para a listagem limpa.

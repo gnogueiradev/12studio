@@ -8,6 +8,7 @@ use App\Http\Requests\Category\StoreCategoryRequest;
 use App\Http\Requests\Category\UpdateCategoryRequest;
 use App\Models\Category;
 use App\Services\CategoryService;
+use App\Services\TranslationService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -93,6 +94,7 @@ class CategoryController extends Controller
                 'color' => $category->color,
                 'sortOrder' => $category->sort_order,
             ],
+            'translations' => app(TranslationService::class)->categoryForm($category->load('translations')),
         ]);
     }
 

@@ -1,5 +1,7 @@
 import { Head, Link, useForm } from '@inertiajs/react';
 import { useState } from 'react';
+import { ContentTranslations } from '@/components/admin/content-translations';
+import type { ContentTranslation } from '@/components/admin/content-translations';
 import { ProductSidebar } from '@/components/admin/product-form/sidebar';
 import { StagedPhotos } from '@/components/admin/product-form/staged-photos';
 import {
@@ -28,7 +30,12 @@ import { Spinner } from '@/components/ui/spinner';
 import { inputToCents } from '@/lib/money';
 import { newVariantProduction, productionBySize } from '@/lib/production';
 import { cn } from '@/lib/utils';
-import { index, store, update } from '@/routes/admin/produtos';
+import {
+    index,
+    store,
+    traducoes as productTranslations,
+    update,
+} from '@/routes/admin/produtos';
 import type {
     CategoryOption,
     ColorOption,
@@ -54,6 +61,9 @@ type Props = {
      * `only: ['pricing']` enquanto o admin escreve — ver VariantForm.
      */
     pricing: VariantPricingPreview;
+    /** Só a editar: o produto nos outros idiomas da montra. */
+    translations?: Record<string, ContentTranslation>;
+    personalizationFields?: { key: string; label: string }[];
     defaultActiveLaborMinutes: number;
 };
 
@@ -93,6 +103,8 @@ export default function ProductForm({
     defaultVatRate,
     pricing,
     defaultActiveLaborMinutes,
+    translations,
+    personalizationFields = [],
 }: Props) {
     const {
         data,
@@ -538,6 +550,33 @@ export default function ProductForm({
                                 />
                                 <InputError message={errors.description} />
                             </section>
+
+                            {editing !== null && translations && (
+                                <section>
+                                    <SectionTitle note="O que ficar vazio aparece em português">
+                                        Traduções da montra
+                                    </SectionTitle>
+                                    <ContentTranslations
+                                        url={(locale) =>
+                                            productTranslations([
+                                                editing.product.id,
+                                                locale,
+                                            ]).url
+                                        }
+                                        translations={translations}
+                                        original={{
+                                            name: editing.product.name,
+                                            description:
+                                                editing.product.description,
+                                        }}
+                                        withSeo
+                                        descriptionAsRichText
+                                        personalizationFields={
+                                            personalizationFields
+                                        }
+                                    />
+                                </section>
+                            )}
 
                             {/*
                              * Recolhido por omissão: são os campos que ninguém

@@ -2,6 +2,7 @@
 
 namespace App\Store;
 
+use App\Models\Category;
 use App\Models\Color;
 use App\Models\Material;
 use App\Models\Product;
@@ -27,7 +28,8 @@ final class ProductDetail
     public static function with(): array
     {
         return [
-            'category',
+            ...Product::withTranslations(),
+            'category' => fn ($query) => $query->with(Category::withTranslations()),
             'images',
             'variants' => fn ($query) => $query->visibleInStore()->with(['color', 'material'])->orderByDesc('is_default')->orderBy('id'),
         ];
@@ -45,12 +47,12 @@ final class ProductDetail
 
         return [
             'id' => $product->id,
-            'name' => $product->name,
+            'name' => (string) $product->translated('name', $locale),
             'slug' => $product->slug,
             'href' => LocalizedUrl::path('/produtos/'.$product->slug, $locale),
-            'description' => (string) $product->description,
+            'description' => (string) $product->translated('description', $locale),
             'category' => $product->category === null ? null : [
-                'name' => $product->category->name,
+                'name' => $product->category->translated('name', $locale),
                 'href' => LocalizedUrl::path('/categoria/'.$product->category->slug, $locale),
             ],
             'price' => PriceRange::of($variants)->toArray(),
@@ -59,10 +61,10 @@ final class ProductDetail
             'isCustom' => $product->isCustom(),
             'images' => self::images($product),
             'colors' => $variants->pluck('color')->filter()->unique('id')->sortBy('sort_order')->values()
-                ->map(fn (Color $color): array => ['id' => $color->id, 'name' => $color->name, 'hex' => $color->hex_color])
+                ->map(fn (Color $color): array => ['id' => $color->id, 'name' => $color->translatedName($locale), 'hex' => $color->hex_color])
                 ->all(),
             'materials' => $variants->pluck('material')->filter()->unique('id')->sortBy('sort_order')->values()
-                ->map(fn (Material $material): array => ['id' => $material->id, 'name' => $material->name])
+                ->map(fn (Material $material): array => ['id' => $material->id, 'name' => $material->translatedName($locale)])
                 ->all(),
             'sizes' => $variants->pluck('size_label')->filter()->unique()->values()->all(),
             'variants' => $variants->map(fn (Variant $variant): array => [
@@ -81,7 +83,7 @@ final class ProductDetail
                 ], fn (?int $value): bool => $value !== null && $value > 0),
             ])->values()->all(),
             'defaultVariantId' => $default?->id,
-            'personalization' => self::personalization($product),
+            'personalization' => self::personalization($product, $locale ?? app()->getLocale()),
         ];
     }
 
@@ -133,7 +135,7 @@ final class ProductDetail
      *
      * @return array{fields: array<int, array<string, mixed>>, surcharge: int|null}|null
      */
-    private static function personalization(Product $product): ?array
+    private static function personalization(Product $product, string $locale): ?array
     {
         // O JSON vem da BD: um item que nao seja um campo valido sai.
         /** @var array<int, mixed> $raw */
@@ -143,7 +145,7 @@ final class ProductDetail
             ->filter(fn (mixed $field): bool => is_array($field) && is_string($field['key'] ?? null) && is_string($field['label'] ?? null))
             ->map(fn (array $field): array => [
                 'key' => $field['key'],
-                'label' => $field['label'],
+                'label' => is_string($field['label_i18n'][$locale] ?? null) && $field['label_i18n'][$locale] !== '' ? $field['label_i18n'][$locale] : $field['label'],
                 'type' => ($field['type'] ?? 'text') === 'number' ? 'number' : 'text',
                 'required' => (bool) ($field['required'] ?? false),
                 'maxLength' => is_int($field['maxLength'] ?? null) ? $field['maxLength'] : null,

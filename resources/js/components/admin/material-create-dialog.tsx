@@ -1,4 +1,5 @@
 import { useForm } from '@inertiajs/react';
+import { LabelTranslations } from '@/components/admin/label-translations';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import {
@@ -70,6 +71,7 @@ export function MaterialCreateDialog({
             spools_in_stock: editing?.spoolsInStock ?? 0,
             min_spools: editing?.minSpools ?? 0,
             sort_order: editing?.sortOrder ?? 0,
+            name_i18n: { ...(editing?.nameI18n ?? {}) },
         });
 
     const pricePerKgCents = inputToCents(data.price_per_kg);
@@ -312,6 +314,12 @@ export function MaterialCreateDialog({
                             <InputError message={errors.sort_order} />
                         </div>
                     </div>
+
+                    <LabelTranslations
+                        idPrefix="material-name"
+                        value={data.name_i18n}
+                        onChange={(value) => setData('name_i18n', value)}
+                    />
                 </div>
 
                 <DialogFooter className="border-t border-border/60 p-6">

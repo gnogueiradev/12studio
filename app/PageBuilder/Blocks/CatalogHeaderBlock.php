@@ -48,8 +48,8 @@ class CatalogHeaderBlock extends Block
 
         if ($category instanceof Category) {
             return [
-                'title' => $category->name,
-                'text' => (string) $category->description,
+                'title' => (string) $category->translated('name', $context->locale),
+                'text' => (string) $category->translated('description', $context->locale),
                 'category' => true,
             ];
         }

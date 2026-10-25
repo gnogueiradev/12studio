@@ -36,7 +36,8 @@ class ProductController extends Controller
 
         $locale = app()->getLocale();
         $detail = ProductDetail::make($product, $locale);
-        $title = $product->seo_title ?: $product->name;
+        $name = (string) $detail['name'];
+        $title = $product->translation('seo_title', $locale) ?? $name;
         $image = $product->images->sortBy([['is_primary', 'desc'], ['sort_order', 'asc']])->first()?->og_url;
 
         return $store->render(
@@ -50,13 +51,13 @@ class ProductController extends Controller
             seo: Seo::make(
                 path: '/produtos/'.$product->slug,
                 title: $title,
-                description: $product->seo_description ?: $product->description,
+                description: $product->translation('seo_description', $locale) ?? $product->translated('description', $locale),
                 image: $image,
                 type: 'product',
                 jsonLd: [$this->jsonLd($product, $detail, $image), Seo::breadcrumb(array_values(array_filter([
                     ['label' => trans('store.nav.catalog'), 'href' => LocalizedUrl::path('/produtos')],
-                    $product->category ? ['label' => $product->category->name, 'href' => LocalizedUrl::path('/categoria/'.$product->category->slug)] : null,
-                    ['label' => $product->name, 'href' => null],
+                    $product->category ? ['label' => $product->category->translated('name', $locale), 'href' => LocalizedUrl::path('/categoria/'.$product->category->slug)] : null,
+                    ['label' => $name, 'href' => null],
                 ])))],
                 index: ! $preview,
             ),
@@ -75,12 +76,12 @@ class ProductController extends Controller
         $schema = [
             '@context' => 'https://schema.org',
             '@type' => 'Product',
-            'name' => $product->name,
-            'description' => trim(strip_tags((string) $product->description)) ?: null,
+            'name' => $detail['name'],
+            'description' => trim(strip_tags((string) $detail['description'])) ?: null,
             'image' => $image === null ? null : [url($image)],
             'url' => url($detail['href']),
             'brand' => ['@type' => 'Brand', 'name' => app(BrandSettings::class)->name()],
-            'category' => $product->category?->name,
+            'category' => $detail['category']['name'] ?? null,
         ];
 
         $price = PriceRange::of($product->variants);

@@ -39,6 +39,10 @@ class StoreColorRequest extends FormRequest
             // 6 digitos, ou 8 quando a cor tem alfa (a coluna aceita 9 chars).
             'hex_color' => ['required', 'string', 'regex:/^#[0-9a-fA-F]{6}([0-9a-fA-F]{2})?$/'],
             'sort_order' => ['integer', 'min:0', 'max:65535'],
+            // O nome nos outros idiomas da montra (so os filtros e as
+            // especificacoes). Vazio num idioma: fica o portugues.
+            'name_i18n' => ['nullable', 'array'],
+            'name_i18n.*' => ['nullable', 'string', 'max:60'],
             // Em que filamentos e que esta cor existe. Opcional de proposito:
             // uma cor por declarar e um estado legitimo — vive com a pastilha
             // "sem material" ate o dono saber o que tem. O que ela nao faz e

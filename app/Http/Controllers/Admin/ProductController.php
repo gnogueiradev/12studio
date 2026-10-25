@@ -16,6 +16,7 @@ use App\Services\PricingPreview;
 use App\Services\PricingSettings;
 use App\Services\ProductService;
 use App\Services\TagService;
+use App\Services\TranslationService;
 use App\Support\ColorOptions;
 use App\Support\MaterialOptions;
 use App\Support\Micros;
@@ -196,6 +197,13 @@ class ProductController extends Controller
             // tem de abrir numa variante nova. Com o produto, para o preco
             // sugerido levar a taxa de IVA dele e nao a da loja.
             'pricing' => $this->preview->fromRequest($request, $product),
+            // O nome, a descricao e o SEO nos outros idiomas da montra, com o
+            // estado de cada um (em falta, desatualizada, em dia).
+            'translations' => app(TranslationService::class)->productForm($product->load('translations')),
+            'personalizationFields' => array_map(
+                fn (array $field): array => ['key' => $field['key'], 'label' => (string) ($field['label'] ?? $field['key'])],
+                $product->personalizationFieldList(),
+            ),
         ]);
     }
 

@@ -54,6 +54,8 @@ export type MaterialRow = {
     state: MaterialState;
     /** Quantas variantes dependem desta bobine — e porque não se apaga. */
     variantsCount: number;
+    /** O nome nos outros idiomas da montra. */
+    nameI18n: Record<string, string>;
 };
 
 export type MaterialStats = {
@@ -90,6 +92,7 @@ export type MaterialFormData = {
     spools_in_stock: number;
     min_spools: number;
     sort_order: number;
+    name_i18n: Record<string, string>;
 };
 
 /**
@@ -110,6 +113,8 @@ export type ColorRow = {
     state: ColorState;
     /** Vazio = por declarar, e é o que põe a pastilha em `no_material`. */
     materials: MaterialSummary[];
+    /** O nome nos outros idiomas da montra. */
+    nameI18n: Record<string, string>;
 };
 
 export type ColorStats = {
@@ -129,6 +134,7 @@ export type ColorFormData = {
     sort_order: number;
     /** Em que filamentos esta cor existe. Vazio é um estado legítimo. */
     material_ids: number[];
+    name_i18n: Record<string, string>;
 };
 
 /** Mesma convenção do MATERIAL_STATES: singular na pastilha, plural na chip. */

@@ -2,6 +2,7 @@
 
 namespace App\Store;
 
+use App\Models\Category;
 use App\Models\Product;
 use App\Models\ProductImage;
 use App\Models\Variant;
@@ -34,7 +35,8 @@ final class ProductCard
     public static function with(): array
     {
         return [
-            'category',
+            ...Product::withTranslations(),
+            'category' => fn ($query) => $query->with(Category::withTranslations()),
             'images',
             'variants' => fn ($query) => $query->visibleInStore()->with('color'),
         ];
@@ -73,17 +75,19 @@ final class ProductCard
         $price = PriceRange::of($variants);
         $availability = self::availability($product, $variants);
 
+        $name = (string) $product->translated('name', $locale);
+
         return [
             'id' => $product->id,
-            'name' => $product->name,
+            'name' => $name,
             'slug' => $product->slug,
             'href' => LocalizedUrl::path('/produtos/'.$product->slug, $locale),
-            'category' => $product->category?->name,
+            'category' => $product->category?->translated('name', $locale),
             'price' => $price->toArray(),
-            'image' => $primary?->responsive($product->name),
-            'hoverImage' => $second?->responsive($product->name),
+            'image' => $primary?->responsive($name),
+            'hoverImage' => $second?->responsive($name),
             'colors' => $colors->take(self::MAX_SWATCHES)->map(fn ($color): array => [
-                'name' => $color->name,
+                'name' => $color->translatedName($locale),
                 'hex' => $color->hex_color,
             ])->all(),
             'moreColors' => max(0, $colors->count() - self::MAX_SWATCHES),

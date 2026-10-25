@@ -52,6 +52,7 @@ class ColorController extends Controller
                 'hex' => $color->hex_color,
                 'image' => $color->image,
                 'sortOrder' => $color->sort_order,
+                'nameI18n' => (object) ($color->name_i18n ?? []),
                 'variantsCount' => (int) $color->variants_count,
                 'state' => $color->state(),
                 'materials' => $color->materials

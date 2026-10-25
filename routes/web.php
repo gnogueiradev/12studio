@@ -178,6 +178,16 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         Route::patch('definicoes/montra/guardar', [Admin\StoreSettingsController::class, 'update'])
             ->name('montra.update');
 
+        // Traducoes do conteudo da montra (o portugues e o do proprio
+        // formulario). So os outros idiomas: um /pt da 404.
+        $translatable = array_values(array_diff(array_keys((array) config('locales.available')), [config('locales.default')]));
+        Route::put('produtos/{product}/traducoes/{locale}', [Admin\TranslationController::class, 'product'])
+            ->whereIn('locale', $translatable)
+            ->name('produtos.traducoes');
+        Route::put('categorias/{category}/traducoes/{locale}', [Admin\TranslationController::class, 'category'])
+            ->whereIn('locale', $translatable)
+            ->name('categorias.traducoes');
+
         // Conversas com clientes da montra (caixa de entrada).
         Route::get('conversas', [Admin\ConversationController::class, 'index'])
             ->name('conversas.index');

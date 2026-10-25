@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use App\Concerns\HasTags;
+use App\Concerns\HasTranslations;
 use App\Support\SearchText;
 use Database\Factories\ProductFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
@@ -56,6 +57,9 @@ class Product extends Model
 
     use HasTags;
 
+    /** @use HasTranslations<ProductTranslation> */
+    use HasTranslations;
+
     /*
      * Apagar e sair de vista, nao desaparecer: a linha fica para as encomendas
      * e os movimentos de stock das variantes continuarem a ter dono. E o
@@ -85,6 +89,37 @@ class Product extends Model
                 $product->search_text = SearchText::normalize($product->name, $product->description);
             }
         });
+    }
+
+    /**
+     * Os campos de personalizacao com chave em texto (o JSON vem da BD e um
+     * item estragado nao pode rebentar a montra).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function personalizationFieldList(): array
+    {
+        /** @var array<int, mixed> $raw */
+        $raw = (array) $this->personalization_fields;
+
+        return array_values(array_filter(
+            $raw,
+            fn (mixed $field): bool => is_array($field) && is_string($field['key'] ?? null),
+        ));
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    public static function translatableFields(): array
+    {
+        return ['name', 'description', 'seo_title', 'seo_description'];
+    }
+
+    /** @return HasMany<ProductTranslation, $this> */
+    public function translations(): HasMany
+    {
+        return $this->hasMany(ProductTranslation::class);
     }
 
     public function tagScope(): string
