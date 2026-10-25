@@ -87,7 +87,7 @@ class CatalogQuery
         }
 
         $variant = function (callable $constraint) use ($query): void {
-            $query->whereHas('variants', fn (Builder $variant) => $constraint($variant->visibleInStore()));
+            $query->whereHas('variants', fn (Builder $variant) => $constraint($variant->scopes('visibleInStore')));
         };
 
         if ($this->colors !== []) {
@@ -159,7 +159,7 @@ class CatalogQuery
 
         $categories = Category::query()
             ->where('status', 'visible')
-            ->whereHas('products', fn (Builder $q) => $q->visibleInStore())
+            ->whereHas('products', fn (Builder $q) => $q->scopes('visibleInStore'))
             ->orderBy('sort_order')
             ->orderBy('name')
             ->get(['id', 'name', 'slug']);

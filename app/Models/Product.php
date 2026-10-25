@@ -191,6 +191,6 @@ class Product extends Model
             ->where(fn (Builder $query) => $query
                 ->whereNull('category_id')
                 ->orWhereHas('category', fn (Builder $category) => $category->whereIn('status', ['visible', 'hidden'])))
-            ->whereHas('variants', fn (Builder $variant) => $variant->visibleInStore());
+            ->whereHas('variants', fn (Builder $variant) => $variant->scopes('visibleInStore'));
     }
 }

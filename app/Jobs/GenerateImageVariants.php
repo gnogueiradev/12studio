@@ -38,9 +38,9 @@ class GenerateImageVariants implements ShouldQueue
         public int $id,
     ) {}
 
-    public static function for(Model&HasImageVariants $image): static
+    public static function for(Model&HasImageVariants $image): self
     {
-        return new static($image::class, (int) $image->getKey());
+        return new self($image::class, (int) $image->getKey());
     }
 
     public function handle(ImageVariants $variants): void

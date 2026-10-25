@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Models\Category;
 use App\Services\StoreMenus;
 use App\Services\StoreSettings;
+use App\Services\ThemeSettings;
 use App\Support\LocalizedUrl;
 use Closure;
 use Illuminate\Http\Request;
@@ -47,6 +48,7 @@ class ShareStorefront
             'contact' => $this->contact(),
             'social' => $this->social(),
             'categories' => $this->categories(),
+            'logo' => app(ThemeSettings::class)->logoUrl(),
         ]);
     }
 

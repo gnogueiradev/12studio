@@ -2,6 +2,7 @@ import { Link, usePage } from '@inertiajs/react';
 import {
     Boxes,
     Calculator,
+    ExternalLink,
     Factory,
     FolderTree,
     LayoutGrid,
@@ -88,6 +89,12 @@ const backofficeNavItems: NavItem[] = [
         icon: Printer,
     },
     {
+        // O site público: páginas por blocos, menus, imagens e tema.
+        title: 'Montra',
+        href: '/admin/montra/paginas',
+        icon: Store,
+    },
+    {
         title: 'Calculadora',
         href: '/admin/calculadora',
         icon: Calculator,
@@ -136,7 +143,7 @@ const footerNavItems: NavItem[] = [
     {
         title: 'Ver loja',
         href: '/',
-        icon: Store,
+        icon: ExternalLink,
     },
 ];
 

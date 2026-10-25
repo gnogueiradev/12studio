@@ -7,6 +7,7 @@ use App\PageBuilder\Block;
 use App\PageBuilder\Field;
 use App\PageBuilder\RenderContext;
 use App\Store\ProductCard;
+use Illuminate\Database\Eloquent\Collection as EloquentCollection;
 
 class ProductRelatedBlock extends Block
 {
@@ -55,7 +56,7 @@ class ProductRelatedBlock extends Block
         $base = fn () => ProductCard::query(Product::query())->whereKeyNot($product->id);
 
         $related = $product->category_id === null
-            ? collect()
+            ? new EloquentCollection
             : $base()->where('category_id', $product->category_id)->orderByDesc('featured')->latest()->limit($limit)->get();
 
         // Poucos na categoria: completa com destaques de outras.

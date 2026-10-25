@@ -38,7 +38,7 @@ final class Field
 
     public ?int $min = null;
 
-    /** @var array<string, string> */
+    /** @var array<int|string, string> */
     public array $options = [];
 
     /** @var array<int, Field> */
@@ -81,7 +81,7 @@ final class Field
     }
 
     /**
-     * @param  array<string, string>  $options
+     * @param  array<int|string, string>  $options
      */
     public static function select(string $key, string $label, array $options): self
     {

@@ -89,6 +89,9 @@ class DefaultPages
         ], fn (mixed $value): bool => $value !== null);
     }
 
+    /**
+     * @return array{label: string, href: string}
+     */
     private static function link(string $label, string $href): array
     {
         return ['label' => $label, 'href' => $href];

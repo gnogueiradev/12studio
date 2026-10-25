@@ -135,7 +135,11 @@ final class ProductDetail
      */
     private static function personalization(Product $product): ?array
     {
-        $fields = collect((array) $product->personalization_fields)
+        // O JSON vem da BD: um item que nao seja um campo valido sai.
+        /** @var array<int, mixed> $raw */
+        $raw = (array) $product->personalization_fields;
+
+        $fields = collect($raw)
             ->filter(fn (mixed $field): bool => is_array($field) && is_string($field['key'] ?? null) && is_string($field['label'] ?? null))
             ->map(fn (array $field): array => [
                 'key' => $field['key'],

@@ -55,7 +55,7 @@ class CatalogController extends Controller
             ->through(fn (Product $product): array => ProductCard::make($product, $locale));
 
         $path = $category === null ? '/produtos' : '/categoria/'.$category->slug;
-        $title = $category?->name ?? (string) (((array) $page->seo)[$locale]['title'] ?? trans('store.nav.catalog'));
+        $title = $category->name ?? (string) (((array) $page->seo)[$locale]['title'] ?? trans('store.nav.catalog'));
 
         $breadcrumb = [['label' => trans('store.nav.catalog'), 'href' => LocalizedUrl::path('/produtos')]];
         if ($category !== null) {

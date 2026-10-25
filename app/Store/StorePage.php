@@ -19,6 +19,13 @@ use Inertia\Response;
  */
 class StorePage
 {
+    /**
+     * Atributo do pedido que o PreviewController poe: a pagina e a do iframe
+     * do editor — mostra sempre o rascunho, sem faixa, e o React fica a
+     * escutar os blocos que o editor lhe manda.
+     */
+    public const PREVIEW = 'pagebuilder.preview';
+
     public function __construct(
         private PageRenderer $renderer,
     ) {}
@@ -32,6 +39,7 @@ class StorePage
     {
         $admin = (bool) $request->user()?->isAdmin();
         $live = $page->isLive();
+        $preview = $admin && $request->attributes->get(self::PREVIEW) === true;
 
         if (! $live && ! $admin) {
             abort(404);
@@ -40,7 +48,7 @@ class StorePage
         // O admin num pagina ja publicada ve o publicado (o que o cliente ve);
         // o rascunho confere-se pela pre-visualizacao do editor.
         $draft = ! $live;
-        $blocks = $draft ? $page->draft_blocks : (array) $page->published_blocks;
+        $blocks = $draft || $preview ? $page->draft_blocks : (array) $page->published_blocks;
 
         $locale = app()->getLocale();
         $default = (string) config('locales.default');
@@ -54,14 +62,15 @@ class StorePage
             title: $title,
             description: $this->description($page, $locale, $default),
             jsonLd: $page->key === 'home' ? [Seo::organization()] : [],
-            index: ! $draft,
+            index: ! $draft && ! $preview,
         );
 
         return Inertia::render('store/page', [
             'page' => [
                 'key' => $page->key ?? $page->slug,
                 'title' => $title,
-                'draft' => $draft,
+                'draft' => $draft && ! $preview,
+                'preview' => $preview,
                 'blocks' => $this->renderer->render($blocks, $context),
             ],
             ...$props,

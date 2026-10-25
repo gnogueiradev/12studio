@@ -21,7 +21,7 @@ class PageRenderer
     ) {}
 
     /**
-     * @param  array<int, array<string, mixed>>  $blocks
+     * @param  array<int, mixed>  $blocks
      * @return array<int, array{id: string, type: string, variant: string|null, style: array<string, string>, data: array<string, mixed>}>
      */
     public function render(array $blocks, RenderContext $context): array

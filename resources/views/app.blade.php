@@ -63,9 +63,15 @@
             <style id="store-theme">{!! $themeCss !!}</style>
         @endif
 
-        <link rel="icon" href="/favicon.ico" sizes="any">
-        <link rel="icon" href="/favicon.svg" type="image/svg+xml">
-        <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+        @php($storeFavicon = \App\Support\StoreHead::favicon(isset($page['props']['locale'])))
+        @if ($storeFavicon)
+            <link rel="icon" href="{{ $storeFavicon }}">
+            <link rel="apple-touch-icon" href="{{ $storeFavicon }}">
+        @else
+            <link rel="icon" href="/favicon.ico" sizes="any">
+            <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+            <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+        @endif
 
         {{--
             SEO da montra (App\Store\Seo): so nas paginas que o trazem. O
@@ -103,7 +109,7 @@
             @endforeach
         @endisset
 
-        @fonts
+        {{ \App\Support\StoreHead::fonts(isset($page['props']['locale'])) }}
 
         @viteReactRefresh
         @vite(['resources/css/app.css', 'resources/js/app.tsx', "resources/js/pages/{$page['component']}.tsx"])

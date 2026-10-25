@@ -93,6 +93,8 @@ export type StorePageData = {
     title: string;
     /** O admin a ver uma página que ainda não está publicada. */
     draft: boolean;
+    /** A página dentro do iframe do editor de páginas (só admin). */
+    preview?: boolean;
     blocks: StoreBlock[];
 };
 

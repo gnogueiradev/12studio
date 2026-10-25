@@ -33,16 +33,24 @@ class Pages
         $draft = in_array($key, DefaultPages::DRAFTS, true);
 
         try {
-            return Page::query()->create([
+            $page = Page::query()->create([
                 'type' => 'system',
                 'key' => $key,
-                'name' => DefaultPages::NAMES[$key] ?? $key,
+                'name' => DefaultPages::NAMES[$key],
                 'status' => $draft ? 'draft' : 'published',
                 'seo' => DefaultPages::seo($key),
                 'draft_blocks' => $blocks,
                 'published_blocks' => $draft ? null : $blocks,
                 'published_at' => $draft ? null : now(),
             ]);
+
+            // A versao de origem fica no historico: "Repor esta versao"
+            // devolve a pagina como a loja nasceu.
+            if (! $draft) {
+                $page->revisions()->create(['blocks' => $blocks, 'seo' => $page->seo, 'created_at' => now()]);
+            }
+
+            return $page;
         } catch (QueryException) {
             // Dois pedidos ao mesmo tempo na primeira visita: o outro criou-a.
             return Page::query()->where('key', $key)->firstOrFail();

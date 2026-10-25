@@ -60,7 +60,7 @@ class ProductGridBlock extends Block
             'manual' => $this->manual($query, $data['products']),
             'new' => $query->latest()->limit($limit)->get(),
             'sale' => $query
-                ->whereHas('variants', fn (Builder $variant) => $variant->visibleInStore()
+                ->whereHas('variants', fn (Builder $variant) => $variant->scopes('visibleInStore')
                     ->whereNotNull('compare_at_cents')
                     ->whereColumn('compare_at_cents', '>', 'price_cents'))
                 ->latest()->limit($limit)->get(),

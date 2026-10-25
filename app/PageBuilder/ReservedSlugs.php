@@ -23,7 +23,7 @@ class ReservedSlugs
     {
         $reserved = self::STATIC;
 
-        foreach (Route::getRoutes() as $route) {
+        foreach (Route::getRoutes()->getRoutes() as $route) {
             $first = explode('/', trim($route->uri(), '/'))[0];
 
             if ($first !== '' && ! str_starts_with($first, '{')) {

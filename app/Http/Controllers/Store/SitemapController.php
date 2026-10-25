@@ -57,7 +57,7 @@ class SitemapController extends Controller
         $xml = '<?xml version="1.0" encoding="UTF-8"?>'."\n"
             .'<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9" xmlns:xhtml="http://www.w3.org/1999/xhtml">'."\n";
 
-        foreach (collect($entries)->unique(0) as [$path, $updated]) {
+        foreach (collect($entries)->unique(fn (array $entry): string => (string) $entry[0]) as [$path, $updated]) {
             $alternates = '';
             foreach ($locales as $code) {
                 $alternates .= sprintf(

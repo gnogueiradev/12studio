@@ -29,6 +29,9 @@ class BlockSanitizer
     /** @var array<string, string> */
     private array $errors = [];
 
+    /** Exigir os campos obrigatorios (ao publicar sim; no rascunho nao). */
+    private bool $requireFields = true;
+
     public function __construct(
         private BlockRegistry $registry,
     ) {}
@@ -39,7 +42,56 @@ class BlockSanitizer
      *
      * @throws ValidationException
      */
-    public function clean(array $blocks, string $template): array
+    public function clean(array $blocks, string $template, bool $requireFields = true): array
+    {
+        $this->requireFields = $requireFields;
+
+        try {
+            $clean = $this->run($blocks, $template);
+        } finally {
+            $this->requireFields = true;
+        }
+
+        foreach ($this->registry->forTemplate($template) as $block) {
+            if ($block->required() && ! in_array($block->type(), array_column($clean, 'type'), true)) {
+                $this->errors['blocks'] = "Falta o bloco \"{$block->label()}\": é obrigatório nesta página.";
+            }
+        }
+
+        if ($this->errors !== []) {
+            throw ValidationException::withMessages($this->errors);
+        }
+
+        return $clean;
+    }
+
+    /**
+     * Para a pre-visualizacao do editor: limpa como o clean() (o rich text
+     * passa pelo HTMLPurifier, os links pelo mesmo crivo), mas nao recusa
+     * nada — um campo obrigatorio ainda vazio ou um texto comprido demais
+     * nao impedem de ver a pagina enquanto se escreve. O que nao se consegue
+     * mostrar (tipo desconhecido, fora do template) sai.
+     *
+     * @param  array<mixed>  $blocks
+     * @return array<int, array<string, mixed>>
+     */
+    public function preview(array $blocks, string $template): array
+    {
+        if (! array_is_list($blocks)) {
+            return [];
+        }
+
+        $clean = $this->run(array_slice($blocks, 0, self::MAX_BLOCKS), $template);
+        $this->errors = [];
+
+        return $clean;
+    }
+
+    /**
+     * @param  array<mixed>  $blocks
+     * @return array<int, array<string, mixed>>
+     */
+    private function run(array $blocks, string $template): array
     {
         $this->errors = [];
 
@@ -92,16 +144,6 @@ class BlockSanitizer
             $ids[$id] = true;
 
             $clean[] = $this->block($block, $raw, $path, $id);
-        }
-
-        foreach ($this->registry->forTemplate($template) as $block) {
-            if ($block->required() && ! isset($seen[$block->type()])) {
-                $this->errors['blocks'] = "Falta o bloco \"{$block->label()}\": é obrigatório nesta página.";
-            }
-        }
-
-        if ($this->errors !== []) {
-            throw ValidationException::withMessages($this->errors);
         }
 
         return $clean;
@@ -230,7 +272,7 @@ class BlockSanitizer
             default => null,
         };
 
-        if ($enforceRequired && $field->required && $this->isEmpty($clean) && ! isset($this->errors[$path])) {
+        if ($enforceRequired && $this->requireFields && $field->required && $this->isEmpty($clean) && ! isset($this->errors[$path])) {
             $this->errors[$path] = "O campo \"{$field->label}\" é obrigatório.";
         }
 

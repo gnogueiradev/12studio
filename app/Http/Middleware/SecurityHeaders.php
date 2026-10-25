@@ -71,7 +71,10 @@ class SecurityHeaders
         // Redundante com o frame-ancestors do CSP, mas o CSP ainda esta em
         // Report-Only: ate ele passar a valer, e isto que impede clickjacking
         // do backoffice.
-        $response->headers->set('X-Frame-Options', 'DENY');
+        //
+        // A excecao: a pre-visualizacao do construtor da montra vive num
+        // iframe do proprio editor. So o mesmo site a pode emoldurar.
+        $response->headers->set('X-Frame-Options', $this->isFramable($request) ? 'SAMEORIGIN' : 'DENY');
         $response->headers->set('Referrer-Policy', 'strict-origin-when-cross-origin');
         // O payment=() sai daqui na Fase 3: o Stripe precisa da Payment Request
         // API para o Apple Pay / Google Pay.
@@ -107,6 +110,13 @@ class SecurityHeaders
      */
     private function policyFor(Request $request): array
     {
+        if ($this->isFramable($request)) {
+            return array_map(
+                fn (string $directive): string => $directive === "frame-ancestors 'none'" ? "frame-ancestors 'self'" : $directive,
+                self::CONTENT_SECURITY_POLICY,
+            );
+        }
+
         if (! $request->routeIs('passport.authorizations.authorize')) {
             return self::CONTENT_SECURITY_POLICY;
         }
@@ -123,6 +133,12 @@ class SecurityHeaders
                 : $directive,
             self::CONTENT_SECURITY_POLICY,
         );
+    }
+
+    /** A pre-visualizacao do editor de paginas (so admin — ver as rotas). */
+    private function isFramable(Request $request): bool
+    {
+        return $request->routeIs('admin.montra.preview');
     }
 
     /**

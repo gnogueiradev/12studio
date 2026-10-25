@@ -48,7 +48,7 @@ class BreadcrumbBlock extends Block
     {
         $items = [['label' => $context->translate('nav.catalog'), 'href' => LocalizedUrl::path('/produtos', $context->locale)]];
 
-        $category = $context->product?->category ?? ($context->subject['category'] ?? null);
+        $category = $context->product->category ?? ($context->subject['category'] ?? null);
 
         if ($category instanceof Category) {
             $items[] = ['label' => $category->name, 'href' => LocalizedUrl::path('/categoria/'.$category->slug, $context->locale)];

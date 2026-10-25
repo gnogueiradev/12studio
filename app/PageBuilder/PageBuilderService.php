@@ -25,12 +25,17 @@ class PageBuilderService
     /**
      * Grava o rascunho. O site publico nao muda.
      *
+     * Um rascunho pode estar por acabar (um bloco acabado de juntar, com um
+     * campo obrigatorio ainda vazio): so publicar exige os obrigatorios. O
+     * resto — textos compridos demais, links inseguros, blocos fora do
+     * template, os blocos obrigatorios do template — e recusado ja.
+     *
      * @param  array<mixed>  $blocks
      * @param  array<mixed>|null  $seo
      */
     public function saveDraft(Page $page, array $blocks, ?array $seo = null): Page
     {
-        $page->draft_blocks = $this->sanitizer->clean($blocks, $page->template());
+        $page->draft_blocks = $this->sanitizer->clean($blocks, $page->template(), requireFields: false);
 
         if ($seo !== null) {
             $page->seo = $this->seo($seo);
@@ -161,7 +166,7 @@ class PageBuilderService
             'name' => $page->name.' (cópia)',
             'status' => 'draft',
             'seo' => $page->seo,
-            'draft_blocks' => $this->sanitizer->clean($page->draft_blocks, 'page'),
+            'draft_blocks' => $this->sanitizer->clean($page->draft_blocks, 'page', requireFields: false),
         ]);
     }
 

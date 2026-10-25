@@ -178,6 +178,77 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
         Route::patch('definicoes/montra/guardar', [Admin\StoreSettingsController::class, 'update'])
             ->name('montra.update');
 
+        // ── Construtor da montra (App\PageBuilder). Paginas e landings, menus,
+        //    biblioteca de imagens e, so para o dono, o tema. URIs proprios por
+        //    acao, pela mesma razao do Wayfinder acima. ─────────────────────
+        Route::get('montra/paginas', [Admin\Store\PageController::class, 'index'])
+            ->name('montra.paginas.index');
+        Route::post('montra/paginas', [Admin\Store\PageController::class, 'store'])
+            ->name('montra.paginas.store');
+        Route::get('montra/paginas/{page}', [Admin\Store\PageController::class, 'edit'])
+            ->name('montra.paginas.edit');
+        Route::put('montra/paginas/{page}/rascunho', [Admin\Store\PageController::class, 'saveDraft'])
+            ->name('montra.paginas.rascunho');
+        Route::post('montra/paginas/{page}/render', [Admin\Store\PageController::class, 'render'])
+            ->name('montra.paginas.render');
+        Route::post('montra/paginas/{page}/publicar', [Admin\Store\PageController::class, 'publish'])
+            ->name('montra.paginas.publicar');
+        Route::post('montra/paginas/{page}/despublicar', [Admin\Store\PageController::class, 'unpublish'])
+            ->name('montra.paginas.despublicar');
+        Route::post('montra/paginas/{page}/descartar', [Admin\Store\PageController::class, 'discard'])
+            ->name('montra.paginas.descartar');
+        Route::post('montra/paginas/{page}/duplicar', [Admin\Store\PageController::class, 'duplicate'])
+            ->name('montra.paginas.duplicar');
+        Route::patch('montra/paginas/{page}/definicoes', [Admin\Store\PageController::class, 'updateSettings'])
+            ->name('montra.paginas.definicoes');
+        Route::post('montra/paginas/{page}/versoes/{revision}/repor', [Admin\Store\PageController::class, 'restore'])
+            ->scopeBindings()
+            ->name('montra.paginas.repor');
+        Route::delete('montra/paginas/{page}', [Admin\Store\PageController::class, 'destroy'])
+            ->name('montra.paginas.destroy');
+
+        // A pagina dentro do iframe do editor: a unica do site que se deixa
+        // emoldurar (pelo proprio site) — ver SecurityHeaders.
+        Route::get('montra/preview/{page}', Admin\Store\PreviewController::class)
+            ->name('montra.preview');
+
+        // O seletor de produtos dos blocos (grelha manual).
+        Route::get('montra/opcoes/produtos', [Admin\Store\PageController::class, 'products'])
+            ->name('montra.opcoes.produtos');
+
+        Route::get('montra/menus', [Admin\Store\MenuController::class, 'edit'])
+            ->name('montra.menus.edit');
+        Route::put('montra/menus/{location}', [Admin\Store\MenuController::class, 'update'])
+            ->whereIn('location', ['header', 'footer'])
+            ->name('montra.menus.update');
+        Route::delete('montra/menus/{location}', [Admin\Store\MenuController::class, 'reset'])
+            ->whereIn('location', ['header', 'footer'])
+            ->name('montra.menus.reset');
+
+        Route::get('montra/media', [Admin\Store\MediaController::class, 'index'])
+            ->name('montra.media.index');
+        Route::get('montra/media/lista', [Admin\Store\MediaController::class, 'list'])
+            ->name('montra.media.lista');
+        Route::post('montra/media', [Admin\Store\MediaController::class, 'store'])
+            ->middleware('throttle:30,1')
+            ->name('montra.media.store');
+        Route::patch('montra/media/{media}', [Admin\Store\MediaController::class, 'update'])
+            ->name('montra.media.update');
+        Route::delete('montra/media/{media}', [Admin\Store\MediaController::class, 'destroy'])
+            ->name('montra.media.destroy');
+
+        // O tema mexe na marca toda: so o dono.
+        Route::middleware('owner')->group(function (): void {
+            Route::get('montra/tema', [Admin\Store\ThemeController::class, 'edit'])
+                ->name('montra.tema.edit');
+            Route::put('montra/tema', [Admin\Store\ThemeController::class, 'update'])
+                ->name('montra.tema.update');
+            Route::post('montra/tema/preview', [Admin\Store\ThemeController::class, 'preview'])
+                ->name('montra.tema.preview');
+            Route::delete('montra/tema', [Admin\Store\ThemeController::class, 'reset'])
+                ->name('montra.tema.reset');
+        });
+
         // Chaves de API do MCP. Cada visita e acao pede a password outra vez:
         // uma chave de escrita e uma sessao de admin que vive fora do browser.
         Route::middleware('password.confirm')->group(function (): void {
