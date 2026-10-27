@@ -102,6 +102,11 @@ class BrandSettingsTest extends TestCase
 
     public function test_emails_are_signed_with_the_brand(): void
     {
+        // O APP_NAME de producao e "12studio": sem o fixar aqui, o teste so
+        // falhava nas maquinas cujo .env o tem (no Jenkins vale "Laravel").
+        config(['app.name' => '12studio']);
+        app()->setLocale('pt');
+
         $this->rename('Oficina do Rui');
 
         $order = Order::factory()->create();
@@ -114,6 +119,7 @@ class BrandSettingsTest extends TestCase
         $mail->assertHasSubject("Equipa Oficina do Rui: Conta criada — {$staff->name}");
         $this->assertStringContainsString('Oficina do Rui', $mail->render());
         $this->assertStringNotContainsString('12studio', $mail->render());
+        $this->assertStringContainsString('Todos os direitos reservados.', $mail->render());
     }
 
     public function test_the_mcp_server_introduces_itself_with_the_brand(): void
