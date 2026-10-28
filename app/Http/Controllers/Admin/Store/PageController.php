@@ -14,6 +14,7 @@ use App\Models\Tag;
 use App\PageBuilder\Block;
 use App\PageBuilder\BlockRegistry;
 use App\PageBuilder\BlockSanitizer;
+use App\PageBuilder\Container;
 use App\PageBuilder\DefaultPages;
 use App\PageBuilder\Field;
 use App\PageBuilder\PageBuilderService;
@@ -89,6 +90,7 @@ class PageController extends Controller
         return Inertia::render('admin/montra/editor', [
             'page' => $this->editable($page),
             'schema' => $registry->schema($page->template()),
+            'container' => Container::schema(),
             'styles' => [
                 'bg' => $this->options(Block::BACKGROUNDS),
                 'spacing' => $this->options(Block::SPACINGS),

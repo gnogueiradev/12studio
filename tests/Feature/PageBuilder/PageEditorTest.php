@@ -106,6 +106,7 @@ class PageEditorTest extends TestCase
                 ->where('page.template', 'page')
                 ->has('page.blocks')
                 ->has('schema')
+                ->has('container.styleProps')
                 ->where('schema', fn ($schema) => collect($schema)->pluck('type')->contains('hero')
                     && ! collect($schema)->pluck('type')->contains('product_main'))
                 ->has('revisions', 1)

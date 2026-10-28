@@ -43,6 +43,11 @@ class ProductMainBlock extends Block
         return true;
     }
 
+    public function rootOnly(): bool
+    {
+        return true;
+    }
+
     public function variants(): array
     {
         return ['gallery_left' => 'Galeria à esquerda', 'gallery_right' => 'Galeria à direita'];

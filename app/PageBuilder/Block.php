@@ -75,6 +75,47 @@ abstract class Block
     }
 
     /**
+     * As propriedades de estilo proprias do elemento (alem das avancadas).
+     *
+     * @return array<int, StyleProp>
+     */
+    public function styleFields(): array
+    {
+        return [];
+    }
+
+    /**
+     * Com casca: o fundo, espaco, largura e alinhamento classicos do bloco.
+     * Os elementos basicos novos vivem dentro de contentores e dispensam-na.
+     */
+    public function hasShell(): bool
+    {
+        return true;
+    }
+
+    /** So na raiz, sozinho num contentor (os blocos de template). */
+    public function rootOnly(): bool
+    {
+        return false;
+    }
+
+    /**
+     * Iguais para todos os nos.
+     *
+     * @return array<int, StyleProp>
+     */
+    public function advancedFields(): array
+    {
+        return [
+            StyleProp::int('margin_top', 'Margem superior', 0, 200),
+            StyleProp::int('margin_bottom', 'Margem inferior', 0, 200),
+            StyleProp::int('padding_y', 'Espaço vertical interior', 0, 200),
+            StyleProp::int('padding_x', 'Espaço horizontal interior', 0, 120),
+            StyleProp::toggle('hide', 'Esconder'),
+        ];
+    }
+
+    /**
      * O estilo com que o bloco nasce no editor.
      *
      * @return array{bg: string, spacing: string, width: string, align: string}
@@ -115,6 +156,10 @@ abstract class Block
             'unique' => $this->unique(),
             'defaultStyle' => $this->defaultStyle(),
             'fields' => array_map(fn (Field $field): array => $field->toArray(), $this->fields()),
+            'styleFields' => array_map(fn (StyleProp $prop): array => $prop->toArray(), $this->styleFields()),
+            'advancedFields' => array_map(fn (StyleProp $prop): array => $prop->toArray(), $this->advancedFields()),
+            'hasShell' => $this->hasShell(),
+            'rootOnly' => $this->rootOnly(),
         ];
     }
 

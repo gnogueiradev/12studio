@@ -34,6 +34,11 @@ class CatalogHeaderBlock extends Block
         return true;
     }
 
+    public function rootOnly(): bool
+    {
+        return true;
+    }
+
     public function fields(): array
     {
         return [
