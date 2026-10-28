@@ -61,9 +61,9 @@ class SystemPagesTest extends TestCase
     public function test_the_default_content_comes_in_every_language(): void
     {
         $this->get('/en')->assertInertia(fn (Assert $page) => $page
-            ->where('page.blocks.0.type', 'hero')
-            ->where('page.blocks.0.data.title', '3D-printed pieces, designed with care.')
-            ->where('page.blocks.0.data.primary.href', '/en/produtos'));
+            ->where('page.blocks.0.children.0.type', 'hero')
+            ->where('page.blocks.0.children.0.data.title', '3D-printed pieces, designed with care.')
+            ->where('page.blocks.0.children.0.data.primary.href', '/en/produtos'));
 
         $this->get('/fr/sobre')->assertInertia(fn (Assert $page) => $page
             ->where('page.title', 'À propos'));
@@ -79,7 +79,7 @@ class SystemPagesTest extends TestCase
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->where('page.draft', true)
-                ->where('page.blocks.1.type', 'text'));
+                ->where('page.blocks.1.children.0.type', 'text'));
     }
 
     public function test_a_published_page_shows_the_published_version_not_the_draft(): void
@@ -92,6 +92,6 @@ class SystemPagesTest extends TestCase
         $page->update(['draft_blocks' => $draft]);
 
         $this->get('/sobre')->assertInertia(fn (Assert $page) => $page
-            ->where('page.blocks.0.data.title', 'Sobre nós'));
+            ->where('page.blocks.0.children.0.data.title', 'Sobre nós'));
     }
 }

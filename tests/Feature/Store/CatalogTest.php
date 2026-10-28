@@ -133,8 +133,8 @@ class CatalogTest extends TestCase
 
         $this->get('/en/categoria/vasos')->assertInertia(fn (Assert $page) => $page
             ->where('page.title', 'Vasos')
-            ->where('page.blocks.0.type', 'catalog_header')
-            ->where('page.blocks.0.data.title', 'Vasos')
+            ->where('page.blocks.0.children.0.type', 'catalog_header')
+            ->where('page.blocks.0.children.0.data.title', 'Vasos')
             ->where('catalog.path', '/en/categoria/vasos'));
     }
 

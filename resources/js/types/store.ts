@@ -61,14 +61,36 @@ export type BlockStyle = {
     align: 'start' | 'center';
 };
 
-/** Um bloco como o PageRenderer o entrega. */
+export type StoreDevice = 'desktop' | 'tablet' | 'mobile';
+
+/** Valores por dispositivo; o que falta herda do tamanho acima. */
+export type StoreDeviceValues<T = unknown> = Partial<Record<StoreDevice, T>>;
+
+/** Um elemento como o PageRenderer o entrega. */
 export type StoreBlock = {
     id: string;
     type: string;
+    label?: string | null;
     variant: string | null;
     style: BlockStyle;
+    shell?: boolean;
+    styleProps?: Record<string, StoreDeviceValues>;
+    advanced?: Record<string, StoreDeviceValues>;
     data: Record<string, unknown>;
 };
+
+/** Um contentor da árvore da página. */
+export type StoreContainer = {
+    id: string;
+    type: 'container';
+    label: string | null;
+    style: Record<string, StoreDeviceValues>;
+    advanced: Record<string, StoreDeviceValues>;
+    bgImage: ResponsiveImageData | null;
+    children: StoreNode[];
+};
+
+export type StoreNode = StoreContainer | StoreBlock;
 
 /** App\Store\ProductCard::make() */
 export type ProductCardData = {
@@ -99,6 +121,7 @@ export type StorePageData = {
     draft: boolean;
     /** A página dentro do iframe do editor de páginas (só admin). */
     preview?: boolean;
+    /** Na verdade chega uma árvore (StoreNode[]); o tipo muda quando a loja a renderizar. */
     blocks: StoreBlock[];
 };
 

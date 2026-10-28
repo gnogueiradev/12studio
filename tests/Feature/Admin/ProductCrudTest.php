@@ -833,9 +833,9 @@ class ProductCrudTest extends TestCase
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->component('store/page')
-                ->where('page.blocks.3.type', 'product_grid')
-                ->has('page.blocks.3.data.products', 1)
-                ->where('page.blocks.3.data.products.0.name', 'Ativo'));
+                ->where('page.blocks.3.children.0.type', 'product_grid')
+                ->has('page.blocks.3.children.0.data.products', 1)
+                ->where('page.blocks.3.children.0.data.products.0.name', 'Ativo'));
     }
 
     public function test_non_admins_cannot_touch_products(): void

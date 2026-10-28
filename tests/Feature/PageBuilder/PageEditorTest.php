@@ -132,7 +132,7 @@ class PageEditorTest extends TestCase
 
         auth()->logout();
         $this->get('/natal')->assertInertia(fn (Assert $inertia) => $inertia
-            ->where('page.blocks.0.data.title', 'Antes'));
+            ->where('page.blocks.0.children.0.data.title', 'Antes'));
     }
 
     public function test_an_invalid_draft_comes_back_with_the_field_path(): void
@@ -278,9 +278,11 @@ class PageEditorTest extends TestCase
                 ],
             ])
             ->assertOk()
-            ->assertJsonCount(2, 'blocks')
-            ->assertJsonPath('blocks.0.id', 'a')
-            ->assertJsonPath('blocks.0.data.body', fn (string $html) => str_contains($html, 'Hello')
+            // O bloco desconhecido sai, deixando a sua seccao vazia.
+            ->assertJsonCount(3, 'blocks')
+            ->assertJsonCount(0, 'blocks.2.children')
+            ->assertJsonPath('blocks.0.children.0.id', 'a')
+            ->assertJsonPath('blocks.0.children.0.data.body', fn (string $html) => str_contains($html, 'Hello')
                 && ! str_contains($html, 'onerror') && ! str_contains($html, '<script'));
 
         $this->assertSame([], $page->fresh()->draft_blocks);
@@ -300,7 +302,7 @@ class PageEditorTest extends TestCase
             ->assertInertia(fn (Assert $inertia) => $inertia
                 ->component('store/page')
                 ->where('page.preview', true)
-                ->where('page.blocks.0.data.title', 'Rascunho')
+                ->where('page.blocks.0.children.0.data.title', 'Rascunho')
                 ->where('locale.current', 'en'));
 
         $this->assertStringContainsString("frame-ancestors 'self'", (string) $response->headers->get('Content-Security-Policy-Report-Only'));
