@@ -108,7 +108,7 @@ final class StyleProp
             $value = $this->value($byDevice[$device]);
 
             if ($value === null) {
-                $errors["$path.$device"] = "O valor de «{$this->label}» nao e valido.";
+                $errors["$path.$device"] = "O valor de «{$this->label}» não é válido.";
 
                 continue;
             }
