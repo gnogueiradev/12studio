@@ -1,3 +1,4 @@
+import { randomId } from '@/lib/utils';
 import type {
     BlockSchema,
     EditorBlock,
@@ -53,7 +54,7 @@ export function blankBlock(
     }
 
     return {
-        id: crypto.randomUUID(),
+        id: randomId(),
         type: schema.type,
         v: 1,
         visible: true,
@@ -67,7 +68,7 @@ export function blankBlock(
 export function duplicateBlock(block: EditorBlock): EditorBlock {
     return {
         ...structuredClone(block),
-        id: crypto.randomUUID(),
+        id: randomId(),
     };
 }
 

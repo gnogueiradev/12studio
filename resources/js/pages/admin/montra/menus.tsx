@@ -34,6 +34,7 @@ import {
     SelectValue,
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
+import { randomId } from '@/lib/utils';
 import { reset, update } from '@/routes/admin/montra/menus';
 import type { StoreLink } from '@/types/page-builder';
 
@@ -70,7 +71,7 @@ const TYPE_LABELS: Record<ItemType, string> = {
 function withUids(items: ServerItem[]): MenuItem[] {
     return items.map((item) => ({
         ...item,
-        uid: crypto.randomUUID(),
+        uid: randomId(),
         children: withUids(item.children ?? []),
     }));
 }
@@ -176,7 +177,7 @@ function MenuEditor({
     };
 
     const blank = (): MenuItem => ({
-        uid: crypto.randomUUID(),
+        uid: randomId(),
         label: {},
         type: 'path',
         target: '',
