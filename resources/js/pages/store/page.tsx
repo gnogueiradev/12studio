@@ -159,9 +159,11 @@ function EditorPreview({ initial }: { initial: StoreBlock[] }) {
     return (
         <>
             {selected && (
-                <style>{`[data-block-id="${CSS.escape(selected)}"]{outline:2px solid var(--ring);outline-offset:-2px}`}</style>
+                <style>{`[data-block-id="${CSS.escape(selected)}"]{outline:3px solid var(--ring);outline-offset:-3px}`}</style>
             )}
-            <style>{`[data-block-id]{cursor:pointer}[data-block-id]:hover{outline:1px dashed var(--ring);outline-offset:-1px}`}</style>
+            {/* Mais grossos do que o normal: o editor mostra a página
+                reduzida, e uma linha de 1px quase desaparece. */}
+            <style>{`[data-block-id]{cursor:pointer}[data-block-id]:hover{outline:2px dashed var(--ring);outline-offset:-2px}`}</style>
             <BlockList blocks={blocks} />
             {blocks.length === 0 && (
                 <p className="px-4 py-24 text-center text-sm text-muted-foreground">

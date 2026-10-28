@@ -1,616 +1,628 @@
-import {
-    closestCenter,
-    DndContext,
-    KeyboardSensor,
-    PointerSensor,
-    useSensor,
-    useSensors,
-} from '@dnd-kit/core';
-import type { DragEndEvent } from '@dnd-kit/core';
-import {
-    arrayMove,
-    SortableContext,
-    sortableKeyboardCoordinates,
-    useSortable,
-    verticalListSortingStrategy,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
-import { Head, router, usePage } from '@inertiajs/react';
-import { GripVertical, Plus, RotateCcw, Trash2 } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { Head, router } from '@inertiajs/react';
+import { Lock, MoreHorizontal, Plus, RotateCcw } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
 import { ConfirmDialog } from '@/components/admin/confirm-dialog';
+import {
+    ItemEditor,
+    NoItemSelected,
+} from '@/components/admin/montra/menus/item-editor';
+import type { ItemChange } from '@/components/admin/montra/menus/item-editor';
+import {
+    blankItem,
+    complaintsBookItem,
+    findItem,
+    hasComplaintsBook,
+    isComplaintsBook,
+    labelOf,
+    mapErrors,
+    NO_ERRORS,
+    removeItem,
+    sameMenu,
+    strip,
+    updateItem,
+    withUids,
+} from '@/components/admin/montra/menus/menu-model';
+import type {
+    MenuErrors,
+    MenuItem,
+    MenuLimits,
+    MenuLocation,
+    ServerItem,
+} from '@/components/admin/montra/menus/menu-model';
+import { MenuPreview } from '@/components/admin/montra/menus/menu-preview';
+import { MenuTree } from '@/components/admin/montra/menus/menu-tree';
 import { MontraNav } from '@/components/admin/montra/montra-nav';
 import { PageHeader } from '@/components/admin/page-header';
 import { Panel } from '@/components/admin/panel';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from '@/components/ui/select';
+    DropdownMenu,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Spinner } from '@/components/ui/spinner';
-import { randomId } from '@/lib/utils';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { reset, update } from '@/routes/admin/montra/menus';
 import type { StoreLink } from '@/types/page-builder';
 
-type ItemType = 'path' | 'url' | 'email';
-
-type MenuItem = {
-    /** Só no editor, para o drag and drop. */
-    uid: string;
-    label: Record<string, string>;
-    type: ItemType;
-    target: string;
-    children: MenuItem[];
-};
-
-type ServerItem = Omit<MenuItem, 'uid' | 'children'> & {
-    children: ServerItem[];
-};
-
-type Location = 'header' | 'footer';
-
 type Props = {
-    menus: Record<Location, ServerItem[]>;
+    menus: Record<MenuLocation, ServerItem[]>;
     locales: string[];
     links: StoreLink[];
-    limits: Record<Location, { items: number; children: number }>;
+    limits: Record<MenuLocation, MenuLimits>;
 };
 
-const TYPE_LABELS: Record<ItemType, string> = {
-    path: 'Página da loja',
-    url: 'Endereço externo',
-    email: 'Email',
+const NAMES: Record<MenuLocation, string> = {
+    header: 'menu do topo',
+    footer: 'rodapé',
 };
-
-function withUids(items: ServerItem[]): MenuItem[] {
-    return items.map((item) => ({
-        ...item,
-        uid: randomId(),
-        children: withUids(item.children ?? []),
-    }));
-}
-
-function strip(items: MenuItem[]): ServerItem[] {
-    return items.map((item) => ({
-        label: item.label,
-        type: item.type,
-        target: item.target,
-        children: strip(item.children),
-    }));
-}
 
 /**
- * Montra → Menus. O header tem itens com, no máximo, um nível de submenu; o
- * rodapé tem colunas, cada uma com os seus links. Arrasta-se pela pega ⠿
- * (rato ou teclado).
+ * Montra → Menus. Um menu de cada vez: em cima o esboço de como fica, à
+ * esquerda a estrutura (arrastar para ordenar), à direita o item escolhido.
+ * Os dois menus vivem aqui, por isso trocar de separador não perde nada.
  */
 export default function MenusPage({ menus, locales, links, limits }: Props) {
+    const [tab, setTab] = useState<MenuLocation>('header');
+    const [drafts, setDrafts] = useState<Record<MenuLocation, MenuItem[]>>(
+        () => ({
+            header: withUids(menus.header),
+            footer: withUids(menus.footer),
+        }),
+    );
+    const [selected, setSelected] = useState<
+        Record<MenuLocation, string | null>
+    >({ header: null, footer: null });
+    const [errors, setErrors] = useState<Record<MenuLocation, MenuErrors>>({
+        header: NO_ERRORS,
+        footer: NO_ERRORS,
+    });
+    // O item acabado de criar: o editor abre com o cursor no texto.
+    const [justAdded, setJustAdded] = useState<string | null>(null);
+    const [processing, setProcessing] = useState(false);
+    const [confirmReset, setConfirmReset] = useState(false);
+    const [resetting, setResetting] = useState(false);
+    const [confirmRemove, setConfirmRemove] = useState<string | null>(null);
+
+    const dirty = useMemo(
+        () => ({
+            header: !sameMenu(drafts.header, menus.header, locales),
+            footer: !sameMenu(drafts.footer, menus.footer, locales),
+        }),
+        [drafts, menus, locales],
+    );
+
+    // Sair com alterações por guardar (num dos dois menus) pergunta antes.
+    const anyDirty = dirty.header || dirty.footer;
+
+    useEffect(() => {
+        if (!anyDirty) {
+            return;
+        }
+
+        const warn = (event: BeforeUnloadEvent) => event.preventDefault();
+        window.addEventListener('beforeunload', warn);
+        const stop = router.on('before', (event) => {
+            const visit = event.detail.visit;
+
+            if (
+                visit.method === 'get' &&
+                !window.confirm(
+                    'Há alterações nos menus que não guardaste. Sair na mesma?',
+                )
+            ) {
+                event.preventDefault();
+            }
+        });
+
+        return () => {
+            window.removeEventListener('beforeunload', warn);
+            stop();
+        };
+    }, [anyDirty]);
+
+    const items = drafts[tab];
+    const menuErrors = errors[tab];
+    const menuLimits = limits[tab];
+    const isFooter = tab === 'footer';
+    const found = findItem(items, selected[tab]);
+    const errorCount = Object.values(menuErrors.byUid).filter(
+        (fields) => Object.keys(fields).length > 0,
+    ).length;
+
+    const setItems = (change: (items: MenuItem[]) => MenuItem[]) =>
+        setDrafts((current) => ({ ...current, [tab]: change(current[tab]) }));
+
+    const select = (uid: string | null) =>
+        setSelected((current) => ({ ...current, [tab]: uid }));
+
+    // Escolher à mão (na pré-visualização ou na estrutura).
+    const pick = (uid: string) => {
+        select(uid);
+        setJustAdded(null);
+    };
+
+    const add = (item: MenuItem, parentUid?: string) => {
+        setItems((list) =>
+            parentUid
+                ? list.map((parent) =>
+                      parent.uid === parentUid &&
+                      parent.children.length < menuLimits.children
+                          ? { ...parent, children: [...parent.children, item] }
+                          : parent,
+                  )
+                : list.length < menuLimits.items
+                  ? [...list, item]
+                  : list,
+        );
+        select(item.uid);
+        setJustAdded(item.uid);
+    };
+
+    const change =
+        (uid: string): ItemChange =>
+        (patch, clears) => {
+            setItems((list) =>
+                updateItem(list, uid, (item) => ({ ...item, ...patch })),
+            );
+            // Mexer num campo tira-lhe o erro do último "Guardar".
+            setErrors((current) => {
+                const fields = current[tab].byUid[uid];
+
+                if (!fields || !clears.some((key) => key in fields)) {
+                    return current;
+                }
+
+                const rest = Object.fromEntries(
+                    Object.entries(fields).filter(
+                        ([key]) => !clears.includes(key),
+                    ),
+                );
+
+                return {
+                    ...current,
+                    [tab]: {
+                        ...current[tab],
+                        byUid: { ...current[tab].byUid, [uid]: rest },
+                    },
+                };
+            });
+        };
+
+    const remove = (uid: string) => {
+        const target = findItem(items, uid);
+        setItems((list) => removeItem(list, uid));
+        // Os erros do que saiu saem com ele (senão o aviso continuava a
+        // contar itens que já não estão lá).
+        const gone = [uid, ...(target?.item.children ?? []).map((c) => c.uid)];
+        setErrors((current) => ({
+            ...current,
+            [tab]: {
+                ...current[tab],
+                byUid: Object.fromEntries(
+                    Object.entries(current[tab].byUid).filter(
+                        ([key]) => !gone.includes(key),
+                    ),
+                ),
+            },
+        }));
+
+        if (
+            selected[tab] === uid ||
+            target?.item.children.some((child) => child.uid === selected[tab])
+        ) {
+            select(target?.parent?.uid ?? null);
+        }
+    };
+
+    // O Livro de Reclamações (ou uma coluna com ele) pede confirmação.
+    const requestRemove = (uid: string) => {
+        const target = findItem(items, uid)?.item;
+
+        if (
+            target &&
+            (isComplaintsBook(target) || target.children.some(isComplaintsBook))
+        ) {
+            setConfirmRemove(uid);
+        } else {
+            remove(uid);
+        }
+    };
+
+    const save = () => {
+        const location = tab;
+        const sent = drafts[location];
+        setProcessing(true);
+
+        router.put(
+            update(location).url,
+            { items: strip(sent) },
+            {
+                errorBag: location,
+                preserveScroll: true,
+                onSuccess: (page) => {
+                    const fresh = (page.props as unknown as Props).menus[
+                        location
+                    ];
+                    // O que se mexeu enquanto gravava fica (e continua por
+                    // guardar); só se troca pela versão do servidor se nada
+                    // mudou entretanto.
+                    setDrafts((current) =>
+                        current[location] === sent
+                            ? {
+                                  ...current,
+                                  [location]: withUids(
+                                      fresh,
+                                      current[location],
+                                  ),
+                              }
+                            : current,
+                    );
+                    setErrors((current) => ({
+                        ...current,
+                        [location]: NO_ERRORS,
+                    }));
+                },
+                onError: (bag) => {
+                    const mapped = mapErrors(bag, sent);
+                    setErrors((current) => ({
+                        ...current,
+                        [location]: mapped.errors,
+                    }));
+
+                    if (mapped.first) {
+                        setSelected((current) => ({
+                            ...current,
+                            [location]: mapped.first,
+                        }));
+                    }
+                },
+                onFinish: () => setProcessing(false),
+            },
+        );
+    };
+
+    const discard = () => {
+        setDrafts((current) => ({ ...current, [tab]: withUids(menus[tab]) }));
+        setErrors((current) => ({ ...current, [tab]: NO_ERRORS }));
+        select(null);
+    };
+
+    const restoreDefaults = () => {
+        const location = tab;
+        setResetting(true);
+
+        router.delete(reset(location).url, {
+            preserveScroll: true,
+            onSuccess: (page) => {
+                setConfirmReset(false);
+                setDrafts((current) => ({
+                    ...current,
+                    [location]: withUids(
+                        (page.props as unknown as Props).menus[location],
+                    ),
+                }));
+                setErrors((current) => ({ ...current, [location]: NO_ERRORS }));
+                setSelected((current) => ({ ...current, [location]: null }));
+            },
+            onFinish: () => setResetting(false),
+        });
+    };
+
+    // Onde o "Pôr de volta" do Livro de Reclamações o mete: a última
+    // coluna com espaço.
+    const complaintsColumn = [...items]
+        .reverse()
+        .find((column) => column.children.length < menuLimits.children);
+
     return (
         <>
             <Head title="Menus da montra" />
             <div className="flex h-full flex-1 flex-col gap-4 p-4">
                 <PageHeader
                     title="Montra"
-                    description="Os menus do topo e do rodapé. Um rótulo vazio num idioma fica em português."
+                    description="Os menus do topo e do rodapé da loja. Nada muda no site até carregares em “Guardar”."
                 />
                 <MontraNav current="menus" />
-                <div className="grid gap-4 xl:grid-cols-2">
-                    <MenuEditor
-                        location="header"
-                        title="Menu do topo"
-                        description="Até 8 itens. Um item com links por baixo vira um submenu."
-                        initial={menus.header}
-                        locales={locales}
-                        links={links}
-                        limits={limits.header}
-                    />
-                    <MenuEditor
-                        location="footer"
-                        title="Rodapé"
-                        description="Até 4 colunas, cada uma com um título e os seus links. O Livro de Reclamações é obrigatório para quem vende em Portugal: não o tires."
-                        initial={menus.footer}
-                        locales={locales}
-                        links={links}
-                        limits={limits.footer}
-                    />
-                </div>
-            </div>
-        </>
-    );
-}
 
-function MenuEditor({
-    location,
-    title,
-    description,
-    initial,
-    locales,
-    links,
-    limits,
-}: {
-    location: Location;
-    title: string;
-    description: string;
-    initial: ServerItem[];
-    locales: string[];
-    links: StoreLink[];
-    limits: { items: number; children: number };
-}) {
-    const [items, setItems] = useState<MenuItem[]>(() => withUids(initial));
-    const [processing, setProcessing] = useState(false);
-    const [confirmReset, setConfirmReset] = useState(false);
-    const allErrors = usePage().props.errors as unknown as Record<
-        string,
-        Record<string, string> | undefined
-    >;
-    const errors = allErrors[location] ?? {};
-    const dirty = useMemo(
-        () => JSON.stringify(strip(items)) !== JSON.stringify(initial),
-        [items, initial],
-    );
-    const isFooter = location === 'footer';
-    const listId = `${location}-links`;
-
-    const save = () => {
-        setProcessing(true);
-        router.put(
-            update(location).url,
-            { items: strip(items) },
-            {
-                preserveScroll: true,
-                errorBag: location,
-                onSuccess: (page) =>
-                    setItems(
-                        withUids(
-                            (page.props as unknown as Props).menus[location],
-                        ),
-                    ),
-                onFinish: () => setProcessing(false),
-            },
-        );
-    };
-
-    const blank = (): MenuItem => ({
-        uid: randomId(),
-        label: {},
-        type: 'path',
-        target: '',
-        children: [],
-    });
-
-    const setItem = (uid: string, next: MenuItem) =>
-        setItems((current) =>
-            current.map((item) => (item.uid === uid ? next : item)),
-        );
-
-    return (
-        <Panel
-            title={title}
-            description={description}
-            aside={
-                <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setConfirmReset(true)}
+                <Tabs
+                    value={tab}
+                    onValueChange={(value) => setTab(value as MenuLocation)}
                 >
-                    <RotateCcw />
-                    Repor
-                </Button>
-            }
-        >
-            <datalist id={listId}>
-                {links.map((link) => (
-                    <option key={link.path} value={link.path}>
-                        {`${link.group}: ${link.label}`}
-                    </option>
-                ))}
-            </datalist>
-            <InputError message={errors.items} />
-            <SortableItems
-                items={items}
-                onReorder={setItems}
-                render={(item, index) => (
-                    <ItemFields
-                        item={item}
-                        locales={locales}
-                        listId={listId}
-                        path={`items.${index}`}
-                        errors={errors}
-                        targetOptional={isFooter}
-                        heading={isFooter ? `Coluna ${index + 1}` : undefined}
-                        onChange={(next) => setItem(item.uid, next)}
-                        onRemove={() =>
-                            setItems((current) =>
-                                current.filter(
-                                    (other) => other.uid !== item.uid,
-                                ),
-                            )
-                        }
-                    >
-                        <div className="grid gap-2 border-l-2 border-border/60 pl-3">
-                            <SortableItems
-                                items={item.children}
-                                onReorder={(children) =>
-                                    setItem(item.uid, { ...item, children })
-                                }
-                                render={(child, childIndex) => (
-                                    <ItemFields
-                                        item={child}
-                                        locales={locales}
-                                        listId={listId}
-                                        path={`items.${index}.children.${childIndex}`}
-                                        errors={errors}
-                                        onChange={(next) =>
-                                            setItem(item.uid, {
-                                                ...item,
-                                                children: item.children.map(
-                                                    (other) =>
-                                                        other.uid === child.uid
-                                                            ? next
-                                                            : other,
-                                                ),
-                                            })
-                                        }
-                                        onRemove={() =>
-                                            setItem(item.uid, {
-                                                ...item,
-                                                children: item.children.filter(
-                                                    (other) =>
-                                                        other.uid !== child.uid,
-                                                ),
-                                            })
-                                        }
-                                        moveTargets={
-                                            isFooter
-                                                ? items
-                                                      .map((column, i) => ({
-                                                          uid: column.uid,
-                                                          label: `Coluna ${i + 1}`,
-                                                      }))
-                                                      .filter(
-                                                          (column) =>
-                                                              column.uid !==
-                                                              item.uid,
-                                                      )
-                                                : undefined
-                                        }
-                                        onMoveTo={(target) =>
-                                            setItems((current) =>
-                                                current.map((column) =>
-                                                    column.uid === item.uid
-                                                        ? {
-                                                              ...column,
-                                                              children:
-                                                                  column.children.filter(
-                                                                      (other) =>
-                                                                          other.uid !==
-                                                                          child.uid,
-                                                                  ),
-                                                          }
-                                                        : column.uid === target
-                                                          ? {
-                                                                ...column,
-                                                                children: [
-                                                                    ...column.children,
-                                                                    child,
-                                                                ],
-                                                            }
-                                                          : column,
-                                                ),
-                                            )
-                                        }
-                                    />
-                                )}
-                            />
-                            <InputError
-                                message={errors[`items.${index}.children`]}
-                            />
-                            <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                className="justify-self-start"
-                                disabled={
-                                    item.children.length >= limits.children
-                                }
-                                onClick={() =>
-                                    setItem(item.uid, {
-                                        ...item,
-                                        children: [...item.children, blank()],
-                                    })
+                    <div className="flex items-center justify-between gap-3">
+                        <TabsList>
+                            {(['header', 'footer'] as const).map((location) => (
+                                <TabsTrigger
+                                    key={location}
+                                    value={location}
+                                    className="px-4"
+                                >
+                                    {location === 'header'
+                                        ? 'Menu do topo'
+                                        : 'Rodapé'}
+                                    {dirty[location] && (
+                                        <span className="size-1.5 rounded-full bg-warning">
+                                            <span className="sr-only">
+                                                (por guardar)
+                                            </span>
+                                        </span>
+                                    )}
+                                </TabsTrigger>
+                            ))}
+                        </TabsList>
+                        <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    aria-label="Mais opções"
+                                >
+                                    <MoreHorizontal />
+                                </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                                <DropdownMenuItem
+                                    onSelect={() => setConfirmReset(true)}
+                                >
+                                    <RotateCcw />
+                                    Repor o {NAMES[tab]} de origem
+                                </DropdownMenuItem>
+                            </DropdownMenuContent>
+                        </DropdownMenu>
+                    </div>
+
+                    {(['header', 'footer'] as const).map((location) => (
+                        <TabsContent
+                            key={location}
+                            value={location}
+                            className="grid gap-4"
+                        >
+                            <Panel
+                                title="Pré-visualização"
+                                aside={
+                                    <span className="text-muted-foreground">
+                                        Clica num item para o editar
+                                    </span>
                                 }
                             >
-                                <Plus />
-                                {isFooter
-                                    ? 'Link na coluna'
-                                    : 'Link no submenu'}
-                            </Button>
-                        </div>
-                    </ItemFields>
+                                <MenuPreview
+                                    location={location}
+                                    items={items}
+                                    locale={locales[0]}
+                                    selected={selected[location]}
+                                    errors={menuErrors}
+                                    onSelect={pick}
+                                />
+                            </Panel>
+
+                            <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)]">
+                                <Panel
+                                    title="Estrutura"
+                                    description={
+                                        isFooter
+                                            ? 'Colunas com um título e os seus links.'
+                                            : 'Os itens pela ordem em que aparecem. Um item com sub-links abre um submenu.'
+                                    }
+                                    aside={
+                                        <span className="whitespace-nowrap text-muted-foreground">
+                                            {items.length} de {menuLimits.items}{' '}
+                                            {isFooter ? 'colunas' : 'itens'}
+                                        </span>
+                                    }
+                                >
+                                    <div className="grid gap-3">
+                                        {(menuErrors.top || errorCount > 0) && (
+                                            <div className="grid gap-1 rounded-md border border-destructive/40 bg-destructive-soft px-3 py-2 text-sm text-destructive-soft-foreground">
+                                                {errorCount > 0 && (
+                                                    <p>
+                                                        {errorCount === 1
+                                                            ? 'Não ficou guardado: há 1 item marcado a vermelho.'
+                                                            : `Não ficou guardado: há ${errorCount} itens marcados a vermelho.`}
+                                                    </p>
+                                                )}
+                                                <InputError
+                                                    message={menuErrors.top}
+                                                />
+                                            </div>
+                                        )}
+
+                                        {items.length === 0 ? (
+                                            <p className="rounded-md border border-dashed border-border px-3 py-6 text-center text-sm text-muted-foreground">
+                                                Ainda não há{' '}
+                                                {isFooter ? 'colunas' : 'itens'}
+                                                .
+                                            </p>
+                                        ) : (
+                                            <MenuTree
+                                                location={location}
+                                                items={items}
+                                                setItems={setItems}
+                                                limits={menuLimits}
+                                                links={links}
+                                                locales={locales}
+                                                selected={selected[location]}
+                                                errors={menuErrors}
+                                                onSelect={pick}
+                                                onAddChild={(parentUid) =>
+                                                    add(blankItem(), parentUid)
+                                                }
+                                                onRemove={requestRemove}
+                                            />
+                                        )}
+
+                                        <Button
+                                            type="button"
+                                            variant="outline"
+                                            size="sm"
+                                            className="w-fit"
+                                            disabled={
+                                                items.length >= menuLimits.items
+                                            }
+                                            onClick={() => add(blankItem())}
+                                        >
+                                            <Plus />
+                                            {isFooter ? 'Coluna' : 'Item'}
+                                        </Button>
+
+                                        {isFooter &&
+                                            (hasComplaintsBook(items) ? (
+                                                <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                                                    <Lock
+                                                        aria-hidden
+                                                        className="size-3.5 shrink-0"
+                                                    />
+                                                    O Livro de Reclamações é
+                                                    obrigatório em Portugal: não
+                                                    o tires.
+                                                </p>
+                                            ) : (
+                                                <div className="grid gap-2 rounded-md border border-warning/40 bg-warning-soft px-3 py-2 text-sm text-warning-soft-foreground">
+                                                    <p>
+                                                        Falta o Livro de
+                                                        Reclamações — é
+                                                        obrigatório para quem
+                                                        vende em Portugal.
+                                                    </p>
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="w-fit"
+                                                        disabled={
+                                                            !complaintsColumn
+                                                        }
+                                                        onClick={() =>
+                                                            complaintsColumn &&
+                                                            add(
+                                                                complaintsBookItem(
+                                                                    locales,
+                                                                ),
+                                                                complaintsColumn.uid,
+                                                            )
+                                                        }
+                                                    >
+                                                        <Plus />
+                                                        Pôr de volta
+                                                    </Button>
+                                                </div>
+                                            ))}
+                                    </div>
+                                </Panel>
+
+                                <Panel
+                                    title={
+                                        found
+                                            ? labelOf(found.item, locales[0]) ||
+                                              'Sem texto'
+                                            : 'Editar'
+                                    }
+                                    className="lg:sticky lg:top-4"
+                                >
+                                    {found ? (
+                                        <ItemEditor
+                                            key={found.item.uid}
+                                            location={location}
+                                            item={found.item}
+                                            parent={found.parent}
+                                            locales={locales}
+                                            links={links}
+                                            limits={menuLimits}
+                                            errors={
+                                                menuErrors.byUid[
+                                                    found.item.uid
+                                                ] ?? {}
+                                            }
+                                            autoFocus={
+                                                justAdded === found.item.uid
+                                            }
+                                            onChange={change(found.item.uid)}
+                                            onRemove={() =>
+                                                requestRemove(found.item.uid)
+                                            }
+                                            onAddChild={() =>
+                                                add(blankItem(), found.item.uid)
+                                            }
+                                        />
+                                    ) : (
+                                        <NoItemSelected location={location} />
+                                    )}
+                                </Panel>
+                            </div>
+                        </TabsContent>
+                    ))}
+                </Tabs>
+
+                {!dirty[tab] && anyDirty && (
+                    <div className="sticky bottom-4 z-20 mt-auto flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card/95 px-4 py-3 shadow-lg backdrop-blur">
+                        <span
+                            aria-hidden
+                            className="size-2 shrink-0 rounded-full bg-warning"
+                        />
+                        <p className="flex-1 text-sm" role="status">
+                            Tens alterações por guardar no{' '}
+                            {NAMES[tab === 'header' ? 'footer' : 'header']}.
+                        </p>
+                        <Button
+                            variant="outline"
+                            onClick={() =>
+                                setTab(tab === 'header' ? 'footer' : 'header')
+                            }
+                        >
+                            Ver
+                        </Button>
+                    </div>
                 )}
-            />
-            <div className="mt-4 flex flex-wrap items-center gap-2">
-                <Button
-                    type="button"
-                    variant="outline"
-                    disabled={items.length >= limits.items}
-                    onClick={() => setItems((current) => [...current, blank()])}
-                >
-                    <Plus />
-                    {isFooter ? 'Coluna' : 'Item'}
-                </Button>
-                <span className="flex-1" />
-                {dirty && (
-                    <span className="text-sm text-warning">
-                        Alterações por guardar.
-                    </span>
+                {dirty[tab] && (
+                    <div className="sticky bottom-4 z-20 mt-auto flex flex-wrap items-center gap-3 rounded-xl border border-border bg-card/95 px-4 py-3 shadow-lg backdrop-blur">
+                        <span
+                            aria-hidden
+                            className="size-2 shrink-0 rounded-full bg-warning"
+                        />
+                        <p className="flex-1 text-sm" role="status">
+                            Tens alterações por guardar no {NAMES[tab]}.
+                        </p>
+                        <Button
+                            variant="ghost"
+                            onClick={discard}
+                            disabled={processing}
+                        >
+                            Descartar
+                        </Button>
+                        <Button onClick={save} disabled={processing}>
+                            {processing && <Spinner />}
+                            Guardar
+                        </Button>
+                    </div>
                 )}
-                <Button onClick={save} disabled={!dirty || processing}>
-                    {processing && <Spinner />}
-                    Guardar
-                </Button>
             </div>
+
             <ConfirmDialog
                 open={confirmReset}
                 onOpenChange={setConfirmReset}
-                title="Repor o menu de origem?"
-                description="Volta aos links com que a loja nasceu. O menu atual perde-se."
+                title={`Repor o ${NAMES[tab]} de origem?`}
+                description="Volta aos links com que a loja nasceu. O que tens agora perde-se."
                 confirmLabel="Repor"
-                onConfirm={() =>
-                    router.delete(reset(location).url, {
-                        preserveScroll: true,
-                        onSuccess: (page) => {
-                            setConfirmReset(false);
-                            setItems(
-                                withUids(
-                                    (page.props as unknown as Props).menus[
-                                        location
-                                    ],
-                                ),
-                            );
-                        },
-                    })
-                }
+                processing={resetting}
+                onConfirm={restoreDefaults}
             />
-        </Panel>
-    );
-}
-
-function SortableItems({
-    items,
-    onReorder,
-    render,
-}: {
-    items: MenuItem[];
-    onReorder: (items: MenuItem[]) => void;
-    render: (item: MenuItem, index: number) => React.ReactNode;
-}) {
-    const sensors = useSensors(
-        useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-        useSensor(KeyboardSensor, {
-            coordinateGetter: sortableKeyboardCoordinates,
-        }),
-    );
-
-    const onDragEnd = ({ active, over }: DragEndEvent) => {
-        if (!over || active.id === over.id) {
-            return;
-        }
-
-        const from = items.findIndex((item) => item.uid === active.id);
-        const to = items.findIndex((item) => item.uid === over.id);
-
-        if (from >= 0 && to >= 0) {
-            onReorder(arrayMove(items, from, to));
-        }
-    };
-
-    return (
-        <DndContext
-            sensors={sensors}
-            collisionDetection={closestCenter}
-            onDragEnd={onDragEnd}
-        >
-            <SortableContext
-                items={items.map((item) => item.uid)}
-                strategy={verticalListSortingStrategy}
-            >
-                <ul className="grid gap-2">
-                    {items.map((item, index) => (
-                        <SortableRow key={item.uid} id={item.uid}>
-                            {render(item, index)}
-                        </SortableRow>
-                    ))}
-                </ul>
-            </SortableContext>
-        </DndContext>
-    );
-}
-
-function SortableRow({
-    id,
-    children,
-}: {
-    id: string;
-    children: React.ReactNode;
-}) {
-    const {
-        attributes,
-        listeners,
-        setNodeRef,
-        transform,
-        transition,
-        isDragging,
-    } = useSortable({ id });
-
-    return (
-        <li
-            ref={setNodeRef}
-            style={{
-                transform: CSS.Transform.toString(transform),
-                transition,
-            }}
-            className="flex gap-1 rounded-lg border border-border/60 bg-card p-2 data-[dragging=true]:z-10 data-[dragging=true]:shadow-lg"
-            data-dragging={isDragging}
-        >
-            <button
-                type="button"
-                className="h-8 cursor-grab touch-none rounded px-1 text-muted-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                aria-label="Mover"
-                {...attributes}
-                {...listeners}
-            >
-                <GripVertical className="size-4" />
-            </button>
-            <div className="min-w-0 flex-1">{children}</div>
-        </li>
-    );
-}
-
-function ItemFields({
-    item,
-    locales,
-    listId,
-    path,
-    errors,
-    targetOptional = false,
-    heading,
-    onChange,
-    onRemove,
-    moveTargets,
-    onMoveTo,
-    children,
-}: {
-    item: MenuItem;
-    locales: string[];
-    listId: string;
-    path: string;
-    errors: Record<string, string>;
-    targetOptional?: boolean;
-    heading?: string;
-    onChange: (item: MenuItem) => void;
-    onRemove: () => void;
-    moveTargets?: { uid: string; label: string }[];
-    onMoveTo?: (uid: string) => void;
-    children?: React.ReactNode;
-}) {
-    return (
-        <div className="grid gap-2">
-            {heading && (
-                <p className="text-xs font-medium text-muted-foreground">
-                    {heading}
-                </p>
-            )}
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-                {locales.map((locale) => (
-                    <div key={locale} className="grid gap-1">
-                        <Label
-                            htmlFor={`${item.uid}-${locale}`}
-                            className="text-xs"
-                        >
-                            Rótulo {locale.toUpperCase()}
-                        </Label>
-                        <Input
-                            id={`${item.uid}-${locale}`}
-                            value={item.label[locale] ?? ''}
-                            maxLength={40}
-                            onChange={(event) =>
-                                onChange({
-                                    ...item,
-                                    label: {
-                                        ...item.label,
-                                        [locale]: event.target.value,
-                                    },
-                                })
-                            }
-                        />
-                        <InputError
-                            message={errors[`${path}.label.${locale}`]}
-                        />
-                    </div>
-                ))}
-            </div>
-            <div className="flex flex-wrap items-start gap-2">
-                <Select
-                    value={item.type}
-                    onValueChange={(type) =>
-                        onChange({ ...item, type: type as ItemType })
+            <ConfirmDialog
+                open={confirmRemove !== null}
+                onOpenChange={(open) => !open && setConfirmRemove(null)}
+                title="Tirar o Livro de Reclamações?"
+                description="Quem vende em Portugal é obrigado a ter o link para o Livro de Reclamações no site."
+                confirmLabel="Tirar na mesma"
+                destructive
+                onConfirm={() => {
+                    if (confirmRemove) {
+                        remove(confirmRemove);
                     }
-                >
-                    <SelectTrigger
-                        className="w-44"
-                        aria-label="Tipo de destino"
-                    >
-                        <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {(Object.keys(TYPE_LABELS) as ItemType[]).map(
-                            (type) => (
-                                <SelectItem key={type} value={type}>
-                                    {TYPE_LABELS[type]}
-                                </SelectItem>
-                            ),
-                        )}
-                    </SelectContent>
-                </Select>
-                <div className="grid min-w-40 flex-1 gap-1">
-                    <Input
-                        value={item.target}
-                        list={item.type === 'path' ? listId : undefined}
-                        aria-label="Destino"
-                        placeholder={
-                            item.type === 'path'
-                                ? '/produtos'
-                                : item.type === 'url'
-                                  ? 'https://…'
-                                  : 'ola@aminhaloja.pt'
-                        }
-                        onChange={(event) =>
-                            onChange({ ...item, target: event.target.value })
-                        }
-                    />
-                    {targetOptional && (
-                        <p className="text-xs text-muted-foreground">
-                            Opcional: o título da coluna pode não ser um link.
-                        </p>
-                    )}
-                    <InputError message={errors[`${path}.target`]} />
-                </div>
-                {moveTargets && moveTargets.length > 0 && onMoveTo && (
-                    <Select value="" onValueChange={onMoveTo}>
-                        <SelectTrigger
-                            className="w-36"
-                            aria-label="Mover para outra coluna"
-                        >
-                            <SelectValue placeholder="Mover para…" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {moveTargets.map((target) => (
-                                <SelectItem key={target.uid} value={target.uid}>
-                                    {target.label}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                )}
-                <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    aria-label="Apagar"
-                    onClick={onRemove}
-                >
-                    <Trash2 />
-                </Button>
-            </div>
-            {children}
-        </div>
+
+                    setConfirmRemove(null);
+                }}
+            />
+        </>
     );
 }
 

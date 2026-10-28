@@ -1,9 +1,60 @@
+import {
+    Columns2,
+    FileText,
+    GalleryHorizontal,
+    Grid3x3,
+    HelpCircle,
+    Image as ImageIcon,
+    LayoutGrid,
+    ListOrdered,
+    Mail,
+    Megaphone,
+    MessageSquareQuote,
+    PencilRuler,
+    Rows3,
+    ShieldCheck,
+    Square,
+} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
+import { createElement } from 'react';
 import { randomId } from '@/lib/utils';
 import type {
     BlockSchema,
     EditorBlock,
     FieldSchema,
 } from '@/types/page-builder';
+
+/** Um ícone por tipo, para o catálogo e a lista se lerem de relance. */
+const ICONS: Record<string, LucideIcon> = {
+    hero: Megaphone,
+    product_grid: LayoutGrid,
+    categories: Grid3x3,
+    text: FileText,
+    text_image: Columns2,
+    banner: Rows3,
+    gallery: GalleryHorizontal,
+    steps: ListOrdered,
+    faq: HelpCircle,
+    testimonials: MessageSquareQuote,
+    trust: ShieldCheck,
+    contact: Mail,
+    custom_order: PencilRuler,
+    spacer: Square,
+};
+
+/** O ícone do tipo de bloco (decorativo: o nome vai sempre ao lado). */
+export function BlockIcon({
+    type,
+    className,
+}: {
+    type: string;
+    className?: string;
+}) {
+    return createElement(ICONS[type] ?? ImageIcon, {
+        'aria-hidden': true,
+        className,
+    });
+}
 
 /** O valor de um campo vazio — o mesmo do BlockSanitizer::emptyValue(). */
 export function emptyValue(field: FieldSchema): unknown {

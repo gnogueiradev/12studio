@@ -14,7 +14,7 @@ import { edit as menus } from '@/routes/admin/montra/menus';
 import { index as pages } from '@/routes/admin/montra/paginas';
 import { edit as theme } from '@/routes/admin/montra/tema';
 
-type Section = 'paginas' | 'menus' | 'media' | 'tema';
+type Section = 'paginas' | 'menus' | 'media' | 'tema' | 'definicoes';
 
 /**
  * Os separadores da área Montra do backoffice. O tema só aparece ao dono
@@ -24,7 +24,7 @@ export function MontraNav({ current }: { current: Section }) {
     const { auth } = usePage().props;
 
     const items: {
-        key: Section | 'definicoes';
+        key: Section;
         label: string;
         href: string;
         icon: LucideIcon;

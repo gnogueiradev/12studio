@@ -1,6 +1,7 @@
 import { Head, Link, useForm } from '@inertiajs/react';
 import { ExternalLink } from 'lucide-react';
 import { useState } from 'react';
+import { MontraNav } from '@/components/admin/montra/montra-nav';
 import { PageHeader } from '@/components/admin/page-header';
 import { Panel } from '@/components/admin/panel';
 import InputError from '@/components/input-error';
@@ -117,6 +118,7 @@ export default function StoreSettingsPage({
                         </a>
                     </Button>
                 </PageHeader>
+                <MontraNav current="definicoes" />
 
                 <form
                     onSubmit={submit}

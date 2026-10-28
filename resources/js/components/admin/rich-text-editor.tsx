@@ -16,6 +16,7 @@ import {
     Strikethrough,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
+import { useEffect } from 'react';
 import { Separator } from '@/components/ui/separator';
 import { Toggle } from '@/components/ui/toggle';
 
@@ -210,6 +211,15 @@ export function RichTextEditor({
             },
         },
     });
+
+    // O valor também muda por fora (desfazer no editor de páginas, repor uma
+    // versão): o TipTap só lê o `content` ao nascer, por isso acerta-se aqui.
+    // Sem isto mostrava o texto antigo e a tecla seguinte gravava-o de novo.
+    useEffect(() => {
+        if (editor && !editor.isDestroyed && value !== editor.getHTML()) {
+            editor.commands.setContent(value, { emitUpdate: false });
+        }
+    }, [editor, value]);
 
     if (!editor) {
         return null;

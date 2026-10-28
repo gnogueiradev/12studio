@@ -1,20 +1,13 @@
-import { Head, Link, router, useForm } from '@inertiajs/react';
-import {
-    Copy,
-    ExternalLink,
-    FileText,
-    LayoutTemplate,
-    Pencil,
-    Plus,
-} from 'lucide-react';
-import { useState } from 'react';
+import { Head, useForm } from '@inertiajs/react';
+import { Plus, Search, SearchX, X } from 'lucide-react';
+import { useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import { MontraNav } from '@/components/admin/montra/montra-nav';
 import {
-    formatDateTime,
-    PageStatusBadge,
-} from '@/components/admin/montra/page-status';
+    NewLandingTile,
+    PageCard,
+} from '@/components/admin/montra/pages/page-card';
 import { PageHeader } from '@/components/admin/page-header';
-import { Panel } from '@/components/admin/panel';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import {
@@ -28,8 +21,9 @@ import {
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { slugify } from '@/lib/slug';
-import { duplicar, edit, store } from '@/routes/admin/montra/paginas';
+import { store } from '@/routes/admin/montra/paginas';
 import type { PageRow } from '@/types/page-builder';
 
 type Props = {
@@ -37,12 +31,38 @@ type Props = {
     landings: PageRow[];
 };
 
+type Filter = 'all' | 'system' | 'landing';
+
+const GRID =
+    'grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4';
+
 /**
  * Montra → Páginas. As de sistema (o site precisa delas: não se apagam) e as
- * landing pages, cada uma com o seu endereço e, se quiseres, datas.
+ * landing pages, em cartões com a miniatura de cada uma.
  */
 export default function PagesIndex({ system, landings }: Props) {
     const [creating, setCreating] = useState(false);
+    const [filter, setFilter] = useState<Filter>('all');
+    const [search, setSearch] = useState('');
+
+    const query = normalize(search.trim());
+    const shownSystem = useMemo(
+        () => system.filter((page) => matches(page, query)),
+        [system, query],
+    );
+    const shownLandings = useMemo(
+        () => landings.filter((page) => matches(page, query)),
+        [landings, query],
+    );
+
+    const withSystem = filter !== 'landing';
+    const withLandings = filter !== 'system';
+    const total =
+        (withSystem ? shownSystem.length : 0) +
+        (withLandings ? shownLandings.length : 0);
+    const newTile = query === '' && (
+        <NewLandingTile onClick={() => setCreating(true)} />
+    );
 
     return (
         <>
@@ -60,35 +80,88 @@ export default function PagesIndex({ system, landings }: Props) {
 
                 <MontraNav current="paginas" />
 
-                <Panel
-                    title="Páginas do site"
-                    description="Fazem parte do site: podes mudar tudo o que têm, mas não apagá-las. O catálogo e a página de produto são modelos — o mesmo layout serve todas as categorias e todos os produtos."
-                >
-                    <PageList pages={system} />
-                </Panel>
+                <div className="flex flex-wrap items-center gap-2">
+                    <ToggleGroup
+                        type="single"
+                        variant="outline"
+                        size="sm"
+                        value={filter}
+                        onValueChange={(value) =>
+                            value && setFilter(value as Filter)
+                        }
+                        aria-label="Mostrar"
+                        className="max-w-full overflow-x-auto"
+                    >
+                        <FilterItem
+                            value="all"
+                            label="Todas"
+                            count={system.length + landings.length}
+                        />
+                        <FilterItem
+                            value="system"
+                            label="Páginas do site"
+                            count={system.length}
+                        />
+                        <FilterItem
+                            value="landing"
+                            label="Landing pages"
+                            count={landings.length}
+                        />
+                    </ToggleGroup>
 
-                <Panel
-                    title="Landing pages"
-                    description="Páginas tuas, com endereço próprio (ex.: /natal) e, se quiseres, datas de início e fim."
-                >
-                    {landings.length === 0 ? (
-                        <div className="flex flex-col items-start gap-3 py-2 text-sm text-muted-foreground">
-                            <p>
-                                Ainda não há landing pages. Servem para
-                                campanhas, datas especiais ou coleções.
-                            </p>
-                            <Button
-                                variant="outline"
-                                onClick={() => setCreating(true)}
+                    <div className="relative min-w-60 flex-1 sm:ml-auto sm:max-w-80 sm:flex-none">
+                        <Search className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                            type="search"
+                            value={search}
+                            onChange={(event) => setSearch(event.target.value)}
+                            placeholder="Nome ou endereço"
+                            aria-label="Procurar páginas"
+                            className="pr-9 pl-9 [&::-webkit-search-cancel-button]:hidden"
+                        />
+                        {search && (
+                            <button
+                                type="button"
+                                onClick={() => setSearch('')}
+                                aria-label="Limpar pesquisa"
+                                className="absolute top-1/2 right-2 flex size-6 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
                             >
-                                <Plus />
-                                Criar a primeira
-                            </Button>
-                        </div>
-                    ) : (
-                        <PageList pages={landings} />
-                    )}
-                </Panel>
+                                <X className="size-4" />
+                            </button>
+                        )}
+                    </div>
+                </div>
+
+                {query !== '' && total === 0 ? (
+                    <NoResults search={search} onClear={() => setSearch('')} />
+                ) : filter === 'all' ? (
+                    <div className="flex flex-col gap-8">
+                        {shownSystem.length > 0 && (
+                            <Section
+                                title="Páginas do site"
+                                description="Fazem parte do site: mudas tudo o que têm, mas não se apagam."
+                                count={shownSystem.length}
+                            >
+                                <PageGrid pages={shownSystem} />
+                            </Section>
+                        )}
+                        {(shownLandings.length > 0 || query === '') && (
+                            <Section
+                                title="Landing pages"
+                                description="Páginas tuas, com endereço próprio e, se quiseres, datas."
+                                count={shownLandings.length}
+                            >
+                                <PageGrid pages={shownLandings}>
+                                    {newTile}
+                                </PageGrid>
+                            </Section>
+                        )}
+                    </div>
+                ) : filter === 'system' ? (
+                    <PageGrid pages={shownSystem} />
+                ) : (
+                    <PageGrid pages={shownLandings}>{newTile}</PageGrid>
+                )}
             </div>
 
             <CreateLandingDialog open={creating} onOpenChange={setCreating} />
@@ -96,88 +169,109 @@ export default function PagesIndex({ system, landings }: Props) {
     );
 }
 
-function PageList({ pages }: { pages: PageRow[] }) {
+function FilterItem({
+    value,
+    label,
+    count,
+}: {
+    value: Filter;
+    label: string;
+    count: number;
+}) {
     return (
-        <ul className="divide-y divide-border/60">
+        <ToggleGroupItem value={value} className="gap-1.5 px-3">
+            {label}
+            <span className="text-xs text-muted-foreground tabular-nums">
+                {count}
+            </span>
+        </ToggleGroupItem>
+    );
+}
+
+function Section({
+    title,
+    description,
+    count,
+    children,
+}: {
+    title: string;
+    description: string;
+    count: number;
+    children: ReactNode;
+}) {
+    return (
+        <section className="flex flex-col gap-3">
+            <div>
+                <h2 className="flex items-baseline gap-2 text-base font-semibold">
+                    {title}
+                    <span className="text-sm font-normal text-muted-foreground tabular-nums">
+                        {count}
+                    </span>
+                </h2>
+                <p className="text-sm text-muted-foreground">{description}</p>
+            </div>
+            {children}
+        </section>
+    );
+}
+
+function PageGrid({
+    pages,
+    children,
+}: {
+    pages: PageRow[];
+    children?: ReactNode;
+}) {
+    return (
+        <div className={GRID}>
+            {children}
             {pages.map((page) => (
-                <li
-                    key={page.id}
-                    className="flex flex-wrap items-center gap-x-4 gap-y-2 py-3"
-                >
-                    <div className="flex min-w-0 flex-1 items-center gap-3">
-                        {page.template === 'page' ? (
-                            <FileText
-                                aria-hidden
-                                className="size-4 shrink-0 text-muted-foreground"
-                            />
-                        ) : (
-                            <LayoutTemplate
-                                aria-hidden
-                                className="size-4 shrink-0 text-muted-foreground"
-                            />
-                        )}
-                        <div className="min-w-0">
-                            <Link
-                                href={edit(page.id)}
-                                className="font-medium hover:underline"
-                            >
-                                {page.name}
-                            </Link>
-                            <p className="truncate text-sm text-muted-foreground">
-                                {page.template === 'product'
-                                    ? 'Modelo de todos os produtos'
-                                    : page.template === 'catalog'
-                                      ? 'Modelo do catálogo e das categorias'
-                                      : page.path}
-                                {page.startsAt || page.endsAt ? (
-                                    <>
-                                        {' · '}
-                                        {page.startsAt
-                                            ? formatDateTime(page.startsAt)
-                                            : '…'}
-                                        {' → '}
-                                        {page.endsAt
-                                            ? formatDateTime(page.endsAt)
-                                            : '…'}
-                                    </>
-                                ) : null}
-                            </p>
-                        </div>
-                    </div>
-                    <PageStatusBadge page={page} />
-                    <div className="flex items-center gap-1">
-                        {page.path && page.live && (
-                            <Button variant="ghost" size="icon" asChild>
-                                <a
-                                    href={page.path}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    aria-label={`Ver ${page.name} no site`}
-                                >
-                                    <ExternalLink />
-                                </a>
-                            </Button>
-                        )}
-                        {page.template === 'page' && (
-                            <Button
-                                variant="ghost"
-                                size="icon"
-                                aria-label={`Duplicar ${page.name}`}
-                                onClick={() => router.post(duplicar(page.id))}
-                            >
-                                <Copy />
-                            </Button>
-                        )}
-                        <Button variant="outline" size="sm" asChild>
-                            <Link href={edit(page.id)}>
-                                <Pencil />
-                                Editar
-                            </Link>
-                        </Button>
-                    </div>
-                </li>
+                <PageCard key={page.id} page={page} />
             ))}
-        </ul>
+        </div>
+    );
+}
+
+function NoResults({
+    search,
+    onClear,
+}: {
+    search: string;
+    onClear: () => void;
+}) {
+    return (
+        <div className="flex flex-col items-center gap-3 rounded-xl border border-dashed border-border px-6 py-16 text-center">
+            <span className="flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground">
+                <SearchX aria-hidden className="size-5" />
+            </span>
+            <div>
+                <p className="text-sm font-medium">
+                    Nenhuma página com “{search.trim()}”
+                </p>
+                <p className="text-sm text-muted-foreground">
+                    Procura pelo nome ou pelo endereço (ex.: /natal).
+                </p>
+            </div>
+            <Button variant="outline" size="sm" onClick={onClear}>
+                Limpar pesquisa
+            </Button>
+        </div>
+    );
+}
+
+/** Sem maiúsculas nem acentos: "catalogo" encontra o "Catálogo". */
+function normalize(value: string): string {
+    return value
+        .normalize('NFD')
+        .replace(/\p{Diacritic}/gu, '')
+        .toLowerCase();
+}
+
+function matches(page: PageRow, query: string): boolean {
+    return (
+        query === '' ||
+        normalize(page.name).includes(query) ||
+        normalize(page.path ?? '').includes(query)
     );
 }
 
@@ -193,6 +287,10 @@ function CreateLandingDialog({
         slug: '',
     });
     const [slugTouched, setSlugTouched] = useState(false);
+    const address = data.slug
+        .trim()
+        .replace(/^\/+|\/+$/g, '')
+        .toLowerCase();
 
     const close = (value: boolean) => {
         onOpenChange(value);
@@ -251,12 +349,27 @@ function CreateLandingDialog({
                                 value={data.slug}
                                 maxLength={80}
                                 placeholder="natal-2026"
+                                aria-describedby={
+                                    address !== ''
+                                        ? 'landing-address'
+                                        : undefined
+                                }
                                 onChange={(event) => {
                                     setSlugTouched(true);
                                     setData('slug', event.target.value);
                                 }}
                             />
                         </div>
+                        {/* Como o servidor o grava: sem barras e em minúsculas. */}
+                        {address !== '' && (
+                            <p
+                                id="landing-address"
+                                className="truncate text-xs text-muted-foreground"
+                            >
+                                Fica em{' '}
+                                <span className="font-mono">/{address}</span>
+                            </p>
+                        )}
                         <InputError message={errors.slug} />
                     </div>
                     <DialogFooter>

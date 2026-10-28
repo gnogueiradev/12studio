@@ -4,6 +4,7 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { initializeTheme } from '@/hooks/use-appearance';
 import AppLayout from '@/layouts/app-layout';
 import AuthLayout from '@/layouts/auth-layout';
+import EditorLayout from '@/layouts/editor-layout';
 import SettingsLayout from '@/layouts/settings/layout';
 import StoreLayout from '@/layouts/store-layout';
 import { initializeCurrency } from '@/lib/money';
@@ -33,6 +34,9 @@ createInertiaApp({
                 return undefined;
             // Montra publica: todas as paginas em pages/store/. Tudo o resto
             // — admin/, settings/, dashboard — usa o AppLayout de sidebar.
+            // O editor de páginas ocupa o ecrã todo, sem a sidebar.
+            case name === 'admin/montra/editor':
+                return EditorLayout;
             case name.startsWith('store/'):
                 return StoreLayout;
             case name.startsWith('auth/'):

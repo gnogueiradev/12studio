@@ -10,25 +10,29 @@ import {
 } from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import {
+    Tooltip,
+    TooltipContent,
+    TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { requestJson } from '@/lib/http';
-import { cn } from '@/lib/utils';
 import type { EditorBlock, PreviewMessage } from '@/types/page-builder';
 
+/** A largura a sério de cada ecrã; a pré-visualização encolhe para caber. */
 const DEVICES = {
     mobile: { width: 390, label: 'Telemóvel', icon: Smartphone },
     tablet: { width: 820, label: 'Tablet', icon: Tablet },
-    desktop: { width: null, label: 'Computador', icon: Monitor },
+    desktop: { width: 1280, label: 'Computador', icon: Monitor },
 } as const;
 
-type Device = keyof typeof DEVICES;
+export type Device = keyof typeof DEVICES;
 
 type Props = {
     url: string;
     renderUrl: string;
     blocks: EditorBlock[];
     locale: string;
-    locales: string[];
-    onLocale: (locale: string) => void;
+    device: Device;
     selected: string | null;
     onSelect: (id: string) => void;
 };
@@ -38,28 +42,49 @@ type Props = {
  * Cada alteração vai ao servidor só para ser renderizada — nada se grava — e
  * os blocos prontos seguem para o iframe por postMessage, que os troca sem
  * recarregar. Clicar num bloco lá dentro seleciona-o aqui.
+ *
+ * O iframe tem a largura do ecrã escolhido e é reduzido (nunca ampliado) para
+ * caber, para o "Computador" mostrar mesmo o layout de computador.
  */
 export function PreviewFrame({
     url,
     renderUrl,
     blocks,
     locale,
-    locales,
-    onLocale,
+    device,
     selected,
     onSelect,
 }: Props) {
     const frame = useRef<HTMLIFrameElement>(null);
+    const canvas = useRef<HTMLDivElement>(null);
     const rendered = useRef<unknown[] | null>(null);
-    const [device, setDevice] = useState<Device>('desktop');
     const [rendering, setRendering] = useState(false);
     const [reloadKey, setReloadKey] = useState(0);
+    const [size, setSize] = useState<{ width: number; height: number } | null>(
+        null,
+    );
 
     const post = useCallback((message: PreviewMessage) => {
         frame.current?.contentWindow?.postMessage(
             message,
             window.location.origin,
         );
+    }, []);
+
+    useEffect(() => {
+        const node = canvas.current;
+
+        if (!node) {
+            return;
+        }
+
+        const observer = new ResizeObserver(([entry]) => {
+            const { width, height } = entry.contentRect;
+            setSize({ width, height });
+        });
+        observer.observe(node);
+
+        return () => observer.disconnect();
     }, []);
 
     // Renderiza os blocos do editor (com uma pausa, para não ir ao servidor
@@ -134,76 +159,129 @@ export function PreviewFrame({
     }, [onSelect, post, selected]);
 
     const width = DEVICES[device].width;
+    const scale = size && size.width > 0 ? Math.min(1, size.width / width) : 1;
     const src = `${url}?locale=${encodeURIComponent(locale)}`;
 
     return (
-        <div className="flex h-full min-h-0 flex-col">
-            <div className="flex flex-wrap items-center gap-2 border-b border-border/60 px-3 py-2">
-                <ToggleGroup
-                    type="single"
-                    size="sm"
-                    value={device}
-                    onValueChange={(value) =>
-                        value && setDevice(value as Device)
-                    }
-                    aria-label="Tamanho do ecrã"
+        <div className="flex h-full min-h-0 flex-col bg-muted">
+            <div
+                ref={canvas}
+                className="flex min-h-0 flex-1 justify-center overflow-hidden p-3 sm:p-5"
+            >
+                <div
+                    className="relative h-full shrink-0 overflow-hidden rounded-lg bg-background shadow-lg ring-1 ring-border"
+                    style={{
+                        width: width * scale,
+                        height: size?.height || undefined,
+                    }}
                 >
-                    {(Object.keys(DEVICES) as Device[]).map((key) => {
-                        const Icon = DEVICES[key].icon;
-
-                        return (
-                            <ToggleGroupItem
-                                key={key}
-                                value={key}
-                                aria-label={DEVICES[key].label}
-                            >
-                                <Icon />
-                            </ToggleGroupItem>
-                        );
-                    })}
-                </ToggleGroup>
-                <Select value={locale} onValueChange={onLocale}>
-                    <SelectTrigger
-                        size="sm"
-                        className="w-20"
-                        aria-label="Idioma da pré-visualização"
-                    >
-                        <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {locales.map((code) => (
-                            <SelectItem key={code} value={code}>
-                                {code.toUpperCase()}
-                            </SelectItem>
-                        ))}
-                    </SelectContent>
-                </Select>
+                    <iframe
+                        key={`${src}-${reloadKey}`}
+                        ref={frame}
+                        src={src}
+                        title="Pré-visualização da página"
+                        className="absolute top-0 left-0 block border-0 bg-background"
+                        style={{
+                            width,
+                            height: size?.height ? size.height / scale : '100%',
+                            transform: `scale(${scale})`,
+                            transformOrigin: '0 0',
+                        }}
+                    />
+                </div>
+            </div>
+            <div className="flex h-9 shrink-0 items-center gap-2 px-3 text-xs text-muted-foreground">
+                <span>
+                    {DEVICES[device].label} · {width}px
+                </span>
+                <span
+                    className="rounded bg-background/60 px-1.5 py-0.5 tabular-nums"
+                    title="Zoom da pré-visualização"
+                >
+                    {Math.round(scale * 100)}%
+                </span>
                 <span className="flex-1" />
-                {rendering && <Spinner className="size-4" />}
-                <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    className="size-8"
-                    aria-label="Recarregar a pré-visualização"
-                    onClick={() => setReloadKey((key) => key + 1)}
+                {rendering && <Spinner className="size-3.5" />}
+                <Tooltip>
+                    <TooltipTrigger asChild>
+                        <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="size-7"
+                            aria-label="Recarregar a pré-visualização"
+                            onClick={() => setReloadKey((key) => key + 1)}
+                        >
+                            <RotateCw />
+                        </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Recarregar</TooltipContent>
+                </Tooltip>
+            </div>
+        </div>
+    );
+}
+
+/** O tamanho do ecrã e o idioma da pré-visualização (na barra de topo). */
+export function PreviewControls({
+    device,
+    onDevice,
+    locale,
+    locales,
+    onLocale,
+}: {
+    device: Device;
+    onDevice: (device: Device) => void;
+    locale: string;
+    locales: string[];
+    onLocale: (locale: string) => void;
+}) {
+    return (
+        <div className="flex items-center gap-2">
+            <ToggleGroup
+                type="single"
+                size="sm"
+                variant="outline"
+                value={device}
+                onValueChange={(value) => value && onDevice(value as Device)}
+                aria-label="Tamanho do ecrã"
+            >
+                {(Object.keys(DEVICES) as Device[]).map((key) => {
+                    const Icon = DEVICES[key].icon;
+
+                    return (
+                        <Tooltip key={key}>
+                            <TooltipTrigger asChild>
+                                <ToggleGroupItem
+                                    value={key}
+                                    aria-label={DEVICES[key].label}
+                                >
+                                    <Icon />
+                                </ToggleGroupItem>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                                {DEVICES[key].label}
+                            </TooltipContent>
+                        </Tooltip>
+                    );
+                })}
+            </ToggleGroup>
+            <Select value={locale} onValueChange={onLocale}>
+                <SelectTrigger
+                    size="sm"
+                    className="w-20"
+                    aria-label="Idioma da pré-visualização"
                 >
-                    <RotateCw />
-                </Button>
-            </div>
-            <div className="flex min-h-0 flex-1 justify-center overflow-auto bg-muted/50 p-3">
-                <iframe
-                    key={`${src}-${reloadKey}`}
-                    ref={frame}
-                    src={src}
-                    title="Pré-visualização da página"
-                    className={cn(
-                        'h-full rounded-md border border-border/60 bg-background shadow-sm transition-[width]',
-                        width === null && 'w-full',
-                    )}
-                    style={width === null ? undefined : { width }}
-                />
-            </div>
+                    <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                    {locales.map((code) => (
+                        <SelectItem key={code} value={code}>
+                            {code.toUpperCase()}
+                        </SelectItem>
+                    ))}
+                </SelectContent>
+            </Select>
         </div>
     );
 }
