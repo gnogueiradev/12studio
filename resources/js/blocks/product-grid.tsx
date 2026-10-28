@@ -24,7 +24,13 @@ const SIZES: Record<number, string> = {
     4: '(min-width: 1024px) 25vw, (min-width: 768px) 33vw, 50vw',
 };
 
-export function ProductGridBlock({ block }: { block: StoreBlock }) {
+export function ProductGridBlock({
+    block,
+    nested,
+}: {
+    block: StoreBlock;
+    nested: boolean;
+}) {
     const data = block.data as Data;
 
     if (data.products.length === 0) {
@@ -32,7 +38,7 @@ export function ProductGridBlock({ block }: { block: StoreBlock }) {
     }
 
     return (
-        <BlockSection style={block.style}>
+        <BlockSection shell={!nested} style={block.style}>
             <BlockHeading
                 title={data.title}
                 subtitle={data.subtitle}

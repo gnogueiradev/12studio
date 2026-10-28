@@ -19,9 +19,11 @@ const RISE_IN =
 export function HeroBlock({
     block,
     first,
+    nested,
 }: {
     block: StoreBlock;
     first: boolean;
+    nested: boolean;
 }) {
     const data = block.data as Data;
     const variant = block.variant ?? 'split';
@@ -84,7 +86,7 @@ export function HeroBlock({
 
     if (variant === 'split' && data.image) {
         return (
-            <BlockSection style={block.style}>
+            <BlockSection shell={!nested} style={block.style}>
                 <div className="grid items-center gap-10 md:grid-cols-2 md:gap-16">
                     {text}
                     <div
@@ -106,5 +108,9 @@ export function HeroBlock({
         );
     }
 
-    return <BlockSection style={block.style}>{text}</BlockSection>;
+    return (
+        <BlockSection shell={!nested} style={block.style}>
+            {text}
+        </BlockSection>
+    );
 }

@@ -7,7 +7,13 @@ type Data = {
     items: { quote: string; name: string; detail: string }[];
 };
 
-export function TestimonialsBlock({ block }: { block: StoreBlock }) {
+export function TestimonialsBlock({
+    block,
+    nested,
+}: {
+    block: StoreBlock;
+    nested: boolean;
+}) {
     const data = block.data as Data;
 
     if (data.items.length === 0) {
@@ -15,7 +21,7 @@ export function TestimonialsBlock({ block }: { block: StoreBlock }) {
     }
 
     return (
-        <BlockSection style={block.style}>
+        <BlockSection shell={!nested} style={block.style}>
             <BlockHeading title={data.title} align={block.style.align} />
             <ul className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {data.items.map((item, index) => (

@@ -295,7 +295,13 @@ function FilterPanel({
 
 type Data = { empty_title: string; empty_text: string };
 
-export function CatalogGridBlock({ block }: { block: StoreBlock }) {
+export function CatalogGridBlock({
+    block,
+    nested,
+}: {
+    block: StoreBlock;
+    nested: boolean;
+}) {
     const data = block.data as Data;
     const t = useT();
     const localized = useLocalizedUrl();
@@ -381,7 +387,7 @@ export function CatalogGridBlock({ block }: { block: StoreBlock }) {
     const panel = <FilterPanel catalog={catalog} apply={apply} />;
 
     return (
-        <BlockSection style={block.style}>
+        <BlockSection shell={!nested} style={block.style}>
             <div className="flex flex-wrap items-center gap-3 border-b border-border/60 pb-4">
                 <form
                     role="search"

@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/tooltip';
 import { requestJson } from '@/lib/http';
 import type { EditorBlock, PreviewMessage } from '@/types/page-builder';
+import type { StoreNode } from '@/types/store';
 
 /** A largura a sério de cada ecrã; a pré-visualização encolhe para caber. */
 const DEVICES = {
@@ -57,7 +58,7 @@ export function PreviewFrame({
 }: Props) {
     const frame = useRef<HTMLIFrameElement>(null);
     const canvas = useRef<HTMLDivElement>(null);
-    const rendered = useRef<unknown[] | null>(null);
+    const rendered = useRef<StoreNode[] | null>(null);
     const [rendering, setRendering] = useState(false);
     const [reloadKey, setReloadKey] = useState(0);
     const [size, setSize] = useState<{ width: number; height: number } | null>(
@@ -93,7 +94,7 @@ export function PreviewFrame({
         const controller = new AbortController();
         const timer = window.setTimeout(() => {
             setRendering(true);
-            requestJson<{ blocks: unknown[] }>(
+            requestJson<{ blocks: StoreNode[] }>(
                 renderUrl,
                 'POST',
                 { blocks, locale },

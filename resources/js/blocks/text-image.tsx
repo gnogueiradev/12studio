@@ -13,12 +13,18 @@ type Data = {
     image: ResponsiveImageData | null;
 };
 
-export function TextImageBlock({ block }: { block: StoreBlock }) {
+export function TextImageBlock({
+    block,
+    nested,
+}: {
+    block: StoreBlock;
+    nested: boolean;
+}) {
     const data = block.data as Data;
     const imageLeft = block.variant === 'image_left';
 
     return (
-        <BlockSection style={block.style}>
+        <BlockSection shell={!nested} style={block.style}>
             <div
                 className={cn(
                     'grid items-center gap-10 md:gap-16',

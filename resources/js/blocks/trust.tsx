@@ -5,7 +5,13 @@ import { BlockSection } from './section';
 
 type Data = { items: { icon: string; title: string; text: string }[] };
 
-export function TrustBlock({ block }: { block: StoreBlock }) {
+export function TrustBlock({
+    block,
+    nested,
+}: {
+    block: StoreBlock;
+    nested: boolean;
+}) {
     const data = block.data as Data;
 
     if (data.items.length === 0) {
@@ -13,7 +19,7 @@ export function TrustBlock({ block }: { block: StoreBlock }) {
     }
 
     return (
-        <BlockSection style={block.style}>
+        <BlockSection shell={!nested} style={block.style}>
             <ul
                 className={cn(
                     'grid grid-cols-2 gap-6 border-y border-border/60 py-8 md:gap-8',

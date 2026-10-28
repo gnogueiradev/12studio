@@ -55,7 +55,13 @@ function CategoryTile({
     );
 }
 
-export function CategoriesBlock({ block }: { block: StoreBlock }) {
+export function CategoriesBlock({
+    block,
+    nested,
+}: {
+    block: StoreBlock;
+    nested: boolean;
+}) {
     const data = block.data as Data;
 
     if (data.categories.length === 0) {
@@ -63,7 +69,7 @@ export function CategoriesBlock({ block }: { block: StoreBlock }) {
     }
 
     return (
-        <BlockSection style={block.style}>
+        <BlockSection shell={!nested} style={block.style}>
             <BlockHeading
                 title={data.title}
                 subtitle={data.subtitle}

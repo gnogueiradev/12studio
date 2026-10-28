@@ -3,6 +3,8 @@
  * App\PageBuilder\Block::schema() manda e o JSON que o BlockSanitizer grava.
  */
 
+import type { StoreNode } from './store';
+
 export type FieldType =
     | 'text'
     | 'textarea'
@@ -128,7 +130,8 @@ export type MediaItem = {
 
 /** Mensagens entre o editor e o iframe da pré-visualização. */
 export type PreviewMessage =
-    | { source: 'studio-editor'; kind: 'blocks'; blocks: unknown[] }
+    /** A árvore já renderizada pelo servidor (PageRenderer). */
+    | { source: 'studio-editor'; kind: 'blocks'; blocks: StoreNode[] }
     | { source: 'studio-editor'; kind: 'select'; id: string | null }
     | {
           source: 'studio-editor';

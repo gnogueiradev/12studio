@@ -1,3 +1,4 @@
+import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import type { StoreBlock } from '@/types/store';
 import { styleProp } from './props';
@@ -17,6 +18,7 @@ const RATIOS: Record<string, string> = {
  */
 export function VideoBlock({ block }: { block: StoreBlock }) {
     const data = block.data as Data;
+    const t = useT();
 
     if (!data.url) {
         return null;
@@ -33,7 +35,7 @@ export function VideoBlock({ block }: { block: StoreBlock }) {
         >
             <iframe
                 src={data.url}
-                title="Vídeo"
+                title={t('video.title')}
                 loading="lazy"
                 allow="fullscreen; picture-in-picture"
                 referrerPolicy="strict-origin-when-cross-origin"

@@ -9,7 +9,13 @@ type Data = {
     steps: { icon: string; title: string; text: string }[];
 };
 
-export function StepsBlock({ block }: { block: StoreBlock }) {
+export function StepsBlock({
+    block,
+    nested,
+}: {
+    block: StoreBlock;
+    nested: boolean;
+}) {
     const data = block.data as Data;
 
     if (data.steps.length === 0) {
@@ -17,7 +23,7 @@ export function StepsBlock({ block }: { block: StoreBlock }) {
     }
 
     return (
-        <BlockSection style={block.style}>
+        <BlockSection shell={!nested} style={block.style}>
             <BlockHeading
                 title={data.title}
                 subtitle={data.subtitle}

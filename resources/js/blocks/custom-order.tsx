@@ -61,7 +61,13 @@ const STEP_OF: Record<string, number> = {
  * ficheiros 3D, fotografias ou PDF) e o contacto. Abre uma conversa do tipo
  * `quote`; a resposta chega pelo link privado.
  */
-export function CustomOrderBlock({ block }: { block: StoreBlock }) {
+export function CustomOrderBlock({
+    block,
+    nested,
+}: {
+    block: StoreBlock;
+    nested: boolean;
+}) {
     const data = block.data as Data;
     const t = useT();
     const url = useLocalizedUrl();
@@ -172,7 +178,7 @@ export function CustomOrderBlock({ block }: { block: StoreBlock }) {
     };
 
     return (
-        <BlockSection style={block.style} id="pedido">
+        <BlockSection shell={!nested} style={block.style} id="pedido">
             <div className="mx-auto max-w-2xl rounded-xl border border-border/60 bg-card p-6 text-card-foreground md:p-10">
                 {data.title && (
                     <h2 className="text-2xl font-semibold tracking-tight text-balance md:text-3xl">

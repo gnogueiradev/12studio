@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { cn } from '@/lib/utils';
 import type { BlockStyle } from '@/types/store';
 
-const BACKGROUNDS: Record<BlockStyle['bg'], string> = {
+export const BACKGROUNDS: Record<BlockStyle['bg'], string> = {
     default: '',
     muted: 'bg-muted',
     accent: 'bg-accent text-accent-foreground',
@@ -22,20 +22,41 @@ const SPACINGS: Record<BlockStyle['spacing'], string> = {
 /**
  * A casca de cada bloco: fundo, espaçamento, largura e alinhamento escolhidos
  * no construtor — sempre a partir dos tokens do tema, nunca cores livres.
+ *
+ * Sem casca (`shell` desligado, o elemento dentro de uma coluna) quem dá o
+ * fundo e o espaço é o contentor: fica só o `@container`, para o bloco
+ * responder à largura da coluna e não à do ecrã.
  */
 export function BlockSection({
     style,
+    shell,
     children,
     className,
     innerClassName,
     id,
 }: {
     style: BlockStyle;
+    shell: boolean;
     children: ReactNode;
     className?: string;
     innerClassName?: string;
     id?: string;
 }) {
+    if (!shell) {
+        return (
+            <div
+                id={id}
+                className={cn(
+                    '@container',
+                    style.align === 'center' && 'text-center',
+                    innerClassName,
+                )}
+            >
+                {children}
+            </div>
+        );
+    }
+
     return (
         <section
             id={id}
@@ -48,6 +69,7 @@ export function BlockSection({
         >
             <div
                 className={cn(
+                    '@container',
                     style.width === 'contained'
                         ? 'mx-auto w-full max-w-6xl px-4'
                         : 'w-full px-4 md:px-8',

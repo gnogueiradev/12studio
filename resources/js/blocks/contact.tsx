@@ -15,7 +15,13 @@ type Data = {
     responseHours: number | null;
 };
 
-export function ContactBlock({ block }: { block: StoreBlock }) {
+export function ContactBlock({
+    block,
+    nested,
+}: {
+    block: StoreBlock;
+    nested: boolean;
+}) {
     const data = block.data as Data;
     const t = useT();
     const { storefront } = usePage().props;
@@ -27,7 +33,7 @@ export function ContactBlock({ block }: { block: StoreBlock }) {
             storefront.social.length > 0);
 
     return (
-        <BlockSection style={block.style}>
+        <BlockSection shell={!nested} style={block.style}>
             <div
                 className={cn(
                     'grid gap-10',

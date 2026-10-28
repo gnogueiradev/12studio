@@ -1,10 +1,10 @@
 import { Head } from '@inertiajs/react';
 import { FileWarning } from 'lucide-react';
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { BlockList } from '@/blocks';
+import { NodeTree } from '@/blocks/node-tree';
 import { useT } from '@/lib/i18n';
 import type { PreviewMessage } from '@/types/page-builder';
-import type { StoreBlock, StorePageData } from '@/types/store';
+import type { StoreNode, StorePageData } from '@/types/store';
 
 /**
  * Uma página da montra montada por blocos (App\PageBuilder). O conteúdo, a
@@ -30,7 +30,7 @@ export default function StorePage({ page }: { page: StorePageData }) {
             {page.preview ? (
                 <EditorPreview initial={page.blocks} />
             ) : (
-                <BlockList blocks={page.blocks} />
+                <NodeTree nodes={page.blocks} />
             )}
         </>
     );
@@ -41,7 +41,7 @@ export default function StorePage({ page }: { page: StorePageData }) {
  * manda (já renderizados pelo servidor), realça o bloco selecionado e, ao
  * clicar num bloco, diz ao editor qual foi — em vez de seguir links.
  */
-function EditorPreview({ initial }: { initial: StoreBlock[] }) {
+function EditorPreview({ initial }: { initial: StoreNode[] }) {
     const t = useT();
     const [blocks, setBlocks] = useState(initial);
     const [selected, setSelected] = useState<string | null>(null);
@@ -74,7 +74,7 @@ function EditorPreview({ initial }: { initial: StoreBlock[] }) {
             }
 
             if (message.kind === 'blocks') {
-                setBlocks(message.blocks as StoreBlock[]);
+                setBlocks(message.blocks);
             }
 
             if (message.kind === 'select') {
@@ -151,7 +151,7 @@ function EditorPreview({ initial }: { initial: StoreBlock[] }) {
                     <FileWarning aria-hidden="true" className="size-4" />
                     {t('preview.draft')}
                 </p>
-                <BlockList blocks={blocks} />
+                <NodeTree nodes={blocks} />
             </>
         );
     }
@@ -164,7 +164,7 @@ function EditorPreview({ initial }: { initial: StoreBlock[] }) {
             {/* Mais grossos do que o normal: o editor mostra a página
                 reduzida, e uma linha de 1px quase desaparece. */}
             <style>{`[data-block-id]{cursor:pointer}[data-block-id]:hover{outline:2px dashed var(--ring);outline-offset:-2px}`}</style>
-            <BlockList blocks={blocks} />
+            <NodeTree nodes={blocks} />
             {blocks.length === 0 && (
                 <p className="px-4 py-24 text-center text-sm text-muted-foreground">
                     Página vazia: junta blocos no editor.

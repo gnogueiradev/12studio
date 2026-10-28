@@ -27,9 +27,13 @@ import { TestimonialsBlock } from './testimonials';
 import { TextBlock } from './text';
 import { TextImageBlock } from './text-image';
 import { TrustBlock } from './trust';
-
 import { VideoBlock } from './video';
-export type BlockProps = { block: StoreBlock; first: boolean };
+
+/**
+ * `first`: o primeiro elemento da página (leva o <h1>). `nested`: o elemento
+ * vem sem casca de secção, e quem dá o fundo e o espaço é o contentor.
+ */
+export type BlockProps = { block: StoreBlock; first: boolean; nested: boolean };
 
 /**
  * `type` do bloco → componente. Tem de ter os mesmos tipos que o
@@ -65,20 +69,3 @@ export const BLOCK_COMPONENTS: Record<string, ComponentType<BlockProps>> = {
     product_main: ProductMainBlock,
     product_related: ProductRelatedBlock,
 };
-
-/** Os blocos de uma página, por ordem. Um tipo sem componente não aparece. */
-export function BlockList({ blocks }: { blocks: StoreBlock[] }) {
-    return (
-        <>
-            {blocks.map((block, index) => {
-                const Component = BLOCK_COMPONENTS[block.type];
-
-                return Component ? (
-                    <div key={block.id} data-block-id={block.id}>
-                        <Component block={block} first={index === 0} />
-                    </div>
-                ) : null;
-            })}
-        </>
-    );
-}

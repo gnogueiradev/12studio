@@ -121,8 +121,8 @@ export type StorePageData = {
     draft: boolean;
     /** A página dentro do iframe do editor de páginas (só admin). */
     preview?: boolean;
-    /** Na verdade chega uma árvore (StoreNode[]); o tipo muda quando a loja a renderizar. */
-    blocks: StoreBlock[];
+    /** A árvore da página: contentores na raiz, elementos nas folhas. */
+    blocks: StoreNode[];
 };
 
 /** A prop `catalog` (CatalogController). */

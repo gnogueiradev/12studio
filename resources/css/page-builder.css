@@ -1,0 +1,240 @@
+/*
+ * Construtor de páginas da montra (resources/js/blocks/node-tree.tsx).
+ *
+ * Os valores que o dono escolhe por dispositivo chegam como variáveis CSS no
+ * `style` de cada nó: --pb-<prop>-d (computador), -t (tablet) e -m
+ * (telemóvel), já com a herança feita no JS. Esta folha é fixa e só escolhe
+ * qual das três ler em cada tamanho, com os mesmos pontos de quebra do
+ * Tailwind (md = 48rem, lg = 64rem).
+ *
+ * Uma variável que o nó não define fica no valor por omissão neutro: sem
+ * espaço, sem largura máxima, sem fundo. Um contentor vazio de estilo (o das
+ * páginas convertidas) não muda nada à volta do elemento.
+ */
+
+@layer components {
+    /*
+     * As variáveis CSS herdam-se: sem isto, um contentor dentro de outro lia
+     * o espaço, a direção e as margens do pai. Cada nó começa sem nenhuma, e
+     * o `style` inline (mais forte) põe as suas.
+     */
+    .pb-container,
+    .pb-advanced {
+        --pb-direction-d: initial;
+        --pb-direction-t: initial;
+        --pb-direction-m: initial;
+        --pb-wrap-d: initial;
+        --pb-wrap-t: initial;
+        --pb-wrap-m: initial;
+        --pb-gap-d: initial;
+        --pb-gap-t: initial;
+        --pb-gap-m: initial;
+        --pb-justify-d: initial;
+        --pb-justify-t: initial;
+        --pb-justify-m: initial;
+        --pb-align-d: initial;
+        --pb-align-t: initial;
+        --pb-align-m: initial;
+        --pb-width-d: initial;
+        --pb-width-t: initial;
+        --pb-width-m: initial;
+        --pb-max-width-d: initial;
+        --pb-max-width-t: initial;
+        --pb-max-width-m: initial;
+        --pb-gutter-d: initial;
+        --pb-gutter-t: initial;
+        --pb-gutter-m: initial;
+        --pb-min-height-d: initial;
+        --pb-min-height-t: initial;
+        --pb-min-height-m: initial;
+        --pb-padding-y-d: initial;
+        --pb-padding-y-t: initial;
+        --pb-padding-y-m: initial;
+        --pb-padding-x-d: initial;
+        --pb-padding-x-t: initial;
+        --pb-padding-x-m: initial;
+        --pb-overlay-d: initial;
+        --pb-overlay-t: initial;
+        --pb-overlay-m: initial;
+        --pb-radius-d: initial;
+        --pb-radius-t: initial;
+        --pb-radius-m: initial;
+        --pb-text-align-d: initial;
+        --pb-text-align-t: initial;
+        --pb-text-align-m: initial;
+        --pb-margin-top-d: initial;
+        --pb-margin-top-t: initial;
+        --pb-margin-top-m: initial;
+        --pb-margin-bottom-d: initial;
+        --pb-margin-bottom-t: initial;
+        --pb-margin-bottom-m: initial;
+        --pb-adv-padding-y-d: initial;
+        --pb-adv-padding-y-t: initial;
+        --pb-adv-padding-y-m: initial;
+        --pb-adv-padding-x-d: initial;
+        --pb-adv-padding-x-t: initial;
+        --pb-adv-padding-x-m: initial;
+    }
+
+    /* A caixa do contentor: largura no pai, altura, preenchimento e cantos. */
+    .pb-container {
+        width: var(--pb-width-m, auto);
+        min-height: var(--pb-min-height-m, auto);
+        padding-block: var(--pb-adv-padding-y-m, var(--pb-padding-y-m, 0px));
+        padding-inline: var(--pb-adv-padding-x-m, var(--pb-padding-x-m, 0px));
+        border-radius: var(--pb-radius-m, 0px);
+        /* Sem fallback de propósito: por definir, herda o alinhamento do pai. */
+        text-align: var(--pb-text-align-m);
+    }
+
+    /* O layout dos filhos: o contentor, ou o seu interior quando é contido. */
+    .pb-flex {
+        display: flex;
+        flex-direction: var(--pb-direction-m, column);
+        flex-wrap: var(--pb-wrap-m, nowrap);
+        gap: var(--pb-gap-m, 0px);
+        justify-content: var(--pb-justify-m, flex-start);
+        align-items: var(--pb-align-m, stretch);
+    }
+
+    /* Um filho largo encolhe em vez de rebentar a linha. */
+    .pb-flex > * {
+        min-width: 0;
+    }
+
+    /* Contido: o fundo vai de ponta a ponta, o conteúdo fica no max-w-6xl px-4. */
+    .pb-boxed {
+        display: flex;
+        flex-direction: column;
+    }
+
+    .pb-inner {
+        flex-grow: 1;
+        width: 100%;
+        max-width: var(--pb-max-width-m, none);
+        margin-inline: auto;
+        padding-inline: var(--pb-gutter-m, 0px);
+    }
+
+    .pb-overlay {
+        opacity: var(--pb-overlay-m, 0);
+    }
+
+    /* O separador Avançado, igual para contentores e elementos. */
+    .pb-advanced {
+        margin-top: var(--pb-margin-top-m, 0px);
+        margin-bottom: var(--pb-margin-bottom-m, 0px);
+    }
+
+    .pb-advanced:not(.pb-container) {
+        padding-block: var(--pb-adv-padding-y-m, 0px);
+        padding-inline: var(--pb-adv-padding-x-m, 0px);
+    }
+
+    @media (min-width: 48rem) {
+        .pb-container {
+            width: var(--pb-width-t, auto);
+            min-height: var(--pb-min-height-t, auto);
+            padding-block: var(
+                --pb-adv-padding-y-t,
+                var(--pb-padding-y-t, 0px)
+            );
+            padding-inline: var(
+                --pb-adv-padding-x-t,
+                var(--pb-padding-x-t, 0px)
+            );
+            border-radius: var(--pb-radius-t, 0px);
+            text-align: var(--pb-text-align-t);
+        }
+
+        .pb-flex {
+            flex-direction: var(--pb-direction-t, column);
+            flex-wrap: var(--pb-wrap-t, nowrap);
+            gap: var(--pb-gap-t, 0px);
+            justify-content: var(--pb-justify-t, flex-start);
+            align-items: var(--pb-align-t, stretch);
+        }
+
+        .pb-inner {
+            max-width: var(--pb-max-width-t, none);
+            padding-inline: var(--pb-gutter-t, 0px);
+        }
+
+        .pb-overlay {
+            opacity: var(--pb-overlay-t, 0);
+        }
+
+        .pb-advanced {
+            margin-top: var(--pb-margin-top-t, 0px);
+            margin-bottom: var(--pb-margin-bottom-t, 0px);
+        }
+
+        .pb-advanced:not(.pb-container) {
+            padding-block: var(--pb-adv-padding-y-t, 0px);
+            padding-inline: var(--pb-adv-padding-x-t, 0px);
+        }
+    }
+
+    @media (min-width: 64rem) {
+        .pb-container {
+            width: var(--pb-width-d, auto);
+            min-height: var(--pb-min-height-d, auto);
+            padding-block: var(
+                --pb-adv-padding-y-d,
+                var(--pb-padding-y-d, 0px)
+            );
+            padding-inline: var(
+                --pb-adv-padding-x-d,
+                var(--pb-padding-x-d, 0px)
+            );
+            border-radius: var(--pb-radius-d, 0px);
+            text-align: var(--pb-text-align-d);
+        }
+
+        .pb-flex {
+            flex-direction: var(--pb-direction-d, column);
+            flex-wrap: var(--pb-wrap-d, nowrap);
+            gap: var(--pb-gap-d, 0px);
+            justify-content: var(--pb-justify-d, flex-start);
+            align-items: var(--pb-align-d, stretch);
+        }
+
+        .pb-inner {
+            max-width: var(--pb-max-width-d, none);
+            padding-inline: var(--pb-gutter-d, 0px);
+        }
+
+        .pb-overlay {
+            opacity: var(--pb-overlay-d, 0);
+        }
+
+        .pb-advanced {
+            margin-top: var(--pb-margin-top-d, 0px);
+            margin-bottom: var(--pb-margin-bottom-d, 0px);
+        }
+
+        .pb-advanced:not(.pb-container) {
+            padding-block: var(--pb-adv-padding-y-d, 0px);
+            padding-inline: var(--pb-adv-padding-x-d, 0px);
+        }
+    }
+
+    /* Esconder por dispositivo: depois de tudo o resto, ganha ao display. */
+    @media (max-width: 47.999rem) {
+        .pb-hide-m {
+            display: none;
+        }
+    }
+
+    @media (min-width: 48rem) and (max-width: 63.999rem) {
+        .pb-hide-t {
+            display: none;
+        }
+    }
+
+    @media (min-width: 64rem) {
+        .pb-hide-d {
+            display: none;
+        }
+    }
+}

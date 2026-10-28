@@ -3,14 +3,22 @@ import type { StoreBlock } from '@/types/store';
 
 const SIZES: Record<string, string> = { sm: 'h-8', md: 'h-16', lg: 'h-28' };
 
-export function SpacerBlock({ block }: { block: StoreBlock }) {
+export function SpacerBlock({
+    block,
+    nested,
+}: {
+    block: StoreBlock;
+    nested: boolean;
+}) {
     const data = block.data as { size: string; line: boolean };
 
     return (
         <div
             aria-hidden="true"
             className={cn(
-                'mx-auto flex w-full max-w-6xl items-center px-4',
+                'flex w-full items-center',
+                // Sem casca, a largura é a da coluna.
+                !nested && 'mx-auto max-w-6xl px-4',
                 SIZES[data.size] ?? SIZES.md,
             )}
         >
