@@ -1,0 +1,45 @@
+<?php
+
+return [
+    'accepted' => 'Debes aceptar :attribute.',
+    'array' => 'El campo :attribute debe ser una lista.',
+    'boolean' => 'El campo :attribute debe ser verdadero o falso.',
+    'date' => 'El campo :attribute no es una fecha válida.',
+    'after_or_equal' => 'El campo :attribute debe ser una fecha igual o posterior a :date.',
+    'email' => 'El campo :attribute debe ser un email válido.',
+    'extensions' => 'El campo :attribute debe ser un archivo de tipo: :values.',
+    'file' => 'El campo :attribute debe ser un archivo.',
+    'image' => 'El campo :attribute debe ser una imagen.',
+    'in' => 'El valor elegido en :attribute no es válido.',
+    'integer' => 'El campo :attribute debe ser un número entero.',
+    'max' => [
+        'array' => 'El campo :attribute no puede tener más de :max elementos.',
+        'file' => 'El archivo :attribute no puede superar los :max kilobytes.',
+        'numeric' => 'El campo :attribute no puede ser mayor que :max.',
+        'string' => 'El campo :attribute no puede tener más de :max caracteres.',
+    ],
+    'mimes' => 'El campo :attribute debe ser un archivo de tipo: :values.',
+    'min' => [
+        'array' => 'El campo :attribute debe tener al menos :min elementos.',
+        'file' => 'El archivo :attribute debe tener al menos :min kilobytes.',
+        'numeric' => 'El campo :attribute debe ser al menos :min.',
+        'string' => 'El campo :attribute debe tener al menos :min caracteres.',
+    ],
+    'numeric' => 'El campo :attribute debe ser un número.',
+    'regex' => 'El formato de :attribute no es válido.',
+    'required' => 'El campo :attribute es obligatorio.',
+    'required_if' => 'El campo :attribute es obligatorio cuando :other es :value.',
+    'string' => 'El campo :attribute debe ser texto.',
+    'uploaded' => 'No se ha podido subir :attribute.',
+    'url' => 'El campo :attribute debe ser una dirección válida.',
+
+    'attributes' => [
+        'name' => 'nombre',
+        'email' => 'email',
+        'phone' => 'teléfono',
+        'message' => 'mensaje',
+        'quantity' => 'cantidad',
+        'consent' => 'la política de privacidad',
+        'files' => 'archivos',
+    ],
+];

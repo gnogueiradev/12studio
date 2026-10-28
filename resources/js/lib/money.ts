@@ -1,5 +1,8 @@
 import { getInitialPageFromDOM, router } from '@inertiajs/core';
 import type { Page } from '@inertiajs/core';
+import { usePage } from '@inertiajs/react';
+import { useCallback } from 'react';
+import { useLocale } from '@/lib/i18n';
 
 /** O `id` por omissão do createInertiaApp — o app.tsx não lhe mexe. */
 const INERTIA_APP_ID = 'app';
@@ -188,4 +191,26 @@ export function inputToMicros(value: string): number {
     const parsed = Number.parseFloat(clean);
 
     return Number.isNaN(parsed) ? 0 : Math.round(parsed * 1_000_000);
+}
+
+/**
+ * Preços da montra pública: na moeda da loja e no formato do idioma da página
+ * ("12,50 €" em PT, "€12.50" em EN).
+ *
+ * Não usa o formatador de módulo do backoffice de propósito: o SSR serve
+ * visitantes de idiomas (e, mais tarde, lojas) diferentes no mesmo processo, e
+ * aqui tudo tem de vir das props do pedido.
+ */
+export function usePrice(): (cents: number) => string {
+    const { currency } = usePage().props;
+    const { intl } = useLocale();
+
+    return useCallback(
+        (cents: number) =>
+            new Intl.NumberFormat(intl, {
+                style: 'currency',
+                currency: currency || DEFAULT_CURRENCY,
+            }).format(cents / 100),
+        [currency, intl],
+    );
 }

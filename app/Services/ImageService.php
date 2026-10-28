@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Images\ImageVariants;
+use App\Jobs\GenerateImageVariants;
 use App\Models\Product;
 use App\Models\ProductImage;
 use Illuminate\Http\UploadedFile;
@@ -11,6 +13,10 @@ use RuntimeException;
 
 class ImageService
 {
+    public function __construct(
+        private ImageVariants $variants,
+    ) {}
+
     /**
      * Guarda o ficheiro no disco `public` e cria a linha.
      */
@@ -60,7 +66,7 @@ class ImageService
             return [];
         }
 
-        return DB::transaction(function () use ($product, $paths, $alt): array {
+        $images = DB::transaction(function () use ($product, $paths, $alt): array {
             $isFirst = ! $product->images()->exists();
             $order = (int) $product->images()->max('sort_order');
 
@@ -75,6 +81,15 @@ class ImageService
                 array_keys(array_values($paths)),
             );
         });
+
+        // As versoes reduzidas para a montra, na fila. Depois do commit: quem
+        // chama pode estar dentro de uma transacao maior (criar produto com
+        // fotos), e o job nao pode correr antes de a linha existir.
+        foreach ($images as $image) {
+            dispatch(GenerateImageVariants::for($image))->afterCommit();
+        }
+
+        return $images;
     }
 
     /**
@@ -151,5 +166,6 @@ class ImageService
         // escrita externa dentro de DB::transaction prende o unico escritor
         // do SQLite mais tempo do que o preciso.
         Storage::disk('public')->delete($image->path);
+        $this->variants->delete('public', $image->variants);
     }
 }

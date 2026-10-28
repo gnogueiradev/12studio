@@ -3,9 +3,11 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Setting\UpdateBrandSettingsRequest;
 use App\Http\Requests\Setting\UpdatePricingSettingsRequest;
 use App\Http\Requests\Setting\UpdateSettingsRequest;
 use App\Models\Setting;
+use App\Services\BrandSettings;
 use App\Services\PricingSettings;
 use App\Services\SettingService;
 use Illuminate\Http\RedirectResponse;
@@ -13,10 +15,10 @@ use Inertia\Inertia;
 use Inertia\Response;
 
 /**
- * Definicoes que o dono pode mudar sem deploy: a moeda da loja e os parametros
- * da calculadora de precos.
+ * Definicoes que o dono pode mudar sem deploy: a identidade da loja, a moeda e
+ * os parametros da calculadora de precos.
  *
- * Dois formularios e duas rotas, e nao um so. Um endpoint unico obrigava todas
+ * Um formulario e uma rota por seccao, e nao um so. Um endpoint unico obrigava todas
  * as regras de preco a `sometimes` — e uma gravacao parcial saltava a validacao
  * em silencio — e a pagina precisa de dois estados "por guardar" independentes
  * de qualquer forma: quem vem mudar o simbolo da moeda nao quer levar com um
@@ -27,6 +29,7 @@ class SettingController extends Controller
     public function __construct(
         private SettingService $settings,
         private PricingSettings $pricing,
+        private BrandSettings $brand,
     ) {}
 
     public function index(): Response
@@ -37,6 +40,7 @@ class SettingController extends Controller
             ],
             'currencies' => $this->currencyOptions(),
             'pricing' => $this->pricing->toForm(),
+            'brand' => $this->brand->toArray(),
         ]);
     }
 
@@ -82,6 +86,19 @@ class SettingController extends Controller
         $this->settings->setMany($this->pricing->fromForm($request->validated()));
 
         $this->toast('Preços atualizados.');
+
+        return to_route('admin.definicoes.index');
+    }
+
+    /**
+     * O nome da loja e a frase do rodape. Muda o cabecalho da montra, o
+     * <title>, os emails e o nome do servidor MCP — tudo le do BrandSettings.
+     */
+    public function updateBrand(UpdateBrandSettingsRequest $request): RedirectResponse
+    {
+        $this->settings->setMany($this->brand->fromForm($request->validated()));
+
+        $this->toast('Identidade da loja atualizada.');
 
         return to_route('admin.definicoes.index');
     }

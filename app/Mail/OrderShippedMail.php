@@ -3,6 +3,7 @@
 namespace App\Mail;
 
 use App\Models\Order;
+use App\Services\BrandSettings;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
@@ -33,6 +34,7 @@ class OrderShippedMail extends Mailable implements ShouldQueue
             markdown: 'mail.orders.shipped',
             with: [
                 'order' => $this->order,
+                'brand' => app(BrandSettings::class)->name(),
             ],
         );
     }

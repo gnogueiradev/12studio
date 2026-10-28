@@ -3,6 +3,7 @@
 namespace App\Mail;
 
 use App\Models\User;
+use App\Services\BrandSettings;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Mail\Mailable;
@@ -29,7 +30,7 @@ class StaffAccountChangedMail extends Mailable implements ShouldQueue
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: "Equipa 12studio: {$this->change} — {$this->staff->name}",
+            subject: 'Equipa '.app(BrandSettings::class)->name().": {$this->change} — {$this->staff->name}",
         );
     }
 
@@ -42,6 +43,7 @@ class StaffAccountChangedMail extends Mailable implements ShouldQueue
                 'by' => $this->by,
                 'change' => $this->change,
                 'url' => route('admin.utilizadores.index'),
+                'brand' => app(BrandSettings::class)->name(),
             ],
         );
     }

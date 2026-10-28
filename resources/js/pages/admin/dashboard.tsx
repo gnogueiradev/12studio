@@ -1,4 +1,4 @@
-import { Head, Link } from '@inertiajs/react';
+import { Head, Link, usePage } from '@inertiajs/react';
 import { AdminTable } from '@/components/admin/admin-table';
 import type { Column } from '@/components/admin/admin-table';
 import { PageHeader } from '@/components/admin/page-header';
@@ -17,6 +17,7 @@ import {
     index as ordersIndex,
     show as showOrder,
 } from '@/routes/admin/encomendas';
+import { index as storeSettings } from '@/routes/admin/montra';
 import { create as novoProduto } from '@/routes/admin/produtos';
 import type {
     DashboardAlert,
@@ -49,6 +50,7 @@ export default function AdminDashboard({
     production,
     alerts,
 }: Props) {
+    const { brand } = usePage().props;
     const openOrders = statusCounts.reduce(
         (sum, entry) => sum + entry.count,
         0,
@@ -100,8 +102,14 @@ export default function AdminDashboard({
         <>
             <Head title="Backoffice" />
             <div className="flex h-full flex-1 flex-col gap-4 p-4">
-                <PageHeader title="Backoffice 12studio" description={today}>
-                    <span className="flex items-center gap-2 rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground">
+                <PageHeader
+                    title={`Backoffice ${brand.name}`}
+                    description={today}
+                >
+                    <Link
+                        href={storeSettings()}
+                        className="flex items-center gap-2 rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                    >
                         <span
                             className={cn(
                                 'size-1.5 rounded-full',
@@ -109,7 +117,7 @@ export default function AdminDashboard({
                             )}
                         />
                         {storeOpen ? 'Loja aberta' : 'Loja em pré-lançamento'}
-                    </span>
+                    </Link>
                     <Button asChild variant="outline">
                         <Link href={createOrder()}>Nova encomenda</Link>
                     </Button>

@@ -57,7 +57,7 @@ export default function AlertSettings({ channels, jenkinsCredential }: Props) {
             <div className="flex h-full flex-1 flex-col gap-4 p-4">
                 <PageHeader
                     title="Alertas"
-                    description="O 12studio avisa no Discord de tudo o que acontece — e do que devia acontecer e não aconteceu. Um canal por tipo de alerta."
+                    description="A loja avisa no Discord de tudo o que acontece — e do que devia acontecer e não aconteceu. Um canal por tipo de alerta."
                 />
 
                 <Guide
@@ -217,10 +217,10 @@ function Guide({
                     <p className="text-muted-foreground">
                         Um por tipo de alerta: <strong>#encomendas</strong>,{' '}
                         <strong>#stock-producao</strong>,{' '}
-                        <strong>#seguranca</strong> e <strong>#sistema</strong>.
-                        No Discord, carrega no <strong>+</strong> ao lado de
-                        “Canais de texto”. Se quiseres que só tu os vejas, liga
-                        “Canal privado”.
+                        <strong>#seguranca</strong>, <strong>#sistema</strong> e{' '}
+                        <strong>#conversas</strong>. No Discord, carrega no{' '}
+                        <strong>+</strong> ao lado de “Canais de texto”. Se
+                        quiseres que só tu os vejas, liga “Canal privado”.
                     </p>
                 </section>
 
@@ -241,7 +241,7 @@ function Guide({
                             <strong>Novo webhook</strong>.
                         </li>
                         <li>
-                            Dá-lhe um nome (por exemplo “12studio”) — é o nome
+                            Dá-lhe um nome (por exemplo o da loja) — é o nome
                             que aparece nas mensagens.
                         </li>
                         <li>

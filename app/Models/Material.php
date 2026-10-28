@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Concerns\HasLabelTranslations;
 use Database\Factories\MaterialFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -20,14 +21,17 @@ use Illuminate\Support\Carbon;
  * @property int $min_spools
  * @property bool $active
  * @property int $sort_order
+ * @property array<string, string>|null $name_i18n
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['name', 'family', 'supplier', 'price_per_kg_cents', 'spools_in_stock', 'min_spools', 'active', 'sort_order'])]
+#[Fillable(['name', 'name_i18n', 'family', 'supplier', 'price_per_kg_cents', 'spools_in_stock', 'min_spools', 'active', 'sort_order'])]
 class Material extends Model
 {
     /** @use HasFactory<MaterialFactory> */
     use HasFactory;
+
+    use HasLabelTranslations;
 
     /**
      * Familias de polimero que imprimimos. Constante do modelo (padrao do
@@ -46,6 +50,7 @@ class Material extends Model
     protected function casts(): array
     {
         return [
+            'name_i18n' => 'array',
             'price_per_kg_cents' => 'integer',
             'spools_in_stock' => 'integer',
             'min_spools' => 'integer',

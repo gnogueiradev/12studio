@@ -1,5 +1,6 @@
 import { Head, Link, useForm } from '@inertiajs/react';
 import { useState } from 'react';
+import { BrandSettingsPanel } from '@/components/admin/brand-settings-panel';
 import { PageHeader } from '@/components/admin/page-header';
 import { Panel } from '@/components/admin/panel';
 import { PricingSettingsPanel } from '@/components/admin/pricing-settings-panel';
@@ -20,12 +21,14 @@ import { index as alertsIndex } from '@/routes/admin/alertas';
 import { index as apiKeysIndex } from '@/routes/admin/chaves-api';
 import { index, update } from '@/routes/admin/definicoes';
 import { index as etsyIndex } from '@/routes/admin/etsy';
+import { index as storeIndex } from '@/routes/admin/montra';
 import type { PricingSettingsForm } from '@/types/pricing';
 
 type Props = {
     settings: { currency: string };
     currencies: Option[];
     pricing: PricingSettingsForm;
+    brand: { name: string; tagline: string };
 };
 
 /**
@@ -39,6 +42,7 @@ export default function SettingsIndex({
     settings,
     currencies,
     pricing,
+    brand,
 }: Props) {
     const { data, setData, patch, processing, errors } = useForm({
         currency: settings.currency,
@@ -79,6 +83,9 @@ export default function SettingsIndex({
                     description="O que podes mudar sem um novo deploy."
                 >
                     <Button variant="outline" asChild>
+                        <Link href={storeIndex()}>Montra</Link>
+                    </Button>
+                    <Button variant="outline" asChild>
                         <Link href={etsyIndex()}>Etsy</Link>
                     </Button>
                     <Button variant="outline" asChild>
@@ -88,6 +95,8 @@ export default function SettingsIndex({
                         <Link href={apiKeysIndex()}>Chaves de API</Link>
                     </Button>
                 </PageHeader>
+
+                <BrandSettingsPanel brand={brand} />
 
                 <form
                     onSubmit={submit}
