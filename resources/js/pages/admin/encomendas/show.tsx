@@ -1,6 +1,6 @@
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { AlertTriangle, ChevronDown, Printer } from 'lucide-react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { ConfirmDialog } from '@/components/admin/confirm-dialog';
 import { OrderProgress } from '@/components/admin/order-progress';
@@ -1381,13 +1381,25 @@ OrdersShow.layout = {
  * sozinha a paga.
  */
 function PaymentLink({ url }: { url: string }) {
-    const [copied, setCopied] = useState(false);
+    const [copied, setCopied] = useState<'copied' | 'selected' | null>(null);
+    const input = useRef<HTMLInputElement>(null);
 
+    const flash = (state: 'copied' | 'selected') => {
+        setCopied(state);
+        window.setTimeout(() => setCopied(null), 2000);
+    };
+
+    // O navigator.clipboard so existe em https (e localhost): em
+    // http://12studio.test fica o link selecionado, pronto para o Ctrl+C.
     const copy = () => {
-        void navigator.clipboard.writeText(url).then(() => {
-            setCopied(true);
-            window.setTimeout(() => setCopied(false), 2000);
-        });
+        if (!navigator.clipboard) {
+            input.current?.select();
+            flash('selected');
+
+            return;
+        }
+
+        void navigator.clipboard.writeText(url).then(() => flash('copied'));
     };
 
     return (
@@ -1400,6 +1412,7 @@ function PaymentLink({ url }: { url: string }) {
             </Label>
             <div className="flex gap-2">
                 <Input
+                    ref={input}
                     id="payment-link"
                     readOnly
                     value={url}
@@ -1412,7 +1425,11 @@ function PaymentLink({ url }: { url: string }) {
                     size="sm"
                     onClick={copy}
                 >
-                    {copied ? 'Copiado' : 'Copiar'}
+                    {copied === 'copied'
+                        ? 'Copiado'
+                        : copied === 'selected'
+                          ? 'Ctrl+C'
+                          : 'Copiar'}
                 </Button>
             </div>
         </div>
