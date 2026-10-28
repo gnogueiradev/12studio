@@ -209,10 +209,15 @@ function containerLayout(node: StoreContainer, stacked: boolean) {
     put(vars, 'align', resolveDevices(pick(style.align, ALIGN)));
 
     // Numa linha que empilhou no telemóvel, a largura dos filhos (feita para
-    // a linha) não desce ao telemóvel: cada filho ocupa a largura toda.
+    // a linha) não desce ao telemóvel: cada filho ocupa a largura toda, mesmo
+    // com o `align` da linha a centrar (aí o `auto` encolhia ao conteúdo).
     const ownWidth = units(style.width, '%');
     const width = resolveDevices(ownWidth);
-    put(vars, 'width', stacked ? { ...width, mobile: ownWidth.mobile } : width);
+    put(
+        vars,
+        'width',
+        stacked ? { ...width, mobile: ownWidth.mobile ?? '100%' } : width,
+    );
 
     put(vars, 'min-height', resolveDevices(units(style.min_height, 'px')));
     put(vars, 'padding-y', resolveDevices(units(style.padding_y, 'px')));

@@ -17,6 +17,9 @@
      * As variáveis CSS herdam-se: sem isto, um contentor dentro de outro lia
      * o espaço, a direção e as margens do pai. Cada nó começa sem nenhuma, e
      * o `style` inline (mais forte) põe as suas.
+     *
+     * Cada variável --pb-* que o node-tree.tsx escreve tem de estar nesta
+     * lista, ou passa para os contentores aninhados.
      */
     .pb-container,
     .pb-advanced {
