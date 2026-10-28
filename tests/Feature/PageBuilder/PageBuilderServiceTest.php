@@ -61,7 +61,7 @@ class PageBuilderServiceTest extends TestCase
         $this->service()->saveDraft($page, [['type' => 'banner', 'content' => ['pt' => ['title' => 'Outro']]]]);
         $this->service()->restore($page, $revision);
 
-        $this->assertSame('Feliz Natal', $page->refresh()->draft_blocks[0]['content']['pt']['title']);
+        $this->assertSame('Feliz Natal', $page->refresh()->draft_blocks[0]['children'][0]['content']['pt']['title']);
     }
 
     public function test_reserved_and_taken_slugs_are_refused(): void

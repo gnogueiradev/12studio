@@ -106,6 +106,16 @@ abstract class Block
      */
     public function advancedFields(): array
     {
+        return self::advancedProps();
+    }
+
+    /**
+     * O separador Avancado, partilhado por elementos e contentores.
+     *
+     * @return array<int, StyleProp>
+     */
+    public static function advancedProps(): array
+    {
         return [
             StyleProp::int('margin_top', 'Margem superior', 0, 200),
             StyleProp::int('margin_bottom', 'Margem inferior', 0, 200),

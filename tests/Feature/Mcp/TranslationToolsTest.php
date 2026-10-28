@@ -17,6 +17,7 @@ use App\Models\Material;
 use App\Models\Product;
 use App\Models\User;
 use App\PageBuilder\PageBuilderService;
+use App\PageBuilder\PageDocument;
 use App\Services\TranslationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Laravel\Mcp\Server\Testing\PendingTestResponse;
@@ -133,8 +134,8 @@ class TranslationToolsTest extends TestCase
         ])->assertOk();
 
         $page->refresh();
-        $this->assertSame('Merry Christmas', $page->draft_blocks[0]['content']['en']['title']);
-        $this->assertSame('Feliz Natal', $page->draft_blocks[0]['content']['pt']['title']);
+        $this->assertSame('Merry Christmas', $page->draft_blocks[0]['children'][0]['content']['en']['title']);
+        $this->assertSame('Feliz Natal', $page->draft_blocks[0]['children'][0]['content']['pt']['title']);
         // Traduzir grava o rascunho; o site so muda quando se publica.
         $this->assertNull($page->published_blocks);
 
@@ -143,6 +144,35 @@ class TranslationToolsTest extends TestCase
             'locale' => 'en',
             'blocks' => [['id' => 'nao-existe', 'content' => ['title' => 'X']]],
         ])->assertHasErrors();
+    }
+
+    public function test_translate_page_finds_nested_nodes(): void
+    {
+        $service = app(PageBuilderService::class);
+        $page = $service->createLanding(['name' => 'Natal', 'slug' => 'natal']);
+        $service->saveDraft($page, [[
+            'id' => 'sec',
+            'type' => 'container',
+            'style' => ['direction' => ['desktop' => 'row']],
+            'children' => [
+                ['id' => 'col', 'type' => 'container', 'children' => [
+                    ['id' => 'fundo', 'type' => 'banner', 'content' => ['pt' => ['title' => 'Feliz Natal']]],
+                ]],
+            ],
+        ]]);
+
+        $this->assertSame(['en', 'es', 'fr'], collect(app(TranslationService::class)->pageMissingLocales($page->refresh()))->sort()->values()->all());
+
+        $this->writer()->tool(PageContentTranslateTool::class, [
+            'id' => $page->id,
+            'locale' => 'en',
+            'blocks' => [['id' => 'fundo', 'content' => ['title' => 'Merry Christmas']]],
+        ])->assertOk();
+
+        $node = PageDocument::find($page->refresh()->draft_blocks, 'fundo');
+        $this->assertSame('Merry Christmas', $node['content']['en']['title']);
+        $this->assertSame('Feliz Natal', $node['content']['pt']['title']);
+        $this->assertSame('col', $page->draft_blocks[0]['children'][0]['id']);
     }
 
     public function test_colour_and_material_names_are_translated_through_their_update_tools(): void

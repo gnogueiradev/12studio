@@ -6,6 +6,7 @@ use App\Mcp\Tools\StudioTool;
 use App\Models\Page;
 use App\Models\User;
 use App\PageBuilder\BlockRegistry;
+use App\PageBuilder\PageDocument;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
 use Laravel\Mcp\Response;
@@ -42,9 +43,15 @@ class PageGetTool extends StudioTool
             return Response::error('Página não encontrada.');
         }
 
+        // Os elementos de qualquer nivel da arvore (os contentores nao tem texto).
+        $nodes = [];
+        PageDocument::walk($page->draft_blocks, function (array $node) use (&$nodes): void {
+            $nodes[] = $node;
+        });
+
         $blocks = [];
 
-        foreach ($page->draft_blocks as $block) {
+        foreach ($nodes as $block) {
             $definition = $this->registry->get((string) ($block['type'] ?? ''));
 
             if ($definition === null) {

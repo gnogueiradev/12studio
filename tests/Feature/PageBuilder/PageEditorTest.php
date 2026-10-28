@@ -128,7 +128,7 @@ class PageEditorTest extends TestCase
             ->assertOk()
             ->assertJsonPath('page.hasChanges', true);
 
-        $this->assertSame('Depois', $page->fresh()->draft_blocks[0]['content']['pt']['title']);
+        $this->assertSame('Depois', $page->fresh()->draft_blocks[0]['children'][0]['content']['pt']['title']);
 
         auth()->logout();
         $this->get('/natal')->assertInertia(fn (Assert $inertia) => $inertia
@@ -144,7 +144,7 @@ class PageEditorTest extends TestCase
                 'blocks' => [['type' => 'banner', 'content' => ['pt' => ['title' => str_repeat('x', 500)]]]],
             ])
             ->assertUnprocessable()
-            ->assertJsonValidationErrors('blocks.0.content.pt.title');
+            ->assertJsonValidationErrors('blocks.0.children.0.content.pt.title');
     }
 
     public function test_an_unfinished_block_saves_as_draft_but_does_not_publish(): void
@@ -163,7 +163,7 @@ class PageEditorTest extends TestCase
 
         $this->actingAs($this->admin)
             ->post(route('admin.montra.paginas.publicar', $page))
-            ->assertSessionHasErrors('blocks.0.content.pt.body');
+            ->assertSessionHasErrors('blocks.0.children.0.content.pt.body');
 
         $this->assertSame('draft', $page->fresh()->status);
     }
@@ -188,8 +188,8 @@ class PageEditorTest extends TestCase
             ->assertRedirect();
 
         $page->refresh();
-        $this->assertSame('Primeira', $page->draft_blocks[0]['content']['pt']['title']);
-        $this->assertSame('Segunda', $page->published_blocks[0]['content']['pt']['title']);
+        $this->assertSame('Primeira', $page->draft_blocks[0]['children'][0]['content']['pt']['title']);
+        $this->assertSame('Segunda', $page->published_blocks[0]['children'][0]['content']['pt']['title']);
     }
 
     public function test_a_revision_of_another_page_is_refused(): void

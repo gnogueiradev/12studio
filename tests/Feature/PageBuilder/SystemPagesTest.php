@@ -88,7 +88,7 @@ class SystemPagesTest extends TestCase
 
         $page = Page::query()->where('key', 'about')->firstOrFail();
         $draft = $page->draft_blocks;
-        $draft[0]['content']['pt']['title'] = 'Título ainda por publicar';
+        $draft[0]['children'][0]['content']['pt']['title'] = 'Título ainda por publicar';
         $page->update(['draft_blocks' => $draft]);
 
         $this->get('/sobre')->assertInertia(fn (Assert $page) => $page

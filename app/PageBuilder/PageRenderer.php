@@ -26,7 +26,7 @@ class PageRenderer
      */
     public function render(array $blocks, RenderContext $context): array
     {
-        $visible = array_values(array_filter($blocks, fn (mixed $block): bool => is_array($block) && ($block['visible'] ?? true) !== false));
+        $visible = $this->visibleElements($blocks);
 
         $context->preloadMedia($this->imageIds($visible, $context));
 
@@ -61,6 +61,35 @@ class PageRenderer
         }
 
         return $rendered;
+    }
+
+    /**
+     * Provisorio ate o renderer recursivo (Task 4, que o substitui): a
+     * arvore v2 achata-se nos seus elementos visiveis, em pre-ordem. Um
+     * contentor escondido esconde tudo o que tem dentro.
+     *
+     * @param  array<int, mixed>  $nodes
+     * @return array<int, array<string, mixed>>
+     */
+    private function visibleElements(array $nodes): array
+    {
+        $elements = [];
+
+        foreach ($nodes as $node) {
+            if (! is_array($node) || ($node['visible'] ?? true) === false) {
+                continue;
+            }
+
+            if (($node['type'] ?? null) === 'container') {
+                array_push($elements, ...$this->visibleElements(array_values((array) ($node['children'] ?? []))));
+
+                continue;
+            }
+
+            $elements[] = $node;
+        }
+
+        return $elements;
     }
 
     /**
