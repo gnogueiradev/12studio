@@ -907,6 +907,9 @@ export default function OrdersShow({ order, tagSuggestions }: Props) {
                                             {order.paidAt}
                                         </Row>
                                     )}
+                                    {order.paymentLink && (
+                                        <PaymentLink url={order.paymentLink} />
+                                    )}
                                 </dl>
                             )}
                         </Card>
@@ -1371,3 +1374,47 @@ OrdersShow.layout = {
         { title: 'Detalhe', href: '#' },
     ],
 };
+
+/**
+ * O link que se manda ao cliente na conversa: abre o resumo da encomenda e
+ * um botão que paga pelo Stripe. Quando o pagamento chega, a encomenda passa
+ * sozinha a paga.
+ */
+function PaymentLink({ url }: { url: string }) {
+    const [copied, setCopied] = useState(false);
+
+    const copy = () => {
+        void navigator.clipboard.writeText(url).then(() => {
+            setCopied(true);
+            window.setTimeout(() => setCopied(false), 2000);
+        });
+    };
+
+    return (
+        <div className="mt-2 grid gap-1.5 border-t pt-3">
+            <Label
+                htmlFor="payment-link"
+                className="text-xs font-normal text-muted-foreground"
+            >
+                Link de pagamento (Stripe)
+            </Label>
+            <div className="flex gap-2">
+                <Input
+                    id="payment-link"
+                    readOnly
+                    value={url}
+                    onFocus={(event) => event.currentTarget.select()}
+                    className="text-xs"
+                />
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={copy}
+                >
+                    {copied ? 'Copiado' : 'Copiar'}
+                </Button>
+            </div>
+        </div>
+    );
+}

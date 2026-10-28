@@ -95,7 +95,8 @@ class SecurityHeaders
     }
 
     /**
-     * A politica, com uma excecao so: o ecra de consentimento OAuth.
+     * A politica, com duas excecoes: o ecra de consentimento OAuth e o link
+     * de pagamento (que acaba no Stripe Checkout).
      *
      * Ali o botao "Autorizar" faz POST e o servidor responde com um redirect
      * para o claude.ai — e o `form-action` aplica-se tambem aos redirects que
@@ -107,15 +108,18 @@ class SecurityHeaders
      */
     private function policyFor(Request $request): array
     {
-        if (! $request->routeIs('passport.authorizations.authorize')) {
+        if ($request->routeIs('payment-link.show')) {
+            // O botao "Pagar" acaba num redirect para o Stripe Checkout.
+            $domains = ['https://checkout.stripe.com'];
+        } elseif ($request->routeIs('passport.authorizations.authorize')) {
+            /** @var array<int, string> $domains */
+            $domains = array_filter(
+                (array) config('mcp.redirect_domains', []),
+                fn (mixed $domain): bool => is_string($domain) && str_starts_with($domain, 'https://'),
+            );
+        } else {
             return self::CONTENT_SECURITY_POLICY;
         }
-
-        /** @var array<int, string> $domains */
-        $domains = array_filter(
-            (array) config('mcp.redirect_domains', []),
-            fn (mixed $domain): bool => is_string($domain) && str_starts_with($domain, 'https://'),
-        );
 
         return array_map(
             fn (string $directive): string => $directive === "form-action 'self'"

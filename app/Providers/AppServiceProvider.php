@@ -158,6 +158,10 @@ class AppServiceProvider extends ServiceProvider
         // Os avisos da Etsy: porta publica, guardada pela assinatura. O teto
         // e para quem a tenta adivinhar — a Etsy fica muito abaixo dele.
         RateLimiter::for('etsy-webhook', fn (Request $request): Limit => Limit::perMinute(120)->by('etsy-webhook:'.$request->ip()));
+
+        // Os avisos do Stripe: o mesmo, com mais folga — um reembolso ou um
+        // lote de pagamentos manda varios de seguida.
+        RateLimiter::for('stripe-webhook', fn (Request $request): Limit => Limit::perMinute(300)->by('stripe-webhook:'.$request->ip()));
     }
 
     /**

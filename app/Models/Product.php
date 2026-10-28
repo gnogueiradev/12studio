@@ -3,8 +3,10 @@
 namespace App\Models;
 
 use App\Concerns\HasTags;
+use App\Observers\StripeCatalogObserver;
 use Database\Factories\ProductFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -30,6 +32,7 @@ use Illuminate\Support\Carbon;
  * @property int|null $personalization_surcharge_cents
  * @property string|null $seo_title
  * @property string|null $seo_description
+ * @property string|null $stripe_product_id
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property Carbon|null $deleted_at
@@ -45,6 +48,7 @@ use Illuminate\Support\Carbon;
     'max_open_production_qty', 'personalization_fields',
     'personalization_surcharge_cents', 'seo_title', 'seo_description',
 ])]
+#[ObservedBy(StripeCatalogObserver::class)]
 class Product extends Model
 {
     /** @use HasFactory<ProductFactory> */
