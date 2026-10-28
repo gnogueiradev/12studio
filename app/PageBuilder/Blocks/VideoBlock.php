@@ -55,7 +55,7 @@ class VideoBlock extends Block
         $embed = VideoEmbed::fromUrl($url);
 
         if ($embed === null) {
-            $errors["$path.settings.url"] = 'Só vídeos do YouTube ou do Vimeo.';
+            $errors["$path.settings.url"] ??= 'Só vídeos do YouTube ou do Vimeo.';
         }
 
         $clean['settings']['url'] = $embed ?? '';

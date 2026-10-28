@@ -4,6 +4,9 @@ namespace Tests\Feature\PageBuilder;
 
 use App\Models\Page;
 use App\Models\User;
+use App\PageBuilder\DefaultPages;
+use App\PageBuilder\PageDocument;
+use App\PageBuilder\Pages;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -48,6 +51,33 @@ class SystemPagesTest extends TestCase
             ->has('page.blocks'));
 
         $this->assertDatabaseHas('pages', ['key' => $key, 'status' => 'published']);
+    }
+
+    public function test_system_pages_are_created_as_trees(): void
+    {
+        foreach (array_keys(DefaultPages::NAMES) as $key) {
+            $page = app(Pages::class)->system($key);
+
+            $this->assertNotEmpty($page->draft_blocks, $key);
+
+            foreach ($page->draft_blocks as $root) {
+                $this->assertSame('container', $root['type'], $key);
+                $this->assertSame(2, $root['v'], $key);
+                $this->assertNotEmpty($root['children'], $key);
+                $this->assertNotSame('container', $root['children'][0]['type'], $key);
+            }
+
+            $ids = [];
+            PageDocument::walk($page->draft_blocks, function (array $node) use (&$ids): void {
+                $ids[] = $node['id'];
+            });
+            $this->assertSame($ids, array_values(array_unique($ids)), "{$key}: ids repetidos");
+
+            // A origem sai ja em arvore, sem passar pelo upgrade.
+            foreach (DefaultPages::blocks($key) as $root) {
+                $this->assertSame('container', $root['type']);
+            }
+        }
     }
 
     public function test_a_page_is_created_only_once(): void

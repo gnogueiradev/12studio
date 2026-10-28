@@ -404,7 +404,11 @@ class BlockSanitizerTest extends TestCase
                 $this->text('<p>ok</p>', ['id' => 'ok']),
                 ['id' => 'pm', 'type' => 'product_main'],
                 $this->container([], ['children' => 'lixo']),
+                ['type' => 'text', 'id' => ['x']],
+                ['type' => ['x']],
             ]),
+            ['type' => 'text', 'id' => ['x']],
+            ['type' => ['x']],
             $deep,
             $this->container(array_fill(0, Container::MAX_NODES + 50, $this->text('<p>x</p>'))),
         ], 'page');
@@ -418,5 +422,17 @@ class BlockSanitizerTest extends TestCase
         $this->assertLessThanOrEqual(Container::MAX_NODES, PageDocument::count($tree));
 
         $this->assertSame([], $sanitizer->preview(['a' => 1], 'page'));
+    }
+
+    public function test_clean_refuses_non_scalar_ids_and_types_with_a_validation_error(): void
+    {
+        foreach ([
+            [['type' => 'text', 'id' => ['x']]],
+            [['type' => ['x']]],
+            [$this->container([['type' => 'text', 'id' => ['x']]])],
+            [$this->container([['type' => ['x']]])],
+        ] as $nodes) {
+            $this->assertNotEmpty($this->errors($nodes));
+        }
     }
 }

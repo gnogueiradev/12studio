@@ -105,7 +105,8 @@ class PageRendererTest extends TestCase
         $renderer = app(PageRenderer::class);
 
         foreach (array_keys(DefaultPages::NAMES) as $key) {
-            $v1 = DefaultPages::blocks($key);
+            // Os blocos de origem saem em arvore; o v1 e o filho de cada raiz.
+            $v1 = array_map(fn (array $root): array => $root['children'][0], DefaultPages::blocks($key));
 
             $flat = $this->elements($renderer->render(
                 app(BlockSanitizer::class)->preview($v1, Page::TEMPLATES[$key] ?? 'page'),

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\PageBuilder;
 
+use App\Models\Media;
 use App\Models\Page;
 use App\Models\Product;
 use App\Models\User;
@@ -112,6 +113,37 @@ class PageEditorTest extends TestCase
                 ->has('revisions', 1)
                 ->where('locales', ['pt', 'es', 'en', 'fr'])
                 ->has('previewUrl'));
+    }
+
+    public function test_the_pickers_and_revisions_look_at_the_whole_tree(): void
+    {
+        $product = $this->product('Vaso');
+        $background = Media::factory()->create();
+        $photo = Media::factory()->create();
+        $page = $this->landing();
+
+        app(PageBuilderService::class)->saveDraft($page, [[
+            'type' => 'container',
+            'style' => ['bg_image' => ['desktop' => $background->id]],
+            'children' => [
+                ['type' => 'container', 'children' => [
+                    ['type' => 'product_grid', 'settings' => ['source' => 'manual', 'products' => [$product->id]]],
+                    ['type' => 'text_image', 'settings' => ['image' => $photo->id]],
+                ]],
+            ],
+        ]]);
+        app(PageBuilderService::class)->publish($page);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.montra.paginas.edit', $page))
+            ->assertOk()
+            ->assertInertia(fn (Assert $inertia) => $inertia
+                ->has('pickedProducts', 1)
+                ->where('pickedProducts.0.id', $product->id)
+                ->has("media.{$background->id}")
+                ->has("media.{$photo->id}")
+                // Um contentor de raiz com outro dentro, mas dois elementos: a lista conta elementos.
+                ->where('revisions.0.blocks', 2));
     }
 
     public function test_autosave_keeps_a_draft_and_the_public_page_does_not_change(): void

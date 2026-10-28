@@ -96,4 +96,22 @@ class PageDocument
 
         return $total;
     }
+
+    /**
+     * Os nos que nao sao contentores (o que o dono chama "blocos").
+     *
+     * @param  array<int, array<string, mixed>>  $nodes
+     */
+    public static function countElements(array $nodes): int
+    {
+        $total = 0;
+
+        self::walk($nodes, function (array $node) use (&$total): void {
+            if (($node['type'] ?? null) !== 'container') {
+                $total++;
+            }
+        });
+
+        return $total;
+    }
 }

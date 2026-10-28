@@ -82,8 +82,18 @@ class SecurityHeadersTest extends TestCase
         $this->assertStringContainsString($frames, $policy($this->get('/')->assertOk()));
         $this->assertStringContainsString($frames, $policy($this->get('/produtos')->assertOk()));
 
+        // Uma landing publicada e uma pagina de outro idioma tambem levam o frame-src.
+        $service = app(PageBuilderService::class);
+        $published = $service->createLanding(['name' => 'Verao', 'slug' => 'verao']);
+        $service->saveDraft($published, [['type' => 'banner', 'content' => ['pt' => ['title' => 'Verao']]]]);
+        $service->publish($published);
+
+        $this->assertStringContainsString($frames, $policy($this->get('/verao')->assertOk()));
+        $this->assertStringContainsString($frames, $policy($this->get('/en/produtos')->assertOk()));
+        $this->assertStringContainsString($frames, $policy($this->get('/en')->assertOk()));
+
         $admin = User::factory()->admin()->create();
-        $landing = app(PageBuilderService::class)->createLanding(['name' => 'Natal', 'slug' => 'natal']);
+        $landing = $service->createLanding(['name' => 'Natal', 'slug' => 'natal']);
 
         $this->assertStringContainsString($frames, $policy($this->actingAs($admin)->get(route('admin.montra.preview', $landing))->assertOk()));
 

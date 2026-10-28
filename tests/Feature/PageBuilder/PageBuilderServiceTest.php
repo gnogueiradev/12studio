@@ -6,6 +6,7 @@ use App\Models\Page;
 use App\Models\PageRevision;
 use App\Models\User;
 use App\PageBuilder\PageBuilderService;
+use App\PageBuilder\PageDocument;
 use App\PageBuilder\Pages;
 use App\PageBuilder\ReservedSlugs;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -118,6 +119,56 @@ class PageBuilderServiceTest extends TestCase
 
         $this->expectException(ValidationException::class);
         $this->service()->saveDraft($page, $page->draft_blocks, ['pt' => ['title' => str_repeat('a', 71)]]);
+    }
+
+    public function test_restoring_a_v1_revision_upgrades_it(): void
+    {
+        $page = $this->landing();
+        $revision = $page->revisions()->create([
+            'blocks' => [['id' => 'velho', 'type' => 'banner', 'v' => 1, 'content' => ['pt' => ['title' => 'Antigo']]]],
+            'seo' => null,
+            'created_at' => now(),
+        ]);
+
+        $this->service()->restore($page, $revision);
+
+        $draft = $page->refresh()->draft_blocks;
+        $this->assertSame('container', $draft[0]['type']);
+        $this->assertSame('velho', $draft[0]['children'][0]['id']);
+        $this->assertSame('banner', $draft[0]['children'][0]['type']);
+        $this->assertSame('Antigo', $draft[0]['children'][0]['content']['pt']['title']);
+    }
+
+    public function test_duplicate_gives_new_ids_to_every_node(): void
+    {
+        $original = $this->service()->saveDraft($this->service()->createLanding(['name' => 'Natal', 'slug' => 'natal']), [[
+            'id' => 'sec',
+            'type' => 'container',
+            'children' => [
+                ['id' => 'col', 'type' => 'container', 'children' => [
+                    ['id' => 'fundo', 'type' => 'banner', 'content' => ['pt' => ['title' => 'Feliz Natal']]],
+                ]],
+                ['id' => 'txt', 'type' => 'text', 'content' => ['pt' => ['body' => '<p>Olá</p>']]],
+            ],
+        ]]);
+
+        $copy = $this->service()->duplicate($original);
+
+        $originalIds = [];
+        PageDocument::walk($original->draft_blocks, function (array $node) use (&$originalIds): void {
+            $originalIds[] = $node['id'];
+        });
+        $copyIds = [];
+        PageDocument::walk($copy->draft_blocks, function (array $node) use (&$copyIds): void {
+            $copyIds[] = $node['id'];
+        });
+
+        $this->assertCount(4, $copyIds);
+        $this->assertSame([], array_intersect($originalIds, $copyIds));
+        $this->assertCount(4, array_unique($copyIds));
+        // O conteudo e a forma da arvore ficam.
+        $this->assertSame('Feliz Natal', $copy->draft_blocks[0]['children'][0]['children'][0]['content']['pt']['title']);
+        $this->assertSame('text', $copy->draft_blocks[0]['children'][1]['type']);
     }
 
     public function test_duplicating_makes_a_new_draft_landing(): void

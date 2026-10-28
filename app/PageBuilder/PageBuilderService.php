@@ -5,6 +5,7 @@ namespace App\PageBuilder;
 use App\Models\Page;
 use App\Models\PageRevision;
 use App\Models\User;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -166,8 +167,26 @@ class PageBuilderService
             'name' => $page->name.' (cópia)',
             'status' => 'draft',
             'seo' => $page->seo,
-            'draft_blocks' => $this->sanitizer->clean($page->draft_blocks, 'page', requireFields: false),
+            'draft_blocks' => $this->withNewIds($this->sanitizer->clean($page->draft_blocks, 'page', requireFields: false)),
         ]);
+    }
+
+    /**
+     * Ids novos em todos os nos da arvore: a copia nao partilha ids com a
+     * original.
+     *
+     * @param  array<int, array<string, mixed>>  $tree
+     * @return array<int, array<string, mixed>>
+     */
+    private function withNewIds(array $tree): array
+    {
+        $copy = $tree;
+
+        PageDocument::walk($tree, function (array $node, string $path) use (&$copy): void {
+            Arr::set($copy, substr($path, strlen('blocks.')).'.id', (string) Str::uuid());
+        });
+
+        return $copy;
     }
 
     public function delete(Page $page): void

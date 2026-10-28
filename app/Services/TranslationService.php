@@ -270,15 +270,22 @@ class TranslationService
         // O id pode ser de um no a qualquer profundidade da arvore.
         $draft = $page->draft_blocks;
         $index = [];
-        PageDocument::walk($draft, function (array $node, string $path) use (&$index): void {
-            $index[(string) ($node['id'] ?? '')] ??= substr($path, strlen('blocks.'));
+        $containers = [];
+        PageDocument::walk($draft, function (array $node, string $path) use (&$index, &$containers): void {
+            $id = (string) ($node['id'] ?? '');
+            $index[$id] ??= substr($path, strlen('blocks.'));
+            $containers[$id] ??= ($node['type'] ?? null) === 'container';
         });
 
         foreach ($blocks as $i => $incoming) {
-            $id = is_array($incoming) ? (string) ($incoming['id'] ?? '') : '';
+            $id = is_array($incoming) && is_scalar($incoming['id'] ?? null) ? (string) $incoming['id'] : '';
 
             if (! isset($index[$id])) {
                 throw ValidationException::withMessages(["blocks.$i.id" => "Não há nenhum bloco com o id \"{$id}\" nesta página (ver page_get)."]);
+            }
+
+            if ($containers[$id]) {
+                throw ValidationException::withMessages(["blocks.$i.id" => "O id \"{$id}\" é de um contentor, que não tem texto para traduzir. Usa o id de um elemento (ver page_get)."]);
             }
 
             $content = is_array($incoming['content'] ?? null) ? $incoming['content'] : [];

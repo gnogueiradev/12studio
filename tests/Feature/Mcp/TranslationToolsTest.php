@@ -20,6 +20,7 @@ use App\PageBuilder\PageBuilderService;
 use App\PageBuilder\PageDocument;
 use App\Services\TranslationService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Validation\ValidationException;
 use Laravel\Mcp\Server\Testing\PendingTestResponse;
 use Laravel\Passport\Passport;
 use Tests\TestCase;
@@ -173,6 +174,58 @@ class TranslationToolsTest extends TestCase
         $this->assertSame('Merry Christmas', $node['content']['en']['title']);
         $this->assertSame('Feliz Natal', $node['content']['pt']['title']);
         $this->assertSame('col', $page->draft_blocks[0]['children'][0]['id']);
+    }
+
+    public function test_mcp_page_get_returns_the_tree(): void
+    {
+        $service = app(PageBuilderService::class);
+        $page = $service->createLanding(['name' => 'Natal', 'slug' => 'natal']);
+        $service->saveDraft($page, [[
+            'id' => 'sec',
+            'type' => 'container',
+            'children' => [
+                ['id' => 'col', 'type' => 'container', 'children' => [
+                    ['id' => 'fundo', 'type' => 'banner', 'content' => ['pt' => ['title' => 'Feliz Natal']]],
+                ]],
+            ],
+        ]]);
+
+        $this->reader()->tool(PageGetTool::class, ['id' => $page->id])
+            ->assertOk()
+            ->assertStructuredContent(fn ($json) => $json
+                ->where('format', 'v2')
+                ->where('blocks.0.id', 'sec')
+                ->where('blocks.0.type', 'container')
+                ->where('blocks.0.children.0.id', 'col')
+                ->where('blocks.0.children.0.children.0.id', 'fundo')
+                ->where('blocks.0.children.0.children.0.type', 'banner')
+                ->where('blocks.0.children.0.children.0.fields.0.key', 'title')
+                ->where('blocks.0.children.0.children.0.fields.0.values.pt', 'Feliz Natal')
+                ->etc());
+
+        $this->reader()->tool(PagesListTool::class)
+            ->assertOk()
+            ->assertStructuredContent(fn ($json) => $json
+                ->where('pages', fn ($pages) => collect($pages)->firstWhere('key', null)['blocks'] === 1
+                    && collect($pages)->firstWhere('key', null)['format'] === 'v2'));
+    }
+
+    public function test_a_container_id_is_refused_when_translating(): void
+    {
+        $service = app(PageBuilderService::class);
+        $page = $service->createLanding(['name' => 'Natal', 'slug' => 'natal']);
+        $service->saveDraft($page, [['id' => 'sec', 'type' => 'container', 'children' => [
+            ['id' => 'b1', 'type' => 'banner', 'content' => ['pt' => ['title' => 'Feliz Natal']]],
+        ]]]);
+
+        try {
+            app(TranslationService::class)->translatePage($page, 'en', [['id' => 'sec', 'content' => ['title' => 'X']]]);
+            $this->fail('Um contentor nao tem texto para traduzir.');
+        } catch (ValidationException $exception) {
+            $this->assertStringContainsString('contentor', $exception->errors()['blocks.0.id'][0]);
+        }
+
+        $this->assertSame([], PageDocument::find($page->refresh()->draft_blocks, 'sec')['content']);
     }
 
     public function test_colour_and_material_names_are_translated_through_their_update_tools(): void

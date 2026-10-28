@@ -114,7 +114,8 @@ class BlockSanitizer
         }
 
         // A raiz so tem contentores: um elemento solto (v1) ganha um a volta.
-        $roots = array_map(fn (mixed $node): mixed => is_array($node) ? PageDocument::upgrade([$node])[0] : $node, $nodes);
+        // (um no com id ou tipo que nao e texto fica como veio: o node() recusa-o)
+        $roots = array_map(fn (mixed $node): mixed => is_array($node) && $this->scalarKeys($node) ? PageDocument::upgrade([$node])[0] : $node, $nodes);
 
         if ($strict && PageDocument::count($roots) > Container::MAX_NODES) {
             throw ValidationException::withMessages(['blocks' => 'Uma página não pode ter mais de '.Container::MAX_NODES.' elementos e contentores.']);
@@ -146,6 +147,12 @@ class BlockSanitizer
             return null;
         }
 
+        if (! $this->scalarKeys($raw)) {
+            $this->errors[$path] = 'Bloco inválido.';
+
+            return null;
+        }
+
         if ($this->budget-- <= 0) {
             return null;
         }
@@ -153,6 +160,17 @@ class BlockSanitizer
         return ($raw['type'] ?? null) === 'container'
             ? $this->container($raw, $path, $template, $depth)
             : $this->element($raw, $path, $template, $depth, $siblings);
+    }
+
+    /**
+     * O id e o tipo, quando vem, tem de ser texto ou numero: com um array o
+     * PHP rebentava ao converter para string.
+     *
+     * @param  array<mixed>  $raw
+     */
+    private function scalarKeys(array $raw): bool
+    {
+        return is_scalar($raw['id'] ?? '') && is_scalar($raw['type'] ?? '');
     }
 
     /**

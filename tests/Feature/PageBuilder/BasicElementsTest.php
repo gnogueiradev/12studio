@@ -98,6 +98,19 @@ class BasicElementsTest extends TestCase
             'youtube shorts' => ['https://www.youtube.com/shorts/dQw4w9WgXcQ', 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ'],
             'vimeo' => ['https://vimeo.com/76979871', 'https://player.vimeo.com/video/76979871'],
             'ja em embed (regravar)' => ['https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ', 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ'],
+            'youtube embed' => ['https://www.youtube.com/embed/dQw4w9WgXcQ', 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ'],
+            'youtube live' => ['youtube.com/live/dQw4w9WgXcQ', 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ'],
+            'http' => ['http://www.youtube.com/watch?v=dQw4w9WgXcQ', 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ'],
+            'sem esquema' => ['youtube.com/watch?v=dQw4w9WgXcQ', 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ'],
+            'sem esquema com www' => ['www.youtube.com/watch?v=dQw4w9WgXcQ', 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ'],
+            'youtu.be sem esquema' => ['youtu.be/dQw4w9WgXcQ', 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ'],
+            'youtu.be com si' => ['https://youtu.be/dQw4w9WgXcQ?si=abcDEF123', 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ'],
+            'parametros extra antes e depois' => ['https://www.youtube.com/watch?feature=share&v=dQw4w9WgXcQ&t=30s', 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ'],
+            'm.youtube' => ['https://m.youtube.com/watch?v=dQw4w9WgXcQ', 'https://www.youtube-nocookie.com/embed/dQw4w9WgXcQ'],
+            'vimeo http' => ['http://vimeo.com/123', 'https://player.vimeo.com/video/123'],
+            'vimeo privado' => ['https://vimeo.com/76979871/a1B2c3D4e5', 'https://player.vimeo.com/video/76979871?h=a1B2c3D4e5'],
+            'vimeo privado ja em embed (regravar)' => ['https://player.vimeo.com/video/76979871?h=a1B2c3D4e5', 'https://player.vimeo.com/video/76979871?h=a1B2c3D4e5'],
+            'vimeo ja em embed (regravar)' => ['https://player.vimeo.com/video/76979871', 'https://player.vimeo.com/video/76979871'],
         ];
     }
 
@@ -124,8 +137,11 @@ class BasicElementsTest extends TestCase
             'javascript' => ['javascript:alert(1)'],
             'youtube falso' => ['https://youtube.com.evil.example/watch?v=dQw4w9WgXcQ'],
             'id curto' => ['https://youtu.be/abc'],
-            'http simples' => ['http://vimeo.com/123'],
-        ];
+            'dominio parecido sem esquema' => ['youtube.com.evil.example/watch?v=dQw4w9WgXcQ'],
+            'userinfo' => ['https://youtube.com@evil.example/watch?v=dQw4w9WgXcQ'],
+            'userinfo sem esquema' => ['youtu.be@evil.example/dQw4w9WgXcQ'],
+            'youtube no caminho de outro host' => ['https://evil.example/youtube.com/watch?v=dQw4w9WgXcQ'],
+            'vimeo falso' => ['https://vimeo.com.evil.example/123/abc'],        ];
     }
 
     #[DataProvider('badVideoUrls')]
@@ -136,6 +152,13 @@ class BasicElementsTest extends TestCase
         $errors = $this->errors(['type' => 'video', 'settings' => ['url' => $url]]);
 
         $this->assertSame('Só vídeos do YouTube ou do Vimeo.', $errors['blocks.0.children.0.settings.url'] ?? null);
+    }
+
+    public function test_video_keeps_the_earlier_error_at_the_url_path(): void
+    {
+        $errors = $this->errors(['type' => 'video', 'settings' => ['url' => 'https://evil.example/'.str_repeat('a', 300)]]);
+
+        $this->assertStringContainsString('300', $errors['blocks.0.children.0.settings.url']);
     }
 
     public function test_video_requires_a_url(): void

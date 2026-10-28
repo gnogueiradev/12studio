@@ -18,6 +18,7 @@ use App\PageBuilder\Container;
 use App\PageBuilder\DefaultPages;
 use App\PageBuilder\Field;
 use App\PageBuilder\PageBuilderService;
+use App\PageBuilder\PageDocument;
 use App\PageBuilder\PageRenderer;
 use App\PageBuilder\Pages;
 use App\PageBuilder\RenderContext;
@@ -102,7 +103,7 @@ class PageController extends Controller
                     'id' => $revision->id,
                     'createdAt' => $revision->created_at?->toIso8601String(),
                     'user' => $revision->user?->name,
-                    'blocks' => count($revision->blocks),
+                    'blocks' => PageDocument::countElements($revision->blocks),
                 ])
                 ->all(),
             'locales' => array_keys((array) config('locales.available')),
@@ -335,13 +336,13 @@ class PageController extends Controller
     {
         $ids = [];
 
-        foreach ($page->draft_blocks as $block) {
+        PageDocument::walk($page->draft_blocks, function (array $block) use (&$ids): void {
             foreach ((array) ($block['settings'] ?? []) as $value) {
                 if (is_array($value) && array_is_list($value) && $value !== [] && is_int($value[0])) {
                     $ids = [...$ids, ...$value];
                 }
             }
-        }
+        });
 
         if ($ids === []) {
             return [];
@@ -378,7 +379,18 @@ class PageController extends Controller
             }
         };
 
-        foreach ($page->draft_blocks as $block) {
+        PageDocument::walk($page->draft_blocks, function (array $block) use ($registry, $collect, &$ids): void {
+            // O fundo de um contentor guarda o id da imagem por dispositivo.
+            if (($block['type'] ?? null) === 'container') {
+                foreach ((array) ($block['style']['bg_image'] ?? []) as $value) {
+                    if (is_int($value)) {
+                        $ids[] = $value;
+                    }
+                }
+
+                return;
+            }
+
             foreach ($registry->get((string) ($block['type'] ?? ''))?->fields() ?? [] as $field) {
                 if ($field->translatable) {
                     foreach ((array) ($block['content'] ?? []) as $content) {
@@ -388,7 +400,7 @@ class PageController extends Controller
                     $collect($field, $block['settings'][$field->key] ?? null);
                 }
             }
-        }
+        });
 
         if ($ids === []) {
             return [];
