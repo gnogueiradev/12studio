@@ -100,6 +100,20 @@ abstract class Block
     }
 
     /**
+     * Ultimo passo da limpeza de um elemento: um bloco pode validar ou
+     * transformar os dados ja limpos (ex.: o video guarda o endereco de
+     * embed). Por omissao nao mexe em nada.
+     *
+     * @param  array{settings: array<string, mixed>, content: array<string, array<string, mixed>>}  $clean
+     * @param  array<string, string>  $errors  erros por caminho do campo
+     * @return array{settings: array<string, mixed>, content: array<string, array<string, mixed>>}
+     */
+    public function finalize(array $clean, string $path, array &$errors): array
+    {
+        return $clean;
+    }
+
+    /**
      * Iguais para todos os nos.
      *
      * @return array<int, StyleProp>

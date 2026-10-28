@@ -23,6 +23,16 @@ class BlockRegistry
         Blocks\ContactBlock::class,
         Blocks\CustomOrderBlock::class,
         Blocks\SpacerBlock::class,
+        // Elementos basicos (vivem dentro de contentores, sem casca).
+        Blocks\HeadingBlock::class,
+        Blocks\ParagraphBlock::class,
+        Blocks\ImageBlock::class,
+        Blocks\ButtonBlock::class,
+        Blocks\IconBlock::class,
+        Blocks\DividerBlock::class,
+        Blocks\VideoBlock::class,
+        Blocks\IconListBlock::class,
+        Blocks\QuoteBlock::class,
         // Templates (catalogo e produto).
         Blocks\CatalogHeaderBlock::class,
         Blocks\CatalogGridBlock::class,

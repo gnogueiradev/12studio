@@ -2,6 +2,8 @@
 
 namespace Tests\Feature;
 
+use App\Models\User;
+use App\PageBuilder\PageBuilderService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use PHPUnit\Framework\Attributes\DataProvider;
 use Tests\TestCase;
@@ -69,6 +71,26 @@ class SecurityHeadersTest extends TestCase
         // contra XSS, que e a unica razao pela qual existe aqui.
         $this->assertStringNotContainsString("script-src 'unsafe-inline'", $policy);
         $this->assertStringNotContainsString('unsafe-eval', $policy);
+    }
+
+    public function test_store_pages_allow_video_frames_but_admin_does_not(): void
+    {
+        config(['access.store_open' => true]);
+        $frames = "frame-src 'self' https://www.youtube-nocookie.com https://player.vimeo.com";
+        $policy = fn ($response): string => (string) $response->headers->get('Content-Security-Policy-Report-Only');
+
+        $this->assertStringContainsString($frames, $policy($this->get('/')->assertOk()));
+        $this->assertStringContainsString($frames, $policy($this->get('/produtos')->assertOk()));
+
+        $admin = User::factory()->admin()->create();
+        $landing = app(PageBuilderService::class)->createLanding(['name' => 'Natal', 'slug' => 'natal']);
+
+        $this->assertStringContainsString($frames, $policy($this->actingAs($admin)->get(route('admin.montra.preview', $landing))->assertOk()));
+
+        // O resto do backoffice fica como estava.
+        $response = $this->actingAs($admin)->get(route('admin.montra.paginas.index'))->assertOk();
+        $this->assertStringNotContainsString('youtube', $policy($response));
+        $this->assertStringNotContainsString('frame-src', $policy($response));
     }
 
     public function test_hsts_is_absent_over_plain_http(): void

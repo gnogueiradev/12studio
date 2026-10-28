@@ -417,6 +417,8 @@ class BlockSanitizer
             }
         }
 
+        ['settings' => $settings, 'content' => $content] = $block->finalize(['settings' => $settings, 'content' => $content], $path, $this->errors);
+
         return [
             'id' => $id,
             'type' => $block->type(),
