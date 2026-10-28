@@ -4,9 +4,11 @@ namespace App\Models;
 
 use App\Concerns\HasTags;
 use App\Concerns\HasTranslations;
+use App\Observers\StripeCatalogObserver;
 use App\Support\SearchText;
 use Database\Factories\ProductFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -35,6 +37,7 @@ use Illuminate\Support\Carbon;
  * @property string|null $seo_description
  * @property string|null $search_text
  * @property int $sort_order
+ * @property string|null $stripe_product_id
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property Carbon|null $deleted_at
@@ -50,6 +53,7 @@ use Illuminate\Support\Carbon;
     'max_open_production_qty', 'personalization_fields',
     'personalization_surcharge_cents', 'seo_title', 'seo_description', 'sort_order',
 ])]
+#[ObservedBy(StripeCatalogObserver::class)]
 class Product extends Model
 {
     /** @use HasFactory<ProductFactory> */

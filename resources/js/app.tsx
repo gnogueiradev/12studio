@@ -26,9 +26,10 @@ createInertiaApp({
     },
     layout: (name) => {
         switch (true) {
-            // Landing "em breve" (loja fechada): desenha o ecra todo sozinha,
-            // sem header nem footer da loja.
+            // Landing "em breve" (loja fechada) e link de pagamento: desenham
+            // o ecra todo sozinhas, sem header nem footer da loja.
             case name === 'coming-soon':
+            case name === 'pagar':
                 return undefined;
             // Montra publica: todas as paginas em pages/store/. Tudo o resto
             // — admin/, settings/, dashboard — usa o AppLayout de sidebar.

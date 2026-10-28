@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\EtsyWebhookController;
+use App\Http\Controllers\StripeWebhookController;
 use Illuminate\Support\Facades\Route;
 
 // ── Avisos de fora (webhooks) ────────────────────────────────────────────────
@@ -14,3 +15,9 @@ use Illuminate\Support\Facades\Route;
 Route::post('webhooks/etsy', EtsyWebhookController::class)
     ->middleware('throttle:etsy-webhook')
     ->name('webhooks.etsy');
+
+// O Stripe avisa quando uma encomenda foi paga pelo link de pagamento (ou
+// reembolsada). Ver StripeWebhookController.
+Route::post('webhooks/stripe', StripeWebhookController::class)
+    ->middleware('throttle:stripe-webhook')
+    ->name('webhooks.stripe');

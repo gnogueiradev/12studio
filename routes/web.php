@@ -5,6 +5,7 @@ use App\Http\Controllers\Admin;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\LoginGateController;
 use App\Http\Controllers\NotifyController;
+use App\Http\Controllers\PaymentLinkController;
 use App\Http\Controllers\Store\SitemapController;
 use Illuminate\Support\Facades\Route;
 
@@ -17,6 +18,17 @@ Route::get('sitemap.xml', SitemapController::class)->name('sitemap');
 Route::post('avisar', NotifyController::class)
     ->middleware('throttle:6,1')
     ->name('notify');
+
+// O link de pagamento de uma encomenda do backoffice (ver
+// PaymentLinkController). O token e o guest_access_token: 64 caracteres. O
+// POST e o que fala com o Stripe — dai o throttle.
+Route::get('pagar/{token}', [PaymentLinkController::class, 'show'])
+    ->where('token', '[A-Za-z0-9]{64}')
+    ->name('payment-link.show');
+Route::post('pagar/{token}', [PaymentLinkController::class, 'pay'])
+    ->where('token', '[A-Za-z0-9]{64}')
+    ->middleware('throttle:10,1')
+    ->name('payment-link.pay');
 
 // ── Cadeado do login: visitar /acesso/<segredo> grava o cookie que torna as
 //    rotas do Fortify visiveis neste browser. Sem middleware — tem de ser
