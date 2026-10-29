@@ -80,7 +80,7 @@ export function CategoriesBlock({
                     {data.categories.map((category) => (
                         <li
                             key={category.href}
-                            className="w-[75%] shrink-0 snap-start sm:w-[45%] lg:w-[30%]"
+                            className="w-[75%] shrink-0 snap-start @blk-sm:w-[45%] @blk-lg:w-[30%]"
                         >
                             <CategoryTile category={category} />
                         </li>
@@ -89,12 +89,12 @@ export function CategoriesBlock({
             ) : (
                 <ul
                     className={cn(
-                        'grid grid-cols-1 gap-4 sm:grid-cols-2',
+                        'grid grid-cols-1 gap-4 @blk-sm:grid-cols-2',
                         // Quatro (ou oito) enchem linhas de quatro; o resto,
                         // de três — sem uma categoria sozinha na última.
                         data.categories.length % 4 === 0
-                            ? 'lg:grid-cols-4'
-                            : 'lg:grid-cols-3',
+                            ? '@blk-lg:grid-cols-4'
+                            : '@blk-lg:grid-cols-3',
                     )}
                 >
                     {data.categories.map((category) => (

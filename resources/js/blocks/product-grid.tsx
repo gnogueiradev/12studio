@@ -14,8 +14,8 @@ type Data = {
 
 const COLUMNS: Record<number, string> = {
     2: 'grid-cols-2',
-    3: 'grid-cols-2 md:grid-cols-3',
-    4: 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4',
+    3: 'grid-cols-2 @blk-md:grid-cols-3',
+    4: 'grid-cols-2 @blk-md:grid-cols-3 @blk-lg:grid-cols-4',
 };
 
 const SIZES: Record<number, string> = {
@@ -54,7 +54,7 @@ export function ProductGridBlock({
             </BlockHeading>
             <div
                 className={cn(
-                    'grid gap-x-4 gap-y-10 md:gap-x-6',
+                    'grid gap-x-4 gap-y-10 @blk-md:gap-x-6',
                     COLUMNS[data.columns] ?? COLUMNS[4],
                 )}
             >

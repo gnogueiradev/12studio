@@ -27,7 +27,7 @@ export function BannerBlock({
                 'flex flex-col gap-5',
                 centered
                     ? 'items-center text-center'
-                    : 'md:flex-row md:items-center md:justify-between',
+                    : '@blk-md:flex-row @blk-md:items-center @blk-md:justify-between',
             )}
         >
             <div className={cn('max-w-2xl', centered && 'mx-auto')}>

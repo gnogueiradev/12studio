@@ -31,11 +31,11 @@ export function StepsBlock({
             />
             <ol
                 className={cn(
-                    'grid gap-8 md:gap-10',
+                    'grid gap-8 @blk-md:gap-10',
                     data.steps.length >= 3
-                        ? 'md:grid-cols-3'
-                        : 'md:grid-cols-2',
-                    data.steps.length === 4 && 'lg:grid-cols-4',
+                        ? '@blk-md:grid-cols-3'
+                        : '@blk-md:grid-cols-2',
+                    data.steps.length === 4 && '@blk-lg:grid-cols-4',
                 )}
             >
                 {data.steps.map((step, index) => (

@@ -23,7 +23,7 @@ export function TestimonialsBlock({
     return (
         <BlockSection shell={!nested} style={block.style}>
             <BlockHeading title={data.title} align={block.style.align} />
-            <ul className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <ul className="grid gap-4 @blk-md:grid-cols-2 @blk-lg:grid-cols-3">
                 {data.items.map((item, index) => (
                     <li
                         key={index}

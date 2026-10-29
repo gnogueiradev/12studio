@@ -27,14 +27,14 @@ export function TextImageBlock({
         <BlockSection shell={!nested} style={block.style}>
             <div
                 className={cn(
-                    'grid items-center gap-10 md:gap-16',
-                    data.image && 'md:grid-cols-2',
+                    'grid items-center gap-10 @blk-md:gap-16',
+                    data.image && '@blk-md:grid-cols-2',
                 )}
             >
                 <div
                     className={cn(
                         'flex max-w-xl flex-col gap-4',
-                        imageLeft && 'md:order-2',
+                        imageLeft && '@blk-md:order-2',
                     )}
                 >
                     {data.eyebrow && (

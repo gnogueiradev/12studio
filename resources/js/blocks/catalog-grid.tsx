@@ -415,7 +415,7 @@ export function CatalogGridBlock({
                     <SheetTrigger asChild>
                         <Button
                             variant="outline"
-                            className={cn('gap-2', side && 'lg:hidden')}
+                            className={cn('gap-2', side && '@blk-lg:hidden')}
                         >
                             <SlidersHorizontal aria-hidden="true" />
                             {t('catalog.filters')}
@@ -479,7 +479,7 @@ export function CatalogGridBlock({
             <div
                 className={cn(
                     'mt-6 grid gap-8',
-                    side && 'lg:grid-cols-[15rem_1fr] lg:gap-10',
+                    side && '@blk-lg:grid-cols-[15rem_1fr] @blk-lg:gap-10',
                 )}
             >
                 {side && (
@@ -488,7 +488,7 @@ export function CatalogGridBlock({
                     // do <main> confunde os leitores de ecra.
                     <section
                         aria-label={t('catalog.filters')}
-                        className="hidden lg:block"
+                        className="hidden @blk-lg:block"
                     >
                         {panel}
                     </section>
@@ -555,10 +555,10 @@ export function CatalogGridBlock({
                             data="products"
                             manual
                             className={cn(
-                                'grid grid-cols-2 gap-x-4 gap-y-10 md:gap-x-6',
+                                'grid grid-cols-2 gap-x-4 gap-y-10 @blk-md:gap-x-6',
                                 side
-                                    ? 'md:grid-cols-3'
-                                    : 'md:grid-cols-3 xl:grid-cols-4',
+                                    ? '@blk-md:grid-cols-3'
+                                    : '@blk-md:grid-cols-3 @blk-xl:grid-cols-4',
                             )}
                             next={({ fetch, hasMore, loading }) =>
                                 hasMore ? (

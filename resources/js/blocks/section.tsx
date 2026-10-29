@@ -104,7 +104,7 @@ export function BlockHeading({
                 'mb-8 flex flex-col gap-4 md:mb-10',
                 align === 'center'
                     ? 'items-center'
-                    : 'md:flex-row md:items-end md:justify-between',
+                    : '@blk-md:flex-row @blk-md:items-end @blk-md:justify-between',
             )}
         >
             <div className={cn('max-w-2xl', align === 'center' && 'mx-auto')}>

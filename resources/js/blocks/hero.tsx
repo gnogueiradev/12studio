@@ -87,11 +87,11 @@ export function HeroBlock({
     if (variant === 'split' && data.image) {
         return (
             <BlockSection shell={!nested} style={block.style}>
-                <div className="grid items-center gap-10 md:grid-cols-2 md:gap-16">
+                <div className="grid items-center gap-10 @blk-md:grid-cols-2 @blk-md:gap-16">
                     {text}
                     <div
                         className={cn(
-                            'aspect-[4/5] overflow-hidden rounded-xl bg-muted md:aspect-square',
+                            'aspect-[4/5] overflow-hidden rounded-xl bg-muted @blk-md:aspect-square',
                             RISE_IN,
                             'delay-150',
                         )}

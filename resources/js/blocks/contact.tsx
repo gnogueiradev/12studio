@@ -39,7 +39,7 @@ export function ContactBlock({
                     'grid gap-10',
                     data.show_form &&
                         hasDetails &&
-                        'md:grid-cols-[3fr_2fr] md:gap-16',
+                        '@blk-md:grid-cols-[3fr_2fr] @blk-md:gap-16',
                 )}
             >
                 <div className="flex flex-col gap-4 text-left">

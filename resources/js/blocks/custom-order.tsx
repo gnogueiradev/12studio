@@ -306,7 +306,7 @@ export function CustomOrderBlock({
 
                             {step === 1 && (
                                 <>
-                                    <div className="grid gap-4 sm:grid-cols-[1fr_8rem]">
+                                    <div className="grid gap-4 @blk-sm:grid-cols-[1fr_8rem]">
                                         <Field
                                             id={id('dimensions')}
                                             label={t('conversation.dimensions')}
@@ -360,7 +360,7 @@ export function CustomOrderBlock({
                                             />
                                         </Field>
                                     </div>
-                                    <div className="grid gap-4 sm:grid-cols-2">
+                                    <div className="grid gap-4 @blk-sm:grid-cols-2">
                                         <Field
                                             id={id('color')}
                                             label={t('conversation.color')}
@@ -552,7 +552,7 @@ export function CustomOrderBlock({
 
                             {step === 2 && (
                                 <>
-                                    <div className="grid gap-4 sm:grid-cols-2">
+                                    <div className="grid gap-4 @blk-sm:grid-cols-2">
                                         <Field
                                             id={id('name')}
                                             label={t('form.name')}
@@ -602,7 +602,7 @@ export function CustomOrderBlock({
                                             type="tel"
                                             autoComplete="tel"
                                             maxLength={30}
-                                            className="sm:w-1/2"
+                                            className="@blk-sm:w-1/2"
                                             value={form.data.phone}
                                             onChange={(event) =>
                                                 form.setData(

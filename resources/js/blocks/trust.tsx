@@ -22,10 +22,10 @@ export function TrustBlock({
         <BlockSection shell={!nested} style={block.style}>
             <ul
                 className={cn(
-                    'grid grid-cols-2 gap-6 border-y border-border/60 py-8 md:gap-8',
+                    'grid grid-cols-2 gap-6 border-y border-border/60 py-8 @blk-md:gap-8',
                     data.items.length >= 4
-                        ? 'md:grid-cols-4'
-                        : 'md:grid-cols-3',
+                        ? '@blk-md:grid-cols-4'
+                        : '@blk-md:grid-cols-3',
                 )}
             >
                 {data.items.map((item, index) => (
