@@ -30,18 +30,27 @@ import {
     TooltipContent,
     TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { isEditorContainer, soleElement, walkNodes } from '@/lib/page-tree';
 import { cn } from '@/lib/utils';
-import type { BlockSchema, EditorBlock } from '@/types/page-builder';
-import { BlockIcon, blockSummary, missingTranslations } from './blocks';
+import type { BlockSchema, EditorNode } from '@/types/page-builder';
+import {
+    BlockIcon,
+    blockSummary,
+    missingTranslations,
+    nodeLabel,
+    subtreeFlags,
+} from './blocks';
 import { MOD } from './shortcuts';
 
 type Props = {
-    blocks: EditorBlock[];
+    /** Só a raiz da árvore: as secções da página. */
+    blocks: EditorNode[];
     schema: Record<string, BlockSchema>;
     selected: string | null;
     locales: string[];
     defaultLocale: string;
-    errorBlocks: Set<number>;
+    /** Os ids das secções com erros (nelas ou lá dentro). */
+    errorBlocks: Set<string>;
     onSelect: (id: string) => void;
     onMove: (from: number, to: number) => void;
     onToggle: (id: string) => void;
@@ -56,6 +65,9 @@ type Props = {
  * teclado (espaço para pegar, setas para mover, espaço para largar). Os
  * blocos obrigatórios do template movem-se mas não se apagam. Entre blocos
  * há uma linha "+" (ao passar o rato ou com o Tab) para meter um ali.
+ *
+ * Até haver o Navegador, cada linha é uma secção de raiz: com um só elemento
+ * mostra-se como esse elemento; com mais, como "Secção".
  */
 export function BlockList({
     blocks,
@@ -131,18 +143,20 @@ export function BlockList({
                             dragging={dragging}
                             onInsert={onInsert}
                             block={block}
-                            schema={schema[block.type]}
+                            schema={schema}
                             selected={selected === block.id}
-                            invalid={errorBlocks.has(index)}
-                            missing={
-                                missingTranslations(
-                                    block,
-                                    schema[block.type],
-                                    locales,
-                                    defaultLocale,
-                                ).length > 0
-                            }
-                            summary={blockSummary(block, defaultLocale)}
+                            invalid={errorBlocks.has(block.id)}
+                            missing={walkNodes([block]).some(
+                                (node) =>
+                                    !isEditorContainer(node) &&
+                                    missingTranslations(
+                                        node,
+                                        schema[node.type],
+                                        locales,
+                                        defaultLocale,
+                                    ).length > 0,
+                            )}
+                            summary={rowSummary(block, defaultLocale)}
                             onSelect={() => onSelect(block.id)}
                             onToggle={() => onToggle(block.id)}
                             onDuplicate={() => onDuplicate(block.id)}
@@ -153,6 +167,20 @@ export function BlockList({
             </SortableContext>
         </DndContext>
     );
+}
+
+function rowSummary(block: EditorNode, defaultLocale: string): string {
+    const element = soleElement(block);
+
+    if (element) {
+        return blockSummary(element, defaultLocale);
+    }
+
+    const count = walkNodes([block]).filter(
+        (node) => !isEditorContainer(node),
+    ).length;
+
+    return count === 1 ? '1 elemento' : `${count} elementos`;
 }
 
 function SortableBlock({
@@ -170,9 +198,9 @@ function SortableBlock({
     onRemove,
     onInsert,
 }: {
-    block: EditorBlock;
+    block: EditorNode;
     index: number;
-    schema: BlockSchema | undefined;
+    schema: Record<string, BlockSchema>;
     selected: boolean;
     invalid: boolean;
     missing: boolean;
@@ -193,8 +221,10 @@ function SortableBlock({
         isDragging,
     } = useSortable({ id: block.id });
     const row = useRef<HTMLLIElement | null>(null);
-    const label = schema?.label ?? block.type;
-    const required = schema?.required ?? false;
+    const label = nodeLabel(block, schema);
+    const { required, unique } = subtreeFlags(block, schema);
+    const element = soleElement(block);
+    const visible = block.visible && (element?.visible ?? true);
 
     // Escolhido na pré-visualização: a lista vai até ele.
     useEffect(() => {
@@ -239,7 +269,7 @@ function SortableBlock({
                     aria-pressed={selected}
                     className={cn(
                         'flex min-w-0 flex-1 items-center gap-2.5 rounded-md py-2 text-left focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
-                        !block.visible && 'opacity-60',
+                        !visible && 'opacity-60',
                     )}
                 >
                     <span
@@ -250,7 +280,10 @@ function SortableBlock({
                                 : 'bg-muted text-muted-foreground',
                         )}
                     >
-                        <BlockIcon type={block.type} className="size-4" />
+                        <BlockIcon
+                            type={element?.type ?? block.type}
+                            className="size-4"
+                        />
                     </span>
                     <span className="min-w-0 flex-1">
                         <span className="flex items-center gap-1.5 text-sm font-medium">
@@ -261,7 +294,7 @@ function SortableBlock({
                                     className="size-3 shrink-0 text-muted-foreground"
                                 />
                             )}
-                            {!block.visible && (
+                            {!visible && (
                                 <EyeOff
                                     aria-label="Escondido"
                                     className="size-3 shrink-0 text-muted-foreground"
@@ -298,12 +331,12 @@ function SortableBlock({
                     )}
                 >
                     <Action
-                        label={block.visible ? 'Esconder' : 'Mostrar'}
+                        label={visible ? 'Esconder' : 'Mostrar'}
                         onClick={onToggle}
                     >
-                        {block.visible ? <Eye /> : <EyeOff />}
+                        {visible ? <Eye /> : <EyeOff />}
                     </Action>
-                    {!schema?.unique && (
+                    {!unique && (
                         <Action
                             label="Duplicar"
                             hint={`${MOD} D`}

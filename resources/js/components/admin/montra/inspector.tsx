@@ -39,7 +39,8 @@ const LOCALE_NAMES: Record<string, string> = {
 
 type Props = {
     block: EditorBlock;
-    index: number;
+    /** A chave dos erros deste nó (`errorKey`). */
+    path: string;
     schema: BlockSchema;
     styles: StyleOptions;
     locales: string[];
@@ -58,7 +59,7 @@ type Props = {
  */
 export function Inspector({
     block,
-    index,
+    path,
     schema,
     styles,
     locales,
@@ -197,7 +198,7 @@ export function Inspector({
                             value={content[field.key]}
                             onChange={(value) => setContent(field.key, value)}
                             idPrefix={`${block.id}-${locale}`}
-                            path={`blocks.${index}.content.${locale}.${field.key}`}
+                            path={`${path}.content.${locale}.${field.key}`}
                             context={context}
                         />
                     ))}
@@ -222,7 +223,7 @@ export function Inspector({
                                 })
                             }
                             idPrefix={`${block.id}-settings`}
-                            path={`blocks.${index}.settings.${field.key}`}
+                            path={`${path}.settings.${field.key}`}
                             context={context}
                         />
                     ))}

@@ -17,12 +17,17 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { createElement } from 'react';
+import { isEditorContainer, soleElement, walkNodes } from '@/lib/page-tree';
 import { randomId } from '@/lib/utils';
 import type {
     BlockSchema,
     EditorBlock,
+    EditorNode,
     FieldSchema,
 } from '@/types/page-builder';
+
+// Vivem em page-tree.ts, que a montra também importa (sem os ícones de cá).
+export { blankContainer, duplicateNode } from '@/lib/page-tree';
 
 /** Um ícone por tipo, para o catálogo e a lista se lerem de relance. */
 const ICONS: Record<string, LucideIcon> = {
@@ -40,6 +45,7 @@ const ICONS: Record<string, LucideIcon> = {
     contact: Mail,
     custom_order: PencilRuler,
     spacer: Square,
+    container: Square,
 };
 
 /** O ícone do tipo de bloco (decorativo: o nome vai sempre ao lado). */
@@ -85,8 +91,8 @@ export function isEmpty(value: unknown): boolean {
     );
 }
 
-/** Um bloco novo, como o BlockSanitizer::blank() o faria. */
-export function blankBlock(
+/** Um elemento novo, como o BlockSanitizer::blank() o faria. */
+export function blankNode(
     schema: BlockSchema,
     locales: string[],
     defaultLocale: string,
@@ -109,17 +115,41 @@ export function blankBlock(
         type: schema.type,
         v: 1,
         visible: true,
+        label: null,
         variant: schema.variants[0]?.value ?? null,
         style: { ...schema.defaultStyle },
+        shell: schema.hasShell,
+        styleProps: {},
+        advanced: {},
         settings,
         content,
     };
 }
 
-export function duplicateBlock(block: EditorBlock): EditorBlock {
+/** O nome de um nó: o que o dono lhe deu, o do bloco único ou "Secção". */
+export function nodeLabel(
+    node: EditorNode,
+    schema: Record<string, BlockSchema | undefined>,
+): string {
+    const element = isEditorContainer(node) ? soleElement(node) : node;
+
+    return (
+        node.label ||
+        element?.label ||
+        (element ? (schema[element.type]?.label ?? element.type) : 'Secção')
+    );
+}
+
+/** Os elementos lá dentro que a impedem de se apagar ou de se duplicar. */
+export function subtreeFlags(
+    node: EditorNode,
+    schema: Record<string, BlockSchema | undefined>,
+): { required: boolean; unique: boolean } {
+    const types = walkNodes([node]).map((item) => schema[item.type]);
+
     return {
-        ...structuredClone(block),
-        id: randomId(),
+        required: types.some((item) => item?.required),
+        unique: types.some((item) => item?.unique),
     };
 }
 

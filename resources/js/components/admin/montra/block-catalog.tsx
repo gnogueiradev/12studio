@@ -8,14 +8,15 @@ import {
     DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import type { BlockSchema, EditorBlock } from '@/types/page-builder';
-import { BlockIcon } from './blocks';
+import { walkNodes } from '@/lib/page-tree';
+import type { BlockSchema, EditorNode } from '@/types/page-builder';
+import { BlockIcon, nodeLabel } from './blocks';
 
 type Props = {
     open: boolean;
     onOpenChange: (open: boolean) => void;
     schema: BlockSchema[];
-    blocks: EditorBlock[];
+    nodes: EditorNode[];
     /** Onde entra o bloco novo; null = a seguir ao selecionado (ou no fim). */
     at: number | null;
     onAdd: (schema: BlockSchema) => void;
@@ -26,14 +27,18 @@ export function BlockCatalog({
     open,
     onOpenChange,
     schema,
-    blocks,
+    nodes,
     at,
     onAdd,
 }: Props) {
     const neighbour =
-        at !== null && at < blocks.length
-            ? (schema.find((block) => block.type === blocks[at].type)?.label ??
-              blocks[at].type)
+        at !== null && at < nodes.length
+            ? nodeLabel(
+                  nodes[at],
+                  Object.fromEntries(
+                      schema.map((block) => [block.type, block]),
+                  ),
+              )
             : null;
 
     return (
@@ -53,7 +58,7 @@ export function BlockCatalog({
                 {/* Só existe com o diálogo aberto: a pesquisa começa vazia. */}
                 <CatalogBody
                     schema={schema}
-                    blocks={blocks}
+                    nodes={nodes}
                     onPick={(block) => {
                         onAdd(block);
                         onOpenChange(false);
@@ -66,16 +71,16 @@ export function BlockCatalog({
 
 function CatalogBody({
     schema,
-    blocks,
+    nodes,
     onPick,
 }: {
     schema: BlockSchema[];
-    blocks: EditorBlock[];
+    nodes: EditorNode[];
     onPick: (schema: BlockSchema) => void;
 }) {
     const [query, setQuery] = useState('');
     const list = useRef<HTMLUListElement>(null);
-    const used = new Set(blocks.map((block) => block.type));
+    const used = new Set(walkNodes(nodes).map((node) => node.type));
     const needle = normalize(query.trim());
     const matches = needle
         ? schema.filter((block) =>

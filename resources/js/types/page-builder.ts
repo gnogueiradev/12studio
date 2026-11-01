@@ -3,7 +3,7 @@
  * App\PageBuilder\Block::schema() manda e o JSON que o BlockSanitizer grava.
  */
 
-import type { StoreNode } from './store';
+import type { StoreDeviceValues, StoreNode } from './store';
 
 export type FieldType =
     | 'text'
@@ -45,7 +45,36 @@ export type BlockSchema = {
     unique: boolean;
     defaultStyle: EditorBlockStyle;
     fields: FieldSchema[];
+    styleFields: StylePropSchema[];
+    advancedFields: StylePropSchema[];
+    hasShell: boolean;
+    rootOnly: boolean;
 };
+
+/** App\PageBuilder\StyleProp::toArray() */
+export type StylePropSchema = {
+    key: string;
+    type: 'enum' | 'int' | 'token' | 'toggle' | 'media';
+    label: string;
+    min?: number;
+    max?: number;
+    unit?: string;
+    default?: string | number;
+    options?: { value: string; label: string }[];
+};
+
+/** App\PageBuilder\Container::schema() */
+export type ContainerSchema = {
+    styleProps: StylePropSchema[];
+    limits: {
+        maxDepth: number;
+        maxNodes: number;
+        maxRowChildren: number;
+    };
+};
+
+/** Valores por dispositivo, por propriedade; o que falta herda de cima. */
+export type EditorDeviceProps = Record<string, StoreDeviceValues>;
 
 export type EditorBlockStyle = {
     bg: string;
@@ -54,17 +83,37 @@ export type EditorBlockStyle = {
     align: string;
 };
 
-/** Um bloco como fica gravado (draft_blocks). */
+/** Um elemento como fica gravado (draft_blocks). */
 export type EditorBlock = {
     id: string;
     type: string;
     v: number;
     visible: boolean;
+    label: string | null;
     variant: string | null;
     style: EditorBlockStyle;
+    shell: boolean;
+    styleProps: EditorDeviceProps;
+    advanced: EditorDeviceProps;
     settings: Record<string, unknown>;
     content: Record<string, Record<string, unknown>>;
 };
+
+/** Um contentor como fica gravado: o único nó com filhos. */
+export type EditorContainer = {
+    id: string;
+    type: 'container';
+    v: number;
+    visible: boolean;
+    label: string | null;
+    settings: Record<string, unknown>;
+    content: Record<string, Record<string, unknown>>;
+    style: EditorDeviceProps;
+    advanced: EditorDeviceProps;
+    children: EditorNode[];
+};
+
+export type EditorNode = EditorContainer | EditorBlock;
 
 export type LinkValue = { label: string; href: string } | null;
 
@@ -89,7 +138,7 @@ export type PageRow = {
 };
 
 export type EditablePage = PageRow & {
-    blocks: EditorBlock[];
+    blocks: EditorNode[];
     seo: Record<string, { title?: string; description?: string }>;
     startsAtInput: string | null;
     endsAtInput: string | null;

@@ -16,7 +16,7 @@ import {
     TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { requestJson } from '@/lib/http';
-import type { EditorBlock, PreviewMessage } from '@/types/page-builder';
+import type { EditorNode, PreviewMessage } from '@/types/page-builder';
 import type { StoreNode } from '@/types/store';
 
 /** A largura a sério de cada ecrã; a pré-visualização encolhe para caber. */
@@ -31,7 +31,7 @@ export type Device = keyof typeof DEVICES;
 type Props = {
     url: string;
     renderUrl: string;
-    blocks: EditorBlock[];
+    blocks: EditorNode[];
     locale: string;
     device: Device;
     selected: string | null;

@@ -27,7 +27,11 @@ import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/admin/confirm-dialog';
 import { BlockCatalog } from '@/components/admin/montra/block-catalog';
 import { BlockList } from '@/components/admin/montra/block-list';
-import { blankBlock, duplicateBlock } from '@/components/admin/montra/blocks';
+import {
+    blankNode,
+    nodeLabel,
+    subtreeFlags,
+} from '@/components/admin/montra/blocks';
 import type { FieldContext } from '@/components/admin/montra/field-input';
 import { Inspector } from '@/components/admin/montra/inspector';
 import type { StyleOptions } from '@/components/admin/montra/inspector';
@@ -43,7 +47,7 @@ import {
 } from '@/components/admin/montra/preview-frame';
 import type { Device } from '@/components/admin/montra/preview-frame';
 import { MOD, ShortcutsHint } from '@/components/admin/montra/shortcuts';
-import { useBlockHistory } from '@/components/admin/montra/use-block-history';
+import { useHistory } from '@/components/admin/montra/use-block-history';
 import { Button } from '@/components/ui/button';
 import {
     DropdownMenu,
@@ -61,6 +65,24 @@ import {
 } from '@/components/ui/tooltip';
 import { useIsWide } from '@/hooks/use-wide';
 import { HttpError, requestJson } from '@/lib/http';
+import {
+    canDrop,
+    canPaste,
+    duplicateInPlace,
+    erroredNodeIds,
+    errorKey,
+    findNode,
+    insertNode,
+    isEditorContainer,
+    keyErrorsByNode,
+    moveNode,
+    nodePath,
+    removeNode,
+    soleElement,
+    updateNode,
+    upgradeRoots,
+    walkNodes,
+} from '@/lib/page-tree';
 import { cn } from '@/lib/utils';
 import {
     descartar,
@@ -74,8 +96,10 @@ import {
 } from '@/routes/admin/montra/paginas';
 import type {
     BlockSchema,
+    ContainerSchema,
     EditablePage,
     EditorBlock,
+    EditorNode,
     ProductOption,
     Revision,
     StoreLink,
@@ -84,6 +108,7 @@ import type {
 type Props = {
     page: EditablePage;
     schema: BlockSchema[];
+    container: ContainerSchema;
     styles: StyleOptions;
     revisions: Revision[];
     locales: string[];
@@ -110,15 +135,17 @@ export default function PageEditor(props: Props) {
     const defaultLocale = locales[0];
     const wide = useIsWide();
 
+    const limits = props.container.limits;
+
     const {
-        blocks,
-        setBlocks,
+        present: nodes,
+        set: setNodes,
         undo,
         redo,
         reset: resetBlocks,
         canUndo,
         canRedo,
-    } = useBlockHistory(page.blocks);
+    } = useHistory<EditorNode[]>(upgradeRoots(page.blocks));
     const [seo, setSeo] = useState(page.seo);
     const [selected, setSelected] = useState<string | null>(null);
     const [locale, setLocale] = useState(defaultLocale);
@@ -178,14 +205,16 @@ export default function PageEditor(props: Props) {
     const version = useRef(0);
     const savedVersion = useRef(0);
     const queue = useRef<Promise<boolean>>(Promise.resolve(true));
-    const latest = useRef({ blocks, seo });
+    const latest = useRef({ blocks: nodes, seo });
 
     useEffect(() => {
-        latest.current = { blocks, seo };
-    }, [blocks, seo]);
+        latest.current = { blocks: nodes, seo };
+    }, [nodes, seo]);
 
     const saveNow = useCallback(async (): Promise<boolean> => {
         const sending = version.current;
+        // Os erros voltam com as posições desta árvore, não as de agora.
+        const sent = latest.current;
         setSaveState('saving');
 
         try {
@@ -195,7 +224,7 @@ export default function PageEditor(props: Props) {
                     hasChanges: boolean;
                     live: boolean;
                 };
-            }>(rascunho(page.id).url, 'PUT', latest.current);
+            }>(rascunho(page.id).url, 'PUT', sent);
             savedVersion.current = Math.max(savedVersion.current, sending);
             setStatus({
                 status: response.page.status,
@@ -209,9 +238,12 @@ export default function PageEditor(props: Props) {
         } catch (exception) {
             if (exception instanceof HttpError && exception.status === 422) {
                 setErrors(
-                    Object.fromEntries(
-                        Object.entries(exception.body.errors ?? {}).map(
-                            ([key, messages]) => [key, messages[0]],
+                    keyErrorsByNode(
+                        sent.blocks,
+                        Object.fromEntries(
+                            Object.entries(exception.body.errors ?? {}).map(
+                                ([key, messages]) => [key, messages[0]],
+                            ),
                         ),
                     ),
                 );
@@ -243,7 +275,7 @@ export default function PageEditor(props: Props) {
         }, AUTOSAVE_DELAY);
 
         return () => window.clearTimeout(timer);
-    }, [blocks, seo, save]);
+    }, [nodes, seo, save]);
 
     /** Grava já o que estiver por gravar (antes de publicar ou sair). */
     const flush = useCallback(async (): Promise<boolean> => {
@@ -301,32 +333,45 @@ export default function PageEditor(props: Props) {
         return () => window.removeEventListener('beforeunload', warn);
     }, [saveState]);
 
-    // ── Operações nos blocos ──────────────────────────────────────────────
-    // Escrever num campo junta-se num só passo do desfazer (por bloco).
-    const update = (block: EditorBlock) =>
-        setBlocks(
-            (current) =>
-                current.map((item) => (item.id === block.id ? block : item)),
-            block.id,
+    // ── Operações na árvore ───────────────────────────────────────────────
+    // Escrever num campo junta-se num só passo do desfazer (por nó).
+    const update = (node: EditorNode) =>
+        setNodes((current) => updateNode(current, node.id, node), node.id);
+
+    // Até haver o Navegador a lista só mostra a raiz: escolher uma secção de
+    // um só elemento abre esse elemento no inspetor.
+    const selectRoot = (root: EditorNode) =>
+        setSelected(soleElement(root)?.id ?? root.id);
+
+    /** `at` é a posição na raiz; sem ela, a seguir à secção selecionada. */
+    const add = (blockSchema: BlockSchema, at: number | null) => {
+        const root = selected ? nodePath(nodes, selected)[0] : null;
+        const after = root ? nodes.indexOf(root) + 1 : 0;
+        const target = {
+            parentId: null,
+            index: Math.min(
+                at ?? (after > 0 ? after : nodes.length),
+                nodes.length,
+            ),
+        };
+        const refused = canDrop(
+            nodes,
+            { type: blockSchema.type },
+            target,
+            schemaByType,
+            limits,
         );
 
-    /** `at` é a posição; sem ela, a seguir ao selecionado (ou no fim). */
-    const add = (blockSchema: BlockSchema, at: number | null) => {
-        const block = blankBlock(blockSchema, locales, defaultLocale);
-        setBlocks((current) => {
-            const after = selected
-                ? current.findIndex((item) => item.id === selected) + 1
-                : 0;
-            const index = Math.min(
-                at ?? (after > 0 ? after : current.length),
-                current.length,
-            );
-            const next = [...current];
-            next.splice(index, 0, block);
+        if (refused) {
+            toast.error(refused);
 
-            return next;
-        });
-        setSelected(block.id);
+            return;
+        }
+
+        const element = blankNode(blockSchema, locales, defaultLocale);
+        // O contentor à volta tem um id ao acaso: não vai dentro do updater.
+        setNodes(insertNode(nodes, element, target));
+        setSelected(element.id);
     };
 
     const openCatalog = (at: number | null) => {
@@ -334,90 +379,106 @@ export default function PageEditor(props: Props) {
         setCatalogOpen(true);
     };
 
+    /** Da posição `from` para a `to` na raiz (a que fica no fim). */
     const move = (from: number, to: number) =>
-        setBlocks((current) => {
-            const next = [...current];
-            const [item] = next.splice(from, 1);
-            next.splice(to, 0, item);
-
-            return next;
-        });
-
-    const toggle = (id: string) =>
-        setBlocks((current) =>
-            current.map((item) =>
-                item.id === id ? { ...item, visible: !item.visible } : item,
-            ),
+        setNodes((current) =>
+            moveNode(current, current[from].id, {
+                parentId: null,
+                index: from < to ? to + 1 : to,
+            }),
         );
 
-    const duplicate = (id: string) => {
-        const original = blocks.find((item) => item.id === id);
+    // Uma secção convertida pode trazer o elemento escondido (v1): mostrar
+    // liga os dois, esconder só o contentor.
+    const toggle = (id: string) =>
+        setNodes((current) => {
+            const root = findNode(current, id)?.node;
 
-        if (!original) {
+            if (!root) {
+                return current;
+            }
+
+            const element = soleElement(root);
+
+            if (root.visible && (element?.visible ?? true)) {
+                return updateNode(current, id, { visible: false });
+            }
+
+            const shown = updateNode(current, id, { visible: true });
+
+            return element
+                ? updateNode(shown, element.id, { visible: true })
+                : shown;
+        });
+
+    const duplicate = (id: string) => {
+        const found = findNode(nodes, id);
+
+        if (!found) {
             return;
         }
 
-        const copy = duplicateBlock(original);
-        setBlocks((current) => {
-            const index = current.findIndex((item) => item.id === id);
-            const next = [...current];
-            next.splice(index < 0 ? current.length : index + 1, 0, copy);
+        const refused = canPaste(
+            nodes,
+            found.node,
+            { parentId: found.parent?.id ?? null, index: found.index + 1 },
+            schemaByType,
+            limits,
+        );
 
-            return next;
-        });
-        setSelected(copy.id);
+        if (refused) {
+            toast.error(refused);
+
+            return;
+        }
+
+        const { nodes: next, newId } = duplicateInPlace(nodes, id);
+        setNodes(next);
+
+        const copy = newId ? findNode(next, newId)?.node : null;
+
+        if (copy) {
+            selectRoot(copy);
+        }
     };
 
-    // Apaga logo e oferece "Desfazer" num aviso, que volta a pôr o bloco
-    // onde estava (mesmo que entretanto tenha havido outras alterações).
+    // Apaga logo e oferece "Desfazer" num aviso, que volta a pôr o nó onde
+    // estava (mesmo que entretanto tenha havido outras alterações).
     const remove = (id: string) => {
-        const index = blocks.findIndex((item) => item.id === id);
+        const found = findNode(nodes, id);
         const resetAt = resets.current;
 
-        if (index < 0) {
+        if (!found) {
             return;
         }
 
-        const removed = blocks[index];
-        setBlocks((current) => current.filter((item) => item.id !== id));
+        const removed = found.node;
+        const target = {
+            parentId: found.parent?.id ?? null,
+            index: found.index,
+        };
+        setNodes((current) => removeNode(current, id));
 
-        if (selected === id) {
+        if (selected && findNode([removed], selected)) {
             setSelected(null);
         }
 
-        toast(
-            `Bloco “${schemaByType[removed.type]?.label ?? removed.type}” apagado`,
-            {
-                action: {
-                    label: 'Desfazer',
-                    onClick: () =>
-                        setBlocks((current) => {
-                            // Não volta se a página entretanto foi reposta do
-                            // servidor, nem se já há outro bloco único igual.
-                            if (
-                                resets.current !== resetAt ||
-                                current.some(
-                                    (item) =>
-                                        item.id === removed.id ||
-                                        (schemaByType[removed.type]?.unique &&
-                                            item.type === removed.type),
-                                )
-                            ) {
-                                return current;
-                            }
-
-                            const next = [...current];
-                            next.splice(
-                                Math.min(index, current.length),
-                                0,
-                                removed,
-                            );
-
-                            return next;
-                        }),
-                },
+        toast(`Bloco “${nodeLabel(removed, schemaByType)}” apagado`, {
+            action: {
+                label: 'Desfazer',
+                onClick: () =>
+                    setNodes((current) =>
+                        // Não volta se a página entretanto foi reposta do
+                        // servidor, nem se já não cabe (outro bloco único
+                        // igual, os limites, o contentor que já não existe).
+                        resets.current !== resetAt ||
+                        findNode(current, removed.id) ||
+                        canPaste(current, removed, target, schemaByType, limits)
+                            ? current
+                            : insertNode(current, removed, target),
+                    ),
             },
-        );
+        });
     };
 
     // ── Ações da página ───────────────────────────────────────────────────
@@ -429,7 +490,7 @@ export default function PageEditor(props: Props) {
                 resets.current += 1;
                 first.current = true;
                 savedVersion.current = version.current;
-                resetBlocks(fresh.blocks);
+                resetBlocks(upgradeRoots(fresh.blocks));
                 setSeo(fresh.seo);
                 setSaveState('saved');
                 setErrors({});
@@ -452,7 +513,12 @@ export default function PageEditor(props: Props) {
                 preserveScroll: true,
                 preserveState: true,
                 onError: (failed) =>
-                    setErrors(failed as Record<string, string>),
+                    setErrors(
+                        keyErrorsByNode(
+                            latest.current.blocks,
+                            failed as Record<string, string>,
+                        ),
+                    ),
                 onFinish: () => setPublishing(false),
             },
         );
@@ -469,22 +535,25 @@ export default function PageEditor(props: Props) {
             },
         );
 
+    // A lista só mostra a raiz: uma secção fica marcada se o erro for nela ou
+    // em qualquer nó lá dentro.
     const errorBlocks = useMemo(() => {
-        const set = new Set<number>();
+        const errored = erroredNodeIds(errors);
 
-        for (const key of Object.keys(errors)) {
-            const match = key.match(/^blocks\.(\d+)/);
+        return new Set(
+            nodes
+                .filter((root) =>
+                    walkNodes([root]).some((node) => errored.has(node.id)),
+                )
+                .map((root) => root.id),
+        );
+    }, [errors, nodes]);
 
-            if (match) {
-                set.add(Number(match[1]));
-            }
-        }
-
-        return set;
-    }, [errors]);
-
-    const selectedIndex = blocks.findIndex((block) => block.id === selected);
-    const selectedBlock = selectedIndex >= 0 ? blocks[selectedIndex] : null;
+    const selectedPath = selected ? nodePath(nodes, selected) : [];
+    const selectedRoot: EditorNode | null = selectedPath[0] ?? null;
+    const selectedNode = selectedPath[selectedPath.length - 1] ?? null;
+    const selectedBlock: EditorBlock | null =
+        selectedNode && !isEditorContainer(selectedNode) ? selectedNode : null;
     const selectedSchema = selectedBlock
         ? schemaByType[selectedBlock.type]
         : undefined;
@@ -551,7 +620,7 @@ export default function PageEditor(props: Props) {
             return;
         }
 
-        if (!selectedBlock) {
+        if (!selectedRoot) {
             return;
         }
 
@@ -572,12 +641,15 @@ export default function PageEditor(props: Props) {
             return;
         }
 
+        // Até haver o Navegador, atuam na secção: é o que a lista mostra.
+        const flags = subtreeFlags(selectedRoot, schemaByType);
+
         // Mesmo num bloco que não se duplica, o Ctrl+D não vai aos favoritos.
         if (mod && key === 'd') {
             event.preventDefault();
 
-            if (!selectedSchema?.unique) {
-                duplicate(selectedBlock.id);
+            if (!flags.unique) {
+                duplicate(selectedRoot.id);
             }
 
             return;
@@ -586,10 +658,10 @@ export default function PageEditor(props: Props) {
         if (
             !mod &&
             (key === 'delete' || key === 'backspace') &&
-            !selectedSchema?.required
+            !flags.required
         ) {
             event.preventDefault();
-            remove(selectedBlock.id);
+            remove(selectedRoot.id);
         }
     });
 
@@ -604,7 +676,7 @@ export default function PageEditor(props: Props) {
         <Inspector
             key={selectedBlock.id}
             block={selectedBlock}
-            index={selectedIndex}
+            path={errorKey(selectedBlock.id)}
             schema={selectedSchema}
             styles={props.styles}
             locales={locales}
@@ -874,7 +946,7 @@ export default function PageEditor(props: Props) {
                             <div className="flex shrink-0 items-baseline justify-between gap-2 px-3 pt-3 pb-1">
                                 <h2 className="text-sm font-medium">Blocos</h2>
                                 <span className="text-xs text-muted-foreground tabular-nums">
-                                    {blocks.length}
+                                    {nodes.length}
                                 </span>
                             </div>
                             <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-3 pb-3">
@@ -884,13 +956,21 @@ export default function PageEditor(props: Props) {
                                     </p>
                                 )}
                                 <BlockList
-                                    blocks={blocks}
+                                    blocks={nodes}
                                     schema={schemaByType}
-                                    selected={selected}
+                                    selected={selectedRoot?.id ?? null}
                                     locales={locales}
                                     defaultLocale={defaultLocale}
                                     errorBlocks={errorBlocks}
-                                    onSelect={setSelected}
+                                    onSelect={(id) => {
+                                        const root = nodes.find(
+                                            (node) => node.id === id,
+                                        );
+
+                                        if (root) {
+                                            selectRoot(root);
+                                        }
+                                    }}
                                     onMove={move}
                                     onToggle={toggle}
                                     onDuplicate={duplicate}
@@ -902,7 +982,7 @@ export default function PageEditor(props: Props) {
                                 <Button
                                     variant="outline"
                                     className="w-full border-dashed"
-                                    onClick={() => openCatalog(blocks.length)}
+                                    onClick={() => openCatalog(nodes.length)}
                                 >
                                     <Plus />
                                     Adicionar bloco
@@ -926,7 +1006,7 @@ export default function PageEditor(props: Props) {
                     <PreviewFrame
                         url={props.previewUrl}
                         renderUrl={render(page.id).url}
-                        blocks={blocks}
+                        blocks={nodes}
                         locale={locale}
                         device={device}
                         selected={selected}
@@ -963,7 +1043,7 @@ export default function PageEditor(props: Props) {
                 open={catalogOpen}
                 onOpenChange={setCatalogOpen}
                 schema={schema}
-                blocks={blocks}
+                nodes={nodes}
                 at={catalogAt}
                 onAdd={(blockSchema) => add(blockSchema, catalogAt)}
             />
