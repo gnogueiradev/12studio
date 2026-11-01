@@ -46,6 +46,21 @@ export function resolveDevices<T>(
     return { desktop, tablet, mobile };
 }
 
+/**
+ * Em linha em algum dispositivo, depois de herdar computador, tablet e
+ * telemóvel (a direção por omissão é coluna). Espelha o BlockSanitizer.
+ */
+export function isRowOnAnyDevice(
+    direction: StoreDeviceValues | undefined,
+): boolean {
+    const { desktop, tablet, mobile } = resolveDevices<unknown>(
+        direction,
+        'column',
+    );
+
+    return [desktop, tablet, mobile].includes('row');
+}
+
 // ── A árvore do editor ───────────────────────────────────────────────────
 // Tudo imutável: o que não muda mantém a referência, e uma operação que não
 // faz nada devolve os mesmos `nodes` (não conta para o desfazer).
@@ -402,13 +417,12 @@ export function insertNode(
             return spliced(nodes, node, target.index);
         }
 
+        // Um elemento de moldura fica num invólucro transparente (sem estilo),
+        // como os das páginas convertidas; os outros ficam num contentor normal.
         const wrapper = blankContainer([100]);
 
         if (node.shell) {
-            wrapper.style = {
-                ...wrapper.style,
-                max_width: { desktop: 'full' },
-            };
+            wrapper.style = {};
         }
 
         return spliced(nodes, { ...wrapper, children: [node] }, target.index);
@@ -643,7 +657,8 @@ function refusal(
     }
 
     if (
-        parent?.style.direction?.desktop === 'row' &&
+        parent &&
+        isRowOnAnyDevice(parent.style.direction) &&
         siblings.length >= limits.maxRowChildren
     ) {
         return `Um contentor em linha leva no máximo ${limits.maxRowChildren} elementos lado a lado.`;

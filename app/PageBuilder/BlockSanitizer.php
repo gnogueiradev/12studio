@@ -195,7 +195,7 @@ class BlockSanitizer
             $children = [];
         }
 
-        if (($style['direction']['desktop'] ?? null) === 'row' && count($children) > Container::MAX_ROW_CHILDREN) {
+        if ($this->isRowOnAnyDevice($style['direction'] ?? []) && count($children) > Container::MAX_ROW_CHILDREN) {
             $this->errors[$path] = 'Um contentor em linha leva no máximo '.Container::MAX_ROW_CHILDREN.' elementos lado a lado.';
         }
 
@@ -221,6 +221,21 @@ class BlockSanitizer
             'advanced' => $this->props(Block::advancedProps(), $raw['advanced'] ?? null, "$path.advanced"),
             'children' => $clean,
         ];
+    }
+
+    /**
+     * Em linha em algum dispositivo, depois de herdar computador -> tablet ->
+     * telemovel (a direcao por omissao e coluna).
+     *
+     * @param  array<mixed>  $direction
+     */
+    private function isRowOnAnyDevice(array $direction): bool
+    {
+        $desktop = $direction['desktop'] ?? 'column';
+        $tablet = $direction['tablet'] ?? $desktop;
+        $mobile = $direction['mobile'] ?? $tablet;
+
+        return in_array('row', [$desktop, $tablet, $mobile], true);
     }
 
     /**
@@ -296,13 +311,7 @@ class BlockSanitizer
             return null;
         }
 
-        if (mb_strlen($label) > 60) {
-            $this->errors["$path.label"] = 'O nome não pode ter mais de 60 caracteres.';
-
-            return mb_substr($label, 0, 60);
-        }
-
-        return $label;
+        return mb_substr($label, 0, 60);
     }
 
     /**

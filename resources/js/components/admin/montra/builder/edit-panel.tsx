@@ -16,6 +16,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import {
     columnCount,
     isEditorContainer,
+    isRowOnAnyDevice,
     stacksOnMobile,
 } from '@/lib/page-tree';
 import type {
@@ -504,7 +505,7 @@ function ContainerStyle({
                                 // O servidor recusava-o ao gravar.
                                 if (
                                     key === 'direction' &&
-                                    next.desktop === 'row' &&
+                                    isRowOnAnyDevice(next) &&
                                     group.children.length >
                                         container.limits.maxRowChildren
                                 ) {

@@ -293,7 +293,9 @@ class BlockSanitizerTest extends TestCase
         $this->assertNull($root['label']);
         $this->assertNull($root['children'][0]['label']);
 
-        $this->assertArrayHasKey('blocks.0.label', $this->errors([$this->container([$this->text('<p>x</p>')], ['label' => str_repeat('a', 61)])]));
+        // Um nome comprido corta-se sem recusar a gravacao.
+        $long = $this->container([$this->text('<p>x</p>')], ['label' => str_repeat('a', 61)]);
+        $this->assertSame(str_repeat('a', 60), $this->clean([$long])[0]['label']);
     }
 
     public function test_node_and_depth_limits(): void
@@ -333,6 +335,23 @@ class BlockSanitizerTest extends TestCase
         // Em coluna nao ha esse limite.
         $column = $this->container(array_fill(0, 7, $this->container([])));
         $this->assertCount(7, $this->clean([$column])[0]['children']);
+    }
+
+    public function test_row_on_any_device_counts_for_the_children_limit(): void
+    {
+        $with = fn (array $direction): array => $this->container(
+            array_fill(0, 7, $this->container([])),
+            ['style' => ['direction' => $direction]],
+        );
+
+        // Coluna no computador mas linha no tablet (herdada pelo telemovel).
+        $this->assertArrayHasKey('blocks.0', $this->errors([$with(['desktop' => 'column', 'tablet' => 'row'])]));
+        // Linha no computador e coluna no telemovel continua a contar.
+        $this->assertArrayHasKey('blocks.0', $this->errors([$with(['desktop' => 'row', 'mobile' => 'column'])]));
+        // So o telemovel em linha tambem.
+        $this->assertArrayHasKey('blocks.0', $this->errors([$with(['desktop' => 'column', 'mobile' => 'row'])]));
+        // Sempre em coluna passa.
+        $this->assertCount(7, $this->clean([$with(['desktop' => 'column', 'tablet' => 'column'])])[0]['children']);
     }
 
     public function test_root_only_block_inside_a_column_is_refused(): void

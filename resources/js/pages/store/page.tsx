@@ -1,12 +1,14 @@
 import { Head } from '@inertiajs/react';
 import { FileWarning } from 'lucide-react';
 import {
+    Component,
     lazy,
     Suspense,
     useEffect,
     useState,
     useSyncExternalStore,
 } from 'react';
+import type { ReactNode } from 'react';
 import { CanvasEditing, NodeTree } from '@/blocks/node-tree';
 import type { CanvasTree } from '@/components/admin/montra/builder/dnd-protocol';
 import { useT } from '@/lib/i18n';
@@ -22,6 +24,25 @@ import type { StoreNode, StorePageData } from '@/types/store';
 const CanvasOverlay = lazy(
     () => import('@/components/admin/montra/builder/canvas-overlay'),
 );
+
+/**
+ * Se o pedaço da camada de edição falhar a carregar, fica a página simples em
+ * vez de desmontar todo o conteúdo do iframe.
+ */
+class OverlayBoundary extends Component<
+    { children: ReactNode },
+    { failed: boolean }
+> {
+    state = { failed: false };
+
+    static getDerivedStateFromError() {
+        return { failed: true };
+    }
+
+    render() {
+        return this.state.failed ? null : this.props.children;
+    }
+}
 
 /**
  * Uma página da montra montada por blocos (App\PageBuilder). O conteúdo, a
@@ -201,14 +222,16 @@ function EditorPreview({ initial }: { initial: StoreNode[] }) {
                 <NodeTree nodes={blocks} />
                 {/* O fim da página: há sempre onde juntar mais. */}
                 <div data-pb-empty="" />
-                <Suspense fallback={null}>
-                    <CanvasOverlay
-                        selected={selected}
-                        tree={tree}
-                        scale={scale}
-                        dragType={dragType}
-                    />
-                </Suspense>
+                <OverlayBoundary>
+                    <Suspense fallback={null}>
+                        <CanvasOverlay
+                            selected={selected}
+                            tree={tree}
+                            scale={scale}
+                            dragType={dragType}
+                        />
+                    </Suspense>
+                </OverlayBoundary>
             </CanvasEditing.Provider>
         );
     }

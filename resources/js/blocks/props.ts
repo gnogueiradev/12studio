@@ -59,11 +59,14 @@ export function deviceVars(
     unit: string,
 ): CSSProperties {
     const { mobile, tablet, desktop } = deviceValues(block, key, fallback);
+    // Só números finitos; o resto (um valor corrompido) usa o de reserva.
+    const safe = (value: unknown) =>
+        typeof value === 'number' && Number.isFinite(value) ? value : fallback;
 
     return {
-        [`--${name}-m`]: `${mobile}${unit}`,
-        [`--${name}-t`]: `${tablet}${unit}`,
-        [`--${name}-d`]: `${desktop}${unit}`,
+        [`--${name}-m`]: `${safe(mobile)}${unit}`,
+        [`--${name}-t`]: `${safe(tablet)}${unit}`,
+        [`--${name}-d`]: `${safe(desktop)}${unit}`,
     } as CSSProperties;
 }
 
