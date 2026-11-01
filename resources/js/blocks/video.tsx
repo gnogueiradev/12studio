@@ -1,15 +1,32 @@
 import { useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import type { StoreBlock } from '@/types/store';
-import { styleProp } from './props';
+import { deviceClasses } from './props';
+import type { DeviceClasses } from './props';
 
 type Data = { url: string };
 
-const RATIOS: Record<string, string> = {
-    '16:9': 'aspect-video',
-    '4:3': 'aspect-[4/3]',
-    '1:1': 'aspect-square',
-    '9:16': 'mx-auto aspect-[9/16] max-w-sm',
+const RATIOS: Record<string, DeviceClasses> = {
+    '16:9': [
+        'aspect-video max-w-none',
+        'md:aspect-video md:max-w-none',
+        'lg:aspect-video lg:max-w-none',
+    ],
+    '4:3': [
+        'aspect-[4/3] max-w-none',
+        'md:aspect-[4/3] md:max-w-none',
+        'lg:aspect-[4/3] lg:max-w-none',
+    ],
+    '1:1': [
+        'aspect-square max-w-none',
+        'md:aspect-square md:max-w-none',
+        'lg:aspect-square lg:max-w-none',
+    ],
+    '9:16': [
+        'aspect-[9/16] max-w-sm',
+        'md:aspect-[9/16] md:max-w-sm',
+        'lg:aspect-[9/16] lg:max-w-sm',
+    ],
 };
 
 /**
@@ -24,13 +41,11 @@ export function VideoBlock({ block }: { block: StoreBlock }) {
         return null;
     }
 
-    const ratio = styleProp<string>(block, 'ratio') ?? '16:9';
-
     return (
         <div
             className={cn(
-                'overflow-hidden rounded-lg bg-muted',
-                RATIOS[ratio] ?? RATIOS['16:9'],
+                'mx-auto overflow-hidden rounded-lg bg-muted',
+                deviceClasses(block, 'ratio', RATIOS, '16:9'),
             )}
         >
             <iframe

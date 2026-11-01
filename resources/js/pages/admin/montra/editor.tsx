@@ -174,6 +174,8 @@ export default function PageEditor(props: Props) {
     const wide = useIsWide();
 
     const limits = props.container.limits;
+    // Uma só vez: percorre a árvore toda.
+    const [initialNodes] = useState(() => upgradeRoots(page.blocks));
 
     const {
         present: nodes,
@@ -183,7 +185,7 @@ export default function PageEditor(props: Props) {
         reset: resetBlocks,
         canUndo,
         canRedo,
-    } = useHistory<EditorNode[]>(upgradeRoots(page.blocks));
+    } = useHistory<EditorNode[]>(initialNodes);
     const [seo, setSeo] = useState(page.seo);
     const [selected, setSelected] = useState<string | null>(null);
     const [locale, setLocale] = useState(defaultLocale);

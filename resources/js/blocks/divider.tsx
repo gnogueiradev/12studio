@@ -1,31 +1,29 @@
-import type { CSSProperties } from 'react';
 import { cn } from '@/lib/utils';
 import type { StoreBlock } from '@/types/store';
-import { styleProp } from './props';
+import { deviceClasses, deviceVars } from './props';
+import type { DeviceClasses } from './props';
 
-const COLORS: Record<string, string> = {
-    border: 'bg-border',
-    muted: 'bg-muted-foreground',
-    accent: 'bg-gold',
+const COLORS: Record<string, DeviceClasses> = {
+    border: ['bg-border', 'md:bg-border', 'lg:bg-border'],
+    muted: [
+        'bg-muted-foreground',
+        'md:bg-muted-foreground',
+        'lg:bg-muted-foreground',
+    ],
+    accent: ['bg-gold', 'md:bg-gold', 'lg:bg-gold'],
 };
 
 export function DividerBlock({ block }: { block: StoreBlock }) {
-    const thickness = styleProp<number>(block, 'thickness') ?? 1;
-    const width = styleProp<number>(block, 'width') ?? 100;
-    const color = styleProp<string>(block, 'color') ?? 'border';
-
     return (
         <hr
             className={cn(
-                'mx-auto h-[var(--divider-thickness)] w-[var(--divider-width)] border-0',
-                COLORS[color] ?? COLORS.border,
+                'mx-auto h-[var(--divider-thickness-m)] w-[var(--divider-width-m)] border-0 md:h-[var(--divider-thickness-t)] md:w-[var(--divider-width-t)] lg:h-[var(--divider-thickness-d)] lg:w-[var(--divider-width-d)]',
+                deviceClasses(block, 'color', COLORS, 'border'),
             )}
-            style={
-                {
-                    '--divider-thickness': `${thickness}px`,
-                    '--divider-width': `${width}%`,
-                } as CSSProperties
-            }
+            style={{
+                ...deviceVars(block, 'thickness', 'divider-thickness', 1, 'px'),
+                ...deviceVars(block, 'width', 'divider-width', 100, '%'),
+            }}
         />
     );
 }

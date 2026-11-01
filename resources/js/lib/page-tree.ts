@@ -266,31 +266,65 @@ export function nodePath(nodes: EditorNode[], id: string): EditorNode[] {
     return [];
 }
 
-/**
- * Um rascunho antigo (v1) ainda não gravado: cada bloco solto ganha o
- * contentor transparente que o PageDocument::wrapper() lhe daria.
- */
-export function upgradeRoots(nodes: EditorNode[]): EditorNode[] {
-    if (nodes.every(isEditorContainer)) {
-        return nodes;
+/** O PHP manda um mapa vazio como `[]`; o que falta passa a mapa vazio. */
+function asMap<T extends object>(value: T | undefined): T {
+    return typeof value === 'object' && value !== null && !Array.isArray(value)
+        ? value
+        : ({} as T);
+}
+
+/** Um nó de um rascunho antigo, com as chaves que o editor conta encontrar. */
+function normalizeNode(raw: EditorNode): EditorNode {
+    if (isEditorContainer(raw)) {
+        return {
+            ...raw,
+            label: raw.label ?? null,
+            settings: asMap(raw.settings),
+            content: asMap(raw.content),
+            style: asMap(raw.style),
+            advanced: asMap(raw.advanced),
+            children: Array.isArray(raw.children)
+                ? raw.children.map(normalizeNode)
+                : [],
+        };
     }
 
-    return nodes.map((node): EditorNode =>
-        isEditorContainer(node)
-            ? node
-            : {
-                  id: `c-${node.id}`,
-                  type: 'container',
-                  v: 2,
-                  visible: true,
-                  label: null,
-                  settings: {},
-                  content: {},
-                  style: {},
-                  advanced: {},
-                  children: [node],
-              },
-    );
+    return {
+        ...raw,
+        label: raw.label ?? null,
+        // Como no BlockSanitizer: sem o valor, a casca está ligada.
+        shell: raw.shell ?? true,
+        settings: asMap(raw.settings),
+        content: asMap(raw.content),
+        styleProps: asMap(raw.styleProps),
+        advanced: asMap(raw.advanced),
+    };
+}
+
+/**
+ * O que o editor recebe do servidor, tal como está na BD. Um rascunho antigo
+ * (v1) ainda não gravado: cada bloco solto ganha o contentor transparente que
+ * o PageDocument::wrapper() lhe daria, e os nós ganham as chaves em falta.
+ */
+export function upgradeRoots(nodes: EditorNode[]): EditorNode[] {
+    return nodes
+        .map((node): EditorNode =>
+            isEditorContainer(node)
+                ? node
+                : {
+                      id: `c-${node.id}`,
+                      type: 'container',
+                      v: 2,
+                      visible: true,
+                      label: null,
+                      settings: {},
+                      content: {},
+                      style: {},
+                      advanced: {},
+                      children: [node],
+                  },
+        )
+        .map(normalizeNode);
 }
 
 function spliced(

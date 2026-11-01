@@ -56,6 +56,16 @@ export function clearDevice(
     return next;
 }
 
+/** O "×" no Esconder: sem nenhum tamanho escondido, não fica nada. */
+export function clearHide(
+    values: StoreDeviceValues | undefined,
+    device: StoreDevice,
+): StoreDeviceValues {
+    const next = clearDevice(values, device);
+
+    return Object.values(next).some(Boolean) ? next : {};
+}
+
 /**
  * Esconder é a exceção à herança: esconder só no computador não pode esconder
  * também no telemóvel. Por isso, ao ligar, os tamanhos abaixo ainda por definir

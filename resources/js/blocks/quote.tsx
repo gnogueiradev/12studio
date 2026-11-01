@@ -1,8 +1,14 @@
 import { cn } from '@/lib/utils';
 import type { StoreBlock } from '@/types/store';
-import { styleProp } from './props';
+import { deviceClasses } from './props';
+import type { DeviceClasses } from './props';
 
 type Data = { text: string; author: string };
+
+const SIZES: Record<string, DeviceClasses> = {
+    md: ['text-lg', 'md:text-xl', 'lg:text-xl'],
+    lg: ['text-2xl', 'md:text-3xl', 'lg:text-3xl'],
+};
 
 export function QuoteBlock({ block }: { block: StoreBlock }) {
     const data = block.data as Data;
@@ -11,14 +17,12 @@ export function QuoteBlock({ block }: { block: StoreBlock }) {
         return null;
     }
 
-    const large = styleProp<string>(block, 'size') === 'lg';
-
     return (
         <blockquote className="border-l-2 border-gold pl-6">
             <p
                 className={cn(
                     'whitespace-pre-line text-foreground',
-                    large ? 'text-2xl md:text-3xl' : 'text-lg md:text-xl',
+                    deviceClasses(block, 'size', SIZES, 'md'),
                 )}
             >
                 {data.text}

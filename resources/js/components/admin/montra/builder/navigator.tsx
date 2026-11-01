@@ -61,8 +61,10 @@ import { BlockIcon, nodeLabel, subtreeFlags } from '../blocks';
 import { flatten, project } from './tree-projection';
 import type { Row } from './tree-projection';
 
-/** Os píxeis de um nível da árvore (também o passo do arrasto na horizontal). */
+/** Os píxeis de um nível da árvore. */
 const INDENT = 14;
+/** Quanto arrastar para o lado muda um nível: um arrasto torto não o faz. */
+const LEVEL_STEP = 28;
 
 /** As setas para os lados mudam de nível; para cima e baixo, de posição. */
 const coordinates: KeyboardCoordinateGetter = (event, args) => {
@@ -73,7 +75,7 @@ const coordinates: KeyboardCoordinateGetter = (event, args) => {
             ...args.currentCoordinates,
             x:
                 args.currentCoordinates.x +
-                (event.code === 'ArrowLeft' ? -INDENT : INDENT),
+                (event.code === 'ArrowLeft' ? -LEVEL_STEP : LEVEL_STEP),
         };
     }
 
@@ -208,7 +210,7 @@ export function Navigator({
     };
 
     const onDragMove = ({ delta }: DragMoveEvent) =>
-        setShift(Math.round(delta.x / INDENT));
+        setShift(Math.trunc(delta.x / LEVEL_STEP));
 
     const onDragOver = ({ over }: DragOverEvent) =>
         setOverId(over ? String(over.id) : null);

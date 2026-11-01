@@ -19,6 +19,7 @@ import { DEVICES } from '../preview-frame';
 import type { Device } from '../preview-frame';
 import {
     clearDevice,
+    clearHide,
     DEVICE_NAMES,
     readDevice,
     writeDevice,
@@ -99,7 +100,13 @@ export function StyleControl({
                     }
                     title="Repor"
                     className="flex size-5 shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
-                    onClick={() => onChange(clearDevice(values, editing))}
+                    onClick={() =>
+                        onChange(
+                            prop.key === 'hide'
+                                ? clearHide(values, editing)
+                                : clearDevice(values, editing),
+                        )
+                    }
                 >
                     <X aria-hidden className="size-3.5" />
                 </button>

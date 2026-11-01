@@ -1,5 +1,6 @@
 import { ArrowLeft, Languages } from 'lucide-react';
 import { useState } from 'react';
+import { toast } from 'sonner';
 import InputError from '@/components/input-error';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -66,7 +67,11 @@ const CONTAINER_GROUPS: { name: string; keys: string[] }[] = [
 ];
 
 /** A montra só lê estes do computador: não variam por dispositivo. */
-const SINGLE_VALUE = new Set(['bg', 'bg_image']);
+const SINGLE_VALUE = new Set([
+    'style.bg',
+    'style.bg_image',
+    'styleProps.level',
+]);
 
 const STACK_HINT = 'empilha no telemóvel';
 
@@ -369,7 +374,7 @@ function PropList({
                     idPrefix={`${node.id}-${field}`}
                     path={`${path}.${field}.${prop.key}`}
                     context={context}
-                    single={field === 'style' && SINGLE_VALUE.has(prop.key)}
+                    single={SINGLE_VALUE.has(`${field}.${prop.key}`)}
                     unset={unset?.(prop.key)}
                 />
             ))}
@@ -495,12 +500,26 @@ function ContainerStyle({
                             device={device}
                             context={context}
                             unset={unset}
-                            onValues={(key, next) =>
+                            onValues={(key, next) => {
+                                // O servidor recusava-o ao gravar.
+                                if (
+                                    key === 'direction' &&
+                                    next.desktop === 'row' &&
+                                    group.children.length >
+                                        container.limits.maxRowChildren
+                                ) {
+                                    toast.error(
+                                        `Um contentor em linha leva no máximo ${container.limits.maxRowChildren} elementos lado a lado.`,
+                                    );
+
+                                    return;
+                                }
+
                                 onChange({
                                     ...group,
                                     style: withProp(group.style, key, next),
-                                })
-                            }
+                                });
+                            }}
                         />
                     </section>
                 );

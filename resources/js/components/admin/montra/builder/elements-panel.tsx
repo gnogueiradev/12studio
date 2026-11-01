@@ -176,7 +176,7 @@ function ElementTile({
             }}
             onDragEnd={() => onDragType(null)}
             className={cn(
-                'flex h-full min-h-16 flex-col items-center justify-center gap-1 rounded-md border border-border/60 bg-card p-1.5 text-center text-xs leading-tight transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
+                'flex h-full min-h-16 flex-col items-center justify-center gap-1 rounded-md border border-border/60 bg-card p-1 text-center text-[11px] leading-tight transition-colors focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
                 tile.taken
                     ? 'cursor-not-allowed opacity-50'
                     : 'cursor-grab hover:bg-muted active:cursor-grabbing',
@@ -186,7 +186,7 @@ function ElementTile({
                 type={tile.type}
                 className="size-4 shrink-0 text-muted-foreground"
             />
-            <span className="w-full break-words">{tile.label}</span>
+            <span className="w-full hyphens-none">{tile.label}</span>
         </div>
     );
 }
