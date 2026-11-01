@@ -1,27 +1,37 @@
 import {
     Columns2,
+    Columns3,
     FileText,
     GalleryHorizontal,
     Grid3x3,
+    Heading,
     HelpCircle,
     Image as ImageIcon,
     LayoutGrid,
+    List,
     ListOrdered,
     Mail,
     Megaphone,
     MessageSquareQuote,
+    Minus,
     PencilRuler,
+    Pilcrow,
+    Play,
+    Quote,
+    RectangleHorizontal,
     Rows3,
     ShieldCheck,
     Square,
+    Star,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { createElement } from 'react';
-import { isEditorContainer, soleElement, walkNodes } from '@/lib/page-tree';
+import { columnCount, isEditorContainer, walkNodes } from '@/lib/page-tree';
 import { randomId } from '@/lib/utils';
 import type {
     BlockSchema,
     EditorBlock,
+    EditorContainer,
     EditorNode,
     FieldSchema,
 } from '@/types/page-builder';
@@ -45,7 +55,17 @@ const ICONS: Record<string, LucideIcon> = {
     contact: Mail,
     custom_order: PencilRuler,
     spacer: Square,
+    heading: Heading,
+    paragraph: Pilcrow,
+    image: ImageIcon,
+    button: RectangleHorizontal,
+    icon: Star,
+    divider: Minus,
+    video: Play,
+    icon_list: List,
+    quote: Quote,
     container: Square,
+    columns: Columns3,
 };
 
 /** O ícone do tipo de bloco (decorativo: o nome vai sempre ao lado). */
@@ -126,18 +146,38 @@ export function blankNode(
     };
 }
 
-/** O nome de um nó: o que o dono lhe deu, o do bloco único ou "Secção". */
+/**
+ * O nome de um nó: o que o dono lhe deu, o do tipo de elemento ou, nos
+ * contentores, "Contentor · 2 colunas" (dentro de uma linha, "Coluna 60%").
+ */
 export function nodeLabel(
     node: EditorNode,
     schema: Record<string, BlockSchema | undefined>,
+    parent: EditorContainer | null = null,
 ): string {
-    const element = isEditorContainer(node) ? soleElement(node) : node;
+    if (node.label) {
+        return node.label;
+    }
 
-    return (
-        node.label ||
-        element?.label ||
-        (element ? (schema[element.type]?.label ?? element.type) : 'Secção')
-    );
+    if (!isEditorContainer(node)) {
+        return schema[node.type]?.label ?? node.type;
+    }
+
+    const width = node.style.width?.desktop;
+    const name =
+        parent?.style.direction?.desktop !== 'row'
+            ? 'Contentor'
+            : typeof width === 'number'
+              ? `Coluna ${width}%`
+              : 'Coluna';
+
+    if (node.style.direction?.desktop !== 'row') {
+        return name;
+    }
+
+    const columns = columnCount(node);
+
+    return `${name} · ${columns} ${columns === 1 ? 'coluna' : 'colunas'}`;
 }
 
 /** Os elementos lá dentro que a impedem de se apagar ou de se duplicar. */
@@ -185,22 +225,4 @@ export function missingTranslations(
                     isEmpty(block.content[locale]?.[field.key]),
             ),
     );
-}
-
-/** Um resumo curto do bloco para a lista (o título, se tiver). */
-export function blockSummary(
-    block: EditorBlock,
-    defaultLocale: string,
-): string {
-    const content = block.content[defaultLocale] ?? {};
-
-    for (const key of ['title', 'heading', 'eyebrow', 'text', 'body']) {
-        const value = content[key];
-
-        if (typeof value === 'string' && value.trim() !== '') {
-            return value.replace(/<[^>]+>/g, ' ').trim();
-        }
-    }
-
-    return '';
 }

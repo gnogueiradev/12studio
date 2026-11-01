@@ -20,7 +20,7 @@ import type { EditorNode, PreviewMessage } from '@/types/page-builder';
 import type { StoreNode } from '@/types/store';
 
 /** A largura a sério de cada ecrã; a pré-visualização encolhe para caber. */
-const DEVICES = {
+export const DEVICES = {
     mobile: { width: 390, label: 'Telemóvel', icon: Smartphone },
     tablet: { width: 820, label: 'Tablet', icon: Tablet },
     desktop: { width: 1280, label: 'Computador', icon: Monitor },

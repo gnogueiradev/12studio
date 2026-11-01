@@ -52,9 +52,8 @@ export function isEditorContainer(node: EditorNode): node is EditorContainer {
     return node.type === 'container';
 }
 
-/** Um contentor novo; com mais de uma coluna, as colunas vêm lá dentro. */
-export function blankContainer(columns: number[]): EditorContainer {
-    const base = {
+function blankShell() {
+    return {
         type: 'container' as const,
         v: 2,
         visible: true,
@@ -63,10 +62,26 @@ export function blankContainer(columns: number[]): EditorContainer {
         content: {},
         advanced: {},
     };
+}
 
+/** Uma coluna: um contentor em coluna com a largura em percentagem. */
+function blankColumn(width: number): EditorContainer {
+    return {
+        ...blankShell(),
+        id: randomId(),
+        style: {
+            direction: { desktop: 'column' },
+            width: { desktop: width },
+        },
+        children: [],
+    };
+}
+
+/** Um contentor novo; com mais de uma coluna, as colunas vêm lá dentro. */
+export function blankContainer(columns: number[]): EditorContainer {
     if (columns.length <= 1) {
         return {
-            ...base,
+            ...blankShell(),
             id: randomId(),
             style: {
                 direction: { desktop: 'column' },
@@ -77,22 +92,105 @@ export function blankContainer(columns: number[]): EditorContainer {
     }
 
     return {
-        ...base,
+        ...blankShell(),
         id: randomId(),
         style: {
             // No telemóvel as colunas empilham (o NodeTree dá-lhes 100%).
             direction: { desktop: 'row', mobile: 'column' },
             max_width: { desktop: 'contained' },
         },
-        children: columns.map((width) => ({
-            ...base,
-            id: randomId(),
-            style: {
-                direction: { desktop: 'column' },
-                width: { desktop: width },
+        children: columns.map(blankColumn),
+    };
+}
+
+/** As larguras de 2 a 4 colunas iguais (inteiros, como o servidor guarda). */
+const EVEN_COLUMNS: Record<number, number[]> = {
+    2: [50, 50],
+    3: [33, 33, 34],
+    4: [25, 25, 25, 25],
+};
+
+/** Quantas colunas o contentor mostra no computador. */
+export function columnCount(node: EditorContainer): number {
+    return node.style.direction?.desktop === 'row' ? node.children.length : 1;
+}
+
+/** Como o NodeTree: uma linha que passa a coluna no telemóvel. */
+export function stacksOnMobile(node: EditorContainer): boolean {
+    const direction = node.style.direction;
+
+    return (
+        resolveDevices(direction).tablet === 'row' &&
+        (direction?.mobile ?? 'column') === 'column'
+    );
+}
+
+/**
+ * O mesmo contentor com `count` colunas, sem perder nada: o que estava solto
+ * entra na primeira coluna, e o conteúdo das colunas que sobram passa para a
+ * última que fica. Com uma só, os filhos das colunas sobem para o contentor.
+ * Devolve o próprio nó se já estiver assim.
+ */
+export function withColumns(
+    node: EditorContainer,
+    count: number,
+): EditorContainer {
+    const direction = node.style.direction ?? {};
+    const isRow = direction.desktop === 'row';
+
+    if (count <= 1) {
+        return isRow
+            ? {
+                  ...node,
+                  style: { ...node.style, direction: { desktop: 'column' } },
+                  children: node.children.flatMap((child) =>
+                      isEditorContainer(child) ? child.children : [child],
+                  ),
+              }
+            : node;
+    }
+
+    const allColumns = node.children.every(isEditorContainer);
+
+    if (isRow && allColumns && node.children.length === count) {
+        return node;
+    }
+
+    const widths = EVEN_COLUMNS[count] ?? [];
+    const current =
+        isRow && allColumns
+            ? (node.children as EditorContainer[])
+            : node.children.length > 0
+              ? [{ ...blankColumn(widths[0]), children: node.children }]
+              : [];
+    const kept = current.slice(0, count);
+    const extra = current.slice(count).flatMap((column) => column.children);
+
+    return {
+        ...node,
+        style: {
+            ...node.style,
+            direction: {
+                ...direction,
+                desktop: 'row',
+                mobile: direction.mobile ?? 'column',
             },
-            children: [],
-        })),
+        },
+        children: widths.map((width, index) => {
+            const column = kept[index] ?? blankColumn(width);
+
+            return {
+                ...column,
+                style: {
+                    ...column.style,
+                    width: { ...column.style.width, desktop: width },
+                },
+                children:
+                    index === kept.length - 1
+                        ? [...column.children, ...extra]
+                        : column.children,
+            };
+        }),
     };
 }
 
@@ -166,17 +264,6 @@ export function nodePath(nodes: EditorNode[], id: string): EditorNode[] {
     }
 
     return [];
-}
-
-/** O elemento de um contentor que só leva esse: uma secção de um bloco. */
-export function soleElement(node: EditorNode): EditorBlock | null {
-    if (!isEditorContainer(node) || node.children.length !== 1) {
-        return null;
-    }
-
-    const [child] = node.children;
-
-    return isEditorContainer(child) ? null : child;
 }
 
 /**

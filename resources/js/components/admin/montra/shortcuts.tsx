@@ -15,8 +15,8 @@ export const MOD =
 const SHORTCUTS: [string, string][] = [
     [`${MOD} Z`, 'Desfazer'],
     [`${MOD} ⇧ Z`, 'Refazer'],
-    [`${MOD} D`, 'Duplicar o bloco'],
-    ['Delete', 'Apagar o bloco'],
+    [`${MOD} D`, 'Duplicar o selecionado'],
+    ['Delete', 'Apagar o selecionado'],
     ['Esc', 'Largar a seleção'],
 ];
 

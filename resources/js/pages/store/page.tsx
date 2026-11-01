@@ -101,7 +101,7 @@ function EditorPreview({ initial }: { initial: StoreNode[] }) {
     useEffect(() => {
         if (selected) {
             document
-                .querySelector(`[data-block-id="${CSS.escape(selected)}"]`)
+                .querySelector(`[data-node-id="${CSS.escape(selected)}"]`)
                 ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
     }, [selected]);
@@ -159,7 +159,7 @@ function EditorPreview({ initial }: { initial: StoreNode[] }) {
     return (
         <>
             {selected && (
-                <style>{`[data-block-id="${CSS.escape(selected)}"]{outline:3px solid var(--ring);outline-offset:-3px}`}</style>
+                <style>{`[data-node-id="${CSS.escape(selected)}"]{outline:3px solid var(--ring);outline-offset:-3px}`}</style>
             )}
             {/* Mais grossos do que o normal: o editor mostra a página
                 reduzida, e uma linha de 1px quase desaparece. */}

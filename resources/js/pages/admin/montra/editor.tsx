@@ -6,8 +6,8 @@ import {
     ExternalLink,
     EyeOff,
     History,
+    ListTree,
     MoreHorizontal,
-    Plus,
     Redo2,
     RotateCcw,
     Search,
@@ -21,20 +21,28 @@ import {
     useMemo,
     useRef,
     useState,
+    useSyncExternalStore,
 } from 'react';
 import type { ReactNode } from 'react';
 import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/admin/confirm-dialog';
-import { BlockCatalog } from '@/components/admin/montra/block-catalog';
-import { BlockList } from '@/components/admin/montra/block-list';
 import {
+    blankContainer,
     blankNode,
+    duplicateNode,
     nodeLabel,
     subtreeFlags,
 } from '@/components/admin/montra/blocks';
+import {
+    copyNode,
+    readClipboard,
+} from '@/components/admin/montra/builder/clipboard';
+import { EditPanel } from '@/components/admin/montra/builder/edit-panel';
+import type { StyleOptions } from '@/components/admin/montra/builder/edit-panel';
+import { ElementsPanel } from '@/components/admin/montra/builder/elements-panel';
+import { Navigator } from '@/components/admin/montra/builder/navigator';
+import type { PasteWhere } from '@/components/admin/montra/builder/navigator';
 import type { FieldContext } from '@/components/admin/montra/field-input';
-import { Inspector } from '@/components/admin/montra/inspector';
-import type { StyleOptions } from '@/components/admin/montra/inspector';
 import {
     HistorySheet,
     LandingSettingsDialog,
@@ -69,7 +77,6 @@ import {
     canDrop,
     canPaste,
     duplicateInPlace,
-    erroredNodeIds,
     errorKey,
     findNode,
     insertNode,
@@ -78,11 +85,11 @@ import {
     moveNode,
     nodePath,
     removeNode,
-    soleElement,
     updateNode,
     upgradeRoots,
-    walkNodes,
+    withColumns,
 } from '@/lib/page-tree';
+import type { NodeTarget } from '@/lib/page-tree';
 import { cn } from '@/lib/utils';
 import {
     descartar,
@@ -98,7 +105,6 @@ import type {
     BlockSchema,
     ContainerSchema,
     EditablePage,
-    EditorBlock,
     EditorNode,
     ProductOption,
     Revision,
@@ -125,10 +131,42 @@ type SaveState = 'saved' | 'dirty' | 'saving' | 'error';
 
 const AUTOSAVE_DELAY = 1200;
 
+const NAVIGATOR_KEY = 'studio-editor-navigator';
+
+/** Só em memória se o browser não deixar usar o localStorage. */
+let navigatorMemory: string | null = null;
+const navigatorListeners = new Set<() => void>();
+
+function readNavigatorChoice(): string | null {
+    try {
+        return window.localStorage.getItem(NAVIGATOR_KEY) ?? navigatorMemory;
+    } catch {
+        return navigatorMemory;
+    }
+}
+
+function saveNavigatorChoice(open: boolean) {
+    navigatorMemory = open ? '1' : '0';
+
+    try {
+        window.localStorage.setItem(NAVIGATOR_KEY, navigatorMemory);
+    } catch {
+        // Fica em memória.
+    }
+
+    navigatorListeners.forEach((listener) => listener());
+}
+
+function subscribeNavigatorChoice(listener: () => void) {
+    navigatorListeners.add(listener);
+
+    return () => navigatorListeners.delete(listener);
+}
+
 /**
- * O editor de uma página da montra, no ecrã todo: blocos à esquerda,
- * pré-visualização ao centro, inspetor à direita (só com um bloco
- * escolhido). Tudo grava sozinho em rascunho; o site só muda em "Publicar".
+ * O editor de uma página da montra, no ecrã todo: Elementos e Editar à
+ * esquerda, pré-visualização ao centro, Navegador à direita (abre e fecha).
+ * Tudo grava sozinho em rascunho; o site só muda em "Publicar".
  */
 export default function PageEditor(props: Props) {
     const { page, schema, locales, revisions } = props;
@@ -177,16 +215,26 @@ export default function PageEditor(props: Props) {
     const [mediaSrc, setMediaSrc] = useState<Record<number, string>>(
         props.media,
     );
-    const [catalogOpen, setCatalogOpen] = useState(false);
-    const [catalogAt, setCatalogAt] = useState<number | null>(null);
     const [device, setDevice] = useState<Device>('desktop');
+    // O painel esquerdo; abaixo de lg, o que ocupa o ecrã.
+    const [panel, setPanel] = useState<'elements' | 'edit'>('elements');
+    const [mobileView, setMobileView] = useState<
+        'panel' | 'navigator' | 'preview'
+    >('panel');
+    // O tipo a ser arrastado da grelha para a página.
+    const [draggingType, setDraggingType] = useState<string | null>(null);
+    const navigatorDragging = useRef(false);
+    // O que o dono escolheu; sem escolha, aberto só nos ecrãs largos.
+    const navigatorChoice = useSyncExternalStore(
+        subscribeNavigatorChoice,
+        readNavigatorChoice,
+        () => null,
+    );
+    const navigatorOpen = navigatorChoice ? navigatorChoice === '1' : wide;
     const [seoOpen, setSeoOpen] = useState(false);
     const [settingsOpen, setSettingsOpen] = useState(false);
     const [historyOpen, setHistoryOpen] = useState(false);
     const [confirmDelete, setConfirmDelete] = useState(false);
-    const [mobileView, setMobileView] = useState<'blocks' | 'preview'>(
-        'blocks',
-    );
     const [publishing, setPublishing] = useState(false);
 
     const schemaByType = useMemo(
@@ -338,26 +386,130 @@ export default function PageEditor(props: Props) {
     const update = (node: EditorNode) =>
         setNodes((current) => updateNode(current, node.id, node), node.id);
 
-    // Até haver o Navegador a lista só mostra a raiz: escolher uma secção de
-    // um só elemento abre esse elemento no inspetor.
-    const selectRoot = (root: EditorNode) =>
-        setSelected(soleElement(root)?.id ?? root.id);
+    /** Selecionar leva ao separador Editar. */
+    const select = (id: string) => {
+        setSelected(id);
+        setPanel('edit');
+        setMobileView('panel');
+    };
 
-    /** `at` é a posição na raiz; sem ela, a seguir à secção selecionada. */
-    const add = (blockSchema: BlockSchema, at: number | null) => {
+    /** O que um tile da grelha cria; "columns" é um contentor com 2 colunas. */
+    const newSubject = (type: string): EditorNode | null => {
+        if (type === 'container') {
+            return blankContainer([100]);
+        }
+
+        if (type === 'columns') {
+            return blankContainer([50, 50]);
+        }
+
+        const blockSchema = schemaByType[type];
+
+        return blockSchema
+            ? blankNode(blockSchema, locales, defaultLocale)
+            : null;
+    };
+
+    /**
+     * Da grelha: um elemento entra dentro do contentor selecionado e os outros
+     * casos a seguir à seleção; sem seleção, no fim da página. Se não couber
+     * ali (um bloco que fica sozinho), tenta a seguir à secção.
+     */
+    const insert = (type: string) => {
+        const subject = newSubject(type);
+
+        if (!subject) {
+            return;
+        }
+
+        const found = selected ? findNode(nodes, selected) : null;
         const root = selected ? nodePath(nodes, selected)[0] : null;
-        const after = root ? nodes.indexOf(root) + 1 : 0;
-        const target = {
+        const targets: NodeTarget[] = [];
+
+        if (found) {
+            targets.push(
+                isEditorContainer(found.node) && !isEditorContainer(subject)
+                    ? {
+                          parentId: found.node.id,
+                          index: found.node.children.length,
+                      }
+                    : {
+                          parentId: found.parent?.id ?? null,
+                          index: found.index + 1,
+                      },
+            );
+        }
+
+        targets.push({
             parentId: null,
-            index: Math.min(
-                at ?? (after > 0 ? after : nodes.length),
-                nodes.length,
-            ),
-        };
-        const refused = canDrop(
-            nodes,
-            { type: blockSchema.type },
-            target,
+            index: root ? nodes.indexOf(root) + 1 : nodes.length,
+        });
+
+        const refusals = targets.map((target) =>
+            canPaste(nodes, subject, target, schemaByType, limits),
+        );
+        const fits = refusals.indexOf(null);
+
+        if (fits < 0) {
+            toast.error(refusals[0] ?? 'Este elemento não cabe aqui.');
+
+            return;
+        }
+
+        const target = targets[fits];
+        // Dentro de um contentor, um bloco da loja nasce sem casca de secção.
+        const placed =
+            target.parentId !== null && !isEditorContainer(subject)
+                ? { ...subject, shell: false }
+                : subject;
+
+        // O contentor à volta tem um id ao acaso: não vai dentro do updater.
+        setNodes(insertNode(nodes, placed, target));
+        select(placed.id);
+    };
+
+    const move = (id: string, target: NodeTarget) => {
+        const refused = canDrop(nodes, id, target, schemaByType, limits);
+
+        if (refused) {
+            toast.error(refused);
+
+            return;
+        }
+
+        setNodes((current) => moveNode(current, id, target));
+    };
+
+    const toggle = (id: string) =>
+        setNodes((current) => {
+            const node = findNode(current, id)?.node;
+
+            return node
+                ? updateNode(current, id, { visible: !node.visible })
+                : current;
+        });
+
+    const rename = (id: string, label: string | null) =>
+        setNodes((current) => updateNode(current, id, { label }));
+
+    const setColumns = (count: number) => {
+        const found = selected ? findNode(nodes, selected) : null;
+
+        if (!found || !isEditorContainer(found.node)) {
+            return;
+        }
+
+        // As colunas novas têm ids ao acaso: não vai dentro do updater.
+        const next = withColumns(found.node, count);
+
+        if (next === found.node) {
+            return;
+        }
+
+        const refused = canPaste(
+            removeNode(nodes, found.node.id),
+            next,
+            { parentId: found.parent?.id ?? null, index: found.index },
             schemaByType,
             limits,
         );
@@ -368,48 +520,8 @@ export default function PageEditor(props: Props) {
             return;
         }
 
-        const element = blankNode(blockSchema, locales, defaultLocale);
-        // O contentor à volta tem um id ao acaso: não vai dentro do updater.
-        setNodes(insertNode(nodes, element, target));
-        setSelected(element.id);
+        setNodes(updateNode(nodes, found.node.id, next));
     };
-
-    const openCatalog = (at: number | null) => {
-        setCatalogAt(at);
-        setCatalogOpen(true);
-    };
-
-    /** Da posição `from` para a `to` na raiz (a que fica no fim). */
-    const move = (from: number, to: number) =>
-        setNodes((current) =>
-            moveNode(current, current[from].id, {
-                parentId: null,
-                index: from < to ? to + 1 : to,
-            }),
-        );
-
-    // Uma secção convertida pode trazer o elemento escondido (v1): mostrar
-    // liga os dois, esconder só o contentor.
-    const toggle = (id: string) =>
-        setNodes((current) => {
-            const root = findNode(current, id)?.node;
-
-            if (!root) {
-                return current;
-            }
-
-            const element = soleElement(root);
-
-            if (root.visible && (element?.visible ?? true)) {
-                return updateNode(current, id, { visible: false });
-            }
-
-            const shown = updateNode(current, id, { visible: true });
-
-            return element
-                ? updateNode(shown, element.id, { visible: true })
-                : shown;
-        });
 
     const duplicate = (id: string) => {
         const found = findNode(nodes, id);
@@ -435,11 +547,57 @@ export default function PageEditor(props: Props) {
         const { nodes: next, newId } = duplicateInPlace(nodes, id);
         setNodes(next);
 
-        const copy = newId ? findNode(next, newId)?.node : null;
-
-        if (copy) {
-            selectRoot(copy);
+        if (newId) {
+            select(newId);
         }
+    };
+
+    const copy = (id: string) => {
+        const found = findNode(nodes, id);
+
+        if (found) {
+            copyNode(found.node);
+            toast(
+                `“${nodeLabel(found.node, schemaByType, found.parent)}” copiado`,
+            );
+        }
+    };
+
+    const paste = (id: string, where: PasteWhere) => {
+        const copied = readClipboard();
+        const found = findNode(nodes, id);
+
+        if (!copied) {
+            toast.error('Ainda não copiaste nada.');
+
+            return;
+        }
+
+        if (!found) {
+            return;
+        }
+
+        const target =
+            where === 'inside' && isEditorContainer(found.node)
+                ? {
+                      parentId: found.node.id,
+                      index: found.node.children.length,
+                  }
+                : {
+                      parentId: found.parent?.id ?? null,
+                      index: found.index + 1,
+                  };
+        const fresh = duplicateNode(copied);
+        const refused = canPaste(nodes, fresh, target, schemaByType, limits);
+
+        if (refused) {
+            toast.error(refused);
+
+            return;
+        }
+
+        setNodes(insertNode(nodes, fresh, target));
+        select(fresh.id);
     };
 
     // Apaga logo e oferece "Desfazer" num aviso, que volta a pôr o nó onde
@@ -463,7 +621,7 @@ export default function PageEditor(props: Props) {
             setSelected(null);
         }
 
-        toast(`Bloco “${nodeLabel(removed, schemaByType)}” apagado`, {
+        toast(`“${nodeLabel(removed, schemaByType, found.parent)}” apagado`, {
             action: {
                 label: 'Desfazer',
                 onClick: () =>
@@ -545,28 +703,15 @@ export default function PageEditor(props: Props) {
             },
         );
 
-    // A lista só mostra a raiz: uma secção fica marcada se o erro for nela ou
-    // em qualquer nó lá dentro.
-    const errorBlocks = useMemo(() => {
-        const errored = erroredNodeIds(errors);
-
-        return new Set(
-            nodes
-                .filter((root) =>
-                    walkNodes([root]).some((node) => errored.has(node.id)),
-                )
-                .map((root) => root.id),
-        );
-    }, [errors, nodes]);
-
     const selectedPath = selected ? nodePath(nodes, selected) : [];
-    const selectedRoot: EditorNode | null = selectedPath[0] ?? null;
     const selectedNode = selectedPath[selectedPath.length - 1] ?? null;
-    const selectedBlock: EditorBlock | null =
-        selectedNode && !isEditorContainer(selectedNode) ? selectedNode : null;
-    const selectedSchema = selectedBlock
-        ? schemaByType[selectedBlock.type]
-        : undefined;
+    const selectedParent = selectedPath[selectedPath.length - 2] ?? null;
+    const selectedContainerParent =
+        selectedParent && isEditorContainer(selectedParent)
+            ? selectedParent
+            : null;
+    // Sem nada selecionado (apagado, desfeito), não há o que editar.
+    const panelView = selectedNode ? panel : 'elements';
 
     const context: FieldContext = {
         links: props.links,
@@ -597,10 +742,13 @@ export default function PageEditor(props: Props) {
 
     // ── Atalhos ───────────────────────────────────────────────────────────
     // Nunca dentro de um campo de texto (aí o desfazer é o do browser) nem
-    // com um diálogo ou menu aberto. Apagar e duplicar também não com o foco
-    // no inspetor, para um Delete num botão de lá não levar o bloco todo.
+    // com um diálogo ou menu aberto.
     const onShortcut = useEffectEvent((event: KeyboardEvent) => {
-        if (event.defaultPrevented || event.isComposing) {
+        if (
+            event.defaultPrevented ||
+            event.isComposing ||
+            navigatorDragging.current
+        ) {
             return;
         }
 
@@ -616,7 +764,6 @@ export default function PageEditor(props: Props) {
 
         const mod = event.metaKey || event.ctrlKey;
         const key = event.key.toLowerCase();
-        const inInspector = Boolean(target?.closest('[data-inspector]'));
 
         if (mod && !event.altKey && (key === 'z' || key === 'y')) {
             event.preventDefault();
@@ -630,36 +777,35 @@ export default function PageEditor(props: Props) {
             return;
         }
 
-        if (!selectedRoot) {
+        if (!selectedNode) {
             return;
         }
 
         if (key === 'escape' && !mod) {
             setSelected(null);
+            setPanel('elements');
 
             return;
         }
 
-        // Apagar e duplicar só com o foco na lista de blocos (ou em lado
-        // nenhum): um Backspace no botão "Publicar" não apaga o bloco.
+        // Apagar e duplicar só com o foco no Navegador (ou em lado nenhum): um
+        // Backspace no botão "Publicar" não apaga o que está selecionado.
         if (
-            inInspector ||
-            (target &&
-                target !== document.body &&
-                !target.closest('[data-block-list]'))
+            target &&
+            target !== document.body &&
+            !target.closest('[data-navigator]')
         ) {
             return;
         }
 
-        // Até haver o Navegador, atuam na secção: é o que a lista mostra.
-        const flags = subtreeFlags(selectedRoot, schemaByType);
+        const flags = subtreeFlags(selectedNode, schemaByType);
 
-        // Mesmo num bloco que não se duplica, o Ctrl+D não vai aos favoritos.
+        // Mesmo num nó que não se duplica, o Ctrl+D não vai aos favoritos.
         if (mod && key === 'd') {
             event.preventDefault();
 
             if (!flags.unique) {
-                duplicate(selectedRoot.id);
+                duplicate(selectedNode.id);
             }
 
             return;
@@ -671,7 +817,7 @@ export default function PageEditor(props: Props) {
             !flags.required
         ) {
             event.preventDefault();
-            remove(selectedRoot.id);
+            remove(selectedNode.id);
         }
     });
 
@@ -681,23 +827,6 @@ export default function PageEditor(props: Props) {
 
         return () => window.removeEventListener('keydown', listener);
     }, []);
-
-    const inspector = selectedBlock && selectedSchema && (
-        <Inspector
-            key={selectedBlock.id}
-            block={selectedBlock}
-            path={errorKey(selectedBlock.id)}
-            schema={selectedSchema}
-            styles={props.styles}
-            locales={locales}
-            defaultLocale={defaultLocale}
-            locale={locale}
-            onLocale={setLocale}
-            onChange={update}
-            onClose={() => setSelected(null)}
-            context={context}
-        />
-    );
 
     return (
         <>
@@ -779,6 +908,17 @@ export default function PageEditor(props: Props) {
                             <Redo2 />
                         </IconAction>
                     </div>
+                    <Button
+                        variant={navigatorOpen ? 'secondary' : 'outline'}
+                        size="sm"
+                        className="hidden lg:inline-flex"
+                        aria-pressed={navigatorOpen}
+                        onClick={() => saveNavigatorChoice(!navigatorOpen)}
+                    >
+                        <ListTree />
+                        <span className="hidden xl:inline">Navegador</span>
+                        <span className="sr-only xl:hidden">Navegador</span>
+                    </Button>
                     <Button
                         variant="outline"
                         size="sm"
@@ -906,111 +1046,126 @@ export default function PageEditor(props: Props) {
                 </div>
             </header>
 
-            {/* Em ecrãs pequenos: blocos ou pré-visualização */}
+            {/* Em ecrãs pequenos: um de cada vez */}
             <div className="shrink-0 border-b border-border/60 px-3 py-2 lg:hidden">
                 <Tabs
-                    value={mobileView}
-                    onValueChange={(value) =>
-                        setMobileView(value as 'blocks' | 'preview')
-                    }
+                    value={mobileView === 'panel' ? panelView : mobileView}
+                    onValueChange={(value) => {
+                        if (value === 'elements' || value === 'edit') {
+                            setPanel(value);
+                            setMobileView('panel');
+                        } else {
+                            setMobileView(value as 'navigator' | 'preview');
+                        }
+                    }}
                 >
                     <TabsList className="w-full">
-                        <TabsTrigger value="blocks" className="flex-1">
-                            Blocos
+                        <TabsTrigger value="elements" className="flex-1 px-1">
+                            Elementos
                         </TabsTrigger>
-                        <TabsTrigger value="preview" className="flex-1">
-                            Pré-visualização
+                        <TabsTrigger
+                            value="edit"
+                            className="flex-1 px-1"
+                            disabled={!selectedNode}
+                        >
+                            Editar
+                        </TabsTrigger>
+                        <TabsTrigger value="navigator" className="flex-1 px-1">
+                            Navegador
+                        </TabsTrigger>
+                        <TabsTrigger value="preview" className="flex-1 px-1">
+                            Página
                         </TabsTrigger>
                     </TabsList>
                 </Tabs>
             </div>
 
             <div className="flex min-h-0 flex-1">
-                {/* Lista de blocos (e, abaixo de xl, o inspetor no lugar
-                    dela enquanto houver um bloco escolhido) */}
                 <aside
-                    aria-label="Blocos"
+                    aria-label="Elementos e edição"
                     className={cn(
                         'flex min-h-0 w-full flex-col border-border/60 bg-background lg:w-[300px] lg:shrink-0 lg:border-r',
-                        mobileView === 'preview' && 'hidden lg:flex',
+                        mobileView !== 'panel' && 'hidden lg:flex',
                     )}
                 >
-                    {!wide && inspector ? (
-                        <div
-                            data-inspector
-                            className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto p-3"
+                    <div className="hidden shrink-0 px-3 pt-3 pb-2 lg:block">
+                        <Tabs
+                            value={panelView}
+                            onValueChange={(value) =>
+                                setPanel(value as 'elements' | 'edit')
+                            }
                         >
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                className="mb-2 -ml-2 text-muted-foreground"
-                                onClick={() => setSelected(null)}
-                            >
-                                <ArrowLeft />
-                                Todos os blocos
-                            </Button>
-                            {inspector}
+                            <TabsList className="w-full">
+                                <TabsTrigger
+                                    value="elements"
+                                    className="flex-1"
+                                >
+                                    Elementos
+                                </TabsTrigger>
+                                <TabsTrigger
+                                    value="edit"
+                                    className="flex-1"
+                                    disabled={!selectedNode}
+                                >
+                                    Editar
+                                </TabsTrigger>
+                            </TabsList>
+                        </Tabs>
+                    </div>
+                    {errors.blocks && (
+                        <p className="mx-3 mb-2 shrink-0 rounded-md bg-destructive-soft p-2 text-sm text-destructive-soft-foreground">
+                            {errors.blocks}
+                        </p>
+                    )}
+                    {panelView === 'edit' && selectedNode ? (
+                        <div className="flex min-h-0 flex-1 flex-col pt-3 lg:pt-0">
+                            <EditPanel
+                                key={selectedNode.id}
+                                node={selectedNode}
+                                parent={selectedContainerParent}
+                                path={errorKey(selectedNode.id)}
+                                name={nodeLabel(
+                                    selectedNode,
+                                    schemaByType,
+                                    selectedContainerParent,
+                                )}
+                                schema={schemaByType[selectedNode.type]}
+                                container={props.container}
+                                styles={props.styles}
+                                locales={locales}
+                                defaultLocale={defaultLocale}
+                                locale={locale}
+                                onLocale={setLocale}
+                                device={device}
+                                onChange={update}
+                                onChild={update}
+                                onColumns={setColumns}
+                                onBack={() => setPanel('elements')}
+                                context={context}
+                            />
                         </div>
                     ) : (
-                        <>
-                            <div className="flex shrink-0 items-baseline justify-between gap-2 px-3 pt-3 pb-1">
-                                <h2 className="text-sm font-medium">Blocos</h2>
-                                <span className="text-xs text-muted-foreground tabular-nums">
-                                    {nodes.length}
-                                </span>
+                        <div className="flex min-h-0 flex-1 flex-col pt-3 lg:pt-0">
+                            <ElementsPanel
+                                schema={schema}
+                                nodes={nodes}
+                                onInsert={insert}
+                                onDragType={setDraggingType}
+                            />
+                            <div className="hidden shrink-0 border-t border-border/60 px-3 py-2 pointer-fine:block">
+                                <ShortcutsHint />
                             </div>
-                            <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto px-3 pb-3">
-                                {errors.blocks && (
-                                    <p className="mb-2 rounded-md bg-destructive-soft p-2 text-sm text-destructive-soft-foreground">
-                                        {errors.blocks}
-                                    </p>
-                                )}
-                                <BlockList
-                                    blocks={nodes}
-                                    schema={schemaByType}
-                                    selected={selectedRoot?.id ?? null}
-                                    locales={locales}
-                                    defaultLocale={defaultLocale}
-                                    errorBlocks={errorBlocks}
-                                    onSelect={(id) => {
-                                        const root = nodes.find(
-                                            (node) => node.id === id,
-                                        );
-
-                                        if (root) {
-                                            selectRoot(root);
-                                        }
-                                    }}
-                                    onMove={move}
-                                    onToggle={toggle}
-                                    onDuplicate={duplicate}
-                                    onRemove={remove}
-                                    onInsert={openCatalog}
-                                />
-                            </div>
-                            <div className="grid shrink-0 gap-1 border-t border-border/60 p-3">
-                                <Button
-                                    variant="outline"
-                                    className="w-full border-dashed"
-                                    onClick={() => openCatalog(nodes.length)}
-                                >
-                                    <Plus />
-                                    Adicionar bloco
-                                </Button>
-                                <div className="hidden pointer-fine:block">
-                                    <ShortcutsHint />
-                                </div>
-                            </div>
-                        </>
+                        </div>
                     )}
                 </aside>
 
                 {/* Pré-visualização */}
                 <section
                     aria-label="Pré-visualização"
+                    data-dragging-type={draggingType ?? undefined}
                     className={cn(
                         'min-h-0 min-w-0 flex-1',
-                        mobileView === 'blocks' && 'hidden lg:block',
+                        mobileView !== 'preview' && 'hidden lg:block',
                     )}
                 >
                     <PreviewFrame
@@ -1020,43 +1175,40 @@ export default function PageEditor(props: Props) {
                         locale={locale}
                         device={device}
                         selected={selected}
-                        onSelect={(id) => {
-                            setSelected(id);
-                            setMobileView('blocks');
-                        }}
+                        onSelect={select}
                     />
                 </section>
 
-                {/* Inspetor (ecrãs largos): só ocupa espaço com um bloco
-                    escolhido; a pré-visualização ajusta o zoom. */}
-                {wide && (
-                    <aside
-                        aria-label="Inspetor"
-                        className={cn(
-                            'min-h-0 shrink-0 overflow-hidden border-border/60 bg-background transition-[width] duration-200 ease-out',
-                            inspector ? 'w-[360px] border-l' : 'w-0',
-                        )}
-                    >
-                        {inspector && (
-                            <div
-                                data-inspector
-                                className="h-full w-[360px] overflow-y-auto p-4"
-                            >
-                                {inspector}
-                            </div>
-                        )}
-                    </aside>
-                )}
+                <aside
+                    aria-label="Navegador"
+                    className={cn(
+                        'min-h-0 shrink-0 border-border/60 bg-background lg:w-[280px] lg:border-l',
+                        mobileView === 'navigator' ? 'w-full' : 'hidden',
+                        navigatorOpen ? 'lg:block' : 'lg:hidden',
+                    )}
+                >
+                    <Navigator
+                        nodes={nodes}
+                        selected={selected}
+                        schema={schemaByType}
+                        limits={limits}
+                        errors={errors}
+                        onSelect={select}
+                        onMove={move}
+                        onToggle={toggle}
+                        onRename={rename}
+                        onDuplicate={duplicate}
+                        onCopy={copy}
+                        onPaste={paste}
+                        onRemove={remove}
+                        onClose={() => saveNavigatorChoice(false)}
+                        onDragging={(dragging) => {
+                            navigatorDragging.current = dragging;
+                        }}
+                    />
+                </aside>
             </div>
 
-            <BlockCatalog
-                open={catalogOpen}
-                onOpenChange={setCatalogOpen}
-                schema={schema}
-                nodes={nodes}
-                at={catalogAt}
-                onAdd={(blockSchema) => add(blockSchema, catalogAt)}
-            />
             <SeoDialog
                 open={seoOpen}
                 onOpenChange={setSeoOpen}

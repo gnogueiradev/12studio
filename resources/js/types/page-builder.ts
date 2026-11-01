@@ -66,6 +66,7 @@ export type StylePropSchema = {
 /** App\PageBuilder\Container::schema() */
 export type ContainerSchema = {
     styleProps: StylePropSchema[];
+    advancedFields: StylePropSchema[];
     limits: {
         maxDepth: number;
         maxNodes: number;

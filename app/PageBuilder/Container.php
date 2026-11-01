@@ -55,6 +55,7 @@ final class Container
     {
         return [
             'styleProps' => array_map(fn (StyleProp $prop): array => $prop->toArray(), self::styleProps()),
+            'advancedFields' => array_map(fn (StyleProp $prop): array => $prop->toArray(), Block::advancedProps()),
             'limits' => [
                 'maxDepth' => self::MAX_DEPTH,
                 'maxNodes' => self::MAX_NODES,
