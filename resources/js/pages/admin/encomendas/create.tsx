@@ -1,5 +1,5 @@
 import { Head, useForm } from '@inertiajs/react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { CustomerPicker } from '@/components/admin/customer-picker';
 import { FormTab } from '@/components/admin/form-tab';
 import { ManualOrderItems } from '@/components/admin/manual-order-items';
@@ -20,9 +20,10 @@ import {
 import { Spinner } from '@/components/ui/spinner';
 import { Tabs, TabsContent, TabsList } from '@/components/ui/tabs';
 import { Textarea } from '@/components/ui/textarea';
-import { formatCents, inputToCents } from '@/lib/money';
+import { centsToInput, formatCents, inputToCents } from '@/lib/money';
+import { postJson } from '@/lib/post-json';
 import { cn } from '@/lib/utils';
-import { index, store } from '@/routes/admin/encomendas';
+import { index, store, totais } from '@/routes/admin/encomendas';
 import {
     store as storeDraft,
     update as updateDraft,
@@ -47,6 +48,16 @@ type Props = {
     draft?: OrderDraft;
 };
 
+/** A resposta de POST /admin/encomendas/totais. */
+type TotalsPreview = {
+    discountCents: number;
+    suggestedShippingCents: number;
+    promoError: string | null;
+};
+
+/** Tempo de silêncio antes de as contas irem ao servidor. */
+const PREVIEW_DEBOUNCE_MS = 350;
+
 /**
  * A venda em mão. É o único canal em que o email não é obrigatório: o cliente
  * está à frente, leva a peça, e não há nada para lhe enviar depois.
@@ -65,6 +76,7 @@ const BLANK: ManualOrderFormData = {
     payment_status: 'pending',
     shipping_price: '0',
     shipping_method_name: '',
+    promo_code: '',
     line1: '',
     line2: '',
     postal_code: '',
@@ -237,6 +249,51 @@ export default function OrdersCreate({
     const shippingCents = shipped ? inputToCents(data.shipping_price) : 0;
     const paid = data.payment_status === 'paid';
 
+    /*
+     * O código só vai ao servidor no "Aplicar", e não a cada tecla: cada
+     * validação fica no log. As contas vêm do mesmo serviço que grava a
+     * encomenda; os portes não mudam sozinhos, a sugestão é só uma sugestão.
+     */
+    const [codeInput, setCodeInput] = useState(data.promo_code);
+    const [preview, setPreview] = useState<TotalsPreview | null>(null);
+    const [previewFailed, setPreviewFailed] = useState(false);
+
+    useEffect(() => {
+        // Uma resposta atrasada não pode pisar a do pedido mais recente.
+        let stale = false;
+
+        const timer = setTimeout(() => {
+            postJson<TotalsPreview>(totais().url, {
+                email: data.email,
+                promo_code: data.promo_code,
+                shipping_price: String(shippingCents / 100),
+                items: data.items.map((item) => ({
+                    unit_price: String(item.unit_price),
+                    qty: item.qty,
+                })),
+            })
+                .then((result) => {
+                    if (!stale) {
+                        setPreview(result);
+                        setPreviewFailed(false);
+                    }
+                })
+                .catch(() => {
+                    if (!stale) {
+                        setPreview(null);
+                        setPreviewFailed(true);
+                    }
+                });
+        }, PREVIEW_DEBOUNCE_MS);
+
+        return () => {
+            stale = true;
+            clearTimeout(timer);
+        };
+    }, [data.email, data.promo_code, data.items, shippingCents]);
+
+    const discountCents = preview?.discountCents ?? 0;
+
     const messages = errors as Record<string, string>;
     const itemsError =
         messages.items ??
@@ -255,6 +312,9 @@ export default function OrdersCreate({
         transform((current) => ({
             ...current,
             draft_id: draft?.id ?? null,
+            // O que está no campo, mesmo sem "Aplicar": um código à vista e
+            // ignorado criava a encomenda a preço cheio.
+            promo_code: codeInput.trim(),
             ...(shipped
                 ? {}
                 : {
@@ -768,6 +828,27 @@ export default function OrdersCreate({
                                                             errors.shipping_price
                                                         }
                                                     />
+                                                    {preview !== null &&
+                                                        preview.suggestedShippingCents !==
+                                                            shippingCents && (
+                                                            <button
+                                                                type="button"
+                                                                className="text-left text-xs text-muted-foreground underline underline-offset-4"
+                                                                onClick={() =>
+                                                                    setData(
+                                                                        'shipping_price',
+                                                                        centsToInput(
+                                                                            preview.suggestedShippingCents,
+                                                                        ),
+                                                                    )
+                                                                }
+                                                            >
+                                                                {preview.suggestedShippingCents ===
+                                                                0
+                                                                    ? 'Usar portes grátis'
+                                                                    : `Usar ${formatCents(preview.suggestedShippingCents)} de portes`}
+                                                            </button>
+                                                        )}
                                                 </div>
                                             </div>
                                         </div>
@@ -936,10 +1017,66 @@ export default function OrdersCreate({
                         </span>
                     </div>
 
+                    <div className="grid gap-2">
+                        <Label htmlFor="promo_code">Código de desconto</Label>
+                        <div className="flex gap-2">
+                            <Input
+                                id="promo_code"
+                                value={codeInput}
+                                onChange={(event) =>
+                                    setCodeInput(
+                                        event.target.value.toUpperCase(),
+                                    )
+                                }
+                                onBlur={() =>
+                                    setData('promo_code', codeInput.trim())
+                                }
+                                maxLength={40}
+                                className="font-mono"
+                            />
+                            <Button
+                                type="button"
+                                variant="outline"
+                                onClick={() =>
+                                    setData('promo_code', codeInput.trim())
+                                }
+                            >
+                                Aplicar
+                            </Button>
+                        </div>
+                        <InputError
+                            message={
+                                errors.promo_code ??
+                                preview?.promoError ??
+                                undefined
+                            }
+                        />
+                        {previewFailed && (
+                            <p className="text-xs text-muted-foreground">
+                                Não foi possível atualizar as contas.
+                            </p>
+                        )}
+                    </div>
+
+                    {discountCents > 0 && (
+                        <div className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">
+                                Desconto
+                            </span>
+                            <span className="tabular-nums">
+                                {formatCents(-discountCents)}
+                            </span>
+                        </div>
+                    )}
+
                     <div className="flex justify-between text-sm">
                         <span className="text-muted-foreground">Portes</span>
                         <span className="tabular-nums">
-                            {formatCents(shippingCents)}
+                            {shipped &&
+                            shippingCents === 0 &&
+                            preview?.suggestedShippingCents === 0
+                                ? 'Portes grátis'
+                                : formatCents(shippingCents)}
                         </span>
                     </div>
 
@@ -948,7 +1085,9 @@ export default function OrdersCreate({
                             Total
                         </span>
                         <span className="text-2xl font-semibold tracking-tight tabular-nums">
-                            {formatCents(itemsTotal + shippingCents)}
+                            {formatCents(
+                                itemsTotal - discountCents + shippingCents,
+                            )}
                         </span>
                     </div>
 

@@ -121,6 +121,26 @@ class StripeEvents
         // cliente abrir o pagamento, o dono tem de o saber.
         if ($paid !== $order->total_cents) {
             $note .= sprintf(' Atenção: foram pagos %s e a encomenda tem %s.', $this->euros($paid), $this->euros($order->total_cents));
+
+            Log::channel('api')->warning('Valor pago no Stripe diferente do total da encomenda.', [
+                'order_id' => $order->getKey(),
+                'session_id' => $session['id'] ?? null,
+                'amount_total' => $paid,
+                'total_cents' => $order->total_cents,
+            ]);
+        }
+
+        // Pagou numa sessao que nao chegou a ser fechada (o Stripe estava em
+        // baixo, ou pagou nesse instante). O pipeline nao sai de um estado
+        // terminal: alguem tem de reembolsar.
+        if (in_array($order->status, ['cancelled', 'refunded'], true)) {
+            $note .= ' Atenção: a encomenda já estava fechada. Confirma no Dashboard e reembolsa.';
+
+            Log::channel('api')->warning('Pagamento no Stripe de uma encomenda fechada.', [
+                'order_id' => $order->getKey(),
+                'session_id' => $session['id'] ?? null,
+                'status' => $order->status,
+            ]);
         }
 
         $this->orders->setPaymentStatus($order, 'paid', null, $note);

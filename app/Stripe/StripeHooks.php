@@ -2,7 +2,9 @@
 
 namespace App\Stripe;
 
+use App\Jobs\ExpireStripeSession;
 use App\Jobs\SyncStripeProduct;
+use App\Models\Order;
 use App\Models\Product;
 use App\Models\Variant;
 use Throwable;
@@ -38,6 +40,26 @@ class StripeHooks
     public function variantChanged(Variant $variant): void
     {
         $this->schedule((int) $variant->product_id);
+    }
+
+    /**
+     * A encomenda ja nao se paga pelo que a sessao aberta diz: foi paga a mao,
+     * cancelada, ou mudou de valor. Um link mandado por DM dura 24 horas, e sem
+     * isto continuava a cobrar.
+     *
+     * Com um payment intent, o cliente ja submeteu e nao ha nada a expirar.
+     */
+    public function sessionOutdated(Order $order): void
+    {
+        try {
+            if (! $this->stripe->isEnabled() || $order->stripe_session_id === null || $order->stripe_payment_intent_id !== null) {
+                return;
+            }
+
+            ExpireStripeSession::dispatch((int) $order->getKey(), $order->stripe_session_id)->afterCommit();
+        } catch (Throwable $exception) {
+            report($exception);
+        }
     }
 
     private function schedule(int $productId): void

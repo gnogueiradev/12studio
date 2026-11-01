@@ -66,6 +66,8 @@ class StoreManualOrderRequest extends FormRequest
 
             'shipping_price' => ['required', 'numeric', 'min:0', 'max:9999.99'],
             'shipping_method_name' => ['nullable', 'string', 'max:120'],
+            // Quem decide se serve e o OrderService, que conhece o subtotal.
+            'promo_code' => ['nullable', 'string', 'max:40'],
 
             'line1' => ['nullable', 'string', 'max:190'],
             'line2' => ['nullable', 'string', 'max:190'],

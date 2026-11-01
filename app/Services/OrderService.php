@@ -14,11 +14,14 @@ use App\Models\StockMovement;
 use App\Models\Tag;
 use App\Models\User;
 use App\Models\Variant;
+use App\Stripe\StripeHooks;
 use App\Support\Money;
+use App\Support\PromoCodeValidation;
 use Closure;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use RuntimeException;
 
 /**
@@ -60,6 +63,10 @@ class OrderService
         private TagService $tagService,
         private OrderAlerts $alerts,
         private EtsyHooks $etsy,
+        private OrderTotalsCalculator $totals,
+        private PromoCodeValidator $promoCodes,
+        private PromoCodeRedeemer $redeemer,
+        private StripeHooks $stripe,
     ) {}
 
     /**
@@ -105,7 +112,12 @@ class OrderService
             $lines = $this->resolveLines($data['items']);
 
             $subtotal = array_sum(array_column($lines, 'line_total_cents'));
-            $shipping = Money::fromDecimal((string) ($data['shipping_price'] ?? '0'));
+            $promo = $this->validPromoCode($data, $subtotal);
+            $totals = $this->totals->calculate(
+                $subtotal,
+                $promo->discountCents ?? 0,
+                Money::fromDecimal((string) ($data['shipping_price'] ?? '0')),
+            );
 
             $order = Order::query()->create([
                 'order_number' => $this->nextOrderNumber(),
@@ -123,9 +135,12 @@ class OrderService
                 'sales_channel' => $data['sales_channel'],
                 'external_order_reference' => $data['external_order_reference'] ?? null,
                 'created_by_user_id' => $admin->getKey(),
-                'subtotal_cents' => $subtotal,
-                'shipping_cents' => $shipping,
-                'total_cents' => $subtotal + $shipping,
+                'subtotal_cents' => $totals->subtotalCents,
+                'shipping_cents' => $totals->shippingCents,
+                'promo_code_id' => $promo?->promoCode?->getKey(),
+                'promo_code' => $promo?->promoCode?->code,
+                'discount_cents' => $totals->discountCents,
+                'total_cents' => $totals->totalCents,
                 'currency' => 'EUR',
                 'shipping_address' => $this->addressSnapshot($data),
                 'shipping_method_name' => $data['shipping_method_name'] ?? null,
@@ -386,6 +401,10 @@ class OrderService
             forced: $force && ! $order->isPaid() && ! in_array($to, self::TERMINAL, true),
         );
 
+        if ($to === 'cancelled') {
+            $this->stripe->sessionOutdated($order);
+        }
+
         // Fora da transacao: nada de I/O externo dentro de uma escrita ao
         // SQLite (o Mailable e queued e ja usa afterCommit).
         //
@@ -442,11 +461,26 @@ class OrderService
                 $by,
                 trim(sprintf('Pagamento: %s -> %s. %s', $previous, $paymentStatus, $note ?? '')),
             );
+
+            // Aqui, e nao no webhook: as vendas pagas em MB WAY ou em dinheiro
+            // marcam-se a mao e gastam o codigo na mesma.
+            if ($paymentStatus === 'paid') {
+                $problem = $this->redeemer->redeem($order);
+
+                if ($problem !== null) {
+                    $this->notePayment($order, "O uso do código {$order->promo_code} não ficou registado. {$problem}");
+                }
+            }
         });
 
         $order->refresh();
 
         $this->alerts->paymentChanged($order, $previous, $by, $note);
+
+        // Pago por outra via: o link que ficou aberto cobrava segunda vez.
+        if ($paymentStatus === 'paid') {
+            $this->stripe->sessionOutdated($order);
+        }
 
         return match ($paymentStatus) {
             'paid' => $this->advanceAfterPayment($order, $by),
@@ -470,8 +504,8 @@ class OrderService
      * Ajuste ao valor final: um desconto acordado a posteriori (negativo) ou
      * um extra combinado a parte (positivo).
      *
-     * O `total_cents` continua a ser SEMPRE calculado — subtotal + portes +
-     * ajuste — e nunca escrito a mao. E ele que o dashboard e a ficha de
+     * O `total_cents` continua a ser SEMPRE calculado — subtotal - desconto +
+     * portes + ajuste — e nunca escrito a mao. E ele que o dashboard e a ficha de
      * cliente somam em SQL; guardar o ajuste sem o refletir aqui era pôr
      * quatro agregacoes a aprender a soma-lo, cada uma podendo ficar para
      * tras.
@@ -496,7 +530,12 @@ class OrderService
         }
 
         $previousTotal = $order->total_cents;
-        $total = $order->subtotal_cents + $order->shipping_cents + $adjustmentCents;
+        $total = $this->totals->calculate(
+            $order->subtotal_cents,
+            $order->discount_cents,
+            $order->shipping_cents,
+            $adjustmentCents,
+        )->totalCents;
 
         if ($total < 0) {
             throw new RuntimeException('O ajuste nao pode deixar o total negativo.');
@@ -531,6 +570,10 @@ class OrderService
         $order->refresh();
 
         $this->alerts->adjusted($order, $previousTotal, $by);
+
+        if ($order->total_cents !== $previousTotal) {
+            $this->stripe->sessionOutdated($order);
+        }
 
         return $order;
     }
@@ -807,6 +850,32 @@ class OrderService
             'changed_by_user_id' => $by?->getKey(),
             'note' => $note === null || trim($note) === '' ? null : Str::limit(trim($note), 300, ''),
         ]);
+    }
+
+    /**
+     * O codigo escolhido no formulario, ja validado contra o subtotal e o email
+     * desta encomenda. A recusa sai por baixo do campo, como os outros erros.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function validPromoCode(array $data, int $subtotal): ?PromoCodeValidation
+    {
+        if (blank($data['promo_code'] ?? null)) {
+            return null;
+        }
+
+        $promo = $this->promoCodes->validate(
+            (string) $data['promo_code'],
+            $subtotal,
+            isset($data['email']) ? (string) $data['email'] : null,
+            ['source' => 'manual_order'],
+        );
+
+        if (! $promo->valid) {
+            throw ValidationException::withMessages(['promo_code' => (string) $promo->message]);
+        }
+
+        return $promo;
     }
 
     /**

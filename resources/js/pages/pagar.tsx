@@ -28,6 +28,8 @@ type Props = {
         items: Item[];
         shippingCents: number;
         adjustmentCents: number;
+        discountCents: number;
+        promoCode: string | null;
         totalCents: number;
     };
     state: 'payable' | 'processing' | 'paid' | 'unavailable';
@@ -101,6 +103,15 @@ export default function Pagar({ order, state, returning, token }: Props) {
                                 <span>Portes</span>
                                 <span className="tabular-nums">
                                     {formatCents(order.shippingCents)}
+                                </span>
+                            </li>
+                        )}
+
+                        {order.discountCents > 0 && (
+                            <li className="flex justify-between gap-4 py-2">
+                                <span>Desconto ({order.promoCode})</span>
+                                <span className="tabular-nums">
+                                    {formatCents(-order.discountCents)}
                                 </span>
                             </li>
                         )}

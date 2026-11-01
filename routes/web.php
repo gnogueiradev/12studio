@@ -100,6 +100,16 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
             ->name('encomendas.ajuste');
         Route::patch('encomendas/{order}/detalhes', [Admin\OrderController::class, 'updateDetails'])
             ->name('encomendas.detalhes');
+        Route::post('encomendas/totais', [Admin\OrderController::class, 'totals'])
+            ->name('encomendas.totais');
+        Route::post('encomendas/{order}/link-pagamento', [Admin\OrderController::class, 'paymentLink'])
+            ->name('encomendas.link-pagamento');
+
+        // Sem `destroy`: um codigo desativa-se, as encomendas continuam a apontar
+        // para ele.
+        Route::resource('codigos', Admin\PromoCodeController::class)
+            ->parameters(['codigos' => 'promoCode'])
+            ->except(['show', 'destroy']);
 
         // Cliente = User::scopeCustomers(). Sem `create` nem `edit`: os dois
         // acontecem no modal da listagem, que chega ao cliente certo por

@@ -31,6 +31,9 @@ trait FakesStripe
     /** @var array<int, array{method: string, path: string, data: array<string, mixed>, idempotency: string|null}> */
     protected array $stripeCalls = [];
 
+    /** @var array<string, array{fingerprint: string, status: int, body: mixed}> */
+    private array $stripeIdempotency = [];
+
     /**
      * Montada aqui e nao escrita por extenso, para o secret scanning do GitHub
      * nao a tomar por uma chave verdadeira.
@@ -95,17 +98,48 @@ trait FakesStripe
 
         $this->stripeCalls[] = ['method' => $request->method(), 'path' => $path, 'data' => $data, 'idempotency' => $idempotency];
 
+        // O Stripe recusa a mesma chave com outro pedido, e com o mesmo pedido
+        // devolve a primeira resposta sem criar nada.
+        $fingerprint = md5($path.json_encode($data));
+        $replay = $idempotency === null ? null : ($this->stripeIdempotency[$idempotency] ?? null);
+
+        if ($replay !== null) {
+            return $replay['fingerprint'] === $fingerprint
+                ? Http::response($replay['body'], $replay['status'])
+                : $this->stripeError(400, 'Keys for idempotent requests can only be used with the same parameters they were first used with.');
+        }
+
+        $answer = $this->routeStripe($request->method(), $path, $data)->wait();
+
+        $body = json_decode((string) $answer->getBody(), true);
+
+        if ($idempotency !== null) {
+            $this->stripeIdempotency[$idempotency] = [
+                'fingerprint' => $fingerprint,
+                'status' => $answer->getStatusCode(),
+                'body' => $body,
+            ];
+        }
+
+        return Http::response($body, $answer->getStatusCode());
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function routeStripe(string $method, string $path, array $data): mixed
+    {
         return match (true) {
-            $request->method() === 'POST' && $path === 'products' => $this->createStripe('products', 'prod', $data + ['active' => 'true']),
-            $request->method() === 'POST' && Str::is('products/*', $path) => $this->updateStripe('products', Str::after($path, 'products/'), $data),
-            $request->method() === 'POST' && $path === 'prices' => $this->createStripePrice($data),
-            $request->method() === 'POST' && Str::is('prices/*', $path) => $this->updateStripePrice(Str::after($path, 'prices/'), $data),
-            $request->method() === 'POST' && $path === 'coupons' => $this->createStripe('coupons', 'coupon', $data),
-            $request->method() === 'POST' && $path === 'checkout/sessions' => $this->createStripeSession($data),
-            $request->method() === 'POST' && Str::is('checkout/sessions/*/expire', $path) => $this->expireStripeSession(Str::between($path, 'checkout/sessions/', '/expire')),
-            $request->method() === 'GET' && Str::is('checkout/sessions/*', $path) => $this->readStripe('sessions', Str::after($path, 'checkout/sessions/')),
-            $request->method() === 'GET' && Str::is('payment_intents/*', $path) => $this->readStripe('payment_intents', Str::after($path, 'payment_intents/')),
-            default => $this->stripeError(404, "Unrecognized request URL ({$request->method()}: /v1/{$path})."),
+            $method === 'POST' && $path === 'products' => $this->createStripe('products', 'prod', $data + ['active' => 'true']),
+            $method === 'POST' && Str::is('products/*', $path) => $this->updateStripe('products', Str::after($path, 'products/'), $data),
+            $method === 'POST' && $path === 'prices' => $this->createStripePrice($data),
+            $method === 'POST' && Str::is('prices/*', $path) => $this->updateStripePrice(Str::after($path, 'prices/'), $data),
+            $method === 'POST' && $path === 'coupons' => $this->createStripe('coupons', 'coupon', $data),
+            $method === 'POST' && $path === 'checkout/sessions' => $this->createStripeSession($data),
+            $method === 'POST' && Str::is('checkout/sessions/*/expire', $path) => $this->expireStripeSession(Str::between($path, 'checkout/sessions/', '/expire')),
+            $method === 'GET' && Str::is('checkout/sessions/*', $path) => $this->readStripe('sessions', Str::after($path, 'checkout/sessions/')),
+            $method === 'GET' && Str::is('payment_intents/*', $path) => $this->readStripe('payment_intents', Str::after($path, 'payment_intents/')),
+            default => $this->stripeError(404, "Unrecognized request URL ({$method}: /v1/{$path})."),
         };
     }
 
@@ -181,6 +215,14 @@ trait FakesStripe
             return $this->stripeError(400, 'Missing required param: mode, line_items or success_url.');
         }
 
+        if (isset($data['expires_at'])) {
+            $seconds = (int) $data['expires_at'] - now()->getTimestamp();
+
+            if ($seconds < 1800 || $seconds > 86400) {
+                return $this->stripeError(400, 'The `expires_at` timestamp must be between 30 minutes and 24 hours from now.');
+            }
+        }
+
         $total = 0;
 
         foreach ($data['line_items'] as $item) {
@@ -231,6 +273,7 @@ trait FakesStripe
             'status' => 'open',
             'payment_status' => 'unpaid',
             'amount_total' => $total,
+            'expires_at' => isset($data['expires_at']) ? (int) $data['expires_at'] : null,
             'client_reference_id' => $data['client_reference_id'] ?? null,
             'metadata' => $data['metadata'] ?? [],
             'payment_intent' => null,

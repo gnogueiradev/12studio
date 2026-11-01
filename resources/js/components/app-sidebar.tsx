@@ -13,6 +13,7 @@ import {
     ShoppingCart,
     Store,
     Tags,
+    TicketPercent,
     UserCog,
     Users,
 } from 'lucide-react';
@@ -71,6 +72,11 @@ const backofficeNavItems: NavItem[] = [
         title: 'Etiquetas',
         href: '/admin/etiquetas',
         icon: Tags,
+    },
+    {
+        title: 'Códigos',
+        href: '/admin/codigos',
+        icon: TicketPercent,
     },
     {
         title: 'Materiais',

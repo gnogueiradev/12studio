@@ -250,6 +250,8 @@ export type OrderDetail = {
     adjustmentCents: number;
     /** Obrigatório sempre que o ajuste não é zero; nulo quando é. */
     adjustmentReason: string | null;
+    discountCents: number;
+    promoCode: string | null;
     totalCents: number;
     shippingAddress: OrderAddress | null;
     billingAddress: OrderAddress | null;
@@ -303,6 +305,7 @@ export type ManualOrderFormData = {
     payment_status: string;
     shipping_price: string;
     shipping_method_name: string;
+    promo_code: string;
     line1: string;
     line2: string;
     postal_code: string;
