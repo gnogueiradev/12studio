@@ -1,3 +1,4 @@
+import { normalizeNode } from '@/lib/page-tree';
 import type { EditorNode } from '@/types/page-builder';
 
 const KEY = 'studio-clipboard';
@@ -47,7 +48,11 @@ export function readClipboard(): EditorNode | null {
     try {
         const parsed = JSON.parse(raw) as { v?: unknown; node?: unknown };
 
-        return parsed.v === 2 && isNode(parsed.node) ? parsed.node : null;
+        // Pode ter vindo de outra versão, ou ter sido mexido à mão: chega ao
+        // editor com todas as chaves que ele conta encontrar.
+        return parsed.v === 2 && isNode(parsed.node)
+            ? normalizeNode(parsed.node)
+            : null;
     } catch {
         return null;
     }

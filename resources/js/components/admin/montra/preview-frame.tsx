@@ -16,6 +16,7 @@ import {
     TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { requestJson } from '@/lib/http';
+import { isStoreNodeList } from '@/lib/page-tree';
 import type { EditorNode, PreviewMessage } from '@/types/page-builder';
 import type { StoreNode } from '@/types/store';
 import type { CanvasMessage, CanvasTree } from './builder/dnd-protocol';
@@ -126,6 +127,15 @@ export function PreviewFrame({
                 controller.signal,
             )
                 .then((response) => {
+                    // Já há um pedido mais recente, ou veio sem árvore (uma
+                    // página de erro com 200): fica o que está no iframe.
+                    if (
+                        controller.signal.aborted ||
+                        !isStoreNodeList(response.blocks)
+                    ) {
+                        return;
+                    }
+
                     rendered.current = response.blocks;
                     post({
                         source: 'studio-editor',

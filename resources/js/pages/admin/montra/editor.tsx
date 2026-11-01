@@ -140,6 +140,8 @@ const AUTOSAVE_DELAY = 1200;
 
 const NAVIGATOR_KEY = 'studio-editor-navigator';
 
+const REQUIRED_MESSAGE = 'Esta página precisa deste bloco: não se pode apagar.';
+
 /** Só em memória se o browser não deixar usar o localStorage. */
 let navigatorMemory: string | null = null;
 const navigatorListeners = new Set<() => void>();
@@ -541,14 +543,10 @@ export default function PageEditor(props: Props) {
         }
 
         if (message.action === 'add-structure' && message.target) {
-            if (message.columns) {
-                insertAt(blankContainer(message.columns), message.target);
-            } else {
-                setStructurePicker({
-                    target: message.target,
-                    anchor: message.anchor ?? { x: 0, y: 0 },
-                });
-            }
+            setStructurePicker({
+                target: message.target,
+                anchor: message.anchor ?? { x: 0, y: 0 },
+            });
         }
 
         if (message.id !== null && message.action === 'duplicate') {
@@ -569,7 +567,8 @@ export default function PageEditor(props: Props) {
             return;
         }
 
-        setNodes((current) => moveNode(current, id, target));
+        // O contentor à volta tem um id ao acaso: não vai dentro do updater.
+        setNodes(moveNode(nodes, id, target));
     };
 
     const toggle = (id: string) =>
@@ -738,7 +737,7 @@ export default function PageEditor(props: Props) {
         const found = findNode(nodes, id);
 
         if (found && subtreeFlags(found.node, schemaByType).required) {
-            toast.error('Esta página precisa deste bloco: não se pode apagar.');
+            toast.error(REQUIRED_MESSAGE);
 
             return;
         }
@@ -931,7 +930,7 @@ export default function PageEditor(props: Props) {
 
         // Colar não precisa de seleção: noutra página, vai para o fim. Dentro
         // só de um contentor vazio; com filhos, a seguir a ele.
-        if (mod && key === 'v') {
+        if (mod && !event.shiftKey && key === 'v') {
             event.preventDefault();
             paste(
                 selectedNode?.id ?? null,
@@ -949,14 +948,23 @@ export default function PageEditor(props: Props) {
             return;
         }
 
-        // Com texto escolhido, copiar é copiar esse texto.
+        // Com Shift são do browser (Ctrl+Shift+C abre as ferramentas).
+        if (mod && event.shiftKey) {
+            return;
+        }
+
+        // Com texto escolhido, copiar é copiar esse texto. Sem alvo, o atalho
+        // veio do iframe, que já olhou para o texto escolhido lá dentro.
         if (
             mod &&
+            target &&
             (key === 'c' || key === 'x') &&
             window.getSelection()?.isCollapsed === false
         ) {
             return;
         }
+
+        const flags = subtreeFlags(selectedNode, schemaByType);
 
         if (mod && key === 'c') {
             event.preventDefault();
@@ -967,13 +975,17 @@ export default function PageEditor(props: Props) {
 
         if (mod && key === 'x') {
             event.preventDefault();
-            copy(selectedNode.id);
-            removeIfAllowed(selectedNode.id);
+
+            // O que não se pode apagar também não muda o que estava copiado.
+            if (flags.required) {
+                toast.error(REQUIRED_MESSAGE);
+            } else {
+                copyNode(selectedNode);
+                remove(selectedNode.id);
+            }
 
             return;
         }
-
-        const flags = subtreeFlags(selectedNode, schemaByType);
 
         // Mesmo num nó que não se duplica, o Ctrl+D não vai aos favoritos.
         if (mod && key === 'd') {
@@ -1054,7 +1066,8 @@ export default function PageEditor(props: Props) {
                         role="status"
                         title={saveLabel}
                         className={cn(
-                            'min-w-0 items-center gap-1.5 truncate text-xs sm:flex',
+                            // Com limite: um aviso longo não empurra os botões.
+                            'max-w-40 min-w-0 items-center gap-1.5 truncate text-xs sm:flex xl:max-w-64',
                             saveState === 'error' || hasErrors
                                 ? 'flex text-destructive'
                                 : 'hidden text-muted-foreground',
@@ -1065,7 +1078,7 @@ export default function PageEditor(props: Props) {
                         )}
                         <span className="truncate">{saveLabel}</span>
                     </p>
-                    <div className="flex items-center">
+                    <div className="flex shrink-0 items-center">
                         <IconAction
                             label="Desfazer"
                             hint={`${MOD} Z`}

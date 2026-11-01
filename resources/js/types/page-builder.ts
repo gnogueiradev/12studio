@@ -221,7 +221,6 @@ export type PreviewMessage =
           kind: 'action';
           id: string | null;
           action: 'duplicate' | 'remove' | 'add-element' | 'add-structure';
-          columns?: number[];
           target?: NodeTarget;
           anchor?: { x: number; y: number };
       }

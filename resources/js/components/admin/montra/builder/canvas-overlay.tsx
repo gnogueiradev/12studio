@@ -405,8 +405,8 @@ export default function CanvasOverlay({
         event.preventDefault();
 
         const result = resolve(event);
-        const id = event.dataTransfer.getData(NODE_DRAG_TYPE) || moving.current;
-        const type = event.dataTransfer.getData(ELEMENT_DRAG_TYPE) || dragType;
+        const id = event.dataTransfer.getData(NODE_DRAG_TYPE);
+        const type = event.dataTransfer.getData(ELEMENT_DRAG_TYPE);
 
         if (result && id) {
             send({
@@ -492,7 +492,11 @@ export default function CanvasOverlay({
             const key = event.key.toLowerCase();
             const forwarded =
                 event.metaKey || event.ctrlKey
-                    ? ['c', 'x', 'v', 'd', 'z', 'y'].includes(key)
+                    ? // Com Shift só o refazer: os outros são do browser
+                      // (Ctrl+Shift+C abre as ferramentas).
+                      key === 'z' ||
+                      (!event.shiftKey &&
+                          ['c', 'x', 'v', 'd', 'y'].includes(key))
                     : ['escape', 'delete', 'backspace'].includes(key);
 
             // Com texto escolhido, copiar é copiar esse texto.

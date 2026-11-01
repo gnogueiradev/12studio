@@ -55,7 +55,15 @@ export async function requestJson<T>(
         signal,
     });
 
-    const data = await response.json().catch(() => ({}));
+    // Um corpo que não é JSON conta como vazio, mas cancelar a meio da leitura
+    // é cancelar: não pode passar por uma resposta boa e sem nada.
+    const data = await response.json().catch((error: unknown) => {
+        if (signal?.aborted) {
+            throw error;
+        }
+
+        return {};
+    });
 
     if (!response.ok) {
         throw new HttpError(response.status, data);

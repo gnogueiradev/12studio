@@ -362,6 +362,10 @@ function firstValue(values: StoreDeviceValues | undefined): unknown {
 }
 
 function firstElementId(nodes: StoreNode[]): string | null {
+    if (!Array.isArray(nodes)) {
+        return null;
+    }
+
     for (const node of nodes) {
         if (!isContainer(node)) {
             return node.id;

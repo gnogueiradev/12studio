@@ -10,6 +10,7 @@ import {
 import { CanvasEditing, NodeTree } from '@/blocks/node-tree';
 import type { CanvasTree } from '@/components/admin/montra/builder/dnd-protocol';
 import { useT } from '@/lib/i18n';
+import { isStoreNodeList } from '@/lib/page-tree';
 import type { PreviewMessage } from '@/types/page-builder';
 import type { StoreNode, StorePageData } from '@/types/store';
 
@@ -95,7 +96,8 @@ function EditorPreview({ initial }: { initial: StoreNode[] }) {
                 return;
             }
 
-            if (message.kind === 'blocks') {
+            // Uma mensagem estragada não pode deixar a página em branco.
+            if (message.kind === 'blocks' && isStoreNodeList(message.blocks)) {
                 setBlocks(message.blocks);
             }
 

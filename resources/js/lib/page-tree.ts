@@ -17,6 +17,19 @@ export function isContainer(node: StoreNode): node is StoreContainer {
     return node.type === 'container';
 }
 
+/** Uma lista de nós a sério, com os filhos de cada contentor também em lista. */
+export function isStoreNodeList(value: unknown): value is StoreNode[] {
+    return (
+        Array.isArray(value) &&
+        value.every(
+            (node: Partial<StoreContainer> | null) =>
+                typeof node === 'object' &&
+                node !== null &&
+                (node.type !== 'container' || isStoreNodeList(node.children)),
+        )
+    );
+}
+
 /**
  * Os valores de uma propriedade nos três tamanhos, com a herança feita: o
  * tablet herda do computador e o telemóvel do tablet. O `fallback` vale para
@@ -273,11 +286,15 @@ function asMap<T extends object>(value: T | undefined): T {
         : ({} as T);
 }
 
-/** Um nó de um rascunho antigo, com as chaves que o editor conta encontrar. */
-function normalizeNode(raw: EditorNode): EditorNode {
+/**
+ * Um nó de um rascunho antigo (ou de um colar), com as chaves que o editor
+ * conta encontrar.
+ */
+export function normalizeNode(raw: EditorNode): EditorNode {
     if (isEditorContainer(raw)) {
         return {
             ...raw,
+            visible: raw.visible ?? true,
             label: raw.label ?? null,
             settings: asMap(raw.settings),
             content: asMap(raw.content),
@@ -291,6 +308,7 @@ function normalizeNode(raw: EditorNode): EditorNode {
 
     return {
         ...raw,
+        visible: raw.visible ?? true,
         label: raw.label ?? null,
         // Como no BlockSanitizer: sem o valor, a casca está ligada.
         shell: raw.shell ?? true,
@@ -435,9 +453,29 @@ export function removeNode(nodes: EditorNode[], id: string): EditorNode[] {
 }
 
 /**
+ * O contentor de raiz que só existe por causa do seu único elemento: sem
+ * estilo nem nome, como os das páginas convertidas. O que o dono estilizou ou
+ * criou com uma estrutura traz valores e não conta.
+ */
+function isTransparentWrapper(node: EditorContainer): boolean {
+    return (
+        node.children.length === 1 &&
+        !isEditorContainer(node.children[0]) &&
+        node.visible !== false &&
+        !node.label &&
+        Object.keys(node.style).length === 0 &&
+        Object.keys(node.advanced).length === 0
+    );
+}
+
+/**
  * Muda o nó de sítio. Um alvo impossível (o próprio nó, um descendente, um pai
  * que não existe ou não é contentor) devolve a árvore como estava: nunca se
  * perde nada, mesmo que quem chama não tenha perguntado ao `canDrop`.
+ *
+ * O elemento que sai de um contentor transparente não o deixa para trás vazio:
+ * é assim que se reordenam as secções de uma página convertida. Para a raiz vai
+ * o próprio contentor, para a secção ficar igual ao que era.
  */
 export function moveNode(
     nodes: EditorNode[],
@@ -471,13 +509,27 @@ export function moveNode(
         return nodes;
     }
 
-    return insertNode(removeNode(nodes, id), found.node, {
+    const emptied =
+        found.parent &&
+        found.depth === 1 &&
+        !sameParent &&
+        isTransparentWrapper(found.parent)
+            ? found.parent
+            : null;
+
+    if (emptied && target.parentId === null) {
+        return moveNode(nodes, emptied.id, target);
+    }
+
+    const moved = insertNode(removeNode(nodes, id), found.node, {
         parentId: target.parentId,
         index:
             sameParent && found.index < target.index
                 ? target.index - 1
                 : target.index,
     });
+
+    return emptied ? removeNode(moved, emptied.id) : moved;
 }
 
 /**
@@ -524,6 +576,14 @@ function containerHeight(node: EditorNode): number {
     return isEditorContainer(node)
         ? 1 + Math.max(0, ...node.children.map(containerHeight))
         : 0;
+}
+
+/** Só o que é mesmo do esquema: "constructor" também existe num objeto. */
+function schemaOf(
+    schemaByType: SchemaByType,
+    type: string,
+): BlockSchema | undefined {
+    return Object.hasOwn(schemaByType, type) ? schemaByType[type] : undefined;
 }
 
 /** As mesmas regras do BlockSanitizer, ditas antes de largar. */
@@ -579,7 +639,7 @@ function refusal(
 
     // Quem já lá está e tem de ficar sozinho.
     for (const sibling of siblings) {
-        const schema = schemaByType[sibling.type];
+        const schema = schemaOf(schemaByType, sibling.type);
 
         if (schema?.rootOnly) {
             return `O bloco "${schema.label}" só pode ficar sozinho numa secção da página.`;
@@ -609,7 +669,7 @@ function refusal(
             return null;
         }
 
-        const schema = schemaByType[node.type];
+        const schema = schemaOf(schemaByType, node.type);
 
         if (!schema) {
             return `O bloco "${node.type}" não pode entrar nesta página.`;
