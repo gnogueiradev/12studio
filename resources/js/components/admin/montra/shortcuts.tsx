@@ -16,6 +16,9 @@ const SHORTCUTS: [string, string][] = [
     [`${MOD} Z`, 'Desfazer'],
     [`${MOD} ⇧ Z`, 'Refazer'],
     [`${MOD} D`, 'Duplicar o selecionado'],
+    [`${MOD} C`, 'Copiar o selecionado'],
+    [`${MOD} X`, 'Cortar o selecionado'],
+    [`${MOD} V`, 'Colar, mesmo noutra página'],
     ['Delete', 'Apagar o selecionado'],
     ['Esc', 'Largar a seleção'],
 ];

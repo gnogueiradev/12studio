@@ -3,6 +3,7 @@
  * App\PageBuilder\Block::schema() manda e o JSON que o BlockSanitizer grava.
  */
 
+import type { NodeTarget } from '@/lib/page-tree';
 import type { StoreDeviceValues, StoreNode } from './store';
 
 export type FieldType =
@@ -190,5 +191,46 @@ export type PreviewMessage =
           fonts: string;
           mode: 'light' | 'dark';
       }
+    /** Começou (ou acabou, com null) um arrasto da grelha de Elementos. */
+    | { source: 'studio-editor'; kind: 'drag'; type: string | null }
+    /**
+     * Os nomes para as etiquetas e a ordem dos filhos na árvore (com os nós
+     * escondidos, que não vêm renderizados; '' é a raiz). É esta mensagem que
+     * liga o modo de edição: só o editor a manda.
+     */
+    | {
+          source: 'studio-editor';
+          kind: 'labels';
+          labels: Record<string, string>;
+          children: Record<string, string[]>;
+      }
+    /** Quanto o editor está a reduzir o iframe. */
+    | { source: 'studio-editor'; kind: 'scale'; scale: number }
     | { source: 'studio-preview'; kind: 'ready' }
-    | { source: 'studio-preview'; kind: 'select'; id: string };
+    | { source: 'studio-preview'; kind: 'select'; id: string }
+    | {
+          source: 'studio-preview';
+          kind: 'drop';
+          type: string;
+          target: NodeTarget;
+      }
+    | { source: 'studio-preview'; kind: 'move'; id: string; target: NodeTarget }
+    /** `anchor`: onde se clicou, para o editor abrir lá o que for preciso. */
+    | {
+          source: 'studio-preview';
+          kind: 'action';
+          id: string | null;
+          action: 'duplicate' | 'remove' | 'add-element' | 'add-structure';
+          columns?: number[];
+          target?: NodeTarget;
+          anchor?: { x: number; y: number };
+      }
+    /** Um atalho com o foco dentro do iframe, que a janela do editor não vê. */
+    | {
+          source: 'studio-preview';
+          kind: 'key';
+          key: string;
+          ctrlKey: boolean;
+          metaKey: boolean;
+          shiftKey: boolean;
+      };

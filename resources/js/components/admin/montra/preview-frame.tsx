@@ -18,6 +18,7 @@ import {
 import { requestJson } from '@/lib/http';
 import type { EditorNode, PreviewMessage } from '@/types/page-builder';
 import type { StoreNode } from '@/types/store';
+import type { CanvasMessage, CanvasTree } from './builder/dnd-protocol';
 
 /** A largura a sério de cada ecrã; a pré-visualização encolhe para caber. */
 export const DEVICES = {
@@ -36,6 +37,12 @@ type Props = {
     device: Device;
     selected: string | null;
     onSelect: (id: string) => void;
+    /** Os nomes e a ordem dos nós, para a camada de edição dentro do iframe. */
+    tree: CanvasTree;
+    /** O tipo a ser arrastado da grelha. */
+    dragType: string | null;
+    /** O que se fez lá dentro; o `anchor` já vem em coordenadas do ecrã. */
+    onCanvas: (message: CanvasMessage) => void;
 };
 
 /**
@@ -55,6 +62,9 @@ export function PreviewFrame({
     device,
     selected,
     onSelect,
+    tree,
+    dragType,
+    onCanvas,
 }: Props) {
     const frame = useRef<HTMLIFrameElement>(null);
     const canvas = useRef<HTMLDivElement>(null);
@@ -65,12 +75,27 @@ export function PreviewFrame({
         null,
     );
 
+    const width = DEVICES[device].width;
+    const scale = size && size.width > 0 ? Math.min(1, size.width / width) : 1;
+    // Escrever num campo não muda os nomes: nada segue para o iframe.
+    const treeKey = JSON.stringify(tree);
+
     const post = useCallback((message: PreviewMessage) => {
         frame.current?.contentWindow?.postMessage(
             message,
             window.location.origin,
         );
     }, []);
+
+    const postTree = useCallback(
+        (key: string) =>
+            post({
+                source: 'studio-editor',
+                kind: 'labels',
+                ...(JSON.parse(key) as CanvasTree),
+            }),
+        [post],
+    );
 
     useEffect(() => {
         const node = canvas.current;
@@ -123,6 +148,18 @@ export function PreviewFrame({
     }, [selected, post]);
 
     useEffect(() => {
+        postTree(treeKey);
+    }, [treeKey, postTree]);
+
+    useEffect(() => {
+        post({ source: 'studio-editor', kind: 'scale', scale });
+    }, [scale, post]);
+
+    useEffect(() => {
+        post({ source: 'studio-editor', kind: 'drag', type: dragType });
+    }, [dragType, post]);
+
+    useEffect(() => {
         const onMessage = (event: MessageEvent) => {
             if (
                 event.origin !== window.location.origin ||
@@ -147,20 +184,52 @@ export function PreviewFrame({
                 }
 
                 post({ source: 'studio-editor', kind: 'select', id: selected });
+                postTree(treeKey);
+                post({ source: 'studio-editor', kind: 'scale', scale });
             }
 
             if (message.kind === 'select') {
                 onSelect(message.id);
+            }
+
+            if (message.kind === 'drop' || message.kind === 'move') {
+                onCanvas(message);
+            }
+
+            if (message.kind === 'action') {
+                const box = frame.current?.getBoundingClientRect();
+
+                onCanvas(
+                    message.anchor && box
+                        ? {
+                              ...message,
+                              anchor: {
+                                  x: box.left + message.anchor.x * scale,
+                                  y: box.top + message.anchor.y * scale,
+                              },
+                          }
+                        : message,
+                );
+            }
+
+            // Passa pelo mesmo atalho do editor, sem alvo: é "em lado nenhum".
+            if (message.kind === 'key') {
+                window.dispatchEvent(
+                    new KeyboardEvent('keydown', {
+                        key: message.key,
+                        ctrlKey: message.ctrlKey,
+                        metaKey: message.metaKey,
+                        shiftKey: message.shiftKey,
+                    }),
+                );
             }
         };
 
         window.addEventListener('message', onMessage);
 
         return () => window.removeEventListener('message', onMessage);
-    }, [onSelect, post, selected]);
+    }, [onSelect, onCanvas, post, postTree, selected, treeKey, scale]);
 
-    const width = DEVICES[device].width;
-    const scale = size && size.width > 0 ? Math.min(1, size.width / width) : 1;
     const src = `${url}?locale=${encodeURIComponent(locale)}`;
 
     return (

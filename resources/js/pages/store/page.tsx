@@ -1,10 +1,26 @@
 import { Head } from '@inertiajs/react';
 import { FileWarning } from 'lucide-react';
-import { useEffect, useState, useSyncExternalStore } from 'react';
-import { NodeTree } from '@/blocks/node-tree';
+import {
+    lazy,
+    Suspense,
+    useEffect,
+    useState,
+    useSyncExternalStore,
+} from 'react';
+import { CanvasEditing, NodeTree } from '@/blocks/node-tree';
+import type { CanvasTree } from '@/components/admin/montra/builder/dnd-protocol';
 import { useT } from '@/lib/i18n';
 import type { PreviewMessage } from '@/types/page-builder';
 import type { StoreNode, StorePageData } from '@/types/store';
+
+/**
+ * A camada de edição é um pedaço de código à parte: só o iframe do editor a vai
+ * buscar, depois de o editor se dar a conhecer. Quem visita a loja, e as
+ * miniaturas da lista de páginas, nunca a carregam.
+ */
+const CanvasOverlay = lazy(
+    () => import('@/components/admin/montra/builder/canvas-overlay'),
+);
 
 /**
  * Uma página da montra montada por blocos (App\PageBuilder). O conteúdo, a
@@ -45,6 +61,12 @@ function EditorPreview({ initial }: { initial: StoreNode[] }) {
     const t = useT();
     const [blocks, setBlocks] = useState(initial);
     const [selected, setSelected] = useState<string | null>(null);
+    // Null até o editor se dar a conhecer: o tema e as miniaturas também abrem
+    // esta página num iframe, e aí fica só a página.
+    const [tree, setTree] = useState<CanvasTree | null>(null);
+    const [scale, setScale] = useState(1);
+    const [dragType, setDragType] = useState<string | null>(null);
+    const editing = tree !== null;
     // "Ver como cliente": o mesmo endereço aberto num separador, fora do
     // editor. Aí é só o rascunho, com a faixa a dizê-lo. No SSR não há
     // window: o servidor desenha a versão do iframe.
@@ -84,6 +106,18 @@ function EditorPreview({ initial }: { initial: StoreNode[] }) {
             if (message.kind === 'theme') {
                 applyTheme(message.css, message.fonts, message.mode);
             }
+
+            if (message.kind === 'labels') {
+                setTree({ labels: message.labels, children: message.children });
+            }
+
+            if (message.kind === 'scale') {
+                setScale(message.scale);
+            }
+
+            if (message.kind === 'drag') {
+                setDragType(message.type);
+            }
         };
 
         window.addEventListener('message', onMessage);
@@ -120,8 +154,11 @@ function EditorPreview({ initial }: { initial: StoreNode[] }) {
                 event.preventDefault();
             }
 
-            const id =
-                target.closest<HTMLElement>('[data-block-id]')?.dataset.blockId;
+            // A editar, os contentores também se escolhem na página.
+            const id = editing
+                ? target.closest<HTMLElement>('[data-node-id]')?.dataset.nodeId
+                : target.closest<HTMLElement>('[data-block-id]')?.dataset
+                      .blockId;
 
             if (id) {
                 setSelected(id);
@@ -139,7 +176,7 @@ function EditorPreview({ initial }: { initial: StoreNode[] }) {
         document.addEventListener('click', onClick, true);
 
         return () => document.removeEventListener('click', onClick, true);
-    }, [framed]);
+    }, [framed, editing]);
 
     if (!framed) {
         return (
@@ -153,6 +190,24 @@ function EditorPreview({ initial }: { initial: StoreNode[] }) {
                 </p>
                 <NodeTree nodes={blocks} />
             </>
+        );
+    }
+
+    if (tree) {
+        return (
+            <CanvasEditing.Provider value>
+                <NodeTree nodes={blocks} />
+                {/* O fim da página: há sempre onde juntar mais. */}
+                <div data-pb-empty="" />
+                <Suspense fallback={null}>
+                    <CanvasOverlay
+                        selected={selected}
+                        tree={tree}
+                        scale={scale}
+                        dragType={dragType}
+                    />
+                </Suspense>
+            </CanvasEditing.Provider>
         );
     }
 

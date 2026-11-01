@@ -37,11 +37,17 @@ import {
     copyNode,
     readClipboard,
 } from '@/components/admin/montra/builder/clipboard';
+import { ROOT_KEY } from '@/components/admin/montra/builder/dnd-protocol';
+import type {
+    CanvasMessage,
+    CanvasTree,
+} from '@/components/admin/montra/builder/dnd-protocol';
 import { EditPanel } from '@/components/admin/montra/builder/edit-panel';
 import type { StyleOptions } from '@/components/admin/montra/builder/edit-panel';
 import { ElementsPanel } from '@/components/admin/montra/builder/elements-panel';
 import { Navigator } from '@/components/admin/montra/builder/navigator';
 import type { PasteWhere } from '@/components/admin/montra/builder/navigator';
+import { StructurePicker } from '@/components/admin/montra/builder/structure-picker';
 import type { FieldContext } from '@/components/admin/montra/field-input';
 import {
     HistorySheet,
@@ -82,6 +88,7 @@ import {
     insertNode,
     isEditorContainer,
     keyErrorsByNode,
+    walkNodes,
     moveNode,
     nodePath,
     removeNode,
@@ -225,6 +232,17 @@ export default function PageEditor(props: Props) {
     >('panel');
     // O tipo a ser arrastado da grelha para a página.
     const [draggingType, setDraggingType] = useState<string | null>(null);
+    // O sítio que o "+" da página guardou para o próximo elemento da grelha.
+    const [insertTarget, setInsertTarget] = useState<NodeTarget | null>(null);
+    // O "▥": a escolher a estrutura para este sítio.
+    const [structurePicker, setStructurePicker] = useState<{
+        target: NodeTarget;
+        anchor: { x: number; y: number };
+    } | null>(null);
+    const closeStructurePicker = useCallback(
+        () => setStructurePicker(null),
+        [],
+    );
     const navigatorDragging = useRef(false);
     // O que o dono escolheu; sem escolha, aberto só nos ecrãs largos.
     const navigatorChoice = useSyncExternalStore(
@@ -393,6 +411,8 @@ export default function PageEditor(props: Props) {
         setSelected(id);
         setPanel('edit');
         setMobileView('panel');
+        setInsertTarget(null);
+        setStructurePicker(null);
     };
 
     /** O que um tile da grelha cria; "columns" é um contentor com 2 colunas. */
@@ -412,10 +432,17 @@ export default function PageEditor(props: Props) {
             : null;
     };
 
+    /** Dentro de um contentor, um bloco da loja nasce sem casca de secção. */
+    const placedAt = (subject: EditorNode, target: NodeTarget): EditorNode =>
+        target.parentId !== null && !isEditorContainer(subject)
+            ? { ...subject, shell: false }
+            : subject;
+
     /**
-     * Da grelha: um elemento entra dentro do contentor selecionado e os outros
-     * casos a seguir à seleção; sem seleção, no fim da página. Se não couber
-     * ali (um bloco que fica sozinho), tenta a seguir à secção.
+     * Da grelha: para o sítio que o "+" da página guardou; senão, um elemento
+     * entra dentro do contentor selecionado e os outros casos a seguir à
+     * seleção; sem seleção, no fim da página. Se não couber ali (um bloco que
+     * fica sozinho), tenta a seguir à secção.
      */
     const insert = (type: string) => {
         const subject = newSubject(type);
@@ -428,24 +455,28 @@ export default function PageEditor(props: Props) {
         const root = selected ? nodePath(nodes, selected)[0] : null;
         const targets: NodeTarget[] = [];
 
-        if (found) {
-            targets.push(
-                isEditorContainer(found.node) && !isEditorContainer(subject)
-                    ? {
-                          parentId: found.node.id,
-                          index: found.node.children.length,
-                      }
-                    : {
-                          parentId: found.parent?.id ?? null,
-                          index: found.index + 1,
-                      },
-            );
-        }
+        if (insertTarget) {
+            targets.push(insertTarget);
+        } else {
+            if (found) {
+                targets.push(
+                    isEditorContainer(found.node) && !isEditorContainer(subject)
+                        ? {
+                              parentId: found.node.id,
+                              index: found.node.children.length,
+                          }
+                        : {
+                              parentId: found.parent?.id ?? null,
+                              index: found.index + 1,
+                          },
+                );
+            }
 
-        targets.push({
-            parentId: null,
-            index: root ? nodes.indexOf(root) + 1 : nodes.length,
-        });
+            targets.push({
+                parentId: null,
+                index: root ? nodes.indexOf(root) + 1 : nodes.length,
+            });
+        }
 
         const refusals = targets.map((target) =>
             canPaste(nodes, subject, target, schemaByType, limits),
@@ -459,15 +490,74 @@ export default function PageEditor(props: Props) {
         }
 
         const target = targets[fits];
-        // Dentro de um contentor, um bloco da loja nasce sem casca de secção.
-        const placed =
-            target.parentId !== null && !isEditorContainer(subject)
-                ? { ...subject, shell: false }
-                : subject;
+        const placed = placedAt(subject, target);
 
         // O contentor à volta tem um id ao acaso: não vai dentro do updater.
         setNodes(insertNode(nodes, placed, target));
         select(placed.id);
+    };
+
+    /** Um nó novo num sítio escolhido na página; recusado, nada muda. */
+    const insertAt = (subject: EditorNode, target: NodeTarget) => {
+        const placed = placedAt(subject, target);
+        const refused = canPaste(nodes, placed, target, schemaByType, limits);
+
+        if (refused) {
+            toast.error(refused);
+
+            return;
+        }
+
+        setNodes(insertNode(nodes, placed, target));
+        select(placed.id);
+    };
+
+    /** Da pré-visualização: largar, mudar de sítio e os botões da página. */
+    const onCanvas = (message: CanvasMessage) => {
+        if (message.kind === 'drop') {
+            // A grelha pode já não estar lá para avisar que o arrasto acabou.
+            setDraggingType(null);
+
+            const subject = newSubject(message.type);
+
+            if (subject) {
+                insertAt(subject, message.target);
+            }
+
+            return;
+        }
+
+        if (message.kind === 'move') {
+            move(message.id, message.target);
+
+            return;
+        }
+
+        if (message.action === 'add-element' && message.target) {
+            setInsertTarget(message.target);
+            setStructurePicker(null);
+            setPanel('elements');
+            setMobileView('panel');
+        }
+
+        if (message.action === 'add-structure' && message.target) {
+            if (message.columns) {
+                insertAt(blankContainer(message.columns), message.target);
+            } else {
+                setStructurePicker({
+                    target: message.target,
+                    anchor: message.anchor ?? { x: 0, y: 0 },
+                });
+            }
+        }
+
+        if (message.id !== null && message.action === 'duplicate') {
+            duplicate(message.id);
+        }
+
+        if (message.id !== null && message.action === 'remove') {
+            removeIfAllowed(message.id);
+        }
     };
 
     const move = (id: string, target: NodeTarget) => {
@@ -565,9 +655,10 @@ export default function PageEditor(props: Props) {
         }
     };
 
-    const paste = (id: string, where: PasteWhere) => {
+    /** Sem `id`, no fim da página (o colar noutra página, sem nada escolhido). */
+    const paste = (id: string | null, where: PasteWhere) => {
         const copied = readClipboard();
-        const found = findNode(nodes, id);
+        const found = id ? findNode(nodes, id) : null;
 
         if (!copied) {
             toast.error('Ainda não copiaste nada.');
@@ -575,20 +666,21 @@ export default function PageEditor(props: Props) {
             return;
         }
 
-        if (!found) {
+        if (id && !found) {
             return;
         }
 
-        const target =
-            where === 'inside' && isEditorContainer(found.node)
-                ? {
-                      parentId: found.node.id,
-                      index: found.node.children.length,
-                  }
-                : {
-                      parentId: found.parent?.id ?? null,
-                      index: found.index + 1,
-                  };
+        const target = !found
+            ? { parentId: null, index: nodes.length }
+            : where === 'inside' && isEditorContainer(found.node)
+              ? {
+                    parentId: found.node.id,
+                    index: found.node.children.length,
+                }
+              : {
+                    parentId: found.parent?.id ?? null,
+                    index: found.index + 1,
+                };
         const fresh = duplicateNode(copied);
         const refused = canPaste(nodes, fresh, target, schemaByType, limits);
 
@@ -640,6 +732,42 @@ export default function PageEditor(props: Props) {
             },
         });
     };
+
+    /** O ✕ da página e o Ctrl+X: o que a página precisa não sai por aqui. */
+    const removeIfAllowed = (id: string) => {
+        const found = findNode(nodes, id);
+
+        if (found && subtreeFlags(found.node, schemaByType).required) {
+            toast.error('Esta página precisa deste bloco: não se pode apagar.');
+
+            return;
+        }
+
+        remove(id);
+    };
+
+    // Os nomes das etiquetas e a ordem a sério dos filhos, para a página.
+    const canvasTree = useMemo<CanvasTree>(() => {
+        const labels: CanvasTree['labels'] = {};
+        const children: CanvasTree['children'] = {
+            [ROOT_KEY]: nodes.map((node) => node.id),
+        };
+
+        for (const node of walkNodes(nodes)) {
+            if (isEditorContainer(node)) {
+                children[node.id] = node.children.map((child) => child.id);
+                node.children.forEach((child) => {
+                    labels[child.id] = nodeLabel(child, schemaByType, node);
+                });
+            }
+        }
+
+        nodes.forEach((node) => {
+            labels[node.id] = nodeLabel(node, schemaByType, null);
+        });
+
+        return { labels, children };
+    }, [nodes, schemaByType]);
 
     // ── Ações da página ───────────────────────────────────────────────────
     const reloadFromServer = () =>
@@ -779,24 +907,69 @@ export default function PageEditor(props: Props) {
             return;
         }
 
-        if (!selectedNode) {
-            return;
-        }
-
         if (key === 'escape' && !mod) {
-            setSelected(null);
-            setPanel('elements');
+            setInsertTarget(null);
+
+            if (selectedNode) {
+                setSelected(null);
+                setPanel('elements');
+            }
 
             return;
         }
 
-        // Apagar e duplicar só com o foco no Navegador (ou em lado nenhum): um
-        // Backspace no botão "Publicar" não apaga o que está selecionado.
+        // Apagar, duplicar, copiar e colar só com o foco no Navegador (ou em
+        // lado nenhum): um Backspace no botão "Publicar" não apaga o que está
+        // selecionado.
         if (
             target &&
             target !== document.body &&
             !target.closest('[data-navigator]')
         ) {
+            return;
+        }
+
+        // Colar não precisa de seleção: noutra página, vai para o fim. Dentro
+        // só de um contentor vazio; com filhos, a seguir a ele.
+        if (mod && key === 'v') {
+            event.preventDefault();
+            paste(
+                selectedNode?.id ?? null,
+                selectedNode &&
+                    isEditorContainer(selectedNode) &&
+                    selectedNode.children.length === 0
+                    ? 'inside'
+                    : 'after',
+            );
+
+            return;
+        }
+
+        if (!selectedNode) {
+            return;
+        }
+
+        // Com texto escolhido, copiar é copiar esse texto.
+        if (
+            mod &&
+            (key === 'c' || key === 'x') &&
+            window.getSelection()?.isCollapsed === false
+        ) {
+            return;
+        }
+
+        if (mod && key === 'c') {
+            event.preventDefault();
+            copy(selectedNode.id);
+
+            return;
+        }
+
+        if (mod && key === 'x') {
+            event.preventDefault();
+            copy(selectedNode.id);
+            removeIfAllowed(selectedNode.id);
+
             return;
         }
 
@@ -1148,6 +1321,23 @@ export default function PageEditor(props: Props) {
                         </div>
                     ) : (
                         <div className="flex min-h-0 flex-1 flex-col pt-3 lg:pt-0">
+                            {insertTarget && (
+                                <div className="mx-3 mb-2 flex shrink-0 items-center gap-2 rounded-md bg-accent p-2 text-xs text-accent-foreground">
+                                    <span className="flex-1">
+                                        Escolhe um elemento: vai para o sítio
+                                        que marcaste na página.
+                                    </span>
+                                    <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 px-1.5 text-xs"
+                                        onClick={() => setInsertTarget(null)}
+                                    >
+                                        Cancelar
+                                    </Button>
+                                </div>
+                            )}
                             <ElementsPanel
                                 schema={schema}
                                 nodes={nodes}
@@ -1164,7 +1354,6 @@ export default function PageEditor(props: Props) {
                 {/* Pré-visualização */}
                 <section
                     aria-label="Pré-visualização"
-                    data-dragging-type={draggingType ?? undefined}
                     className={cn(
                         'min-h-0 min-w-0 flex-1',
                         mobileView !== 'preview' && 'hidden lg:block',
@@ -1178,6 +1367,9 @@ export default function PageEditor(props: Props) {
                         device={device}
                         selected={selected}
                         onSelect={select}
+                        tree={canvasTree}
+                        dragType={draggingType}
+                        onCanvas={onCanvas}
                     />
                 </section>
 
@@ -1203,6 +1395,21 @@ export default function PageEditor(props: Props) {
                         onCopy={copy}
                         onPaste={paste}
                         onRemove={remove}
+                        onAddStructure={(anchor) => {
+                            const root = selected
+                                ? nodePath(nodes, selected)[0]
+                                : null;
+
+                            setStructurePicker({
+                                anchor,
+                                target: {
+                                    parentId: null,
+                                    index: root
+                                        ? nodes.indexOf(root) + 1
+                                        : nodes.length,
+                                },
+                            });
+                        }}
                         onClose={() => saveNavigatorChoice(false)}
                         onDragging={(dragging) => {
                             navigatorDragging.current = dragging;
@@ -1210,6 +1417,20 @@ export default function PageEditor(props: Props) {
                     />
                 </aside>
             </div>
+
+            {structurePicker && (
+                <StructurePicker
+                    anchor={structurePicker.anchor}
+                    onClose={closeStructurePicker}
+                    onPick={(columns) => {
+                        closeStructurePicker();
+                        insertAt(
+                            blankContainer(columns),
+                            structurePicker.target,
+                        );
+                    }}
+                />
+            )}
 
             <SeoDialog
                 open={seoOpen}

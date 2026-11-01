@@ -1,3 +1,4 @@
+import { createContext, useContext } from 'react';
 import type { CSSProperties } from 'react';
 import { ResponsiveImage } from '@/components/store/responsive-image';
 import { isContainer, resolveDevices } from '@/lib/page-tree';
@@ -11,6 +12,12 @@ import type {
 } from '@/types/store';
 import { BACKGROUNDS } from './section';
 import { BLOCK_COMPONENTS } from './index';
+
+/**
+ * Dentro do editor, um contentor vazio guarda o sítio para a zona de largar
+ * (desenhada por cima pelo canvas-overlay). Na loja é sempre `false`.
+ */
+export const CanvasEditing = createContext(false);
 
 /**
  * A página como o PageRenderer a entrega: contentores (caixas flex) com
@@ -65,15 +72,21 @@ function ContainerNode({
     const advanced = advancedLayout(node.advanced);
     const bg = firstValue(node.style.bg);
     const image = node.bgImage;
+    const editing = useContext(CanvasEditing);
 
-    const children = node.children.map((child) => (
-        <TreeNode
-            key={child.id}
-            node={child}
-            firstId={firstId}
-            stacked={layout.stacksOnMobile}
-        />
-    ));
+    const children =
+        editing && node.children.length === 0 ? (
+            <div data-pb-empty={node.id} />
+        ) : (
+            node.children.map((child) => (
+                <TreeNode
+                    key={child.id}
+                    node={child}
+                    firstId={firstId}
+                    stacked={layout.stacksOnMobile}
+                />
+            ))
+        );
 
     return (
         <div

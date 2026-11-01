@@ -296,6 +296,7 @@ function normalizeNode(raw: EditorNode): EditorNode {
         shell: raw.shell ?? true,
         settings: asMap(raw.settings),
         content: asMap(raw.content),
+        style: asMap(raw.style),
         styleProps: asMap(raw.styleProps),
         advanced: asMap(raw.advanced),
     };

@@ -26,6 +26,7 @@ import {
     ChevronDown,
     ChevronRight,
     ClipboardPaste,
+    Columns3,
     Copy,
     CopyPlus,
     Eye,
@@ -98,6 +99,8 @@ type Props = {
     onCopy: (id: string) => void;
     onPaste: (id: string, where: PasteWhere) => void;
     onRemove: (id: string) => void;
+    /** O "▥": `anchor` é o sítio do botão no ecrã. */
+    onAddStructure: (anchor: { x: number; y: number }) => void;
     onClose: () => void;
     /** Enquanto se arrasta, o Esc é do arrasto e não larga a seleção. */
     onDragging: (dragging: boolean) => void;
@@ -122,6 +125,7 @@ export function Navigator({
     onCopy,
     onPaste,
     onRemove,
+    onAddStructure,
     onClose,
     onDragging,
 }: Props) {
@@ -382,6 +386,25 @@ export function Navigator({
                         )}
                     </DragOverlay>
                 </DndContext>
+            </div>
+            <div className="shrink-0 border-t border-border/60 p-2">
+                <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={(event) => {
+                        const box = event.currentTarget.getBoundingClientRect();
+
+                        onAddStructure({
+                            x: box.left + box.width / 2,
+                            y: box.top,
+                        });
+                    }}
+                >
+                    <Columns3 />
+                    Escolher estrutura
+                </Button>
             </div>
         </div>
     );

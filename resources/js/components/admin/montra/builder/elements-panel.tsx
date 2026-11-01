@@ -5,9 +5,7 @@ import { walkNodes } from '@/lib/page-tree';
 import { cn } from '@/lib/utils';
 import type { BlockSchema, EditorNode } from '@/types/page-builder';
 import { BlockIcon } from '../blocks';
-
-/** O tipo que vai no `dataTransfer` ao arrastar da grelha. */
-export const ELEMENT_DRAG_TYPE = 'application/x-studio-element';
+import { ELEMENT_DRAG_TYPE } from './dnd-protocol';
 
 /** Não são blocos do servidor: o editor faz o contentor (ver `newSubject`). */
 const STRUCTURES = [
