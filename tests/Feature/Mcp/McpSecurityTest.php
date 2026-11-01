@@ -123,11 +123,12 @@ class McpSecurityTest extends TestCase
 
         $tools = collect($this->mcp($token, $this->listTools())->assertOk()->json('result.tools'))->keyBy('name');
 
-        $this->assertCount(71, $tools);
+        $this->assertCount(76, $tools);
         $this->assertFalse($tools['variant_update']['annotations']['readOnlyHint'] ?? false);
         // Arquivar e apagar levam o aviso de destrutivo; editar um preco nao.
         $this->assertTrue($tools['product_archive']['annotations']['destructiveHint'] ?? false);
         $this->assertTrue($tools['product_delete']['annotations']['destructiveHint'] ?? false);
+        $this->assertTrue($tools['product_image_delete']['annotations']['destructiveHint'] ?? false);
         $this->assertFalse($tools['variant_update']['annotations']['destructiveHint'] ?? true);
     }
 

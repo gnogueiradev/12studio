@@ -22,10 +22,23 @@ class StoreProductImageRequest extends FormRequest
     {
         return [
             'images' => ['required', 'array', 'max:10'],
-            // `image` valida que e mesmo uma imagem (le as dimensoes), nao so
-            // que a extensao mente bem.
-            'images.*' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+            'images.*' => self::fileRules(),
         ];
+    }
+
+    /**
+     * Regras de UMA fotografia. Partilhadas com o upload do MCP
+     * (McpProductImageUploadController), para que o que entra por la seja
+     * exatamente o que o backoffice aceita.
+     *
+     * `image` valida que e mesmo uma imagem (le as dimensoes), nao so que a
+     * extensao mente bem.
+     *
+     * @return array<int, string>
+     */
+    public static function fileRules(): array
+    {
+        return ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'];
     }
 
     /**

@@ -58,6 +58,11 @@ use App\Mcp\Tools\Write\Catalog\ColorUpdateTool;
 use App\Mcp\Tools\Write\Catalog\MaterialCreateTool;
 use App\Mcp\Tools\Write\Catalog\MaterialUpdateTool;
 use App\Mcp\Tools\Write\Catalog\TagCreateTool;
+use App\Mcp\Tools\Write\Images\ProductImageDeleteTool;
+use App\Mcp\Tools\Write\Images\ProductImageReorderTool;
+use App\Mcp\Tools\Write\Images\ProductImageSetPrimaryTool;
+use App\Mcp\Tools\Write\Images\ProductImageUpdateTool;
+use App\Mcp\Tools\Write\Images\ProductImageUploadUrlTool;
 use App\Mcp\Tools\Write\Orders\OrderCreateManualTool;
 use App\Mcp\Tools\Write\Orders\OrderItemSetProductionStatusTool;
 use App\Mcp\Tools\Write\Orders\OrderSetPaymentStatusTool;
@@ -93,6 +98,10 @@ Convenções:
 - Preços em euros, com IVA incluído. Envia-os como texto ("12,50" ou "12.50"); as respostas trazem também o valor em cêntimos.
 - Nada se apaga de vez: produtos, variantes, cores e materiais arquivam-se e restauram-se. Um produto também se pode apagar (product_delete): sai das listas mas fica guardado, e recupera-se com product_restore.
 - Um produto tem estados draft (rascunho), active (à venda) e archived.
+
+Fotografias:
+- A imagem nunca vai dentro de uma chamada de ferramenta. Pede um link com product_image_upload_url (um por fotografia, uso único, 15 minutos) e envia o ficheiro por HTTP, multipart/form-data no campo "image". JPG, PNG ou WEBP até 5 MB. Se não tiveres forma de enviar ficheiros por HTTP, diz ao utilizador e dá-lhe o link.
+- product_get mostra as fotografias com os ids. product_image_set_primary, product_image_reorder e product_image_update mexem na galeria; product_image_delete apaga de vez e pede confirmação.
 
 Etsy:
 - As ferramentas etsy_* falam com a loja da Etsy ligada ao 12studio. Se uma recusar, começa por etsy_status: diz se a loja está ligada e o que falta. Ligar a loja faz-se no backoffice (Definições → Etsy), não por aqui.
@@ -172,6 +181,12 @@ class StudioServer extends Server
         VariantArchiveTool::class,
         VariantsApplyCalculatedPricesTool::class,
         StockAdjustTool::class,
+        // Fotografias dos produtos
+        ProductImageUploadUrlTool::class,
+        ProductImageUpdateTool::class,
+        ProductImageSetPrimaryTool::class,
+        ProductImageReorderTool::class,
+        ProductImageDeleteTool::class,
         // Catalogo auxiliar
         CategoryCreateTool::class,
         CategoryUpdateTool::class,

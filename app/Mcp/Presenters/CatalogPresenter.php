@@ -67,19 +67,31 @@ final class CatalogPresenter
             'personalization_surcharge' => McpFormat::moneyOrNull($product->personalization_surcharge_cents),
             'seo_title' => $product->seo_title,
             'seo_description' => $product->seo_description,
-            'images' => $product->images->map(fn (ProductImage $image): array => [
-                'id' => $image->id,
-                'url' => $image->url,
-                'alt' => $image->alt,
-                'is_primary' => $image->is_primary,
-                'variant_id' => $image->variant_id,
-            ])->values()->all(),
+            'images' => $product->images->map(fn (ProductImage $image): array => self::image($image))->values()->all(),
             'variants' => $product->variants
                 ->sortByDesc('is_default')
                 ->map(fn (Variant $variant): array => self::variant($variant))
                 ->values()
                 ->all(),
             'updated_at' => $product->updated_at?->format('Y-m-d H:i'),
+        ];
+    }
+
+    /**
+     * Uma fotografia. A mesma forma na ficha do produto e nas respostas das
+     * ferramentas de imagens.
+     *
+     * @return array<string, mixed>
+     */
+    public static function image(ProductImage $image): array
+    {
+        return [
+            'id' => $image->id,
+            'url' => $image->url,
+            'alt' => $image->alt,
+            'is_primary' => $image->is_primary,
+            'sort_order' => $image->sort_order,
+            'variant_id' => $image->variant_id,
         ];
     }
 

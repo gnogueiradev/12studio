@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\McpOAuthMetadataController;
+use App\Http\Controllers\McpProductImageUploadController;
 use App\Http\Middleware\AnnounceMcpScopes;
 use App\Http\Middleware\NotifyOAuthApproval;
 use App\Http\Middleware\NotifyOAuthRegistration;
@@ -25,6 +26,16 @@ use Laravel\Passport\Http\Controllers\DenyAuthorizationController;
 Mcp::web('/mcp', StudioServer::class)
     ->middleware(['throttle:120,1', 'auth:api', 'admin', 'mcp.token', 'throttle:mcp'])
     ->name('mcp');
+
+// ── Upload de fotografias pedido pelo MCP ────────────────────────────────────
+// O link sai da ferramenta product_image_upload_url. Sem Bearer token: quem o
+// usa e um `curl` com o ficheiro, nao o cliente MCP. Protegem-no a assinatura
+// e o prazo (`signed`), e o nonce de uso unico (App\Mcp\ProductImageUploads).
+// Fica fora do grupo `web`, como o resto deste ficheiro: sem sessao nem CSRF.
+Route::post('/mcp/uploads/imagens/{upload}', McpProductImageUploadController::class)
+    ->middleware(['throttle:30,1', 'signed'])
+    ->where('upload', '[A-Za-z0-9]{40}')
+    ->name('mcp.product-images.upload');
 
 // ── OAuth para o claude.ai, o Desktop e o telemovel ─────────────────────────
 // Tudo registado a mao em vez de Mcp::oauthRoutes() + rotas do Passport:
