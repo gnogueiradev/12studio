@@ -490,6 +490,7 @@ export default function PageEditor(props: Props) {
                 resets.current += 1;
                 first.current = true;
                 savedVersion.current = version.current;
+                setStatus(null);
                 resetBlocks(upgradeRoots(fresh.blocks));
                 setSeo(fresh.seo);
                 setSaveState('saved');
@@ -506,18 +507,21 @@ export default function PageEditor(props: Props) {
             return;
         }
 
+        // Os erros voltam com as posições desta árvore, não as de agora.
+        const sent = latest.current.blocks;
+
         router.post(
             publicar(page.id).url,
             {},
             {
                 preserveScroll: true,
                 preserveState: true,
+                // O estado do autosave já não vale, mesmo que o do servidor
+                // volte a ser igual ao que se viu ao abrir a página.
+                onSuccess: () => setStatus(null),
                 onError: (failed) =>
                     setErrors(
-                        keyErrorsByNode(
-                            latest.current.blocks,
-                            failed as Record<string, string>,
-                        ),
+                        keyErrorsByNode(sent, failed as Record<string, string>),
                     ),
                 onFinish: () => setPublishing(false),
             },
@@ -531,7 +535,13 @@ export default function PageEditor(props: Props) {
             {
                 preserveScroll: true,
                 preserveState: true,
-                onSuccess: () => options.reload && reloadFromServer(),
+                onSuccess: () => {
+                    setStatus(null);
+
+                    if (options.reload) {
+                        reloadFromServer();
+                    }
+                },
             },
         );
 
