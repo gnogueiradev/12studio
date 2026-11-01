@@ -19,41 +19,51 @@ use Mews\Purifier\Facades\Purifier;
  * conhecido: tipos e campos do registo, variantes e estilos da lista, rich
  * text pelo HTMLPurifier (perfil `page`), links so internos, https, mailto,
  * tel ou ancoras. Os erros vem com o caminho do campo
- * ("blocks.2.content.pt.title"), para o editor os por ao lado dele.
+ * ("blocks.2.children.0.content.pt.title"), para o editor os por ao lado dele.
+ *
+ * A pagina e uma arvore (v2): na raiz so contentores, e dentro deles
+ * contentores ou elementos. Os blocos planos (v1) entram pelo
+ * PageDocument::upgrade, por isso o que sai e sempre v2.
  */
 class BlockSanitizer
 {
-    /** Teto de blocos numa pagina. */
-    public const MAX_BLOCKS = 60;
-
     /** @var array<string, string> */
     private array $errors = [];
 
     /** Exigir os campos obrigatorios (ao publicar sim; no rascunho nao). */
     private bool $requireFields = true;
 
+    /** @var array<string, true> ids ja dados na arvore */
+    private array $ids = [];
+
+    /** @var array<string, true> tipos ja vistos na arvore (unique e required) */
+    private array $seen = [];
+
+    /** Nos que ainda cabem na pagina (a pre-visualizacao corta aqui). */
+    private int $budget = 0;
+
     public function __construct(
         private BlockRegistry $registry,
     ) {}
 
     /**
-     * @param  array<mixed>  $blocks
+     * @param  array<mixed>  $nodes
      * @return array<int, array<string, mixed>>
      *
      * @throws ValidationException
      */
-    public function clean(array $blocks, string $template, bool $requireFields = true): array
+    public function clean(array $nodes, string $template, bool $requireFields = true): array
     {
         $this->requireFields = $requireFields;
 
         try {
-            $clean = $this->run($blocks, $template);
+            $clean = $this->run($nodes, $template, strict: true);
         } finally {
             $this->requireFields = true;
         }
 
         foreach ($this->registry->forTemplate($template) as $block) {
-            if ($block->required() && ! in_array($block->type(), array_column($clean, 'type'), true)) {
+            if ($block->required() && ! isset($this->seen[$block->type()])) {
                 $this->errors['blocks'] = "Falta o bloco \"{$block->label()}\": é obrigatório nesta página.";
             }
         }
@@ -70,83 +80,290 @@ class BlockSanitizer
      * passa pelo HTMLPurifier, os links pelo mesmo crivo), mas nao recusa
      * nada — um campo obrigatorio ainda vazio ou um texto comprido demais
      * nao impedem de ver a pagina enquanto se escreve. O que nao se consegue
-     * mostrar (tipo desconhecido, fora do template) sai.
+     * mostrar (tipo desconhecido, fora do template, fundo demais, alem do
+     * teto de nos) sai.
      *
-     * @param  array<mixed>  $blocks
+     * @param  array<mixed>  $nodes
      * @return array<int, array<string, mixed>>
      */
-    public function preview(array $blocks, string $template): array
+    public function preview(array $nodes, string $template): array
     {
-        if (! array_is_list($blocks)) {
+        if (! array_is_list($nodes)) {
             return [];
         }
 
-        $clean = $this->run(array_slice($blocks, 0, self::MAX_BLOCKS), $template);
+        $clean = $this->run($nodes, $template, strict: false);
         $this->errors = [];
 
         return $clean;
     }
 
     /**
-     * @param  array<mixed>  $blocks
+     * @param  array<mixed>  $nodes
      * @return array<int, array<string, mixed>>
      */
-    private function run(array $blocks, string $template): array
+    private function run(array $nodes, string $template, bool $strict): array
     {
         $this->errors = [];
+        $this->ids = [];
+        $this->seen = [];
+        $this->budget = Container::MAX_NODES;
 
-        if (! array_is_list($blocks)) {
+        if (! array_is_list($nodes)) {
             throw ValidationException::withMessages(['blocks' => 'A lista de blocos é inválida.']);
         }
 
-        if (count($blocks) > self::MAX_BLOCKS) {
-            throw ValidationException::withMessages(['blocks' => 'Uma página não pode ter mais de '.self::MAX_BLOCKS.' blocos.']);
+        // A raiz so tem contentores: um elemento solto (v1) ganha um a volta.
+        // (um no com id ou tipo que nao e texto fica como veio: o node() recusa-o)
+        $roots = array_map(fn (mixed $node): mixed => is_array($node) && $this->scalarKeys($node) ? PageDocument::upgrade([$node])[0] : $node, $nodes);
+
+        if ($strict && PageDocument::count($roots) > Container::MAX_NODES) {
+            throw ValidationException::withMessages(['blocks' => 'Uma página não pode ter mais de '.Container::MAX_NODES.' elementos e contentores.']);
         }
 
         $clean = [];
-        $seen = [];
-        $ids = [];
 
-        foreach ($blocks as $index => $raw) {
-            $path = "blocks.$index";
+        foreach ($roots as $index => $raw) {
+            $node = $this->node($raw, "blocks.$index", $template, 0, count($roots));
 
-            if (! is_array($raw)) {
-                $this->errors[$path] = 'Bloco inválido.';
-
-                continue;
+            if ($node !== null) {
+                $clean[] = $node;
             }
-
-            $block = $this->registry->get((string) ($raw['type'] ?? ''));
-
-            if ($block === null) {
-                $this->errors["$path.type"] = 'Tipo de bloco desconhecido.';
-
-                continue;
-            }
-
-            if (! in_array($template, $block->templates(), true)) {
-                $this->errors["$path.type"] = "O bloco \"{$block->label()}\" não pode entrar nesta página.";
-
-                continue;
-            }
-
-            if ($block->unique() && isset($seen[$block->type()])) {
-                $this->errors["$path.type"] = "Só pode haver um bloco \"{$block->label()}\" por página.";
-
-                continue;
-            }
-
-            $seen[$block->type()] = true;
-
-            $id = is_string($raw['id'] ?? null) && preg_match('/^[A-Za-z0-9-]{1,64}$/', $raw['id']) && ! isset($ids[$raw['id']])
-                ? $raw['id']
-                : (string) Str::uuid();
-            $ids[$id] = true;
-
-            $clean[] = $this->block($block, $raw, $path, $id);
         }
 
         return $clean;
+    }
+
+    /**
+     * @param  int  $depth  contentores acima deste no
+     * @param  int  $siblings  filhos do pai, este incluido
+     * @return array<string, mixed>|null
+     */
+    private function node(mixed $raw, string $path, string $template, int $depth, int $siblings): ?array
+    {
+        if (! is_array($raw)) {
+            $this->errors[$path] = 'Bloco inválido.';
+
+            return null;
+        }
+
+        if (! $this->scalarKeys($raw)) {
+            $this->errors[$path] = 'Bloco inválido.';
+
+            return null;
+        }
+
+        if ($this->budget-- <= 0) {
+            return null;
+        }
+
+        return ($raw['type'] ?? null) === 'container'
+            ? $this->container($raw, $path, $template, $depth)
+            : $this->element($raw, $path, $template, $depth, $siblings);
+    }
+
+    /**
+     * O id e o tipo, quando vem, tem de ser texto ou numero: com um array o
+     * PHP rebentava ao converter para string.
+     *
+     * @param  array<mixed>  $raw
+     */
+    private function scalarKeys(array $raw): bool
+    {
+        return is_scalar($raw['id'] ?? '') && is_scalar($raw['type'] ?? '');
+    }
+
+    /**
+     * @param  array<mixed>  $raw
+     * @return array<string, mixed>|null
+     */
+    private function container(array $raw, string $path, string $template, int $depth): ?array
+    {
+        if ($depth >= Container::MAX_DEPTH) {
+            $this->errors[$path] = 'Não se pode meter mais de '.Container::MAX_DEPTH.' contentores uns dentro dos outros.';
+
+            return null;
+        }
+
+        $id = $this->id($raw);
+        $style = $this->props(Container::styleProps(), $raw['style'] ?? null, "$path.style");
+
+        $children = $raw['children'] ?? [];
+
+        if (! is_array($children) || ! array_is_list($children)) {
+            $this->errors["$path.children"] = 'A lista de blocos é inválida.';
+            $children = [];
+        }
+
+        if ($this->isRowOnAnyDevice($style['direction'] ?? []) && count($children) > Container::MAX_ROW_CHILDREN) {
+            $this->errors[$path] = 'Um contentor em linha leva no máximo '.Container::MAX_ROW_CHILDREN.' elementos lado a lado.';
+        }
+
+        $clean = [];
+
+        foreach ($children as $index => $child) {
+            $node = $this->node($child, "$path.children.$index", $template, $depth + 1, count($children));
+
+            if ($node !== null) {
+                $clean[] = $node;
+            }
+        }
+
+        return [
+            'id' => $id,
+            'type' => 'container',
+            'v' => 2,
+            'visible' => $this->visible($raw),
+            'label' => $this->label($raw['label'] ?? null, $path),
+            'settings' => [],
+            'content' => [],
+            'style' => $style,
+            'advanced' => $this->props(Block::advancedProps(), $raw['advanced'] ?? null, "$path.advanced"),
+            'children' => $clean,
+        ];
+    }
+
+    /**
+     * Em linha em algum dispositivo, depois de herdar computador -> tablet ->
+     * telemovel (a direcao por omissao e coluna).
+     *
+     * @param  array<mixed>  $direction
+     */
+    private function isRowOnAnyDevice(array $direction): bool
+    {
+        $desktop = $direction['desktop'] ?? 'column';
+        $tablet = $direction['tablet'] ?? $desktop;
+        $mobile = $direction['mobile'] ?? $tablet;
+
+        return in_array('row', [$desktop, $tablet, $mobile], true);
+    }
+
+    /**
+     * @param  array<mixed>  $raw
+     * @return array<string, mixed>|null
+     */
+    private function element(array $raw, string $path, string $template, int $depth, int $siblings): ?array
+    {
+        $block = $this->registry->get((string) ($raw['type'] ?? ''));
+
+        if ($block === null) {
+            $this->errors["$path.type"] = 'Tipo de bloco desconhecido.';
+
+            return null;
+        }
+
+        if (! in_array($template, $block->templates(), true)) {
+            $this->errors["$path.type"] = "O bloco \"{$block->label()}\" não pode entrar nesta página.";
+
+            return null;
+        }
+
+        if ($block->unique() && isset($this->seen[$block->type()])) {
+            $this->errors["$path.type"] = "Só pode haver um bloco \"{$block->label()}\" por página.";
+
+            return null;
+        }
+
+        $this->seen[$block->type()] = true;
+
+        // Os blocos de template ficam sozinhos num contentor de raiz.
+        if ($block->rootOnly() && ($depth !== 1 || $siblings !== 1)) {
+            $this->errors[$path] = "O bloco \"{$block->label()}\" só pode ficar sozinho numa secção da página.";
+        }
+
+        return $this->block($block, $raw, $path, $this->id($raw));
+    }
+
+    /**
+     * O id que veio, se servir e ainda nao foi dado na arvore; senao um novo.
+     *
+     * @param  array<mixed>  $raw
+     */
+    private function id(array $raw): string
+    {
+        $id = is_string($raw['id'] ?? null) && preg_match('/^[A-Za-z0-9-]{1,64}$/', $raw['id']) && ! isset($this->ids[$raw['id']])
+            ? $raw['id']
+            : (string) Str::uuid();
+
+        $this->ids[$id] = true;
+
+        return $id;
+    }
+
+    /**
+     * @param  array<mixed>  $raw
+     */
+    private function visible(array $raw): bool
+    {
+        return filter_var($raw['visible'] ?? true, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE) ?? true;
+    }
+
+    /** O nome dado no Navegador: texto simples, ate 60 caracteres. */
+    private function label(mixed $value, string $path): ?string
+    {
+        if (! is_string($value)) {
+            return null;
+        }
+
+        $label = trim(strip_tags($value));
+
+        if ($label === '') {
+            return null;
+        }
+
+        return mb_substr($label, 0, 60);
+    }
+
+    /**
+     * Os valores por dispositivo de uma lista de StyleProp. So ficam as
+     * propriedades com algum valor.
+     *
+     * @param  array<int, StyleProp>  $props
+     * @return array<string, array<string, bool|int|string>>
+     */
+    private function props(array $props, mixed $raw, string $path): array
+    {
+        if (! is_array($raw)) {
+            return [];
+        }
+
+        $clean = [];
+
+        foreach ($props as $prop) {
+            $values = $prop->clean($raw[$prop->key] ?? null, "$path.{$prop->key}", $this->errors);
+
+            if ($prop->type === 'media') {
+                $values = $this->existingMedia($values, "$path.{$prop->key}");
+            }
+
+            if ($values !== []) {
+                $clean[$prop->key] = $values;
+            }
+        }
+
+        return $clean;
+    }
+
+    /**
+     * @param  array<string, bool|int|string>  $values
+     * @return array<string, bool|int|string>
+     */
+    private function existingMedia(array $values, string $path): array
+    {
+        if ($values === []) {
+            return [];
+        }
+
+        $existing = Media::query()->whereKey(array_values($values))->pluck('id')->map(fn ($id): int => (int) $id)->all();
+
+        foreach ($values as $device => $id) {
+            if (! in_array($id, $existing, true)) {
+                $this->errors["$path.$device"] = 'A imagem escolhida já não existe.';
+                unset($values[$device]);
+            }
+        }
+
+        return $values;
     }
 
     /**
@@ -176,8 +393,12 @@ class BlockSanitizer
             'type' => $block->type(),
             'v' => 1,
             'visible' => true,
+            'label' => null,
             'variant' => $block->defaultVariant(),
             'style' => $block->defaultStyle(),
+            'shell' => $block->hasShell(),
+            'styleProps' => [],
+            'advanced' => [],
             'settings' => $settings,
             'content' => $content,
         ];
@@ -223,13 +444,20 @@ class BlockSanitizer
             }
         }
 
+        ['settings' => $settings, 'content' => $content] = $block->finalize(['settings' => $settings, 'content' => $content], $path, $this->errors);
+
         return [
             'id' => $id,
             'type' => $block->type(),
             'v' => 1,
-            'visible' => filter_var($raw['visible'] ?? true, FILTER_VALIDATE_BOOL, FILTER_NULL_ON_FAILURE) ?? true,
+            'visible' => $this->visible($raw),
+            'label' => $this->label($raw['label'] ?? null, $path),
             'variant' => $variant,
             'style' => $this->style($block, (array) ($raw['style'] ?? [])),
+            // A casca de seccao: so nos blocos que a tem; por omissao ligada.
+            'shell' => $block->hasShell() && (is_bool($raw['shell'] ?? null) ? $raw['shell'] : true),
+            'styleProps' => $this->props($block->styleFields(), $raw['styleProps'] ?? null, "$path.styleProps"),
+            'advanced' => $this->props($block->advancedFields(), $raw['advanced'] ?? null, "$path.advanced"),
             'settings' => $settings,
             'content' => $content,
         ];

@@ -137,6 +137,10 @@ return [
         'next' => 'Next image',
     ],
 
+    'video' => [
+        'title' => 'Video',
+    ],
+
     'preview' => [
         'draft' => 'Draft — this page is not published yet. Only you can see it.',
         'closed' => 'Shop closed — only you can see this. Visitors see the “coming soon” page.',

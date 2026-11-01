@@ -295,7 +295,13 @@ function FilterPanel({
 
 type Data = { empty_title: string; empty_text: string };
 
-export function CatalogGridBlock({ block }: { block: StoreBlock }) {
+export function CatalogGridBlock({
+    block,
+    nested,
+}: {
+    block: StoreBlock;
+    nested: boolean;
+}) {
     const data = block.data as Data;
     const t = useT();
     const localized = useLocalizedUrl();
@@ -381,7 +387,7 @@ export function CatalogGridBlock({ block }: { block: StoreBlock }) {
     const panel = <FilterPanel catalog={catalog} apply={apply} />;
 
     return (
-        <BlockSection style={block.style}>
+        <BlockSection shell={!nested} style={block.style}>
             <div className="flex flex-wrap items-center gap-3 border-b border-border/60 pb-4">
                 <form
                     role="search"
@@ -409,7 +415,7 @@ export function CatalogGridBlock({ block }: { block: StoreBlock }) {
                     <SheetTrigger asChild>
                         <Button
                             variant="outline"
-                            className={cn('gap-2', side && 'lg:hidden')}
+                            className={cn('gap-2', side && '@blk-lg:hidden')}
                         >
                             <SlidersHorizontal aria-hidden="true" />
                             {t('catalog.filters')}
@@ -473,7 +479,7 @@ export function CatalogGridBlock({ block }: { block: StoreBlock }) {
             <div
                 className={cn(
                     'mt-6 grid gap-8',
-                    side && 'lg:grid-cols-[15rem_1fr] lg:gap-10',
+                    side && '@blk-lg:grid-cols-[15rem_1fr] @blk-lg:gap-10',
                 )}
             >
                 {side && (
@@ -482,7 +488,7 @@ export function CatalogGridBlock({ block }: { block: StoreBlock }) {
                     // do <main> confunde os leitores de ecra.
                     <section
                         aria-label={t('catalog.filters')}
-                        className="hidden lg:block"
+                        className="hidden @blk-lg:block"
                     >
                         {panel}
                     </section>
@@ -549,10 +555,10 @@ export function CatalogGridBlock({ block }: { block: StoreBlock }) {
                             data="products"
                             manual
                             className={cn(
-                                'grid grid-cols-2 gap-x-4 gap-y-10 md:gap-x-6',
+                                'grid grid-cols-2 gap-x-4 gap-y-10 @blk-md:gap-x-6',
                                 side
-                                    ? 'md:grid-cols-3'
-                                    : 'md:grid-cols-3 xl:grid-cols-4',
+                                    ? '@blk-md:grid-cols-3'
+                                    : '@blk-md:grid-cols-3 @blk-xl:grid-cols-4',
                             )}
                             next={({ fetch, hasMore, loading }) =>
                                 hasMore ? (

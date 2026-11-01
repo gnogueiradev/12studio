@@ -1,28 +1,43 @@
 import {
     Columns2,
+    Columns3,
     FileText,
     GalleryHorizontal,
     Grid3x3,
+    Heading,
     HelpCircle,
     Image as ImageIcon,
     LayoutGrid,
+    List,
     ListOrdered,
     Mail,
     Megaphone,
     MessageSquareQuote,
+    Minus,
     PencilRuler,
+    Pilcrow,
+    Play,
+    Quote,
+    RectangleHorizontal,
     Rows3,
     ShieldCheck,
     Square,
+    Star,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { createElement } from 'react';
+import { columnCount, isEditorContainer, walkNodes } from '@/lib/page-tree';
 import { randomId } from '@/lib/utils';
 import type {
     BlockSchema,
     EditorBlock,
+    EditorContainer,
+    EditorNode,
     FieldSchema,
 } from '@/types/page-builder';
+
+// Vivem em page-tree.ts, que a montra também importa (sem os ícones de cá).
+export { blankContainer, duplicateNode } from '@/lib/page-tree';
 
 /** Um ícone por tipo, para o catálogo e a lista se lerem de relance. */
 const ICONS: Record<string, LucideIcon> = {
@@ -40,6 +55,17 @@ const ICONS: Record<string, LucideIcon> = {
     contact: Mail,
     custom_order: PencilRuler,
     spacer: Square,
+    heading: Heading,
+    paragraph: Pilcrow,
+    image: ImageIcon,
+    button: RectangleHorizontal,
+    icon: Star,
+    divider: Minus,
+    video: Play,
+    icon_list: List,
+    quote: Quote,
+    container: Square,
+    columns: Columns3,
 };
 
 /** O ícone do tipo de bloco (decorativo: o nome vai sempre ao lado). */
@@ -85,8 +111,8 @@ export function isEmpty(value: unknown): boolean {
     );
 }
 
-/** Um bloco novo, como o BlockSanitizer::blank() o faria. */
-export function blankBlock(
+/** Um elemento novo, como o BlockSanitizer::blank() o faria. */
+export function blankNode(
     schema: BlockSchema,
     locales: string[],
     defaultLocale: string,
@@ -109,17 +135,61 @@ export function blankBlock(
         type: schema.type,
         v: 1,
         visible: true,
+        label: null,
         variant: schema.variants[0]?.value ?? null,
         style: { ...schema.defaultStyle },
+        shell: schema.hasShell,
+        styleProps: {},
+        advanced: {},
         settings,
         content,
     };
 }
 
-export function duplicateBlock(block: EditorBlock): EditorBlock {
+/**
+ * O nome de um nó: o que o dono lhe deu, o do tipo de elemento ou, nos
+ * contentores, "Contentor · 2 colunas" (dentro de uma linha, "Coluna 60%").
+ */
+export function nodeLabel(
+    node: EditorNode,
+    schema: Record<string, BlockSchema | undefined>,
+    parent: EditorContainer | null = null,
+): string {
+    if (node.label) {
+        return node.label;
+    }
+
+    if (!isEditorContainer(node)) {
+        return schema[node.type]?.label ?? node.type;
+    }
+
+    const width = node.style.width?.desktop;
+    const name =
+        parent?.style.direction?.desktop !== 'row'
+            ? 'Contentor'
+            : typeof width === 'number'
+              ? `Coluna ${width}%`
+              : 'Coluna';
+
+    if (node.style.direction?.desktop !== 'row') {
+        return name;
+    }
+
+    const columns = columnCount(node);
+
+    return `${name} · ${columns} ${columns === 1 ? 'coluna' : 'colunas'}`;
+}
+
+/** Os elementos lá dentro que a impedem de se apagar ou de se duplicar. */
+export function subtreeFlags(
+    node: EditorNode,
+    schema: Record<string, BlockSchema | undefined>,
+): { required: boolean; unique: boolean } {
+    const types = walkNodes([node]).map((item) => schema[item.type]);
+
     return {
-        ...structuredClone(block),
-        id: randomId(),
+        required: types.some((item) => item?.required),
+        unique: types.some((item) => item?.unique),
     };
 }
 
@@ -155,22 +225,4 @@ export function missingTranslations(
                     isEmpty(block.content[locale]?.[field.key]),
             ),
     );
-}
-
-/** Um resumo curto do bloco para a lista (o título, se tiver). */
-export function blockSummary(
-    block: EditorBlock,
-    defaultLocale: string,
-): string {
-    const content = block.content[defaultLocale] ?? {};
-
-    for (const key of ['title', 'heading', 'eyebrow', 'text', 'body']) {
-        const value = content[key];
-
-        if (typeof value === 'string' && value.trim() !== '') {
-            return value.replace(/<[^>]+>/g, ' ').trim();
-        }
-    }
-
-    return '';
 }

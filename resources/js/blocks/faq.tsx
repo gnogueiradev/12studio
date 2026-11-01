@@ -10,7 +10,13 @@ type Data = { title: string; items: { question: string; answer: string }[] };
  * Acordeão com <details>: abre e fecha sem JavaScript, funciona com teclado e
  * leitores de ecrã, e o texto está no HTML para os motores de busca.
  */
-export function FaqBlock({ block }: { block: StoreBlock }) {
+export function FaqBlock({
+    block,
+    nested,
+}: {
+    block: StoreBlock;
+    nested: boolean;
+}) {
     const data = block.data as Data;
 
     if (data.items.length === 0) {
@@ -18,7 +24,7 @@ export function FaqBlock({ block }: { block: StoreBlock }) {
     }
 
     return (
-        <BlockSection style={block.style}>
+        <BlockSection shell={!nested} style={block.style}>
             <div
                 className={cn(
                     'max-w-3xl',

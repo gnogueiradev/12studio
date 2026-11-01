@@ -14,7 +14,7 @@ class TextBlock extends Block
 
     public function label(): string
     {
-        return 'Texto';
+        return 'Bloco de texto';
     }
 
     public function description(): string

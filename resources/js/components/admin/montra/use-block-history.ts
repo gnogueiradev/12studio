@@ -1,33 +1,32 @@
 import { useCallback, useRef, useState } from 'react';
-import type { EditorBlock } from '@/types/page-builder';
 
 /** Quantos passos se guardam para trás (e para a frente). */
 const LIMIT = 50;
-/** Alterações seguidas ao mesmo bloco, sem uma pausa maior, são um passo. */
+/** Alterações seguidas ao mesmo nó, sem uma pausa maior, são um passo. */
 const BURST = 500;
 
-type History = {
-    past: EditorBlock[][];
-    present: EditorBlock[];
-    future: EditorBlock[][];
+type History<T> = {
+    past: T[];
+    present: T;
+    future: T[];
 };
 
-type Updater = EditorBlock[] | ((current: EditorBlock[]) => EditorBlock[]);
+type Updater<T> = T | ((current: T) => T);
 
 /**
- * Os blocos da página com desfazer/refazer. Cada alteração é um passo; quem
- * passar uma `burst` (o id do bloco, ao escrever num campo) junta as
+ * Um valor (a árvore da página) com desfazer/refazer. Cada alteração é um
+ * passo; quem passar uma `burst` (o id do nó, ao escrever num campo) junta as
  * alterações seguidas num só passo até haver meio segundo de pausa.
  */
-export function useBlockHistory(initial: EditorBlock[]) {
-    const [history, setHistory] = useState<History>({
+export function useHistory<T>(initial: T) {
+    const [history, setHistory] = useState<History<T>>({
         past: [],
         present: initial,
         future: [],
     });
     const last = useRef<{ key: string; at: number } | null>(null);
 
-    const setBlocks = useCallback((updater: Updater, burst?: string) => {
+    const set = useCallback((updater: Updater<T>, burst?: string) => {
         const now = Date.now();
         const coalesce =
             burst !== undefined &&
@@ -38,7 +37,7 @@ export function useBlockHistory(initial: EditorBlock[]) {
         setHistory((current) => {
             const next =
                 typeof updater === 'function'
-                    ? updater(current.present)
+                    ? (updater as (current: T) => T)(current.present)
                     : updater;
 
             if (next === current.present) {
@@ -85,14 +84,14 @@ export function useBlockHistory(initial: EditorBlock[]) {
     }, []);
 
     /** Troca tudo e esquece o histórico (o que veio do servidor). */
-    const reset = useCallback((blocks: EditorBlock[]) => {
+    const reset = useCallback((value: T) => {
         last.current = null;
-        setHistory({ past: [], present: blocks, future: [] });
+        setHistory({ past: [], present: value, future: [] });
     }, []);
 
     return {
-        blocks: history.present,
-        setBlocks,
+        present: history.present,
+        set,
         undo,
         redo,
         reset,

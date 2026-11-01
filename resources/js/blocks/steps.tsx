@@ -9,7 +9,13 @@ type Data = {
     steps: { icon: string; title: string; text: string }[];
 };
 
-export function StepsBlock({ block }: { block: StoreBlock }) {
+export function StepsBlock({
+    block,
+    nested,
+}: {
+    block: StoreBlock;
+    nested: boolean;
+}) {
     const data = block.data as Data;
 
     if (data.steps.length === 0) {
@@ -17,7 +23,7 @@ export function StepsBlock({ block }: { block: StoreBlock }) {
     }
 
     return (
-        <BlockSection style={block.style}>
+        <BlockSection shell={!nested} style={block.style}>
             <BlockHeading
                 title={data.title}
                 subtitle={data.subtitle}
@@ -25,11 +31,11 @@ export function StepsBlock({ block }: { block: StoreBlock }) {
             />
             <ol
                 className={cn(
-                    'grid gap-8 md:gap-10',
+                    'grid gap-8 @blk-md:gap-10',
                     data.steps.length >= 3
-                        ? 'md:grid-cols-3'
-                        : 'md:grid-cols-2',
-                    data.steps.length === 4 && 'lg:grid-cols-4',
+                        ? '@blk-md:grid-cols-3'
+                        : '@blk-md:grid-cols-2',
+                    data.steps.length === 4 && '@blk-lg:grid-cols-4',
                 )}
             >
                 {data.steps.map((step, index) => (

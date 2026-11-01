@@ -144,6 +144,10 @@ return [
         'next' => 'Imagem seguinte',
     ],
 
+    'video' => [
+        'title' => 'Vídeo',
+    ],
+
     'preview' => [
         'draft' => 'Rascunho — esta página ainda não está publicada. Só tu a vês.',
         'closed' => 'Montra fechada — só tu vês isto. Os visitantes veem a página “em breve”.',

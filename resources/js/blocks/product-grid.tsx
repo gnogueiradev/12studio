@@ -14,8 +14,8 @@ type Data = {
 
 const COLUMNS: Record<number, string> = {
     2: 'grid-cols-2',
-    3: 'grid-cols-2 md:grid-cols-3',
-    4: 'grid-cols-2 md:grid-cols-3 lg:grid-cols-4',
+    3: 'grid-cols-2 @blk-md:grid-cols-3',
+    4: 'grid-cols-2 @blk-md:grid-cols-3 @blk-lg:grid-cols-4',
 };
 
 const SIZES: Record<number, string> = {
@@ -24,7 +24,13 @@ const SIZES: Record<number, string> = {
     4: '(min-width: 1024px) 25vw, (min-width: 768px) 33vw, 50vw',
 };
 
-export function ProductGridBlock({ block }: { block: StoreBlock }) {
+export function ProductGridBlock({
+    block,
+    nested,
+}: {
+    block: StoreBlock;
+    nested: boolean;
+}) {
     const data = block.data as Data;
 
     if (data.products.length === 0) {
@@ -32,7 +38,7 @@ export function ProductGridBlock({ block }: { block: StoreBlock }) {
     }
 
     return (
-        <BlockSection style={block.style}>
+        <BlockSection shell={!nested} style={block.style}>
             <BlockHeading
                 title={data.title}
                 subtitle={data.subtitle}
@@ -48,7 +54,7 @@ export function ProductGridBlock({ block }: { block: StoreBlock }) {
             </BlockHeading>
             <div
                 className={cn(
-                    'grid gap-x-4 gap-y-10 md:gap-x-6',
+                    'grid gap-x-4 gap-y-10 @blk-md:gap-x-6',
                     COLUMNS[data.columns] ?? COLUMNS[4],
                 )}
             >

@@ -19,9 +19,11 @@ const RISE_IN =
 export function HeroBlock({
     block,
     first,
+    nested,
 }: {
     block: StoreBlock;
     first: boolean;
+    nested: boolean;
 }) {
     const data = block.data as Data;
     const variant = block.variant ?? 'split';
@@ -84,12 +86,12 @@ export function HeroBlock({
 
     if (variant === 'split' && data.image) {
         return (
-            <BlockSection style={block.style}>
-                <div className="grid items-center gap-10 md:grid-cols-2 md:gap-16">
+            <BlockSection shell={!nested} style={block.style}>
+                <div className="grid items-center gap-10 @blk-md:grid-cols-2 @blk-md:gap-16">
                     {text}
                     <div
                         className={cn(
-                            'aspect-[4/5] overflow-hidden rounded-xl bg-muted md:aspect-square',
+                            'aspect-[4/5] overflow-hidden rounded-xl bg-muted @blk-md:aspect-square',
                             RISE_IN,
                             'delay-150',
                         )}
@@ -106,5 +108,9 @@ export function HeroBlock({
         );
     }
 
-    return <BlockSection style={block.style}>{text}</BlockSection>;
+    return (
+        <BlockSection shell={!nested} style={block.style}>
+            {text}
+        </BlockSection>
+    );
 }

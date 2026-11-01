@@ -52,9 +52,9 @@ class ProductPageTest extends TestCase
             ->component('store/page')
             ->where('page.key', 'product')
             ->where('page.title', 'Vaso Ondas')
-            ->where('page.blocks.0.type', 'breadcrumb')
-            ->where('page.blocks.0.data.items.1.label', 'Vasos')
-            ->where('page.blocks.1.type', 'product_main')
+            ->where('page.blocks.0.children.0.type', 'breadcrumb')
+            ->where('page.blocks.0.children.0.data.items.1.label', 'Vasos')
+            ->where('page.blocks.1.children.0.type', 'product_main')
             ->where('product.name', 'Vaso Ondas')
             ->where('product.price', ['from' => 1500, 'to' => 1800, 'compareAt' => null, 'varies' => true])
             ->where('product.availability', 'ready')
@@ -99,7 +99,7 @@ class ProductPageTest extends TestCase
         $this->get('/fr/produtos/vaso-ondas')->assertInertia(fn (Assert $page) => $page
             ->where('product.href', '/fr/produtos/vaso-ondas')
             ->where('product.category.href', '/fr/categoria/vasos')
-            ->where('page.blocks.0.data.items.0', ['label' => 'Catalogue', 'href' => '/fr/produtos']));
+            ->where('page.blocks.0.children.0.data.items.0', ['label' => 'Catalogue', 'href' => '/fr/produtos']));
     }
 
     public function test_seo_tags_and_structured_data(): void

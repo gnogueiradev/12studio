@@ -5,6 +5,7 @@ namespace App\Mcp\Tools\Read;
 use App\Mcp\Tools\StudioTool;
 use App\Models\Page;
 use App\Models\User;
+use App\PageBuilder\PageDocument;
 use App\Services\TranslationService;
 use Illuminate\Contracts\JsonSchema\JsonSchema;
 use Laravel\Mcp\Request;
@@ -18,7 +19,7 @@ use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
 #[Name('pages_list')]
 #[Title('Listar páginas da montra')]
-#[Description('As páginas do site público montadas por blocos: as de sistema (início, sobre, contacto, legais, modelos do catálogo e do produto) e as landing pages. Diz o estado e em que idiomas falta tradução.')]
+#[Description('As páginas do site público montadas por blocos: as de sistema (início, sobre, contacto, legais, modelos do catálogo e do produto) e as landing pages. Diz o estado, quantos elementos tem e em que idiomas falta tradução. O conteúdo de cada página (em árvore, formato v2) vê-se com page_get.')]
 #[IsReadOnly]
 #[IsIdempotent]
 class PagesListTool extends StudioTool
@@ -43,7 +44,8 @@ class PagesListTool extends StudioTool
                 'path' => $page->path(),
                 'status' => $page->status,
                 'unpublished_changes' => $page->hasUnpublishedChanges(),
-                'blocks' => count($page->draft_blocks),
+                'format' => 'v2',
+                'blocks' => PageDocument::countElements($page->draft_blocks),
                 'missing_translations' => $this->translations->pageMissingLocales($page),
             ])->all(),
         ]);

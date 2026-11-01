@@ -23,11 +23,17 @@ export function RichText({
     );
 }
 
-export function TextBlock({ block }: { block: StoreBlock }) {
+export function TextBlock({
+    block,
+    nested,
+}: {
+    block: StoreBlock;
+    nested: boolean;
+}) {
     const data = block.data as Data;
 
     return (
-        <BlockSection style={block.style}>
+        <BlockSection shell={!nested} style={block.style}>
             <div
                 className={cn(
                     block.variant === 'wide' ? 'max-w-4xl' : 'max-w-2xl',

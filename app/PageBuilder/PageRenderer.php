@@ -21,46 +21,100 @@ class PageRenderer
     ) {}
 
     /**
+     * A arvore visivel: contentores com os filhos que se conseguem mostrar,
+     * elementos com os dados ja resolvidos. Um documento v1 sobe para v2.
+     *
      * @param  array<int, mixed>  $blocks
-     * @return array<int, array{id: string, type: string, variant: string|null, style: array<string, string>, data: array<string, mixed>}>
+     * @return array<int, array<string, mixed>>
      */
     public function render(array $blocks, RenderContext $context): array
     {
-        $visible = array_values(array_filter($blocks, fn (mixed $block): bool => is_array($block) && ($block['visible'] ?? true) !== false));
+        $tree = PageDocument::upgrade(array_values(array_filter($blocks, 'is_array')));
 
-        $context->preloadMedia($this->imageIds($visible, $context));
+        $context->preloadMedia($this->imageIds($tree, $context));
 
+        return $this->nodes($tree, $context);
+    }
+
+    /**
+     * @param  array<int, mixed>  $nodes
+     * @return array<int, array<string, mixed>>
+     */
+    private function nodes(array $nodes, RenderContext $context): array
+    {
         $rendered = [];
 
-        foreach ($visible as $block) {
-            $definition = $this->registry->get((string) ($block['type'] ?? ''));
-
-            if ($definition === null) {
-                Log::warning('Bloco de tipo desconhecido ignorado na montra.', ['type' => $block['type'] ?? null]);
-
+        foreach ($nodes as $node) {
+            if (! is_array($node) || ($node['visible'] ?? true) === false) {
                 continue;
             }
 
-            try {
-                $data = $definition->resolve($this->data($definition, $block, $context), $context);
-            } catch (Throwable $exception) {
-                report($exception);
+            $item = ($node['type'] ?? null) === 'container'
+                ? $this->container($node, $context)
+                : $this->element($node, $context);
 
-                continue;
+            if ($item !== null) {
+                $rendered[] = $item;
             }
-
-            $rendered[] = [
-                'id' => (string) ($block['id'] ?? ''),
-                'type' => $definition->type(),
-                'variant' => is_string($block['variant'] ?? null) && array_key_exists($block['variant'], $definition->variants())
-                    ? $block['variant']
-                    : $definition->defaultVariant(),
-                'style' => array_merge($definition->defaultStyle(), array_intersect_key((array) ($block['style'] ?? []), $definition->defaultStyle())),
-                'data' => $data,
-            ];
         }
 
         return $rendered;
+    }
+
+    /**
+     * @param  array<string, mixed>  $node
+     * @return array<string, mixed>
+     */
+    private function container(array $node, RenderContext $context): array
+    {
+        $style = is_array($node['style'] ?? null) ? $node['style'] : [];
+
+        return [
+            'id' => (string) ($node['id'] ?? ''),
+            'type' => 'container',
+            'label' => is_string($node['label'] ?? null) ? $node['label'] : null,
+            'style' => $style,
+            'advanced' => is_array($node['advanced'] ?? null) ? $node['advanced'] : [],
+            'bgImage' => $context->image($style['bg_image']['desktop'] ?? null),
+            'children' => $this->nodes(is_array($node['children'] ?? null) ? $node['children'] : [], $context),
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $block
+     * @return array<string, mixed>|null
+     */
+    private function element(array $block, RenderContext $context): ?array
+    {
+        $definition = $this->registry->get((string) ($block['type'] ?? ''));
+
+        if ($definition === null) {
+            Log::warning('Bloco de tipo desconhecido ignorado na montra.', ['type' => $block['type'] ?? null]);
+
+            return null;
+        }
+
+        try {
+            $data = $definition->resolve($this->data($definition, $block, $context), $context);
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return null;
+        }
+
+        return [
+            'id' => (string) ($block['id'] ?? ''),
+            'type' => $definition->type(),
+            'label' => is_string($block['label'] ?? null) ? $block['label'] : null,
+            'variant' => is_string($block['variant'] ?? null) && array_key_exists($block['variant'], $definition->variants())
+                ? $block['variant']
+                : $definition->defaultVariant(),
+            'style' => array_merge($definition->defaultStyle(), array_intersect_key((array) ($block['style'] ?? []), $definition->defaultStyle())),
+            'shell' => $definition->hasShell() && ($block['shell'] ?? true) !== false,
+            'styleProps' => is_array($block['styleProps'] ?? null) ? $block['styleProps'] : [],
+            'advanced' => is_array($block['advanced'] ?? null) ? $block['advanced'] : [],
+            'data' => $data,
+        ];
     }
 
     /**
@@ -163,26 +217,37 @@ class PageRenderer
     }
 
     /**
-     * Os ids de todas as imagens da pagina, para uma so query.
+     * Os ids de todas as imagens da arvore (campos dos elementos e fundos
+     * dos contentores), para uma so query.
      *
-     * @param  array<int, array<string, mixed>>  $blocks
+     * @param  array<int, array<string, mixed>>  $tree
      * @return array<int, int>
      */
-    private function imageIds(array $blocks, RenderContext $context): array
+    private function imageIds(array $tree, RenderContext $context): array
     {
         $ids = [];
 
-        foreach ($blocks as $block) {
-            $definition = $this->registry->get((string) ($block['type'] ?? ''));
+        PageDocument::walk($tree, function (array $node) use (&$ids, $context): void {
+            if (($node['type'] ?? null) === 'container') {
+                $background = $node['style']['bg_image']['desktop'] ?? null;
+
+                if (is_int($background)) {
+                    $ids[] = $background;
+                }
+
+                return;
+            }
+
+            $definition = $this->registry->get((string) ($node['type'] ?? ''));
 
             if ($definition === null) {
-                continue;
+                return;
             }
 
             foreach ($definition->fields() as $field) {
-                $this->collectImages($field, $this->raw($field, $block, $context), $ids);
+                $this->collectImages($field, $this->raw($field, $node, $context), $ids);
             }
-        }
+        });
 
         return array_values(array_unique($ids));
     }

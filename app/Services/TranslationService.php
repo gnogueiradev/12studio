@@ -9,7 +9,9 @@ use App\Models\Product;
 use App\Models\ProductTranslation;
 use App\PageBuilder\BlockRegistry;
 use App\PageBuilder\PageBuilderService;
+use App\PageBuilder\PageDocument;
 use App\Support\SearchText;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Mews\Purifier\Facades\Purifier;
@@ -227,7 +229,12 @@ class TranslationService
         $default = (string) config('locales.default');
         $missing = [];
 
-        foreach ($page->draft_blocks as $block) {
+        $nodes = [];
+        PageDocument::walk($page->draft_blocks, function (array $node) use (&$nodes): void {
+            $nodes[] = $node;
+        });
+
+        foreach ($nodes as $block) {
             $definition = $this->registry->get((string) ($block['type'] ?? ''));
 
             foreach ($definition?->fields() ?? [] as $field) {
@@ -260,22 +267,30 @@ class TranslationService
     {
         $this->assertLocale($locale);
 
+        // O id pode ser de um no a qualquer profundidade da arvore.
         $draft = $page->draft_blocks;
         $index = [];
-        foreach ($draft as $position => $block) {
-            $index[(string) ($block['id'] ?? '')] = $position;
-        }
+        $containers = [];
+        PageDocument::walk($draft, function (array $node, string $path) use (&$index, &$containers): void {
+            $id = (string) ($node['id'] ?? '');
+            $index[$id] ??= substr($path, strlen('blocks.'));
+            $containers[$id] ??= ($node['type'] ?? null) === 'container';
+        });
 
         foreach ($blocks as $i => $incoming) {
-            $id = is_array($incoming) ? (string) ($incoming['id'] ?? '') : '';
+            $id = is_array($incoming) && is_scalar($incoming['id'] ?? null) ? (string) $incoming['id'] : '';
 
             if (! isset($index[$id])) {
                 throw ValidationException::withMessages(["blocks.$i.id" => "Não há nenhum bloco com o id \"{$id}\" nesta página (ver page_get)."]);
             }
 
+            if ($containers[$id]) {
+                throw ValidationException::withMessages(["blocks.$i.id" => "O id \"{$id}\" é de um contentor, que não tem texto para traduzir. Usa o id de um elemento (ver page_get)."]);
+            }
+
             $content = is_array($incoming['content'] ?? null) ? $incoming['content'] : [];
-            $position = $index[$id];
-            $draft[$position]['content'][$locale] = array_merge((array) ($draft[$position]['content'][$locale] ?? []), $content);
+            $key = $index[$id].'.content.'.$locale;
+            Arr::set($draft, $key, array_merge((array) Arr::get($draft, $key, []), $content));
         }
 
         return $this->pages->saveDraft($page, $draft);

@@ -34,6 +34,16 @@ class DefaultPages
      */
     public static function blocks(string $key): array
     {
+        return PageDocument::upgrade(self::flat($key));
+    }
+
+    /**
+     * Os blocos planos (v1) de origem; a arvore sai de blocks().
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    private static function flat(string $key): array
+    {
         return match ($key) {
             'home' => self::home(),
             'catalog' => self::catalog(),

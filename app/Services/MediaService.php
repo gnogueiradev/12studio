@@ -6,6 +6,7 @@ use App\Images\ImageVariants;
 use App\Jobs\GenerateImageVariants;
 use App\Models\Media;
 use App\Models\Page;
+use App\PageBuilder\PageDocument;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -70,12 +71,43 @@ class MediaService
             ->pluck('name')
             ->all();
 
+        // O fundo de um contentor guarda o id por dispositivo
+        // ("bg_image":{"desktop":12}): confirma-se na arvore das paginas que
+        // o JSON menciona.
+        $backgrounds = Page::query()
+            ->where(fn ($query) => $query
+                ->where('draft_blocks', 'like', '%"bg_image":%')
+                ->orWhere('published_blocks', 'like', '%"bg_image":%'))
+            ->get()
+            ->filter(fn (Page $page): bool => $this->usesBackground($page->draft_blocks, $media->id)
+                || $this->usesBackground($page->published_blocks ?? [], $media->id))
+            ->pluck('name')
+            ->all();
+
+        $pages = array_values(array_unique([...$pages, ...$backgrounds]));
+
         $theme = $this->theme->values();
         if (in_array($media->id, [$theme['logo'], $theme['favicon']], true)) {
             $pages[] = 'Tema';
         }
 
         return $pages;
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $tree
+     */
+    private function usesBackground(array $tree, int $id): bool
+    {
+        $used = false;
+
+        PageDocument::walk($tree, function (array $node) use ($id, &$used): void {
+            if (($node['type'] ?? null) === 'container' && in_array($id, (array) ($node['style']['bg_image'] ?? []), true)) {
+                $used = true;
+            }
+        });
+
+        return $used;
     }
 
     public function delete(Media $media): void

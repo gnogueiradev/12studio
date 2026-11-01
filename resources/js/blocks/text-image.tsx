@@ -13,22 +13,28 @@ type Data = {
     image: ResponsiveImageData | null;
 };
 
-export function TextImageBlock({ block }: { block: StoreBlock }) {
+export function TextImageBlock({
+    block,
+    nested,
+}: {
+    block: StoreBlock;
+    nested: boolean;
+}) {
     const data = block.data as Data;
     const imageLeft = block.variant === 'image_left';
 
     return (
-        <BlockSection style={block.style}>
+        <BlockSection shell={!nested} style={block.style}>
             <div
                 className={cn(
-                    'grid items-center gap-10 md:gap-16',
-                    data.image && 'md:grid-cols-2',
+                    'grid items-center gap-10 @blk-md:gap-16',
+                    data.image && '@blk-md:grid-cols-2',
                 )}
             >
                 <div
                     className={cn(
                         'flex max-w-xl flex-col gap-4',
-                        imageLeft && 'md:order-2',
+                        imageLeft && '@blk-md:order-2',
                     )}
                 >
                     {data.eyebrow && (

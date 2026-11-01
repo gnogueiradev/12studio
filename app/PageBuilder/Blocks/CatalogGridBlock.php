@@ -42,6 +42,11 @@ class CatalogGridBlock extends Block
         return true;
     }
 
+    public function rootOnly(): bool
+    {
+        return true;
+    }
+
     public function variants(): array
     {
         return ['filters_side' => 'Filtros ao lado', 'filters_top' => 'Filtros em cima'];

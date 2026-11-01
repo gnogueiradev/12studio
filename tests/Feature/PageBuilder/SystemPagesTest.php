@@ -4,6 +4,9 @@ namespace Tests\Feature\PageBuilder;
 
 use App\Models\Page;
 use App\Models\User;
+use App\PageBuilder\DefaultPages;
+use App\PageBuilder\PageDocument;
+use App\PageBuilder\Pages;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia as Assert;
 use PHPUnit\Framework\Attributes\DataProvider;
@@ -50,6 +53,33 @@ class SystemPagesTest extends TestCase
         $this->assertDatabaseHas('pages', ['key' => $key, 'status' => 'published']);
     }
 
+    public function test_system_pages_are_created_as_trees(): void
+    {
+        foreach (array_keys(DefaultPages::NAMES) as $key) {
+            $page = app(Pages::class)->system($key);
+
+            $this->assertNotEmpty($page->draft_blocks, $key);
+
+            foreach ($page->draft_blocks as $root) {
+                $this->assertSame('container', $root['type'], $key);
+                $this->assertSame(2, $root['v'], $key);
+                $this->assertNotEmpty($root['children'], $key);
+                $this->assertNotSame('container', $root['children'][0]['type'], $key);
+            }
+
+            $ids = [];
+            PageDocument::walk($page->draft_blocks, function (array $node) use (&$ids): void {
+                $ids[] = $node['id'];
+            });
+            $this->assertSame($ids, array_values(array_unique($ids)), "{$key}: ids repetidos");
+
+            // A origem sai ja em arvore, sem passar pelo upgrade.
+            foreach (DefaultPages::blocks($key) as $root) {
+                $this->assertSame('container', $root['type']);
+            }
+        }
+    }
+
     public function test_a_page_is_created_only_once(): void
     {
         $this->get('/sobre');
@@ -61,9 +91,9 @@ class SystemPagesTest extends TestCase
     public function test_the_default_content_comes_in_every_language(): void
     {
         $this->get('/en')->assertInertia(fn (Assert $page) => $page
-            ->where('page.blocks.0.type', 'hero')
-            ->where('page.blocks.0.data.title', '3D-printed pieces, designed with care.')
-            ->where('page.blocks.0.data.primary.href', '/en/produtos'));
+            ->where('page.blocks.0.children.0.type', 'hero')
+            ->where('page.blocks.0.children.0.data.title', '3D-printed pieces, designed with care.')
+            ->where('page.blocks.0.children.0.data.primary.href', '/en/produtos'));
 
         $this->get('/fr/sobre')->assertInertia(fn (Assert $page) => $page
             ->where('page.title', 'À propos'));
@@ -79,7 +109,7 @@ class SystemPagesTest extends TestCase
             ->assertOk()
             ->assertInertia(fn (Assert $page) => $page
                 ->where('page.draft', true)
-                ->where('page.blocks.1.type', 'text'));
+                ->where('page.blocks.1.children.0.type', 'text'));
     }
 
     public function test_a_published_page_shows_the_published_version_not_the_draft(): void
@@ -88,10 +118,10 @@ class SystemPagesTest extends TestCase
 
         $page = Page::query()->where('key', 'about')->firstOrFail();
         $draft = $page->draft_blocks;
-        $draft[0]['content']['pt']['title'] = 'Título ainda por publicar';
+        $draft[0]['children'][0]['content']['pt']['title'] = 'Título ainda por publicar';
         $page->update(['draft_blocks' => $draft]);
 
         $this->get('/sobre')->assertInertia(fn (Assert $page) => $page
-            ->where('page.blocks.0.data.title', 'Sobre nós'));
+            ->where('page.blocks.0.children.0.data.title', 'Sobre nós'));
     }
 }

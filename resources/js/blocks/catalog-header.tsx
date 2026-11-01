@@ -6,15 +6,17 @@ type Data = { title: string; text: string; category: boolean };
 export function CatalogHeaderBlock({
     block,
     first,
+    nested,
 }: {
     block: StoreBlock;
     first: boolean;
+    nested: boolean;
 }) {
     const data = block.data as Data;
     const Heading = first || data.category ? 'h1' : 'h2';
 
     return (
-        <BlockSection style={block.style}>
+        <BlockSection shell={!nested} style={block.style}>
             <div className="max-w-2xl">
                 <Heading className="text-3xl font-semibold tracking-tight text-balance md:text-4xl">
                     {data.title}

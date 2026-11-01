@@ -137,6 +137,10 @@ return [
         'next' => 'Imagen siguiente',
     ],
 
+    'video' => [
+        'title' => 'Vídeo',
+    ],
+
     'preview' => [
         'draft' => 'Borrador: esta página aún no está publicada. Solo tú la ves.',
         'closed' => 'Tienda cerrada — solo tú ves esto. Los visitantes ven la página “próximamente”.',

@@ -11,7 +11,13 @@ type Data = {
     image: ResponsiveImageData | null;
 };
 
-export function BannerBlock({ block }: { block: StoreBlock }) {
+export function BannerBlock({
+    block,
+    nested,
+}: {
+    block: StoreBlock;
+    nested: boolean;
+}) {
     const data = block.data as Data;
     const centered = block.style.align === 'center';
 
@@ -21,7 +27,7 @@ export function BannerBlock({ block }: { block: StoreBlock }) {
                 'flex flex-col gap-5',
                 centered
                     ? 'items-center text-center'
-                    : 'md:flex-row md:items-center md:justify-between',
+                    : '@blk-md:flex-row @blk-md:items-center @blk-md:justify-between',
             )}
         >
             <div className={cn('max-w-2xl', centered && 'mx-auto')}>
@@ -42,7 +48,10 @@ export function BannerBlock({ block }: { block: StoreBlock }) {
 
     if (data.image) {
         return (
-            <BlockSection style={{ ...block.style, bg: 'default' }}>
+            <BlockSection
+                shell={!nested}
+                style={{ ...block.style, bg: 'default' }}
+            >
                 <div className="dark relative isolate overflow-hidden rounded-xl bg-background px-6 py-14 text-foreground md:px-12">
                     <ResponsiveImage
                         image={{ ...data.image, alt: '' }}
@@ -56,5 +65,9 @@ export function BannerBlock({ block }: { block: StoreBlock }) {
         );
     }
 
-    return <BlockSection style={block.style}>{content}</BlockSection>;
+    return (
+        <BlockSection shell={!nested} style={block.style}>
+            {content}
+        </BlockSection>
+    );
 }

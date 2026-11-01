@@ -115,8 +115,12 @@ class SecurityHeaders
         if ($this->isFramable($request)) {
             return array_map(
                 fn (string $directive): string => $directive === "frame-ancestors 'none'" ? "frame-ancestors 'self'" : $directive,
-                self::CONTENT_SECURITY_POLICY,
+                $this->withVideoFrames(self::CONTENT_SECURITY_POLICY),
             );
+        }
+
+        if ($request->routeIs('home', 'store.*', 'i18n.*')) {
+            return $this->withVideoFrames(self::CONTENT_SECURITY_POLICY);
         }
 
         if ($request->routeIs('payment-link.show')) {
@@ -138,6 +142,18 @@ class SecurityHeaders
                 : $directive,
             self::CONTENT_SECURITY_POLICY,
         );
+    }
+
+    /**
+     * Os elementos de video da montra sao iframes do YouTube (sem cookies) e
+     * do Vimeo: so a montra e a pre-visualizacao os podem emoldurar.
+     *
+     * @param  array<int, string>  $policy
+     * @return array<int, string>
+     */
+    private function withVideoFrames(array $policy): array
+    {
+        return [...$policy, "frame-src 'self' https://www.youtube-nocookie.com https://player.vimeo.com"];
     }
 
     /** A pre-visualizacao do editor de paginas (so admin — ver as rotas). */

@@ -41,10 +41,10 @@ class LandingPageTest extends TestCase
         $this->get('/natal')->assertOk()->assertInertia(fn (Assert $page) => $page
             ->component('store/page')
             ->where('page.title', 'Natal')
-            ->where('page.blocks.0.data.title', 'Feliz Natal'));
+            ->where('page.blocks.0.children.0.data.title', 'Feliz Natal'));
 
         $this->get('/en/natal')->assertOk()->assertInertia(fn (Assert $page) => $page
-            ->where('page.blocks.0.data.title', 'Merry Christmas'));
+            ->where('page.blocks.0.children.0.data.title', 'Merry Christmas'));
     }
 
     public function test_a_draft_landing_is_only_seen_by_the_admin(): void

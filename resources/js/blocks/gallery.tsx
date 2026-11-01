@@ -10,7 +10,13 @@ import { BlockHeading, BlockSection } from './section';
 
 type Data = { title: string; images: { image: ResponsiveImageData | null }[] };
 
-export function GalleryBlock({ block }: { block: StoreBlock }) {
+export function GalleryBlock({
+    block,
+    nested,
+}: {
+    block: StoreBlock;
+    nested: boolean;
+}) {
     const data = block.data as Data;
     const t = useT();
     const images = data.images
@@ -32,13 +38,13 @@ export function GalleryBlock({ block }: { block: StoreBlock }) {
     const carousel = block.variant === 'carousel';
 
     return (
-        <BlockSection style={block.style}>
+        <BlockSection shell={!nested} style={block.style}>
             <BlockHeading title={data.title} align={block.style.align} />
             <ul
                 className={cn(
                     carousel
                         ? '-mx-4 flex snap-x snap-mandatory gap-4 overflow-x-auto px-4 pb-2'
-                        : 'grid grid-cols-2 gap-3 md:grid-cols-3 md:gap-4',
+                        : 'grid grid-cols-2 gap-3 @blk-md:grid-cols-3 @blk-md:gap-4',
                 )}
             >
                 {images.map((image, index) => (
@@ -46,7 +52,7 @@ export function GalleryBlock({ block }: { block: StoreBlock }) {
                         key={image.src + index}
                         className={cn(
                             carousel &&
-                                'w-[80%] shrink-0 snap-start sm:w-[45%] lg:w-[32%]',
+                                'w-[80%] shrink-0 snap-start @blk-sm:w-[45%] @blk-lg:w-[32%]',
                         )}
                     >
                         <button

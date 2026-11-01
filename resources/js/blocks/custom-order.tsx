@@ -61,7 +61,13 @@ const STEP_OF: Record<string, number> = {
  * ficheiros 3D, fotografias ou PDF) e o contacto. Abre uma conversa do tipo
  * `quote`; a resposta chega pelo link privado.
  */
-export function CustomOrderBlock({ block }: { block: StoreBlock }) {
+export function CustomOrderBlock({
+    block,
+    nested,
+}: {
+    block: StoreBlock;
+    nested: boolean;
+}) {
     const data = block.data as Data;
     const t = useT();
     const url = useLocalizedUrl();
@@ -172,7 +178,7 @@ export function CustomOrderBlock({ block }: { block: StoreBlock }) {
     };
 
     return (
-        <BlockSection style={block.style} id="pedido">
+        <BlockSection shell={!nested} style={block.style} id="pedido">
             <div className="mx-auto max-w-2xl rounded-xl border border-border/60 bg-card p-6 text-card-foreground md:p-10">
                 {data.title && (
                     <h2 className="text-2xl font-semibold tracking-tight text-balance md:text-3xl">
@@ -300,7 +306,7 @@ export function CustomOrderBlock({ block }: { block: StoreBlock }) {
 
                             {step === 1 && (
                                 <>
-                                    <div className="grid gap-4 sm:grid-cols-[1fr_8rem]">
+                                    <div className="grid gap-4 @blk-sm:grid-cols-[1fr_8rem]">
                                         <Field
                                             id={id('dimensions')}
                                             label={t('conversation.dimensions')}
@@ -354,7 +360,7 @@ export function CustomOrderBlock({ block }: { block: StoreBlock }) {
                                             />
                                         </Field>
                                     </div>
-                                    <div className="grid gap-4 sm:grid-cols-2">
+                                    <div className="grid gap-4 @blk-sm:grid-cols-2">
                                         <Field
                                             id={id('color')}
                                             label={t('conversation.color')}
@@ -546,7 +552,7 @@ export function CustomOrderBlock({ block }: { block: StoreBlock }) {
 
                             {step === 2 && (
                                 <>
-                                    <div className="grid gap-4 sm:grid-cols-2">
+                                    <div className="grid gap-4 @blk-sm:grid-cols-2">
                                         <Field
                                             id={id('name')}
                                             label={t('form.name')}
@@ -596,7 +602,7 @@ export function CustomOrderBlock({ block }: { block: StoreBlock }) {
                                             type="tel"
                                             autoComplete="tel"
                                             maxLength={30}
-                                            className="sm:w-1/2"
+                                            className="@blk-sm:w-1/2"
                                             value={form.data.phone}
                                             onChange={(event) =>
                                                 form.setData(
