@@ -149,7 +149,7 @@ páginas que já existem convertem-se sozinhas e ficam iguais.
 - `PageDocument::find(array $nodes, string $id): ?array`
 - `PageDocument::count(array $nodes): int`
 
-- [ ] **Step 1: Escrever os testes que falham**
+- [x] **Step 1: Escrever os testes que falham**
   - `test_v1_blocks_are_wrapped_in_transparent_root_containers`:
     - `upgrade([['id'=>'a','type'=>'hero',...]])` dá um container com
       `id 'c-a'`, `children[0]['id'] === 'a'` e `style === []`;
@@ -160,11 +160,11 @@ páginas que já existem convertem-se sozinhas e ficam iguais.
   - `test_walk_visits_in_preorder_with_paths`. Os caminhos esperados são
     `['blocks.0', 'blocks.0.children.0', 'blocks.0.children.1', 'blocks.1']`.
   - `test_find_and_count_cover_nested_nodes`.
-- [ ] **Step 2:** `php artisan test --compact tests/Feature/PageBuilder/PageDocumentTest.php`
+- [x] **Step 2:** `php artisan test --compact tests/Feature/PageBuilder/PageDocumentTest.php`
   deve falhar com "Class not found".
-- [ ] **Step 3:** implementar o `PageDocument` (static e puro).
-- [ ] **Step 4:** correr o mesmo comando e confirmar PASS.
-- [ ] **Step 5:** commit: "Construtor: PageDocument converte v1 em árvore e
+- [x] **Step 3:** implementar o `PageDocument` (static e puro).
+- [x] **Step 4:** correr o mesmo comando e confirmar PASS.
+- [x] **Step 5:** commit: "Construtor: PageDocument converte v1 em árvore e
   percorre-a".
 
 ### Task 2: `StyleProp`, `Container` e os estilos dos elementos
@@ -222,7 +222,7 @@ páginas que já existem convertem-se sozinhas e ficam iguais.
   devolver `{blocks: [...], container: Container::schema()}`. Ajustar os
   consumidores no `PageController::edit` (prop `schema`).
 
-- [ ] **Step 1: Testes**
+- [x] **Step 1: Testes**
   - `test_int_prop_keeps_valid_devices_and_drops_out_of_range` (com
     `padding_y` `{desktop: 40, tablet: 999, phone: 10}`):
     - devolve `{desktop: 40}`;
@@ -233,10 +233,10 @@ páginas que já existem convertem-se sozinhas e ficam iguais.
   - `test_schema_exposes_container_and_style_fields`: o
     `schema('page')['container']` tem `direction`; o esquema do `hero` tem
     `hasShell` a `true` e `rootOnly` a `false`.
-- [ ] **Step 2:** correr e confirmar FAIL.
-- [ ] **Step 3:** implementar.
-- [ ] **Step 4:** PASS.
-- [ ] **Step 5:** commit.
+- [x] **Step 2:** correr e confirmar FAIL.
+- [x] **Step 3:** implementar.
+- [x] **Step 4:** PASS.
+- [x] **Step 5:** commit.
 
 ### Task 3: `BlockSanitizer` recursivo
 
@@ -275,7 +275,7 @@ páginas que já existem convertem-se sozinhas e ficam iguais.
 - O tipo `container` não está no `BlockRegistry`; o sanitizador trata-o à
   parte.
 
-- [ ] **Step 1: Testes novos**
+- [x] **Step 1: Testes novos**
   - `test_nested_tree_is_kept_and_cleaned`: um contentor com duas colunas e
     `heading` e `paragraph` (Task 5; até lá usar `text` e `spacer`).
   - `test_node_and_depth_limits`:
@@ -287,11 +287,11 @@ páginas que já existem convertem-se sozinhas e ficam iguais.
   - `test_unique_counts_across_the_tree`.
   - `test_duplicate_ids_across_the_tree_are_renumbered`.
   - `test_preview_never_throws_and_drops_unknown_nodes`.
-- [ ] **Step 2:** FAIL.
-- [ ] **Step 3:** implementar.
-- [ ] **Step 4:** correr o `BlockSanitizerTest` e o `PageEditorTest` até
+- [x] **Step 2:** FAIL.
+- [x] **Step 3:** implementar.
+- [x] **Step 4:** correr o `BlockSanitizerTest` e o `PageEditorTest` até
   passarem.
-- [ ] **Step 5:** commit.
+- [x] **Step 5:** commit.
 
 ### Task 4: `PageRenderer` recursivo
 
@@ -308,7 +308,7 @@ páginas que já existem convertem-se sozinhas e ficam iguais.
   para o espaço contar. As imagens pré-carregam-se na árvore inteira,
   incluindo `bg_image`.
 
-- [ ] **Step 1: Testes**
+- [x] **Step 1: Testes**
   - `test_tree_is_rendered_recursively_with_hidden_nodes_removed`.
   - `test_v1_blocks_render_like_before`: para cada página do
     `DefaultPages`, o `data` de cada elemento renderizado é igual ao `data`
@@ -316,10 +316,10 @@ páginas que já existem convertem-se sozinhas e ficam iguais.
     de "snapshot" em array, gerada no próprio teste a partir do v1 com
     `shell = true`.
   - `test_container_background_image_is_resolved`.
-- [ ] **Step 2:** FAIL.
-- [ ] **Step 3:** implementar.
-- [ ] **Step 4:** PASS.
-- [ ] **Step 5:** commit.
+- [x] **Step 2:** FAIL.
+- [x] **Step 3:** implementar.
+- [x] **Step 4:** PASS.
+- [x] **Step 5:** commit.
 
 ### Task 5: Elementos básicos novos, vídeo e CSP
 
@@ -361,7 +361,7 @@ páginas que já existem convertem-se sozinhas e ficam iguais.
   `'self' https://www.youtube-nocookie.com https://player.vimeo.com`.
 - No resto do backoffice continua `'self'`.
 
-- [ ] **Step 1: Testes**
+- [x] **Step 1: Testes**
   - `test_heading_requires_text_and_cleans_level`.
   - `test_paragraph_is_purified`: um `<script>` sai.
   - `test_video_accepts_youtube_and_vimeo_urls`. É um data provider com os
@@ -371,14 +371,14 @@ páginas que já existem convertem-se sozinhas e ficam iguais.
   - `test_store_pages_allow_video_frames_but_admin_does_not`.
   - `BlockComponentsTest` (que já existe): tem de falhar enquanto faltarem
     os componentes React.
-- [ ] **Step 2:** FAIL.
-- [ ] **Step 3:** implementar os blocos PHP e criar os componentes React em
+- [x] **Step 2:** FAIL.
+- [x] **Step 3:** implementar os blocos PHP e criar os componentes React em
   `resources/js/blocks/*.tsx`, registados no `BLOCK_COMPONENTS`. Usam os
   tokens; o vídeo é um `<iframe>` com
   `loading="lazy" allow="fullscreen; picture-in-picture"`.
-- [ ] **Step 4:** PASS, incluindo o `BlockComponentsTest` e o
+- [x] **Step 4:** PASS, incluindo o `BlockComponentsTest` e o
   `DesignTokensTest`.
-- [ ] **Step 5:** commit.
+- [x] **Step 5:** commit.
 
 ### Task 6: Consumidores (serviço, páginas de origem, traduções, MCP)
 
@@ -396,7 +396,7 @@ páginas que já existem convertem-se sozinhas e ficam iguais.
 - Test: `PageBuilderServiceTest`, `SystemPagesTest`, os testes do MCP das
   páginas e os de tradução de páginas.
 
-- [ ] **Step 1: Testes**
+- [x] **Step 1: Testes**
   - `test_restoring_a_v1_revision_upgrades_it`. Cria uma `PageRevision` com
     blocos v1, repõe-na e confirma que o `draft_blocks[0]['type']` é
     `container` e que o `children[0]` é o bloco original.
@@ -404,12 +404,12 @@ páginas que já existem convertem-se sozinhas e ficam iguais.
   - `test_translate_page_finds_nested_nodes`.
   - `test_system_pages_are_created_as_trees`.
   - `test_mcp_page_get_returns_the_tree`.
-- [ ] **Step 2:** FAIL.
-- [ ] **Step 3:** implementar.
-- [ ] **Step 4:** correr em segundo plano todos os testes de
+- [x] **Step 2:** FAIL.
+- [x] **Step 3:** implementar.
+- [x] **Step 4:** correr em segundo plano todos os testes de
   `tests/Feature/PageBuilder`, `tests/Feature/Store` e `tests/Feature/Mcp`,
   e os de tradução. Têm de passar.
-- [ ] **Step 5:** commit.
+- [x] **Step 5:** commit.
 
 ## Fase B — Loja
 
@@ -449,19 +449,19 @@ páginas que já existem convertem-se sozinhas e ficam iguais.
 - O fundo `bg` usa as mesmas classes do `BlockSection` (`bg-muted`, `dark …`).
   Exporta-se o mapa `BACKGROUNDS` do `section.tsx`.
 
-- [ ] **Step 1:** implementar, sem testes de JS (o projeto não tem runner).
-- [ ] **Step 2:** `npm run build` e a verificação do frontend (os três
+- [x] **Step 1:** implementar, sem testes de JS (o projeto não tem runner).
+- [x] **Step 2:** `npm run build` e a verificação do frontend (os três
   comandos das Global Constraints).
-- [ ] **Step 3:** correr o `BlockComponentsTest`, o `DesignTokensTest` e o
+- [x] **Step 3:** correr o `BlockComponentsTest`, o `DesignTokensTest` e o
   `tests/Feature/Store` até passarem.
-- [ ] **Step 4: Verificação visual de referência.** Antes desta task, com o
+- [x] **Step 4: Verificação visual de referência.** Antes desta task, com o
   build anterior, tirar capturas em 1280 e em 390 de cada página de origem
   (início, catálogo, um produto, sobre, personalizado, contacto, perguntas,
   termos, privacidade e envios) para
   `.superpowers/visual/antes/<pagina>-<largura>.png`. Depois desta task,
   tirar as `depois/`. Comparar uma a uma no browser; qualquer diferença
   visível é um bug desta task.
-- [ ] **Step 5:** commit.
+- [x] **Step 5:** commit.
 
 ### Task 8: Os blocos da loja respondem à largura da coluna
 
@@ -476,13 +476,13 @@ páginas que já existem convertem-se sozinhas e ficam iguais.
   (`md:text-…`).
 - O `sizes` das imagens fica igual.
 
-- [ ] **Step 1:** mudar as classes.
-- [ ] **Step 2:** fazer o build e repetir a comparação visual da Task 7
+- [x] **Step 1:** mudar as classes.
+- [x] **Step 2:** fazer o build e repetir a comparação visual da Task 7
   (antes e depois). Na largura contida de hoje o resultado tem de ser igual.
-- [ ] **Step 3:** num rascunho local, pôr uma grelha de produtos numa coluna
+- [x] **Step 3:** num rascunho local, pôr uma grelha de produtos numa coluna
   de 33% e confirmar que passa a 1 ou 2 colunas em vez de 4 espremidas.
   Fazer captura.
-- [ ] **Step 4:** commit.
+- [x] **Step 4:** commit.
 
 ## Fase C — Editor
 
@@ -521,16 +521,16 @@ páginas que já existem convertem-se sozinhas e ficam iguais.
 - `canPaste(nodes, node, target, …)`: igual ao `canDrop`, aplicado à
   sub-árvore colada.
 
-- [ ] **Step 1:** implementar e passar o editor para a árvore. A lista de
+- [x] **Step 1:** implementar e passar o editor para a árvore. A lista de
   blocos antiga fica a funcionar só com a raiz até à Task 10.
-- [ ] **Step 2:** tsc, ESLint e Prettier.
-- [ ] **Step 3:** no browser (editor de uma página de origem):
+- [x] **Step 2:** tsc, ESLint e Prettier.
+- [x] **Step 3:** no browser (editor de uma página de origem):
   - abre sem erros;
   - mudar um campo grava ("Rascunho guardado");
   - desfazer funciona;
   - publicar funciona;
   - a loja mostra a alteração.
-- [ ] **Step 4:** commit.
+- [x] **Step 4:** commit.
 
 ### Task 10: Painel Elementos/Editar, controlos por dispositivo e Navegador
 
@@ -590,16 +590,16 @@ páginas que já existem convertem-se sozinhas e ficam iguais.
     "sortable tree"): o deslocamento horizontal decide o nível e o
     `canDrop` recusa com um contorno vermelho e o aviso em `title`.
 
-- [ ] **Step 1:** implementar.
-- [ ] **Step 2:** tsc, ESLint, Prettier e build.
-- [ ] **Step 3:** no browser:
+- [x] **Step 1:** implementar.
+- [x] **Step 2:** tsc, ESLint, Prettier e build.
+- [x] **Step 3:** no browser:
   - selecionar pelo Navegador abre Editar;
   - mudar o `padding_y` em telemóvel e confirmar que o computador mantém o
     seu valor (a pré-visualização em telemóvel mostra o novo);
   - arrastar no Navegador um título de uma coluna para a outra;
   - tentar meter um contentor dentro de si próprio e confirmar que é
     recusado.
-- [ ] **Step 4:** commit.
+- [x] **Step 4:** commit.
 
 ### Task 11: A página editável (seleção, arrastar e largar, estruturas, copiar e colar)
 
@@ -653,9 +653,9 @@ páginas que já existem convertem-se sozinhas e ficam iguais.
   - Delete e Ctrl+D mantêm as regras de foco que já existem (o Navegador
     em vez do `[data-block-list]`).
 
-- [ ] **Step 1:** implementar.
-- [ ] **Step 2:** tsc, ESLint, Prettier e build.
-- [ ] **Step 3:** no browser, reproduzir a frase de sucesso da spec:
+- [x] **Step 1:** implementar.
+- [x] **Step 2:** tsc, ESLint, Prettier e build.
+- [x] **Step 3:** no browser, reproduzir a frase de sucesso da spec:
   1. "+ ▥" no fim, escolher 66/34;
   2. arrastar Título, Texto e Botão da grelha para a coluna 66, e Imagem
      para a coluna 34;
@@ -666,17 +666,17 @@ páginas que já existem convertem-se sozinhas e ficam iguais.
   7. publicar e ver a loja.
 
   Fazer capturas.
-- [ ] **Step 4:** commit.
+- [x] **Step 4:** commit.
 
 ### Task 12: Fecho
 
-- [ ] **Step 1:** atualizar a lista de páginas (as miniaturas continuam,
+- [x] **Step 1:** atualizar a lista de páginas (as miniaturas continuam,
   porque usam a preview) e a `tema.tsx`, se esta usar o `BlockList`.
   Confirmar com `grep -rn "BlockList" resources/js`.
-- [ ] **Step 2:** correr a suite completa em segundo plano até passar.
+- [x] **Step 2:** correr a suite completa em segundo plano até passar.
   Depois, os portões do frontend e um `npm run build` à parte.
-- [ ] **Step 3:** repetir a comparação visual antes/depois das páginas de
+- [x] **Step 3:** repetir a comparação visual antes/depois das páginas de
   origem.
-- [ ] **Step 4:** revisão independente do ramo inteiro e correção das
+- [x] **Step 4:** revisão independente do ramo inteiro e correção das
   falhas.
-- [ ] **Step 5:** marcar as tarefas neste plano e fazer o commit final.
+- [x] **Step 5:** marcar as tarefas neste plano e fazer o commit final.
