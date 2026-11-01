@@ -88,6 +88,7 @@ import {
     insertNode,
     isEditorContainer,
     keyErrorsByNode,
+    removalId,
     walkNodes,
     moveNode,
     nodePath,
@@ -696,10 +697,13 @@ export default function PageEditor(props: Props) {
     // Apaga logo e oferece "Desfazer" num aviso, que volta a pôr o nó onde
     // estava (mesmo que entretanto tenha havido outras alterações).
     const remove = (id: string) => {
-        const found = findNode(nodes, id);
+        const asked = findNode(nodes, id);
+        // Pode sair também o contentor transparente à volta; o Desfazer repõe
+        // os dois, e o aviso continua a falar do que o dono apagou.
+        const found = findNode(nodes, removalId(nodes, id));
         const resetAt = resets.current;
 
-        if (!found) {
+        if (!asked || !found) {
             return;
         }
 
@@ -708,28 +712,37 @@ export default function PageEditor(props: Props) {
             parentId: found.parent?.id ?? null,
             index: found.index,
         };
-        setNodes((current) => removeNode(current, id));
+        setNodes((current) => removeNode(current, removed.id));
 
         if (selected && findNode([removed], selected)) {
             setSelected(null);
         }
 
-        toast(`“${nodeLabel(removed, schemaByType, found.parent)}” apagado`, {
-            action: {
-                label: 'Desfazer',
-                onClick: () =>
-                    setNodes((current) =>
-                        // Não volta se a página entretanto foi reposta do
-                        // servidor, nem se já não cabe (outro bloco único
-                        // igual, os limites, o contentor que já não existe).
-                        resets.current !== resetAt ||
-                        findNode(current, removed.id) ||
-                        canPaste(current, removed, target, schemaByType, limits)
-                            ? current
-                            : insertNode(current, removed, target),
-                    ),
+        toast(
+            `“${nodeLabel(asked.node, schemaByType, asked.parent)}” apagado`,
+            {
+                action: {
+                    label: 'Desfazer',
+                    onClick: () =>
+                        setNodes((current) =>
+                            // Não volta se a página entretanto foi reposta do
+                            // servidor, nem se já não cabe (outro bloco único
+                            // igual, os limites, o contentor que já não existe).
+                            resets.current !== resetAt ||
+                            findNode(current, removed.id) ||
+                            canPaste(
+                                current,
+                                removed,
+                                target,
+                                schemaByType,
+                                limits,
+                            )
+                                ? current
+                                : insertNode(current, removed, target),
+                        ),
+                },
             },
-        });
+        );
     };
 
     /** O ✕ da página e o Ctrl+X: o que a página precisa não sai por aqui. */

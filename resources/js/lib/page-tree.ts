@@ -469,6 +469,32 @@ function isTransparentWrapper(node: EditorContainer): boolean {
 }
 
 /**
+ * O contentor transparente que fica vazio se este elemento sair: é a mesma
+ * regra ao mudar de sítio e ao apagar.
+ */
+function emptiedWrapper(
+    found: NonNullable<ReturnType<typeof findNode>>,
+): EditorContainer | null {
+    return found.parent &&
+        found.depth === 1 &&
+        isTransparentWrapper(found.parent)
+        ? found.parent
+        : null;
+}
+
+/**
+ * O id do que sai ao apagar este nó: o próprio ou, se for o único elemento de
+ * um contentor transparente, o contentor. Numa página convertida, apagar um
+ * bloco faz desaparecer a secção, não deixa uma zona vazia.
+ */
+export function removalId(nodes: EditorNode[], id: string): string {
+    const found = findNode(nodes, id);
+    const wrapper = found ? emptiedWrapper(found) : null;
+
+    return wrapper ? wrapper.id : id;
+}
+
+/**
  * Muda o nó de sítio. Um alvo impossível (o próprio nó, um descendente, um pai
  * que não existe ou não é contentor) devolve a árvore como estava: nunca se
  * perde nada, mesmo que quem chama não tenha perguntado ao `canDrop`.
@@ -509,13 +535,7 @@ export function moveNode(
         return nodes;
     }
 
-    const emptied =
-        found.parent &&
-        found.depth === 1 &&
-        !sameParent &&
-        isTransparentWrapper(found.parent)
-            ? found.parent
-            : null;
+    const emptied = sameParent ? null : emptiedWrapper(found);
 
     if (emptied && target.parentId === null) {
         return moveNode(nodes, emptied.id, target);
