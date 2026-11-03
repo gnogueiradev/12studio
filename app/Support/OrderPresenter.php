@@ -9,6 +9,8 @@ use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\OrderItemStatusHistory;
 use App\Models\OrderStatusHistory;
+use App\Stripe\StripeCheckout;
+use App\Stripe\StripeClient;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Str;
 
@@ -62,6 +64,11 @@ class OrderPresenter
             'shippedAt' => $order->shipped_at?->format('Y-m-d H:i'),
             'deliveredAt' => $order->delivered_at?->format('Y-m-d H:i'),
             'cancelledAt' => $order->cancelled_at?->format('Y-m-d H:i'),
+            // O link que se manda ao cliente para pagar pelo Stripe. So
+            // existe com o Stripe ligado e enquanto a encomenda esta por pagar.
+            'paymentLink' => app(StripeClient::class)->isEnabled() && StripeCheckout::payable($order)
+                ? route('payment-link.show', $order->guest_access_token)
+                : null,
             'customerOrdersCount' => $order->user_id === null
                 ? null
                 : Order::query()->where('user_id', $order->user_id)->count(),

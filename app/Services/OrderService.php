@@ -457,6 +457,16 @@ class OrderService
     }
 
     /**
+     * Uma nota de pagamento no historico, sem mexer em estado nenhum: o que
+     * chegou do Stripe e nao muda a encomenda (um Multibanco a espera, um
+     * pagamento que falhou e que o cliente pode tentar outra vez).
+     */
+    public function notePayment(Order $order, string $note): void
+    {
+        $this->recordOrderHistory($order, $order->status, $order->status, null, $note);
+    }
+
+    /**
      * Ajuste ao valor final: um desconto acordado a posteriori (negativo) ou
      * um extra combinado a parte (positivo).
      *

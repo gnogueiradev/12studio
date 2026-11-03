@@ -70,6 +70,11 @@ class StoreProductRequest extends FormRequest
             'tags.*' => ['string', 'max:60'],
             'status' => ['required', Rule::in(Product::STATUSES)],
             'featured' => ['boolean'],
+            // A ordem dentro dos destaques da montra (menor primeiro).
+            'sort_order' => ['sometimes', 'integer', 'min:0', 'max:9999'],
+            // O que os motores de busca mostram. Vazio = nome e descricao.
+            'seo_title' => ['nullable', 'string', 'max:70'],
+            'seo_description' => ['nullable', 'string', 'max:170'],
             'vat_rate' => ['required', 'integer', 'min:0', 'max:100'],
             'fulfillment_mode' => ['required', Rule::in(Product::FULFILLMENT_MODES)],
             'production_time_days' => ['nullable', 'integer', 'min:0', 'max:60'],

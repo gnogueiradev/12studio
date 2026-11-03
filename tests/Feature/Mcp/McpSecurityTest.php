@@ -105,6 +105,7 @@ class McpSecurityTest extends TestCase
             'whoami', 'products_list', 'product_get', 'pricing_preview', 'pricing_calculate',
             'stock_low', 'stock_movements', 'categories_list', 'tags_list', 'colors_list',
             'materials_list', 'printers_list', 'orders_list', 'order_get',
+            'pages_list', 'page_get', 'translations_missing',
             'etsy_status', 'etsy_user_get', 'etsy_listings_list', 'etsy_listing_get',
             'etsy_taxonomy', 'etsy_market_listings', 'etsy_market_shops', 'etsy_reviews_list',
             'etsy_shipping_list', 'etsy_sections_list',
@@ -123,7 +124,7 @@ class McpSecurityTest extends TestCase
 
         $tools = collect($this->mcp($token, $this->listTools())->assertOk()->json('result.tools'))->keyBy('name');
 
-        $this->assertCount(71, $tools);
+        $this->assertCount(77, $tools);
         $this->assertFalse($tools['variant_update']['annotations']['readOnlyHint'] ?? false);
         // Arquivar e apagar levam o aviso de destrutivo; editar um preco nao.
         $this->assertTrue($tools['product_archive']['annotations']['destructiveHint'] ?? false);

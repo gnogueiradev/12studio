@@ -2,8 +2,11 @@
 
 namespace App\Models;
 
+use App\Observers\StripeCatalogObserver;
 use Database\Factories\VariantFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
+use Illuminate\Database\Eloquent\Attributes\ObservedBy;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -39,6 +42,8 @@ use Illuminate\Support\Carbon;
  * @property int|null $length_mm
  * @property int|null $width_mm
  * @property int|null $height_mm
+ * @property string|null $stripe_price_id
+ * @property int|null $stripe_price_cents
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read int $available_stock
@@ -58,6 +63,7 @@ use Illuminate\Support\Carbon;
     'product_weight_grams', 'package_weight_grams',
     'length_mm', 'width_mm', 'height_mm',
 ])]
+#[ObservedBy(StripeCatalogObserver::class)]
 class Variant extends Model
 {
     /** @use HasFactory<VariantFactory> */
@@ -92,6 +98,7 @@ class Variant extends Model
             'printer_profile_id' => 'integer',
             'components_cost_cents' => 'integer',
             'packaging_cost_cents' => 'integer',
+            'stripe_price_cents' => 'integer',
         ];
     }
 
@@ -197,5 +204,21 @@ class Variant extends Model
     public function isOnSale(): bool
     {
         return $this->compare_at_cents !== null;
+    }
+
+    /**
+     * Variantes que a montra mostra: ativas, e sem uma cor que saiu da
+     * paleta (uma cor desativada deixa de existir para o cliente).
+     *
+     * @param  Builder<Variant>  $query
+     * @return Builder<Variant>
+     */
+    public function scopeVisibleInStore(Builder $query): Builder
+    {
+        return $query
+            ->where('active', true)
+            ->where(fn (Builder $query) => $query
+                ->whereNull('color_id')
+                ->orWhereHas('color', fn (Builder $color) => $color->where('is_active', true)));
     }
 }

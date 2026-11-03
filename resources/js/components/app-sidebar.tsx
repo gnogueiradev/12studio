@@ -2,9 +2,11 @@ import { Link, usePage } from '@inertiajs/react';
 import {
     Boxes,
     Calculator,
+    ExternalLink,
     Factory,
     FolderTree,
     LayoutGrid,
+    MessagesSquare,
     Package,
     Palette,
     Printer,
@@ -50,6 +52,12 @@ const backofficeNavItems: NavItem[] = [
         icon: Factory,
     },
     {
+        // As mensagens da montra (contacto, interesse, peça personalizada).
+        title: 'Conversas',
+        href: '/admin/conversas',
+        icon: MessagesSquare,
+    },
+    {
         title: 'Clientes',
         href: '/admin/clientes',
         icon: Users,
@@ -86,6 +94,12 @@ const backofficeNavItems: NavItem[] = [
         title: 'Impressoras',
         href: '/admin/impressoras',
         icon: Printer,
+    },
+    {
+        // O site público: páginas por blocos, menus, imagens e tema.
+        title: 'Montra',
+        href: '/admin/montra/paginas',
+        icon: Store,
     },
     {
         title: 'Calculadora',
@@ -136,12 +150,17 @@ const footerNavItems: NavItem[] = [
     {
         title: 'Ver loja',
         href: '/',
-        icon: Store,
+        icon: ExternalLink,
     },
 ];
 
 export function AppSidebar() {
-    const { auth } = usePage().props;
+    const { auth, inbox } = usePage().props;
+    const items = navItemsFor(auth.can).map((item) =>
+        item.href === '/admin/conversas' && inbox
+            ? { ...item, badge: inbox.unread }
+            : item,
+    );
     const home = auth.can.backoffice ? '/admin' : '/dashboard';
 
     return (
@@ -159,7 +178,7 @@ export function AppSidebar() {
             </SidebarHeader>
 
             <SidebarContent>
-                <NavMain items={navItemsFor(auth.can)} />
+                <NavMain items={items} />
             </SidebarContent>
 
             <SidebarFooter>

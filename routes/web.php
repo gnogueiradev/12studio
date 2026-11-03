@@ -3,13 +3,14 @@
 use App\Alerts\AlertChannel;
 use App\Http\Controllers\Admin;
 use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\HomeController;
 use App\Http\Controllers\LoginGateController;
 use App\Http\Controllers\NotifyController;
+use App\Http\Controllers\PaymentLinkController;
+use App\Http\Controllers\Store\SitemapController;
 use Illuminate\Support\Facades\Route;
 
-// ── Montra publica ──────────────────────────────────────────────────────────
-Route::get('/', HomeController::class)->name('home');
+// ── Montra publica: routes/store.php, carregado no fim deste ficheiro. ─────
+Route::get('sitemap.xml', SitemapController::class)->name('sitemap');
 
 // Emails deixados na landing "em breve". Throttle porque e o unico POST que um
 // visitante sem sessao alcanca — 6/min chega para quem corrige um erro de
@@ -17,6 +18,17 @@ Route::get('/', HomeController::class)->name('home');
 Route::post('avisar', NotifyController::class)
     ->middleware('throttle:6,1')
     ->name('notify');
+
+// O link de pagamento de uma encomenda do backoffice (ver
+// PaymentLinkController). O token e o guest_access_token: 64 caracteres. O
+// POST e o que fala com o Stripe — dai o throttle.
+Route::get('pagar/{token}', [PaymentLinkController::class, 'show'])
+    ->where('token', '[A-Za-z0-9]{64}')
+    ->name('payment-link.show');
+Route::post('pagar/{token}', [PaymentLinkController::class, 'pay'])
+    ->where('token', '[A-Za-z0-9]{64}')
+    ->middleware('throttle:10,1')
+    ->name('payment-link.pay');
 
 // ── Cadeado do login: visitar /acesso/<segredo> grava o cookie que torna as
 //    rotas do Fortify visiveis neste browser. Sem middleware — tem de ser
@@ -169,6 +181,111 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
             ->name('definicoes.update');
         Route::patch('definicoes/precos', [Admin\SettingController::class, 'updatePricing'])
             ->name('definicoes.precos');
+        Route::patch('definicoes/marca', [Admin\SettingController::class, 'updateBrand'])
+            ->name('definicoes.marca');
+
+        // A montra publica: aberta ou fechada, contactos e redes sociais.
+        Route::get('definicoes/montra', [Admin\StoreSettingsController::class, 'index'])
+            ->name('montra.index');
+        Route::patch('definicoes/montra/guardar', [Admin\StoreSettingsController::class, 'update'])
+            ->name('montra.update');
+
+        // Traducoes do conteudo da montra (o portugues e o do proprio
+        // formulario). So os outros idiomas: um /pt da 404.
+        $translatable = array_values(array_diff(array_keys((array) config('locales.available')), [config('locales.default')]));
+        Route::put('produtos/{product}/traducoes/{locale}', [Admin\TranslationController::class, 'product'])
+            ->whereIn('locale', $translatable)
+            ->name('produtos.traducoes');
+        Route::put('categorias/{category}/traducoes/{locale}', [Admin\TranslationController::class, 'category'])
+            ->whereIn('locale', $translatable)
+            ->name('categorias.traducoes');
+
+        // Conversas com clientes da montra (caixa de entrada).
+        Route::get('conversas', [Admin\ConversationController::class, 'index'])
+            ->name('conversas.index');
+        Route::get('conversas/anexos/{attachment}', [Admin\ConversationController::class, 'attachment'])
+            ->name('conversas.anexo');
+        Route::get('conversas/{conversation}', [Admin\ConversationController::class, 'show'])
+            ->name('conversas.show');
+        Route::post('conversas/{conversation}/responder', [Admin\ConversationController::class, 'reply'])
+            ->name('conversas.responder');
+        Route::post('conversas/{conversation}/fechar', [Admin\ConversationController::class, 'close'])
+            ->name('conversas.fechar');
+        Route::post('conversas/{conversation}/reabrir', [Admin\ConversationController::class, 'reopen'])
+            ->name('conversas.reabrir');
+        Route::post('conversas/{conversation}/rascunho', [Admin\ConversationController::class, 'toOrderDraft'])
+            ->name('conversas.rascunho');
+
+        // ── Construtor da montra (App\PageBuilder). Paginas e landings, menus,
+        //    biblioteca de imagens e, so para o dono, o tema. URIs proprios por
+        //    acao, pela mesma razao do Wayfinder acima. ─────────────────────
+        Route::get('montra/paginas', [Admin\Store\PageController::class, 'index'])
+            ->name('montra.paginas.index');
+        Route::post('montra/paginas', [Admin\Store\PageController::class, 'store'])
+            ->name('montra.paginas.store');
+        Route::get('montra/paginas/{page}', [Admin\Store\PageController::class, 'edit'])
+            ->name('montra.paginas.edit');
+        Route::put('montra/paginas/{page}/rascunho', [Admin\Store\PageController::class, 'saveDraft'])
+            ->name('montra.paginas.rascunho');
+        Route::post('montra/paginas/{page}/render', [Admin\Store\PageController::class, 'render'])
+            ->name('montra.paginas.render');
+        Route::post('montra/paginas/{page}/publicar', [Admin\Store\PageController::class, 'publish'])
+            ->name('montra.paginas.publicar');
+        Route::post('montra/paginas/{page}/despublicar', [Admin\Store\PageController::class, 'unpublish'])
+            ->name('montra.paginas.despublicar');
+        Route::post('montra/paginas/{page}/descartar', [Admin\Store\PageController::class, 'discard'])
+            ->name('montra.paginas.descartar');
+        Route::post('montra/paginas/{page}/duplicar', [Admin\Store\PageController::class, 'duplicate'])
+            ->name('montra.paginas.duplicar');
+        Route::patch('montra/paginas/{page}/definicoes', [Admin\Store\PageController::class, 'updateSettings'])
+            ->name('montra.paginas.definicoes');
+        Route::post('montra/paginas/{page}/versoes/{revision}/repor', [Admin\Store\PageController::class, 'restore'])
+            ->scopeBindings()
+            ->name('montra.paginas.repor');
+        Route::delete('montra/paginas/{page}', [Admin\Store\PageController::class, 'destroy'])
+            ->name('montra.paginas.destroy');
+
+        // A pagina dentro do iframe do editor: a unica do site que se deixa
+        // emoldurar (pelo proprio site) — ver SecurityHeaders.
+        Route::get('montra/preview/{page}', Admin\Store\PreviewController::class)
+            ->name('montra.preview');
+
+        // O seletor de produtos dos blocos (grelha manual).
+        Route::get('montra/opcoes/produtos', [Admin\Store\PageController::class, 'products'])
+            ->name('montra.opcoes.produtos');
+
+        Route::get('montra/menus', [Admin\Store\MenuController::class, 'edit'])
+            ->name('montra.menus.edit');
+        Route::put('montra/menus/{location}', [Admin\Store\MenuController::class, 'update'])
+            ->whereIn('location', ['header', 'footer'])
+            ->name('montra.menus.update');
+        Route::delete('montra/menus/{location}', [Admin\Store\MenuController::class, 'reset'])
+            ->whereIn('location', ['header', 'footer'])
+            ->name('montra.menus.reset');
+
+        Route::get('montra/media', [Admin\Store\MediaController::class, 'index'])
+            ->name('montra.media.index');
+        Route::get('montra/media/lista', [Admin\Store\MediaController::class, 'list'])
+            ->name('montra.media.lista');
+        Route::post('montra/media', [Admin\Store\MediaController::class, 'store'])
+            ->middleware('throttle:30,1')
+            ->name('montra.media.store');
+        Route::patch('montra/media/{media}', [Admin\Store\MediaController::class, 'update'])
+            ->name('montra.media.update');
+        Route::delete('montra/media/{media}', [Admin\Store\MediaController::class, 'destroy'])
+            ->name('montra.media.destroy');
+
+        // O tema mexe na marca toda: so o dono.
+        Route::middleware('owner')->group(function (): void {
+            Route::get('montra/tema', [Admin\Store\ThemeController::class, 'edit'])
+                ->name('montra.tema.edit');
+            Route::put('montra/tema', [Admin\Store\ThemeController::class, 'update'])
+                ->name('montra.tema.update');
+            Route::post('montra/tema/preview', [Admin\Store\ThemeController::class, 'preview'])
+                ->name('montra.tema.preview');
+            Route::delete('montra/tema', [Admin\Store\ThemeController::class, 'reset'])
+                ->name('montra.tema.reset');
+        });
 
         // Chaves de API do MCP. Cada visita e acao pede a password outra vez:
         // uma chave de escrita e uma sessao de admin que vive fora do browser.
@@ -370,3 +487,5 @@ Route::middleware(['auth', 'verified'])->group(function (): void {
 });
 
 require __DIR__.'/settings.php';
+
+require __DIR__.'/store.php';

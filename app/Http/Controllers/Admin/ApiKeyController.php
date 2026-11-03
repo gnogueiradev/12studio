@@ -8,6 +8,7 @@ use App\Http\Requests\AdminActionRequest;
 use App\Http\Requests\ApiKey\StoreApiKeyRequest;
 use App\Models\User;
 use App\Services\ApiKeyService;
+use App\Services\BrandSettings;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -26,6 +27,7 @@ class ApiKeyController extends Controller
     public function __construct(
         private ApiKeyService $keys,
         private SecurityAlerts $alerts,
+        private BrandSettings $brand,
     ) {}
 
     public function index(Request $request): Response
@@ -37,6 +39,9 @@ class ApiKeyController extends Controller
             'lifetimes' => ApiKeyService::LIFETIMES,
             'noExpiry' => ApiKeyService::NO_EXPIRY,
             'mcpUrl' => url('/mcp'),
+            // O nome local do servidor no `claude mcp add`: o da loja, sem
+            // espacos nem acentos.
+            'mcpServerName' => $this->brand->slug(),
             'enabled' => (bool) config('mcp.enabled'),
             // So existe no pedido a seguir a criacao: o token em claro nunca
             // volta a ser mostrado.

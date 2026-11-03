@@ -3,6 +3,7 @@
 namespace App\Mail;
 
 use App\Models\User;
+use App\Services\BrandSettings;
 use Carbon\CarbonInterface;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -31,7 +32,7 @@ class ApiKeyCreatedMail extends Mailable implements ShouldQueue
     public function envelope(): Envelope
     {
         return new Envelope(
-            subject: '12studio: foi ligada uma nova aplicação à tua conta',
+            subject: app(BrandSettings::class)->name().': foi ligada uma nova aplicação à tua conta',
         );
     }
 
@@ -45,6 +46,7 @@ class ApiKeyCreatedMail extends Mailable implements ShouldQueue
                 'accessLabel' => $this->access === 'write' ? 'leitura e escrita' : 'só leitura',
                 'expiresAt' => $this->expiresAt?->format('Y-m-d'),
                 'url' => route('admin.chaves-api.index'),
+                'brand' => app(BrandSettings::class)->name(),
             ],
         );
     }

@@ -46,6 +46,7 @@ class MaterialController extends Controller
                 'minSpools' => $material->min_spools,
                 'active' => $material->active,
                 'sortOrder' => $material->sort_order,
+                'nameI18n' => (object) ($material->name_i18n ?? []),
                 'state' => $material->state(),
                 // Quantas variantes dependem desta bobine. Substitui os
                 // swatches de cor que aqui estavam: e o numero acionavel — diz

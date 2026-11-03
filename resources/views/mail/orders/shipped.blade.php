@@ -18,5 +18,5 @@ Seguir a encomenda
 @endif
 
 Obrigado,<br>
-12studio
+{{ $brand }}
 </x-mail::message>

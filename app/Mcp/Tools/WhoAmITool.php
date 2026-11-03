@@ -16,7 +16,7 @@ use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
 
 #[Name('whoami')]
 #[Title('Quem sou eu')]
-#[Description('Mostra com que conta e com que acesso (só leitura, ou leitura e escrita) esta ligação ao 12studio está a funcionar, e até quando a chave é válida.')]
+#[Description('Mostra com que conta e com que acesso (só leitura, ou leitura e escrita) esta ligação à loja está a funcionar, e até quando a chave é válida.')]
 #[IsReadOnly]
 #[IsIdempotent]
 class WhoAmITool extends StudioTool

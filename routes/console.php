@@ -1,6 +1,8 @@
 <?php
 
 use App\Alerts\SystemAlerts;
+use App\Models\Conversation;
+use App\Models\ConversationAttachment;
 use App\Models\McpActivity;
 use Illuminate\Console\Scheduling\Event;
 use Illuminate\Support\Facades\Schedule;
@@ -39,10 +41,16 @@ $alertOnFailure(Schedule::command('mcp:prune-clients')
     ->dailyAt('04:40')
     ->withoutOverlapping(), 'mcp:prune-clients');
 
-// Rasto do MCP com mais de 12 meses (McpActivity::prunable).
-$alertOnFailure(Schedule::command('model:prune', ['--model' => [McpActivity::class]])
+// Rasto do MCP com mais de 12 meses (McpActivity::prunable); conversas
+// fechadas ha mais de 24 meses e os anexos delas ao fim de 6 (RGPD).
+$alertOnFailure(Schedule::command('model:prune', ['--model' => [McpActivity::class, ConversationAttachment::class, Conversation::class]])
     ->dailyAt('04:45')
     ->withoutOverlapping(), 'model:prune');
+
+// O IP de quem abriu uma conversa so serve contra abusos: sai aos 30 dias.
+$alertOnFailure(Schedule::command('conversations:forget-ips')
+    ->dailyAt('04:50')
+    ->withoutOverlapping(), 'conversations:forget-ips');
 
 // Alertas do Discord: o que NAO esta a acontecer (encomendas paradas, bobines,
 // chaves a expirar) e o resumo das leituras do Claude.
@@ -73,6 +81,13 @@ $alertOnFailure(Schedule::command('etsy:sync --full')
 $alertOnFailure(Schedule::command('etsy:import-orders')
     ->everyFiveMinutes()
     ->withoutOverlapping(), 'etsy:import-orders');
+
+// As versoes reduzidas das fotografias que ainda nao as tem: as carregadas
+// antes de elas existirem, e alguma cujo job tenha falhado. Sem nada em
+// falta, nao poe nada na fila.
+$alertOnFailure(Schedule::command('images:variants')
+    ->dailyAt('04:45')
+    ->withoutOverlapping(), 'images:variants');
 
 // Batimento: o /up (healthcheck do Docker) avisa se isto parar.
 Schedule::call(fn () => app(SystemAlerts::class)->heartbeat())

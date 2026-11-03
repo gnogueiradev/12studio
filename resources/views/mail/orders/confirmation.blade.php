@@ -22,5 +22,5 @@ Assim que o pagamento estiver confirmado, começamos a preparar tudo.
 @endif
 
 Obrigado,<br>
-12studio
+{{ $brand }}
 </x-mail::message>

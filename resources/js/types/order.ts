@@ -265,6 +265,8 @@ export type OrderDetail = {
     shippedAt: string | null;
     deliveredAt: string | null;
     cancelledAt: string | null;
+    /** O link /pagar/… para mandar ao cliente; null com o Stripe desligado ou já paga. */
+    paymentLink: string | null;
     /** Encomendas do cliente registado, esta incluída; null sem cliente. */
     customerOrdersCount: number | null;
     /** O lado da Etsy, nas encomendas que vieram de lá. */

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Concerns\HasLabelTranslations;
 use Database\Factories\ColorFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Collection;
@@ -29,16 +30,19 @@ use Illuminate\Support\Carbon;
  * @property string|null $image
  * @property bool $is_active
  * @property int $sort_order
+ * @property array<string, string>|null $name_i18n
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  * @property-read Collection<int, Material> $materials
  * @property-read int|null $materials_count
  */
-#[Fillable(['name', 'hex_color', 'image', 'is_active', 'sort_order'])]
+#[Fillable(['name', 'name_i18n', 'hex_color', 'image', 'is_active', 'sort_order'])]
 class Color extends Model
 {
     /** @use HasFactory<ColorFactory> */
     use HasFactory;
+
+    use HasLabelTranslations;
 
     /**
      * Get the attributes that should be cast.
@@ -48,6 +52,7 @@ class Color extends Model
     protected function casts(): array
     {
         return [
+            'name_i18n' => 'array',
             'is_active' => 'boolean',
             'sort_order' => 'integer',
         ];

@@ -121,6 +121,6 @@ export default function OAuthAuthorize({
 }
 
 OAuthAuthorize.layout = {
-    title: 'Ligar uma aplicação ao 12studio',
+    title: 'Ligar uma aplicação à tua conta',
     description: 'Confirma que foste tu a pedir este acesso.',
 };

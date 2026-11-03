@@ -2,6 +2,8 @@
 
 namespace App\Http\Middleware;
 
+use App\Models\Conversation;
+use App\Services\BrandSettings;
 use App\Services\SettingService;
 use Illuminate\Http\Request;
 use Inertia\Middleware;
@@ -10,6 +12,7 @@ class HandleInertiaRequests extends Middleware
 {
     public function __construct(
         private SettingService $settings,
+        private BrandSettings $brand,
     ) {}
 
     /**
@@ -42,7 +45,10 @@ class HandleInertiaRequests extends Middleware
     {
         return [
             ...parent::share($request),
-            'name' => config('app.name'),
+            // Nome da loja e frase do rodape, das definicoes. Nada no
+            // frontend escreve "12studio" a mao: a mesma instalacao vai
+            // servir mais do que uma loja.
+            'brand' => $this->brand->toArray(),
             'auth' => [
                 // Campos escolhidos a mao, e nao o modelo inteiro.
                 //
@@ -65,6 +71,11 @@ class HandleInertiaRequests extends Middleware
             // Moeda em vigor: o resources/js/lib/money.ts formata por ela em
             // vez do EUR fixo que tinha antes.
             'currency' => $this->settings->currency(),
+            // O contador de conversas por ler, na sidebar. So para o
+            // backoffice, e so quando a pagina e mesmo renderizada.
+            'inbox' => fn (): ?array => $request->user()?->isAdmin()
+                ? ['unread' => Conversation::query()->unread()->count()]
+                : null,
         ];
     }
 

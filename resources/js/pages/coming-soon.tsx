@@ -1,4 +1,4 @@
-import { Form, Head } from '@inertiajs/react';
+import { Form, Head, usePage } from '@inertiajs/react';
 import { LoaderCircle } from 'lucide-react';
 import AppLogoIcon from '@/components/app-logo-icon';
 import InputError from '@/components/input-error';
@@ -33,6 +33,8 @@ const RISE_IN =
     'ease-[cubic-bezier(0.2,0.7,0.2,1)] fill-mode-both motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-bottom-4';
 
 export default function ComingSoon() {
+    const { brand } = usePage().props;
+
     return (
         <>
             <Head title="Em breve" />
@@ -43,7 +45,7 @@ export default function ComingSoon() {
                     descendentes e nao o proprio no. O `overscroll-none` impede
                     que o rubber-band do telemovel mostre o bege que o Blade
                     pinta no <html> para quem tem tema claro. */}
-                <div className="relative flex min-h-dvh flex-col overflow-hidden overscroll-none bg-background text-foreground">
+                <div className="store-theme relative flex min-h-dvh flex-col overflow-hidden overscroll-none bg-background text-foreground">
                     {/* Brilho dourado no canto. Em estilo inline porque nasce
                         de um color-mix sobre o token --gold: uma classe
                         arbitraria com este gradiente dentro seria ilegivel. */}
@@ -204,7 +206,9 @@ export default function ComingSoon() {
                     </main>
 
                     <footer className="relative flex items-center justify-between gap-5 px-[clamp(1.5rem,6vw,5rem)] pb-[clamp(1.5rem,4vw,2.5rem)] text-[12.5px] text-muted-foreground">
-                        <span>© {new Date().getFullYear()} 12studio</span>
+                        <span>
+                            © {new Date().getFullYear()} {brand.name}
+                        </span>
                         <span className="tracking-[0.04em]">
                             Feito em Portugal
                         </span>

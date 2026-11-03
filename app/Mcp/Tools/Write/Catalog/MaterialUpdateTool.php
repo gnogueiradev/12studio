@@ -28,7 +28,7 @@ use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
 #[IsIdempotent]
 class MaterialUpdateTool extends WriteTool
 {
-    private const FIELDS = ['name', 'family', 'supplier', 'price_per_kg', 'spools_in_stock', 'min_spools', 'active', 'sort_order'];
+    private const FIELDS = ['name', 'family', 'supplier', 'price_per_kg', 'spools_in_stock', 'min_spools', 'active', 'sort_order', 'name_i18n'];
 
     public function __construct(
         private FormRequestRunner $runner,
@@ -47,6 +47,7 @@ class MaterialUpdateTool extends WriteTool
             'min_spools' => $schema->integer()->min(0)->max(65535),
             'active' => $schema->boolean()->description('false = arquivado (sai do seletor; as variantes ficam).'),
             'sort_order' => $schema->integer()->min(0)->max(65535),
+            'name_i18n' => $schema->object()->description('O nome nos outros idiomas da montra: {"es": "…", "en": "…", "fr": "…"}. Vazio num idioma: fica o português.'),
         ];
     }
 

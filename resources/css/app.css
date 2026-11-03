@@ -2,6 +2,8 @@
 
 @import 'tw-animate-css';
 
+@import './page-builder.css';
+
 @source '../views';
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 /*
@@ -114,6 +116,11 @@
 
     /* Cores da marca sem slot proprio no shadcn. */
     --color-gold: var(--gold);
+    --color-gold-foreground: var(--gold-foreground);
+    /* O dourado como cor de TEXTO: o --gold puro da 2.1:1 sobre o fundo
+       claro. Misturado com o texto chega aos 4.5:1 nos dois modos, e segue
+       o tema da loja (os dois tokens vem do ThemeSettings). */
+    --color-gold-text: color-mix(in srgb, var(--gold) 45%, var(--foreground));
     --color-brand-taupe: var(--brand-taupe);
 
     --color-destructive-soft: var(--destructive-soft);
@@ -148,6 +155,27 @@
     --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
     --color-sidebar-border: var(--sidebar-border);
     --color-sidebar-ring: var(--sidebar-ring);
+}
+
+/*
+ * Pontos de quebra dos blocos da loja, medidos na largura do `@container` que
+ * o BlockSection dá a cada bloco (`@blk-md:grid-cols-3`, ...) e não na do
+ * ecrã — uma coluna estreita dentro de um contentor passa a ter o aspeto de
+ * um ecrã estreito.
+ *
+ * O `@container` é a caixa de CONTEÚDO, ou seja, o ecrã menos os 1rem de
+ * cada lado: por isso cada ponto fica 2rem abaixo do equivalente do ecrã
+ * (sm 40rem, md 48rem, lg 64rem, xl 80rem) e as secções de largura contida
+ * mudam exatamente nas mesmas larguras de ecrã que antes. xl fica em 70rem
+ * porque é o máximo que um `max-w-6xl` com padding deixa (72rem - 2rem).
+ * O prefixo `blk-` evita choques com os `@sm:`...`@7xl:` do Tailwind e com
+ * os `max-w-*` que a aplicação já usa.
+ */
+@theme {
+    --container-blk-sm: 38rem;
+    --container-blk-md: 46rem;
+    --container-blk-lg: 62rem;
+    --container-blk-xl: 70rem;
 }
 
 :root {
@@ -195,6 +223,8 @@
     --ring: #8b7556;
 
     --gold: #c6a77b;
+    /* Texto sobre o dourado: escuro nos dois modos (secoes douradas da montra). */
+    --gold-foreground: #211e1c;
     --brand-taupe: #a99582;
 
     --destructive: #a63d2e;
@@ -269,6 +299,7 @@
     --ring: #c6a77b;
 
     --gold: #c6a77b;
+    --gold-foreground: #211e1c;
     --brand-taupe: #a99582;
 
     /* #D4705E sobre --card (#2A2624) dava 4.48:1 e falhava AA por 0.02. Este
@@ -392,6 +423,19 @@
 
     .rich-text strong {
         @apply font-semibold;
+    }
+
+    /* O texto rico na montra: maior e mais arejado do que no backoffice. */
+    .store-rich-text {
+        @apply text-base leading-relaxed md:text-[1.0625rem];
+    }
+
+    .store-rich-text h2 {
+        @apply mt-8 text-xl font-semibold tracking-tight md:text-2xl;
+    }
+
+    .store-rich-text h3 {
+        @apply mt-6 text-lg;
     }
 
     /* Placeholder do editor vazio: o TipTap deixa um <p> sem conteúdo. */

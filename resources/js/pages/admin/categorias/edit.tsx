@@ -1,13 +1,17 @@
 import { Head, useForm } from '@inertiajs/react';
 import CategoryForm from '@/components/admin/category-form';
-import { index, update } from '@/routes/admin/categorias';
+import { ContentTranslations } from '@/components/admin/content-translations';
+import type { ContentTranslation } from '@/components/admin/content-translations';
+import { Panel } from '@/components/admin/panel';
+import { index, traducoes, update } from '@/routes/admin/categorias';
 import type { CategoryDetail, CategoryFormData } from '@/types/catalog';
 
 type Props = {
     category: CategoryDetail;
+    translations: Record<string, ContentTranslation>;
 };
 
-export default function CategoriesEdit({ category }: Props) {
+export default function CategoriesEdit({ category, translations }: Props) {
     const { data, setData, patch, processing, errors } =
         useForm<CategoryFormData>({
             name: category.name,
@@ -40,6 +44,20 @@ export default function CategoriesEdit({ category }: Props) {
                     onSubmit={submit}
                     submitLabel="Guardar alterações"
                 />
+                <Panel
+                    title="Traduções da montra"
+                    description="O nome e a descrição nos outros idiomas. O que ficar vazio aparece em português."
+                    className="max-w-2xl"
+                >
+                    <ContentTranslations
+                        url={(locale) => traducoes([category.id, locale]).url}
+                        translations={translations}
+                        original={{
+                            name: category.name,
+                            description: category.description,
+                        }}
+                    />
+                </Panel>
             </div>
         </>
     );

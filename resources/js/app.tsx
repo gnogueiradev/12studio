@@ -4,24 +4,40 @@ import { TooltipProvider } from '@/components/ui/tooltip';
 import { initializeTheme } from '@/hooks/use-appearance';
 import AppLayout from '@/layouts/app-layout';
 import AuthLayout from '@/layouts/auth-layout';
+import EditorLayout from '@/layouts/editor-layout';
 import SettingsLayout from '@/layouts/settings/layout';
 import StoreLayout from '@/layouts/store-layout';
 import { initializeCurrency } from '@/lib/money';
 
-const appName = import.meta.env.VITE_APP_NAME || '12studio';
-
 createInertiaApp({
-    title: (title) => (title ? `${title} - ${appName}` : appName),
+    // O nome da loja vem das definições (shared prop `brand`), e não de um
+    // VITE_APP_NAME: esse fica gravado no build, e o mesmo build vai servir
+    // mais do que uma loja.
+    title: (title, page) => {
+        // O `page` do callback não conhece as shared props tipadas do
+        // global.d.ts; sem o nome (render isolado), fica o título da página.
+        const appName =
+            (page.props.brand as { name?: string } | undefined)?.name ?? '';
+
+        if (!appName) {
+            return title;
+        }
+
+        return title ? `${title} - ${appName}` : appName;
+    },
     layout: (name) => {
         switch (true) {
-            // Landing "em breve" (loja fechada): desenha o ecra todo sozinha,
-            // sem header nem footer da loja.
+            // Landing "em breve" (loja fechada) e link de pagamento: desenham
+            // o ecra todo sozinhas, sem header nem footer da loja.
             case name === 'coming-soon':
+            case name === 'pagar':
                 return undefined;
-            // Montra publica (home; /produtos e /carrinho juntam-se nas
-            // Fases 2-3). Tudo o resto — admin/, settings/, dashboard —
-            // usa o AppLayout de sidebar.
-            case name === 'home':
+            // Montra publica: todas as paginas em pages/store/. Tudo o resto
+            // — admin/, settings/, dashboard — usa o AppLayout de sidebar.
+            // O editor de páginas ocupa o ecrã todo, sem a sidebar.
+            case name === 'admin/montra/editor':
+                return EditorLayout;
+            case name.startsWith('store/'):
                 return StoreLayout;
             case name.startsWith('auth/'):
                 return AuthLayout;
