@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Support\LocalizedUrl;
+
 /**
  * A montra publica: se esta aberta, e os contactos e redes que mostra aos
  * clientes (rodape, pagina de contacto, botao "Fala connosco").
@@ -28,6 +30,12 @@ class StoreSettings
     public const KEY_SOCIAL = 'store.social';
 
     public const KEY_LOCALES = 'store.locales';
+
+    /** A faixa de aviso no topo da montra: { enabled, text: {pt, es, …}, link }. */
+    public const KEY_ANNOUNCEMENT = 'store.announcement';
+
+    /** Uma linha so: no telemovel, mais do que isto ja sao tres. */
+    public const ANNOUNCEMENT_MAX = 160;
 
     /**
      * Redes que a montra sabe mostrar => [rotulo, hosts aceites]. O host
@@ -86,7 +94,7 @@ class StoreSettings
      * Os valores tal como o formulario de Definicoes -> Montra os edita: todas
      * as redes presentes, vazias quando nao ha link.
      *
-     * @return array{open: bool, contact_email: string, phone: string, address: string, opening_hours: string, response_hours: int|null, social: array<string, string>, locales: array<int, string>}
+     * @return array{open: bool, contact_email: string, phone: string, address: string, opening_hours: string, response_hours: int|null, social: array<string, string>, locales: array<int, string>, announcement: array{enabled: bool, text: array<string, string>, link: string}}
      */
     public function toForm(): array
     {
@@ -109,6 +117,42 @@ class StoreSettings
             'response_hours' => is_int($hours) ? $hours : null,
             'social' => $social,
             'locales' => $this->locales(),
+            'announcement' => $this->announcementForm(),
+        ];
+    }
+
+    /**
+     * A faixa de aviso como a montra a mostra, no idioma da pagina: o texto
+     * desse idioma ou, vazio, o portugues; o link ja com o prefixo do idioma.
+     * Desligada ou sem texto, null — e a montra nao mostra faixa nenhuma.
+     *
+     * @return array{text: string, href: string|null, external: bool}|null
+     */
+    public function announcement(?string $locale = null): ?array
+    {
+        $locale ??= app()->getLocale();
+        $form = $this->announcementForm();
+        $text = $form['text'][$locale] ?? '';
+
+        if ($text === '') {
+            $text = $form['text'][(string) config('locales.default')] ?? '';
+        }
+
+        if (! $form['enabled'] || $text === '') {
+            return null;
+        }
+
+        $link = $form['link'];
+        $external = str_starts_with($link, 'https://');
+
+        return [
+            'text' => $text,
+            'href' => match (true) {
+                $link === '' => null,
+                $external => $link,
+                default => LocalizedUrl::path($link, $locale),
+            },
+            'external' => $external,
         ];
     }
 
@@ -148,6 +192,22 @@ class StoreSettings
             ]));
         }
 
+        // Tambem so quando vem: um pedido sem ela nao apaga a faixa.
+        if (is_array($form['announcement'] ?? null)) {
+            $announcement = $form['announcement'];
+
+            $text = [];
+            foreach (array_keys((array) config('locales.available')) as $locale) {
+                $text[$locale] = trim((string) ($announcement['text'][$locale] ?? ''));
+            }
+
+            $values[self::KEY_ANNOUNCEMENT] = [
+                'enabled' => (bool) ($announcement['enabled'] ?? false),
+                'text' => $text,
+                'link' => trim((string) ($announcement['link'] ?? '')),
+            ];
+        }
+
         return $values;
     }
 
@@ -183,6 +243,30 @@ class StoreSettings
             ])
             ->values()
             ->all();
+    }
+
+    /**
+     * A faixa como foi gravada, com todos os idiomas presentes (vazios quando
+     * nao ha texto). Sem nada gravado, desligada.
+     *
+     * @return array{enabled: bool, text: array<string, string>, link: string}
+     */
+    private function announcementForm(): array
+    {
+        $saved = $this->settings->get(self::KEY_ANNOUNCEMENT);
+        $saved = is_array($saved) ? $saved : [];
+        $savedText = is_array($saved['text'] ?? null) ? $saved['text'] : [];
+
+        $text = [];
+        foreach (array_keys((array) config('locales.available')) as $locale) {
+            $text[$locale] = is_string($savedText[$locale] ?? null) ? $savedText[$locale] : '';
+        }
+
+        return [
+            'enabled' => ($saved['enabled'] ?? false) === true,
+            'text' => $text,
+            'link' => is_string($saved['link'] ?? null) ? $saved['link'] : '',
+        ];
     }
 
     private function string(string $key): string

@@ -15,7 +15,8 @@ use Symfony\Component\HttpFoundation\Response;
 
 /**
  * O que o StoreLayout mostra em todas as paginas da montra (alias
- * `store.shared`): menus, contactos, redes sociais e as categorias do rodape.
+ * `store.shared`): menus, contactos, redes sociais, as categorias do rodape e
+ * a faixa de aviso do topo.
  *
  * Numa so prop, `storefront`, e preguicosa: so e montada quando a pagina e
  * mesmo renderizada, ja com o idioma do SetStoreLocale em vigor. Nao vai para
@@ -50,6 +51,7 @@ class ShareStorefront
             'social' => $this->social(),
             'categories' => $this->categories(),
             'logo' => app(ThemeSettings::class)->logoUrl(),
+            'announcement' => $this->store->announcement(),
             // A hora a que a pagina abriu, encriptada: os formularios de
             // conversa devolvem-na, e um envio rapido demais e de um robo
             // (OpenConversationRequest).

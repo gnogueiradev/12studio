@@ -27,7 +27,24 @@ class UpdateStoreSettingsRequest extends AdminFormRequest
             'social' => ['nullable', 'array'],
             'locales' => ['nullable', 'array'],
             'locales.*' => ['string', 'in:'.implode(',', array_keys((array) config('locales.available')))],
+            'announcement' => ['nullable', 'array'],
+            'announcement.enabled' => ['required_with:announcement', 'boolean'],
+            'announcement.text' => ['nullable', 'array'],
+            // Um caminho da propria montra ("/envios-e-devolucoes") ou um
+            // endereco https. "//outro.site" e "/\outro.site" seriam lidos
+            // pelo browser como outro dominio (o mesmo cuidado do StoreMenus).
+            // Sem /i: "HTTPS://" passava aqui e o StoreSettings lia-o como um
+            // caminho da montra.
+            'announcement.link' => ['nullable', 'string', 'max:255', 'regex:#^(/(?![/\\\\])\S*|https://\S+)$#'],
         ];
+
+        foreach (array_keys((array) config('locales.available')) as $locale) {
+            $rules["announcement.text.$locale"] = ['nullable', 'string', 'max:'.StoreSettings::ANNOUNCEMENT_MAX];
+        }
+
+        // Ligada, tem de ter pelo menos o portugues: e o que os outros idiomas
+        // mostram quando estao vazios.
+        $rules['announcement.text.'.config('locales.default')][] = 'required_if_accepted:announcement.enabled';
 
         foreach (StoreSettings::SOCIAL_NETWORKS as $network => [, $hosts]) {
             $rules["social.$network"] = [
@@ -52,7 +69,12 @@ class UpdateStoreSettingsRequest extends AdminFormRequest
             'response_hours' => 'tempo de resposta',
             'locales' => 'idiomas',
             'locales.*' => 'idioma',
+            'announcement.link' => 'link da faixa',
         ];
+
+        foreach ((array) config('locales.available') as $locale => ['name' => $name]) {
+            $attributes["announcement.text.$locale"] = "texto da faixa ($name)";
+        }
 
         foreach (StoreSettings::SOCIAL_NETWORKS as $network => [$label]) {
             $attributes["social.$network"] = "link do $label";

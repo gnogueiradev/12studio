@@ -28,6 +28,14 @@ export type SocialLink = {
     url: string;
 };
 
+/** A faixa de aviso (StoreSettings::announcement), já no idioma da página. */
+export type Announcement = {
+    text: string;
+    /** Já com o prefixo do idioma quando é interno; null sem link. */
+    href: string | null;
+    external: boolean;
+};
+
 /** A prop `storefront` (ShareStorefront): o que o StoreLayout mostra. */
 export type Storefront = {
     menus: { header: MenuItem[]; footer: MenuItem[] };
@@ -42,6 +50,8 @@ export type Storefront = {
     categories: { label: string; href: string }[];
     /** O logotipo do tema, ou null (fica o nome da loja). */
     logo: string | null;
+    /** A faixa de aviso do topo, ou null quando está desligada. */
+    announcement: Announcement | null;
     /** A hora a que a página abriu, encriptada (anti-spam das conversas). */
     form: { started: string };
 };

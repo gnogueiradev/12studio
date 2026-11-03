@@ -103,6 +103,61 @@ class StorefrontTest extends TestCase
             ]));
     }
 
+    public function test_there_is_no_announcement_until_one_is_enabled(): void
+    {
+        $this->get('/')->assertInertia(fn (Assert $page) => $page
+            ->where('storefront.announcement', null));
+
+        app(SettingService::class)->set(StoreSettings::KEY_ANNOUNCEMENT, [
+            'enabled' => false,
+            'text' => ['pt' => 'Portes grátis acima de 25 €'],
+            'link' => '',
+        ]);
+
+        $this->get('/')->assertInertia(fn (Assert $page) => $page
+            ->where('storefront.announcement', null));
+    }
+
+    public function test_the_announcement_comes_in_the_page_language_with_a_localized_link(): void
+    {
+        app(SettingService::class)->set(StoreSettings::KEY_ANNOUNCEMENT, [
+            'enabled' => true,
+            'text' => ['pt' => 'Portes grátis acima de 25 €', 'es' => '', 'en' => 'Free shipping over €25', 'fr' => ''],
+            'link' => '/envios-e-devolucoes',
+        ]);
+
+        $this->get('/')->assertInertia(fn (Assert $page) => $page
+            ->where('storefront.announcement', [
+                'text' => 'Portes grátis acima de 25 €',
+                'href' => '/envios-e-devolucoes',
+                'external' => false,
+            ]));
+
+        $this->get('/en')->assertInertia(fn (Assert $page) => $page
+            ->where('storefront.announcement.text', 'Free shipping over €25')
+            ->where('storefront.announcement.href', '/en/envios-e-devolucoes'));
+
+        // Sem texto em espanhol, vai o portugues.
+        $this->get('/es')->assertInertia(fn (Assert $page) => $page
+            ->where('storefront.announcement.text', 'Portes grátis acima de 25 €'));
+    }
+
+    public function test_an_external_announcement_link_is_kept_as_is(): void
+    {
+        app(SettingService::class)->set(StoreSettings::KEY_ANNOUNCEMENT, [
+            'enabled' => true,
+            'text' => ['pt' => 'Também na Etsy'],
+            'link' => 'https://www.etsy.com/shop/Oficina',
+        ]);
+
+        $this->get('/fr')->assertInertia(fn (Assert $page) => $page
+            ->where('storefront.announcement', [
+                'text' => 'Também na Etsy',
+                'href' => 'https://www.etsy.com/shop/Oficina',
+                'external' => true,
+            ]));
+    }
+
     public function test_the_footer_lists_only_visible_categories(): void
     {
         Category::factory()->create(['name' => 'Vasos', 'slug' => 'vasos', 'status' => 'visible', 'sort_order' => 2]);

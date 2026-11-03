@@ -123,6 +123,62 @@ class StoreSettingsTest extends TestCase
         $this->assertArrayNotHasKey('myspace', app(StoreSettings::class)->toForm()['social']);
     }
 
+    public function test_the_announcement_is_saved_trimmed_with_every_locale(): void
+    {
+        $this->save(['announcement' => [
+            'enabled' => true,
+            'text' => ['pt' => '  Portes grátis acima de 25 €  ', 'en' => 'Free shipping over €25'],
+            'link' => '/envios-e-devolucoes',
+        ]])->assertSessionHasNoErrors();
+
+        $this->assertSame([
+            'enabled' => true,
+            'text' => ['pt' => 'Portes grátis acima de 25 €', 'es' => '', 'en' => 'Free shipping over €25', 'fr' => ''],
+            'link' => '/envios-e-devolucoes',
+        ], app(StoreSettings::class)->toForm()['announcement']);
+    }
+
+    public function test_a_request_without_the_announcement_keeps_it(): void
+    {
+        $this->save(['announcement' => ['enabled' => true, 'text' => ['pt' => 'Portes grátis'], 'link' => '']]);
+
+        $this->save()->assertSessionHasNoErrors();
+
+        $this->assertTrue(app(StoreSettings::class)->toForm()['announcement']['enabled']);
+    }
+
+    public function test_an_enabled_announcement_needs_the_portuguese_text(): void
+    {
+        $this->save(['announcement' => ['enabled' => true, 'text' => ['pt' => '', 'en' => 'Free shipping'], 'link' => '']])
+            ->assertSessionHasErrors('announcement.text.pt');
+
+        // Desligada pode ficar vazia: e assim que se tira.
+        $this->save(['announcement' => ['enabled' => false, 'text' => ['pt' => ''], 'link' => '']])
+            ->assertSessionHasNoErrors();
+    }
+
+    public function test_the_announcement_link_is_a_store_path_or_https(): void
+    {
+        foreach (['//outro.site', '/\\outro.site', 'http://outro.site', 'HTTPS://outro.site', 'javascript:alert(1)', 'envios'] as $link) {
+            $this->save(['announcement' => ['enabled' => true, 'text' => ['pt' => 'Olá'], 'link' => $link]])
+                ->assertSessionHasErrors('announcement.link');
+        }
+
+        foreach (['/produtos', 'https://www.etsy.com/shop/Oficina'] as $link) {
+            $this->save(['announcement' => ['enabled' => true, 'text' => ['pt' => 'Olá'], 'link' => $link]])
+                ->assertSessionHasNoErrors();
+        }
+    }
+
+    public function test_the_announcement_text_fits_one_line(): void
+    {
+        $this->save(['announcement' => [
+            'enabled' => true,
+            'text' => ['pt' => str_repeat('a', StoreSettings::ANNOUNCEMENT_MAX + 1)],
+            'link' => '',
+        ]])->assertSessionHasErrors('announcement.text.pt');
+    }
+
     public function test_only_admins_reach_the_page(): void
     {
         $this->actingAs(User::factory()->create())

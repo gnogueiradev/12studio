@@ -1,5 +1,6 @@
 import { Link, usePage } from '@inertiajs/react';
 import { EyeOff } from 'lucide-react';
+import { AnnouncementBar } from '@/components/store/announcement-bar';
 import { ContactFab } from '@/components/store/contact-fab';
 import { StoreFooter } from '@/components/store/store-footer';
 import { StoreHeader } from '@/components/store/store-header';
@@ -14,6 +15,7 @@ const EMPTY_STOREFRONT: Storefront = {
     social: [],
     categories: [],
     logo: null,
+    announcement: null,
     form: { started: '' },
 };
 
@@ -74,6 +76,10 @@ export default function StoreLayout({
                         {t('preview.open_store')}
                     </Link>
                 </div>
+            )}
+
+            {storefront.announcement && (
+                <AnnouncementBar announcement={storefront.announcement} />
             )}
 
             <StoreHeader

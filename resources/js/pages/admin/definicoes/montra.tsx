@@ -1,6 +1,7 @@
 import { Head, Link, useForm } from '@inertiajs/react';
 import { ExternalLink } from 'lucide-react';
 import { useState } from 'react';
+import { LabelTranslations } from '@/components/admin/label-translations';
 import { MontraNav } from '@/components/admin/montra/montra-nav';
 import { PageHeader } from '@/components/admin/page-header';
 import { Panel } from '@/components/admin/panel';
@@ -16,6 +17,18 @@ import { home } from '@/routes';
 import { index as settingsIndex } from '@/routes/admin/definicoes';
 import { update } from '@/routes/admin/montra';
 
+/** A faixa de aviso do topo da montra (StoreSettings::KEY_ANNOUNCEMENT). */
+type AnnouncementForm = {
+    enabled: boolean;
+    /** Por idioma; todos presentes, vazios quando não há texto. */
+    text: Record<string, string>;
+    /** Um caminho da montra ("/envios-e-devolucoes"), https://… ou vazio. */
+    link: string;
+};
+
+/** O mesmo limite do StoreSettings::ANNOUNCEMENT_MAX. */
+const ANNOUNCEMENT_MAX = 160;
+
 type StoreForm = {
     open: boolean;
     contact_email: string;
@@ -25,6 +38,7 @@ type StoreForm = {
     response_hours: number | null;
     social: Record<string, string>;
     locales: string[];
+    announcement: AnnouncementForm;
 };
 
 type Props = {
@@ -85,6 +99,14 @@ export default function StoreSettingsPage({
         setData((current) => ({
             ...current,
             social: { ...current.social, [network]: value },
+        }));
+    };
+
+    const changeAnnouncement = (value: Partial<AnnouncementForm>) => {
+        setSaved(false);
+        setData((current) => ({
+            ...current,
+            announcement: { ...current.announcement, ...value },
         }));
     };
 
@@ -151,6 +173,96 @@ export default function StoreSettingsPage({
                             </span>
                         </Label>
                         <InputError message={errors.open} />
+                    </Panel>
+
+                    <Panel
+                        title="Faixa de aviso"
+                        description="Uma linha por cima do cabeçalho, em todas as páginas da montra: portes grátis, uma promoção, as férias do estúdio."
+                    >
+                        <div className="grid gap-4">
+                            <Label className="flex items-start gap-3 font-normal">
+                                <Checkbox
+                                    checked={data.announcement.enabled}
+                                    onCheckedChange={(checked) =>
+                                        changeAnnouncement({
+                                            enabled: checked === true,
+                                        })
+                                    }
+                                    className="mt-0.5"
+                                />
+                                <span className="grid gap-1">
+                                    <span className="font-medium">
+                                        Mostrar a faixa
+                                    </span>
+                                    <span className="text-sm text-muted-foreground">
+                                        Desmarcar tira-a da montra. O texto fica
+                                        guardado para a próxima vez.
+                                    </span>
+                                </span>
+                            </Label>
+
+                            <div className="grid gap-2">
+                                <Label htmlFor="announcement_text_pt">
+                                    Texto
+                                </Label>
+                                <Input
+                                    id="announcement_text_pt"
+                                    value={data.announcement.text.pt ?? ''}
+                                    maxLength={ANNOUNCEMENT_MAX}
+                                    placeholder="Portes grátis em encomendas acima de 25 €"
+                                    onChange={(event) =>
+                                        changeAnnouncement({
+                                            text: {
+                                                ...data.announcement.text,
+                                                pt: event.target.value,
+                                            },
+                                        })
+                                    }
+                                />
+                                <InputError
+                                    message={
+                                        fieldErrors['announcement.text.pt']
+                                    }
+                                />
+                            </div>
+
+                            <LabelTranslations
+                                idPrefix="announcement_text"
+                                legend="Texto noutros idiomas"
+                                maxLength={ANNOUNCEMENT_MAX}
+                                stacked
+                                value={data.announcement.text}
+                                onChange={(text) =>
+                                    changeAnnouncement({ text })
+                                }
+                            />
+
+                            <div className="grid gap-2">
+                                <Label htmlFor="announcement_link">
+                                    Link (opcional)
+                                </Label>
+                                <Input
+                                    id="announcement_link"
+                                    value={data.announcement.link}
+                                    maxLength={255}
+                                    placeholder="/envios-e-devolucoes"
+                                    onChange={(event) =>
+                                        changeAnnouncement({
+                                            link: event.target.value,
+                                        })
+                                    }
+                                />
+                                <p className="text-xs text-muted-foreground">
+                                    Uma página da montra, começada por / e sem o
+                                    idioma à frente (/en, /es…): fica sozinha no
+                                    idioma de quem visita. Ou um endereço
+                                    https://. Vazio, a faixa é só texto.
+                                </p>
+                                <InputError
+                                    message={fieldErrors['announcement.link']}
+                                />
+                            </div>
+                        </div>
                     </Panel>
 
                     <Panel
