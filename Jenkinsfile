@@ -184,6 +184,12 @@ pipeline {
                     #    dava 500. Corre como root, mas o chown do passo 3 da as
                     #    chaves ao application; sem isso a oauth-private.key
                     #    ficava root:root 600 e o php-fpm nao a lia (outro 500).
+                    #
+                    #    images:variants poe na fila as versoes reduzidas das
+                    #    fotografias que ainda nao as tem. Normalmente sao zero
+                    #    (cada upload faz as suas); apanha as anteriores a elas e
+                    #    as que falharam. Antes do queue:restart, para o worker
+                    #    novo as pegar.
                     docker compose exec -T app sh -c '
                         composer install --no-dev --optimize-autoloader --no-interaction &&
                         php artisan db:backup &&
@@ -193,6 +199,7 @@ pipeline {
                         php artisan cache:clear &&
                         php artisan storage:link &&
                         php artisan optimize &&
+                        php artisan images:variants &&
                         php artisan queue:restart
                     '
 
