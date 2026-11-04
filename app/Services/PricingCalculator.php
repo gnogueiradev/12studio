@@ -198,7 +198,11 @@ class PricingCalculator
         $rawRetail = Micros::divRound($marginWholesale * Rate::PER_UNIT, Rate::PER_UNIT - $resellerMarginBp);
         $marginRetail = Micros::ceilTo($rawRetail, self::retailStep($rawRetail));
 
-        $tiers = $this->tiers($input, $quantity, $divisor, $production, $unitLabor, $rawRetail, $vatBp);
+        // O design e trabalho de orcamento, como as placas e as trocas de cor:
+        // numa peca de catalogo nao ha modelacao a cobrar.
+        $designMinutes = $input->quote ? max(0, $input->designMinutes) : 0;
+
+        $tiers = $this->tiers($input, $quantity, $divisor, $production, $unitLabor, $rawRetail, $vatBp, $designMinutes);
 
         // Comissoes do canal: fora do custo industrial de proposito (nao custam
         // nada produzir), so no lucro liquido. Sobre o preco COM IVA, que e
@@ -213,9 +217,11 @@ class PricingCalculator
             laborBreakdownMinutes: $laborBreakdown,
             printMinutes: $input->minutes,
             quote: $input->quote,
-            designMinutes: max(0, $input->designMinutes),
-            plates: max(1, $input->plates),
-            manualColorChanges: max(0, $input->manualColorChanges),
+            // Os valores que CONTARAM: fora de um orcamento, placas, trocas e
+            // design ficam neutros mesmo que tenham vindo preenchidos.
+            designMinutes: $designMinutes,
+            plates: $input->quote ? max(1, $input->plates) : 1,
+            manualColorChanges: $input->quote ? max(0, $input->manualColorChanges) : 0,
             tiers: $tiers,
             marginWholesalePriceMicros: $marginWholesale,
             marginRetailPriceMicros: $marginRetail,
@@ -320,10 +326,11 @@ class PricingCalculator
         int $unitLabor,
         int $rawRetail,
         int $vatBp,
+        int $designMinutes,
     ): PriceTiers {
         $printMilliMinutes = Micros::divRound($input->minutes * 1000, $divisor);
         $designUnit = Micros::divRound(
-            max(0, $input->designMinutes) * max(0, $this->settings->designRateMicrosPerHour()),
+            $designMinutes * max(0, $this->settings->designRateMicrosPerHour()),
             60 * $quantity,
         );
         $marginExVat = Micros::divRound($rawRetail * Rate::PER_UNIT, Rate::PER_UNIT + $vatBp);

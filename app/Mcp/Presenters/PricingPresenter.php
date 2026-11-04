@@ -5,6 +5,7 @@ namespace App\Mcp\Presenters;
 use App\Mcp\McpFormat;
 use App\Services\PricingSettings;
 use App\Support\Micros;
+use App\Support\PriceEvaluation;
 use App\Support\PriceTier;
 use App\Support\PricingResult;
 
@@ -137,6 +138,31 @@ final class PricingPresenter
         return $warnings;
     }
 
+    /**
+     * Um preco escolhido face ao calculo. So informa: o aviso de abaixo do
+     * Minimo nao trava nada.
+     *
+     * @return array<string, mixed>
+     */
+    public static function evaluation(PriceEvaluation $evaluation): array
+    {
+        return [
+            'price' => self::signedCents($evaluation->priceMicros),
+            'price_ex_vat' => self::signedCents($evaluation->priceExVatMicros),
+            'production_cost' => self::signedCents($evaluation->costMicros),
+            'profit' => self::signedCents($evaluation->profitMicros()),
+            'profit_total' => self::signedCents($evaluation->profitMicros() * $evaluation->quantity),
+            'margin_percent' => round($evaluation->marginBp() / 100, 1),
+            'profit_per_print_hour' => self::signedCents($evaluation->profitPerPrintHourMicros()),
+            // below_minimum, minimum_to_recommended, recommended_to_premium ou
+            // above_premium.
+            'position' => $evaluation->position,
+            'matches_tier' => $evaluation->matchesTier,
+            'below_minimum' => $evaluation->isBelowMinimum(),
+            'warnings' => $evaluation->warnings(),
+        ];
+    }
+
     private static function eur(int $cents): string
     {
         return McpFormat::money($cents)['eur'];
@@ -215,5 +241,16 @@ final class PricingPresenter
     private static function cents(int $micros): array
     {
         return McpFormat::money(Micros::toCents($micros));
+    }
+
+    /**
+     * Como o cents(), mas com o sinal certo: o preco avaliado pode ficar abaixo
+     * do custo.
+     *
+     * @return array{eur: string, cents: int}
+     */
+    private static function signedCents(int $micros): array
+    {
+        return McpFormat::money(PriceEvaluation::cents($micros));
     }
 }

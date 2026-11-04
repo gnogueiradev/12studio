@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\PricingSettings;
 use App\Services\SettingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Log;
 use Inertia\Testing\AssertableInertia;
 use Tests\Concerns\PricesWithoutVat;
 use Tests\TestCase;
@@ -33,10 +34,10 @@ class PricingCalculatorPageTest extends TestCase
         // A formula por baixo do IVA: ver o trait. O IVA esta no PricingVatPageTest.
         $this->pricesWithoutVat();
 
-        // A calculadora livre e um ORCAMENTO, com um minimo de 20 min de
-        // trabalho. Estes testes fixam o custo da peca de referencia (5 min)
-        // e o fallback do trabalho ativo, por isso desligam o minimo; o
-        // orcamento em si esta no test_the_calculator_prices_a_quote.
+        // Um ORCAMENTO (quote=1) leva um minimo de 20 min de trabalho. Estes
+        // testes fixam o custo da peca de referencia (5 min) e o fallback do
+        // trabalho ativo, por isso desligam o minimo; o orcamento em si esta
+        // no test_the_calculator_prices_a_quote.
         app(SettingService::class)->set(PricingSettings::KEY_QUOTE_MIN_LABOR_MINUTES, 0);
 
         $this->admin = User::factory()->admin()->create();
@@ -83,6 +84,7 @@ class PricingCalculatorPageTest extends TestCase
                 'hours' => 3,
                 'minutes' => 0,
                 'material_id' => $this->material->id,
+                'quote' => 1,
             ]))
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('result.filamentCostMicros', 850_000)
@@ -113,8 +115,9 @@ class PricingCalculatorPageTest extends TestCase
     }
 
     /**
-     * A calculadora livre e um ORCAMENTO: o minimo de trabalho (20 min), as
-     * placas a mais e as trocas de cor entram na mao de obra.
+     * Com o toggle "Trabalho por encomenda" ligado e um ORCAMENTO: o minimo de
+     * trabalho (20 min), as placas a mais e as trocas de cor entram na mao de
+     * obra. O URL traz o toggle como o Inertia o serializa: "true".
      */
     public function test_the_calculator_prices_a_quote(): void
     {
@@ -128,8 +131,10 @@ class PricingCalculatorPageTest extends TestCase
                 'material_id' => $this->material->id,
                 'plates' => 2,
                 'manual_color_changes' => 1,
+                'quote' => 'true',
             ]))
             ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('inputs.quote', true)
                 ->where('result.quote', true)
                 ->where('result.laborBreakdownMinutes', ['base' => 5, 'quote_minimum' => 15, 'plates' => 5, 'color_changes' => 5])
                 ->where('result.laborMinutes', 30)
@@ -139,6 +144,74 @@ class PricingCalculatorPageTest extends TestCase
                 ->has('result.tiers.recommended')
                 ->has('result.tiers.premium')
             );
+    }
+
+    /**
+     * O bug de producao: sem o toggle, a calculadora tratava uma peca de
+     * catalogo como orcamento. Agora, por omissao, e a conta das variantes —
+     * e o que veio a mais (placas, trocas, design) nao conta.
+     */
+    public function test_without_the_toggle_it_is_a_catalog_part(): void
+    {
+        app(SettingService::class)->forget(PricingSettings::KEY_QUOTE_MIN_LABOR_MINUTES);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.calculadora', [
+                'weight_grams' => 66,
+                'hours' => 4,
+                'minutes' => 37,
+                'material_id' => $this->material->id,
+                'plates' => 2,
+                'manual_color_changes' => 1,
+                'design_minutes' => 60,
+            ]))
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('inputs.quote', false)
+                ->where('result.quote', false)
+                ->where('result.laborBreakdownMinutes', ['base' => 5, 'quote_minimum' => 0, 'plates' => 0, 'color_changes' => 0])
+                ->where('result.laborMinutes', 5)
+                ->where('result.designMinutes', 0)
+                ->where('result.tiers.premium.designCostCents', 0)
+                ->where('result.tiers.minimum.rule', fn (string $rule): bool => $rule !== 'min_job')
+                ->where('result.tiers.recommended.rule', fn (string $rule): bool => $rule !== 'min_job')
+                ->where('result.tiers.premium.rule', fn (string $rule): bool => $rule !== 'min_job')
+                ->where('evaluation', null)
+            );
+    }
+
+    public function test_a_chosen_price_is_evaluated_and_logged(): void
+    {
+        Log::spy();
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.calculadora', [
+                'weight_grams' => 50,
+                'hours' => 3,
+                'minutes' => 0,
+                'material_id' => $this->material->id,
+                'price' => '2,99',
+            ]))
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('inputs.price', '2.99')
+                // Sem IVA: 2,99 - 2,103618 de custo = 0,89; 3h -> 0,30/h.
+                ->where('evaluation.priceCents', 299)
+                ->where('evaluation.profitCents', 89)
+                ->where('evaluation.profitPerPrintHourCents', 30)
+                ->where('evaluation.position', 'below_minimum')
+                ->where('evaluation.belowMinimum', true)
+                ->where('evaluation.warnings.0.code', 'price_below_minimum')
+                ->etc()
+            );
+
+        Log::shouldHaveReceived('info')->withArgs(fn (string $message, array $context): bool => $message === 'Preços: cálculo.'
+            && $context['quote'] === false
+            && $context['evaluated_price_cents'] === 299
+            && $context['evaluated_position'] === 'below_minimum'
+            && $context['material_id'] === $this->material->id
+            && $context['weight_grams'] === 50
+            && $context['print_minutes'] === 180
+            && $context['quantity'] === 1
+            && isset($context['production_cost_cents'], $context['tiers']['minimum']['rule']));
     }
 
     /**

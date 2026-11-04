@@ -50,6 +50,17 @@ final class Micros
     }
 
     /**
+     * O divRound() para valores que podem ser NEGATIVOS — um lucro abaixo do
+     * custo. Arredonda o valor absoluto e repoe o sinal: o intdiv corta para
+     * zero, e com um negativo o "+metade" do divRound() empurrava-o para o
+     * lado errado (-1,6 dava -1). Divisor sempre positivo.
+     */
+    public static function divRoundSigned(int $value, int $divisor): int
+    {
+        return $value < 0 ? -self::divRound(-$value, $divisor) : self::divRound($value, $divisor);
+    }
+
+    /**
      * Taxa em pontos base: 10000 bp = 100%, 800 bp = 8%, 17500 bp = 1,75x.
      * Pontos base e nao percentagem inteira para caber um 7,5% de reserva de
      * falha sem mudar de tipo.

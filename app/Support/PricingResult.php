@@ -102,6 +102,12 @@ final readonly class PricingResult
         return Micros::divRound($micros * Rate::PER_UNIT, Rate::PER_UNIT + $this->vatRateBp);
     }
 
+    /** Um preco escolhido (com IVA, em centimos) posto ao lado deste calculo. */
+    public function evaluate(int $priceCents): PriceEvaluation
+    {
+        return PriceEvaluation::of($this, $priceCents);
+    }
+
     public function wholesalePriceExVatMicros(): int
     {
         return $this->exVat($this->wholesalePriceMicros);

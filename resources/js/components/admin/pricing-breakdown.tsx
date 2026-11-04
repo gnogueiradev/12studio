@@ -24,6 +24,8 @@ type Props = {
     action?: ReactNode;
     /** O que dizer quando não há resultado. */
     emptyHint?: string;
+    /** Logo por baixo dos três níveis — a calculadora põe aqui o preço avaliado. */
+    afterTiers?: ReactNode;
 };
 
 /** 90 → "1h 30m". Zero minutos é o estado vazio, tratado antes de chegar aqui. */
@@ -61,6 +63,7 @@ export function PricingBreakdown({
     usingFallbackRate,
     action,
     emptyHint = 'Preenche o peso e o tempo de impressão para ver o preço.',
+    afterTiers,
 }: Props) {
     if (result === null) {
         return (
@@ -106,6 +109,8 @@ export function PricingBreakdown({
             )}
 
             <PriceTierCards result={result} />
+
+            {afterTiers}
 
             <div className="grid gap-3 sm:grid-cols-2">
                 <StatCard

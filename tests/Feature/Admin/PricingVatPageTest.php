@@ -43,10 +43,11 @@ class PricingVatPageTest extends TestCase
         ]);
         $this->material = Material::factory()->create(['price_per_kg_cents' => 1_700]);
 
-        // A calculadora livre e um orcamento (minimo de 20 min de trabalho).
-        // Aqui prova-se so de onde vem cada taxa, com a peca de referencia de
-        // 5 min — o mesmo custo do PricingVatTest. (Os precos da calculadora
-        // levam ainda o lucro minimo do trabalho; os da variante nao.)
+        // A calculadora livre pedida como orcamento (quote=1: minimo de 20 min
+        // de trabalho). Aqui prova-se so de onde vem cada taxa, com a peca de
+        // referencia de 5 min — o mesmo custo do PricingVatTest. (Os precos da
+        // calculadora levam ainda o lucro minimo do trabalho; os da variante
+        // nao — o painel da variante ignora o quote.)
         app(SettingService::class)->set(PricingSettings::KEY_QUOTE_MIN_LABOR_MINUTES, 0);
     }
 
@@ -60,6 +61,7 @@ class PricingVatPageTest extends TestCase
             'hours' => 3,
             'minutes' => 0,
             'material_id' => $this->material->id,
+            'quote' => 1,
         ];
     }
 

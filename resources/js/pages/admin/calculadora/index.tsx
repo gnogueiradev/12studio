@@ -2,7 +2,9 @@ import { Head, Link, router } from '@inertiajs/react';
 import { useEffect, useRef, useState } from 'react';
 import { PageHeader } from '@/components/admin/page-header';
 import { Panel } from '@/components/admin/panel';
+import { PriceEvaluationCard } from '@/components/admin/price-evaluation-card';
 import { PricingBreakdown } from '@/components/admin/pricing-breakdown';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import {
@@ -20,6 +22,7 @@ import { index as impressorasIndex } from '@/routes/admin/impressoras';
 import { index as materiaisIndex } from '@/routes/admin/materiais';
 import type { MaterialOption } from '@/types/catalog';
 import type {
+    PriceEvaluation,
     PricingBreakdown as Breakdown,
     PricingFormFields,
     PricingMode,
@@ -31,6 +34,8 @@ type Props = {
     inputs: PricingFormFields;
     /** Null enquanto faltar peso ou tempo. */
     result: Breakdown | null;
+    /** O preço escolhido face aos níveis. Null sem preço ou sem cálculo. */
+    evaluation: PriceEvaluation | null;
     hourlyCostMicros: number;
     usingFallbackRate: boolean;
     printers: PrinterProfileOption[];
@@ -61,6 +66,7 @@ const DEBOUNCE_MS = 300;
 export default function CalculadoraIndex({
     inputs,
     result,
+    evaluation,
     hourlyCostMicros,
     usingFallbackRate,
     printers,
@@ -92,6 +98,7 @@ export default function CalculadoraIndex({
                     only: [
                         'inputs',
                         'result',
+                        'evaluation',
                         'hourlyCostMicros',
                         'usingFallbackRate',
                     ],
@@ -460,42 +467,109 @@ export default function CalculadoraIndex({
                                 lá estava perde-se com ela.
                             </p>
 
-                            <fieldset className="grid gap-3 border-t border-border/60 pt-4">
-                                <legend className="mb-1 text-sm font-medium">
-                                    Orçamento
-                                </legend>
+                            <div className="grid gap-3 border-t border-border/60 pt-4">
+                                {/*
+                                 * Desligado por omissão: uma peça de catálogo
+                                 * não é um orçamento. Com ele ligado, o lucro
+                                 * mínimo por trabalho e o mínimo de mão de obra
+                                 * podiam multiplicar o preço de uma peça
+                                 * pequena — e era isso que acontecia sempre.
+                                 */}
+                                <div className="flex items-start gap-3">
+                                    <Checkbox
+                                        id="quote"
+                                        className="mt-0.5"
+                                        checked={fields.quote}
+                                        onCheckedChange={(checked) =>
+                                            patch({ quote: checked === true })
+                                        }
+                                    />
+                                    <div className="grid gap-1">
+                                        <Label htmlFor="quote">
+                                            Trabalho por encomenda (orçamento)
+                                        </Label>
+                                        <p className="text-xs text-muted-foreground">
+                                            {fields.quote
+                                                ? 'Entram o lucro mínimo por trabalho, o mínimo de mão de obra, as placas, as trocas de cor e o design.'
+                                                : 'Desligado é uma peça de catálogo: a mesma conta das variantes, sem lucro mínimo por trabalho.'}
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {fields.quote && (
+                                    <>
+                                        <div className="grid grid-cols-3 gap-3">
+                                            <NumberField
+                                                id="plates"
+                                                label="Placas"
+                                                min={1}
+                                                value={fields.plates}
+                                                onChange={(value) =>
+                                                    patch({
+                                                        plates: Math.max(
+                                                            1,
+                                                            value || 1,
+                                                        ),
+                                                    })
+                                                }
+                                            />
+                                            <NumberField
+                                                id="manual_color_changes"
+                                                label="Trocas de cor"
+                                                min={0}
+                                                value={
+                                                    fields.manual_color_changes
+                                                }
+                                                onChange={(value) =>
+                                                    patch({
+                                                        manual_color_changes:
+                                                            value,
+                                                    })
+                                                }
+                                            />
+                                            <NumberField
+                                                id="design_minutes"
+                                                label="Design (min)"
+                                                min={0}
+                                                value={fields.design_minutes}
+                                                onChange={(value) =>
+                                                    patch({
+                                                        design_minutes: value,
+                                                    })
+                                                }
+                                            />
+                                        </div>
+                                        <p className="text-xs text-muted-foreground">
+                                            Cada placa a mais e cada troca
+                                            manual de cor somam minutos de
+                                            trabalho, por cima do mínimo de um
+                                            orçamento. O design cobra-se uma vez
+                                            e só no Premium.
+                                        </p>
+                                    </>
+                                )}
+                            </div>
+
+                            <div className="grid gap-3 border-t border-border/60 pt-4">
                                 <div className="grid grid-cols-2 gap-3">
-                                    <NumberField
-                                        id="plates"
-                                        label="Placas"
-                                        min={1}
-                                        value={fields.plates}
-                                        onChange={(value) =>
-                                            patch({
-                                                plates: Math.max(1, value || 1),
-                                            })
-                                        }
-                                    />
-                                    <NumberField
-                                        id="manual_color_changes"
-                                        label="Trocas de cor"
-                                        min={0}
-                                        value={fields.manual_color_changes}
-                                        onChange={(value) =>
-                                            patch({
-                                                manual_color_changes: value,
-                                            })
-                                        }
-                                    />
-                                    <NumberField
-                                        id="design_minutes"
-                                        label="Design (min)"
-                                        min={0}
-                                        value={fields.design_minutes}
-                                        onChange={(value) =>
-                                            patch({ design_minutes: value })
-                                        }
-                                    />
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="price">
+                                            Avaliar um preço (€)
+                                        </Label>
+                                        <Input
+                                            id="price"
+                                            type="number"
+                                            step="0.01"
+                                            min={0}
+                                            placeholder="opcional"
+                                            value={fields.price}
+                                            onChange={(event) =>
+                                                patch({
+                                                    price: event.target.value,
+                                                })
+                                            }
+                                        />
+                                    </div>
                                     <div className="grid gap-2">
                                         <Label htmlFor="reference_filament_cost">
                                             Filamento no slicer (€)
@@ -519,14 +593,14 @@ export default function CalculadoraIndex({
                                     </div>
                                 </div>
                                 <p className="text-xs text-muted-foreground">
-                                    Cada placa a mais e cada troca manual de cor
-                                    somam minutos de trabalho, por cima do
-                                    mínimo de um orçamento. O design cobra-se
-                                    uma vez e só no Premium. O filamento do
-                                    slicer (com IVA, como o Bambu Studio o
-                                    mostra) serve só para comparar.
+                                    O preço a avaliar (com IVA) mostra o lucro,
+                                    a margem e o lucro por hora que deixa, e
+                                    onde cai face aos três níveis — não muda
+                                    nenhum. O filamento do slicer (com IVA, como
+                                    o Bambu Studio o mostra) serve só para
+                                    comparar.
                                 </p>
-                            </fieldset>
+                            </div>
                         </div>
                     </Panel>
 
@@ -540,6 +614,16 @@ export default function CalculadoraIndex({
                             printerName={printer?.name ?? null}
                             usingFallbackRate={usingFallbackRate}
                             emptyHint="Escolhe o filamento e preenche o peso e o tempo de impressão para ver o preço."
+                            afterTiers={
+                                result !== null &&
+                                evaluation !== null && (
+                                    <PriceEvaluationCard
+                                        evaluation={evaluation}
+                                        hasVat={result.vatRateBp > 0}
+                                        showJob={result.quantity > 1}
+                                    />
+                                )
+                            }
                         />
 
                         {/*
@@ -550,7 +634,7 @@ export default function CalculadoraIndex({
                         <p role="status" className="sr-only">
                             {result === null
                                 ? 'Sem cálculo: falta o filamento, o peso ou o tempo.'
-                                : `Custo ${formatCents(result.productionCostCents)}. Mínimo ${formatCents(result.tiers.minimum.priceCents)}, recomendado ${formatCents(result.tiers.recommended.priceCents)}, premium ${formatCents(result.tiers.premium.priceCents)}. Revenda ${formatCents(result.wholesalePriceCents)}.`}
+                                : `Custo ${formatCents(result.productionCostCents)}. Mínimo ${formatCents(result.tiers.minimum.priceCents)}, recomendado ${formatCents(result.tiers.recommended.priceCents)}, premium ${formatCents(result.tiers.premium.priceCents)}. Revenda ${formatCents(result.wholesalePriceCents)}.${evaluation === null ? '' : ` O teu preço deixa ${formatCents(evaluation.profitCents)} de lucro, ${formatCents(evaluation.profitPerPrintHourCents)} por hora de impressora.`}`}
                         </p>
                     </div>
                 </div>

@@ -33,7 +33,7 @@ use Laravel\Mcp\Server\Tools\Annotations\IsReadOnly;
  */
 #[Name('pricing_calculate')]
 #[Title('Calculadora de preços')]
-#[Description('Orçamento de uma peça QUALQUER, sem precisar de variante nem de produto — a calculadora livre do backoffice. Dás o filamento, o peso e o tempo de impressão (e, se houver, placas, trocas manuais de cor e minutos de design); devolve o custo de produção parcela a parcela (com a mão de obra discriminada), três preços sugeridos em suggested.tiers (minimum, recommended, premium) com o lucro, a margem, o lucro por hora de impressora e a regra que decidiu cada um (margin, per_hour ou min_job), e avisos. suggested.retail_price e suggested.wholesale_price são os do Recomendado. Os preços vêm com IVA incluído (à taxa normal da loja) e terminam em ,49 ou ,99; os custos, lucros e margens são sem IVA. Tudo por unidade, com os totais do trabalho à parte. Não grava nada. Para uma variante que já existe, usa pricing_preview.')]
+#[Description('Preço de uma peça QUALQUER, sem precisar de variante nem de produto — a calculadora livre do backoffice. Por omissão é uma peça de catálogo (a mesma conta das variantes); com quote=true é um trabalho por encomenda (orçamento) e entram o lucro mínimo por trabalho, o mínimo de mão de obra, as placas, as trocas manuais de cor e os minutos de design. Dás o filamento, o peso e o tempo de impressão; com price (um preço com IVA que estejas a pensar usar) devolve também evaluation: lucro, margem, lucro por hora de impressora e onde cai face aos três níveis, com um aviso só informativo se ficar abaixo do Mínimo. Devolve o custo de produção parcela a parcela (com a mão de obra discriminada), três preços sugeridos em suggested.tiers (minimum, recommended, premium) com o lucro, a margem, o lucro por hora de impressora e a regra que decidiu cada um (margin, per_hour ou min_job), e avisos. suggested.retail_price e suggested.wholesale_price são os do Recomendado. Os preços vêm com IVA incluído (à taxa normal da loja) e terminam em ,49 ou ,99; os custos, lucros e margens são sem IVA. Tudo por unidade, com os totais do trabalho à parte. Não grava nada. Para uma variante que já existe, usa pricing_preview.')]
 #[IsReadOnly]
 #[IsIdempotent]
 class PricingCalculateTool extends StudioTool
@@ -66,12 +66,16 @@ class PricingCalculateTool extends StudioTool
                 ->description('Custo de embalagem por peça em euros, ex. "0,35".'),
             'components_cost' => $schema->string()
                 ->description('Custo de componentes por peça (ímanes, argolas…) em euros.'),
+            'quote' => $schema->boolean()
+                ->description('Trabalho por encomenda (orçamento)? Por omissão false: peça de catálogo. Só com true entram o lucro mínimo por trabalho, o mínimo de mão de obra, as placas, as trocas de cor e o design.'),
+            'price' => $schema->string()
+                ->description('Opcional: um preço com IVA a avaliar, ex. "4,99". Devolve evaluation (lucro, margem, lucro por hora, posição face aos níveis). Não muda os níveis sugeridos.'),
             'plates' => $schema->integer()->min(1)->max(100)
-                ->description('Placas de impressão (de uma peça em per_unit, da mesa em batch). Por omissão 1. Cada placa a mais soma minutos de trabalho.'),
+                ->description('Só com quote=true. Placas de impressão (de uma peça em per_unit, da mesa em batch). Por omissão 1. Cada placa a mais soma minutos de trabalho.'),
             'manual_color_changes' => $schema->integer()->min(0)->max(100)
-                ->description('Trocas manuais de filamento, no mesmo âmbito das placas. Por omissão 0. Cada troca soma minutos de trabalho.'),
+                ->description('Só com quote=true. Trocas manuais de filamento, no mesmo âmbito das placas. Por omissão 0. Cada troca soma minutos de trabalho.'),
             'design_minutes' => $schema->integer()->min(0)->max(6000)
-                ->description('Minutos de design (modelação) do trabalho todo. Cobra-se uma vez e só no preço Premium; divide-se pela quantidade.'),
+                ->description('Só com quote=true. Minutos de design (modelação) do trabalho todo. Cobra-se uma vez e só no preço Premium; divide-se pela quantidade.'),
             'reference_filament_cost' => $schema->string()
                 ->description('Custo do filamento que o slicer mostra (ex. Bambu Studio), em euros com IVA, para o mesmo peso. Avisa se diferir mais de 15% do calculado.'),
         ];
@@ -91,22 +95,36 @@ class PricingCalculateTool extends StudioTool
             return Response::error('Falta o filamento: indica material_id (ver materials_list). Sem ele o plástico saía de graça.');
         }
 
-        // Um orcamento: placas, trocas de cor, minimo de trabalho e lucro
-        // minimo por trabalho entram todos. A mesma conta da pagina.
-        $simulation = $this->pricing->simulate($input, null, quote: true);
+        // So e orcamento com quote=true. A mesma conta da pagina.
+        $quote = $input->isQuote();
+        $simulation = $this->pricing->simulate($input, null, quote: $quote);
         $result = $simulation['result'];
 
         if ($result === null) {
             return Response::error('Falta o peso (weight_grams) ou o tempo de impressão (hours e/ou minutes) — sem os dois não há cálculo.');
         }
 
-        PricingLog::calculated('mcp.pricing_calculate', $material->id, $input->weightGrams(), $result);
+        $price = $input->priceCents();
+
+        PricingLog::calculated('mcp.pricing_calculate', $material->id, $input->weightGrams(), $result, $price);
+
+        $warnings = PricingPresenter::warnings($result);
+
+        // Pedidos de orcamento sem quote=true: nao entram, e o Claude tem de o
+        // saber para nao apresentar um preco de catalogo como orcamento.
+        if (! $quote && ($input->plates() > 1 || $input->manualColorChanges() > 0 || $input->designMinutes() > 0)) {
+            $warnings[] = [
+                'code' => 'quote_inputs_ignored',
+                'message' => 'Placas, trocas de cor e design só contam num orçamento: foram ignorados. Repete com quote=true se for um trabalho por encomenda.',
+            ];
+        }
 
         $printer = $simulation['printer'];
         $asked = $input->printerProfileId();
 
         return Response::structured([
             'inputs' => [
+                'quote' => $result->quote,
                 'mode' => $result->mode,
                 'quantity' => $result->quantity,
                 'material' => [
@@ -138,7 +156,8 @@ class PricingCalculateTool extends StudioTool
             'profit' => PricingPresenter::profits($result),
             'margins_percent' => PricingPresenter::margins($result),
             'job' => PricingPresenter::job($result),
-            'warnings' => PricingPresenter::warnings($result),
+            'evaluation' => $price === null ? null : PricingPresenter::evaluation($result->evaluate($price)),
+            'warnings' => $warnings,
         ]);
     }
 }
