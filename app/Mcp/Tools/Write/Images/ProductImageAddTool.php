@@ -2,10 +2,8 @@
 
 namespace App\Mcp\Tools\Write\Images;
 
-use App\Images\ImageRefused;
 use App\Images\IncomingImage;
 use App\Images\RemoteImageFetcher;
-use App\Mcp\Presenters\CatalogPresenter;
 use App\Mcp\Tools\Write\Concerns\HandlesProductImages;
 use App\Mcp\Tools\WriteTool;
 use App\Models\Product;
@@ -23,7 +21,7 @@ use Laravel\Mcp\Server\Tools\Annotations\IsDestructive;
 
 #[Name('product_image_add')]
 #[Title('Adicionar fotografia')]
-#[Description('Adiciona uma fotografia a um produto, a partir de image_url (https público) OU de image_base64 — um e só um. Para fotos a sério usa o URL: o base64 tem de seguir inteiro na chamada, e só dá para imagens pequenas. Aceita JPG, PNG e WEBP, com pelo menos 600 px no lado menor. A primeira fotografia de um produto fica logo como principal. As versões reduzidas para a loja são feitas a seguir, em segundo plano. Não envia nada para a Etsy (isso é o etsy_listing_push).')]
+#[Description('Adiciona uma fotografia a um produto, a partir de image_url (https público) OU de image_base64 — um e só um. Para fotos a sério usa o URL; sem URL, envia-as às fatias com product_image_upload_start/_chunk/_finish (o image_base64 tem de seguir inteiro numa só chamada e só serve para imagens pequenas, até umas dezenas de KB). Aceita JPG, PNG e WEBP, com pelo menos 600 px no lado menor. A primeira fotografia de um produto fica logo como principal. As versões reduzidas para a loja são feitas a seguir, em segundo plano. Não envia nada para a Etsy (isso é o etsy_listing_push).')]
 #[IsDestructive(false)]
 class ProductImageAddTool extends WriteTool
 {
@@ -39,7 +37,7 @@ class ProductImageAddTool extends WriteTool
         return [
             'product_id' => $schema->integer()->required()->description('Id do produto.'),
             'image_url' => $schema->string()->description('Endereço https público da imagem. Em alternativa a image_base64.'),
-            'image_base64' => $schema->string()->description('A imagem em base64, com ou sem o prefixo data:image/...;base64, . Em alternativa a image_url.'),
+            'image_base64' => $schema->string()->description('A imagem em base64, com ou sem o prefixo data:image/...;base64, . Em alternativa a image_url. Só para imagens pequenas: as maiores vão às fatias (product_image_upload_start).'),
             'filename' => $schema->string()->max(255)->description('Nome original, só para o registo: no disco o nome é gerado.'),
             'alt' => $schema->string()->max(150)->description('Texto alternativo. Sem ele, usa-se o nome do produto.'),
             'variant_id' => $schema->integer()->description('Variante deste produto a que a fotografia pertence. Na loja, só aparece com essa variante escolhida.'),
@@ -83,60 +81,14 @@ class ProductImageAddTool extends WriteTool
             return Response::error('Produto não encontrado.');
         }
 
-        return $this->logged($context, function () use ($data, $url, $base64, $product, $context): ResponseFactory {
-            $this->assertOpen($product);
-
-            if ($context['variant_id'] !== null && ! $this->ownsVariant($product, (int) $context['variant_id'])) {
-                throw new ImageRefused('variante_invalida', 'Essa variante não é deste produto.');
-            }
-
-            $incoming = $url !== ''
+        return $this->logged($context, fn (): ResponseFactory => $this->addIncoming(
+            $this->images,
+            $product,
+            fn (): IncomingImage => $url !== ''
                 ? IncomingImage::fromFile($this->fetcher->fetch($url))
-                : IncomingImage::fromBase64($base64);
-
-            try {
-                // O download pode ter levado 15 segundos: o produto pode ja la nao estar.
-                $this->assertOpen($product->refresh());
-
-                $image = $this->images->add(
-                    $product,
-                    $incoming->uploadedFile(),
-                    alt: ($data['alt'] ?? null) ?: Str::limit($product->name, 150, ''),
-                    variantId: $context['variant_id'],
-                    primary: isset($data['is_primary']) ? (bool) $data['is_primary'] : null,
-                    position: $data['position'] ?? null,
-                );
-            } finally {
-                $incoming->discard();
-            }
-
-            $this->logDone(['image_id' => $image->id, ...$context, ...$incoming->context()]);
-
-            $this->changes = [
-                'product_id' => $product->id,
-                'image_id' => $image->id,
-                'after' => ['is_primary' => $image->is_primary, 'position' => $image->sort_order],
-            ];
-
-            return Response::structured([
-                'message' => 'Fotografia adicionada.',
-                'image' => CatalogPresenter::image($image),
-                'images' => $this->gallery($product),
-            ]);
-        });
-    }
-
-    /**
-     * @throws ImageRefused
-     */
-    private function assertOpen(Product $product): void
-    {
-        if ($product->trashed()) {
-            throw new ImageRefused('produto_apagado', self::$productDeleted);
-        }
-
-        if ($product->status === 'archived') {
-            throw new ImageRefused('produto_arquivado', 'Este produto está arquivado: restaura-o primeiro com product_restore.');
-        }
+                : IncomingImage::fromBase64($base64),
+            $data,
+            $context,
+        ));
     }
 }
