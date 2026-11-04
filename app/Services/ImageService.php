@@ -7,9 +7,11 @@ use App\Jobs\GenerateImageVariants;
 use App\Models\Product;
 use App\Models\ProductImage;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Storage;
 use RuntimeException;
+use Throwable;
 
 class ImageService
 {
@@ -90,6 +92,93 @@ class ImageService
         }
 
         return $images;
+    }
+
+    /**
+     * Uma imagem com tudo definido de uma vez (o MCP; a galeria carrega primeiro
+     * e acerta depois). A primeira de um produto fica principal seja o que for
+     * que se peca, pela mesma razao do attach().
+     *
+     * Se a linha falhar, o ficheiro nao fica no disco sem dono.
+     */
+    public function add(
+        Product $product,
+        UploadedFile $file,
+        ?string $alt = null,
+        ?int $variantId = null,
+        ?bool $primary = null,
+        ?int $position = null,
+    ): ProductImage {
+        [$path] = $this->put([$file]);
+
+        try {
+            $image = DB::transaction(function () use ($product, $path, $alt, $variantId, $primary, $position): ProductImage {
+                $makePrimary = $primary === true || ! $product->images()->exists();
+
+                if ($makePrimary) {
+                    $product->images()->where('is_primary', true)->update(['is_primary' => false]);
+                }
+
+                $image = $product->images()->create([
+                    'path' => $path,
+                    'alt' => $alt,
+                    'variant_id' => $variantId,
+                    'sort_order' => (int) $product->images()->max('sort_order') + 1,
+                    'is_primary' => $makePrimary,
+                ]);
+
+                if ($position !== null) {
+                    $this->moveTo($product, $image, $position);
+                }
+
+                return $image;
+            });
+        } catch (Throwable $exception) {
+            Storage::disk('public')->delete($path);
+
+            throw $exception;
+        }
+
+        dispatch(GenerateImageVariants::for($image))->afterCommit();
+
+        return $image->refresh();
+    }
+
+    /**
+     * Muda o que ja existe numa so transacao, com as mesmas regras da principal.
+     *
+     * @param  array{alt?: string|null, variant_id?: int|null, is_primary?: bool, position?: int}  $changes
+     */
+    public function change(Product $product, ProductImage $image, array $changes): void
+    {
+        DB::transaction(function () use ($product, $image, $changes): void {
+            $fields = Arr::only($changes, ['alt', 'variant_id']);
+
+            if ($fields !== []) {
+                $image->update($fields);
+            }
+
+            if (($changes['is_primary'] ?? false) === true) {
+                $this->setPrimary($image);
+            }
+
+            if (isset($changes['position'])) {
+                $this->moveTo($product, $image, $changes['position']);
+            }
+        });
+    }
+
+    /**
+     * Poe a imagem na posicao indicada (a contar de 1; para la do fim fica no
+     * fim) e renumera a galeria.
+     */
+    private function moveTo(Product $product, ProductImage $image, int $position): void
+    {
+        $others = $product->images()->whereKeyNot($image->getKey())->orderBy('id')->pluck('id')->all();
+
+        array_splice($others, max(0, min($position - 1, count($others))), 0, [$image->getKey()]);
+
+        $this->reorder($product, $others);
     }
 
     /**

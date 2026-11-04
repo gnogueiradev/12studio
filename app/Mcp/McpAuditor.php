@@ -22,7 +22,11 @@ use Throwable;
 class McpAuditor
 {
     /** Chaves que nunca chegam a BD. */
-    private const SECRET_KEYS = ['password', 'password_confirmation', 'token', 'secret', 'api_key'];
+    // Os bytes de uma fotografia nao sao um segredo, mas tambem nao sao rasto.
+    private const SECRET_KEYS = ['password', 'password_confirmation', 'token', 'secret', 'api_key', 'image_base64'];
+
+    /** URLs de que so fica o servidor: a query string pode trazer um token. */
+    private const HOST_ONLY_KEYS = ['image_url'];
 
     /** Chaves com dados pessoais: ficam mascaradas. */
     // O seguimento conta: com o numero, o site da transportadora mostra para
@@ -89,6 +93,7 @@ class McpAuditor
             $clean[$key] = match (true) {
                 is_array($value) => $this->sanitize($value),
                 in_array($name, self::PERSONAL_KEYS, true) => $this->mask($value),
+                in_array($name, self::HOST_ONLY_KEYS, true) => is_string($value) ? parse_url($value, PHP_URL_HOST) : null,
                 is_string($value) => Str::limit($value, self::MAX_STRING),
                 default => $value,
             };

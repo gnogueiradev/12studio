@@ -17,6 +17,23 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Imagens de produto (12studio)
+    |--------------------------------------------------------------------------
+    |
+    | Limites do product_image_add. Nao sao os da galeria do backoffice (5 MB,
+    | sem minimo de dimensoes): esses vivem no StoreProductImageRequest. Os
+    | megapixeis travam imagens que pesam pouco e descomprimem para muito.
+    |
+    */
+
+    'images' => [
+        'max_bytes' => (int) env('MCP_IMAGE_MAX_BYTES', 8 * 1024 * 1024),
+        'min_side' => (int) env('MCP_IMAGE_MIN_SIDE', 600),
+        'max_megapixels' => (float) env('MCP_IMAGE_MAX_MEGAPIXELS', 50),
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Redirect Domains
     |--------------------------------------------------------------------------
     |

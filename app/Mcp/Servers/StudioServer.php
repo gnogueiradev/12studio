@@ -61,6 +61,10 @@ use App\Mcp\Tools\Write\Catalog\ColorUpdateTool;
 use App\Mcp\Tools\Write\Catalog\MaterialCreateTool;
 use App\Mcp\Tools\Write\Catalog\MaterialUpdateTool;
 use App\Mcp\Tools\Write\Catalog\TagCreateTool;
+use App\Mcp\Tools\Write\Images\ProductImageAddTool;
+use App\Mcp\Tools\Write\Images\ProductImageDeleteTool;
+use App\Mcp\Tools\Write\Images\ProductImagesReorderTool;
+use App\Mcp\Tools\Write\Images\ProductImageUpdateTool;
 use App\Mcp\Tools\Write\Orders\OrderCreateManualTool;
 use App\Mcp\Tools\Write\Orders\OrderItemSetProductionStatusTool;
 use App\Mcp\Tools\Write\Orders\OrderSetPaymentStatusTool;
@@ -104,6 +108,7 @@ Convenções:
 - Preços em euros, com IVA incluído. Envia-os como texto ("12,50" ou "12.50"); as respostas trazem também o valor em cêntimos.
 - Nada se apaga de vez: produtos, variantes, cores e materiais arquivam-se e restauram-se. Um produto também se pode apagar (product_delete): sai das listas mas fica guardado, e recupera-se com product_restore.
 - Um produto tem estados draft (rascunho), active (à venda) e archived.
+- As fotografias são a exceção: product_image_delete apaga mesmo, depois de confirmar. Para adicionar fotos a sério usa image_url (https público); o image_base64 só dá para imagens pequenas.
 
 Etsy:
 - As ferramentas etsy_* falam com a loja da Etsy ligada ao 12studio. Se uma recusar, começa por etsy_status: diz se a loja está ligada e o que falta. Ligar a loja faz-se no backoffice (Definições → Etsy), não por aqui.
@@ -185,6 +190,10 @@ TXT;
         ProductArchiveTool::class,
         ProductRestoreTool::class,
         ProductDeleteTool::class,
+        ProductImageAddTool::class,
+        ProductImageUpdateTool::class,
+        ProductImageDeleteTool::class,
+        ProductImagesReorderTool::class,
         VariantCreateTool::class,
         VariantUpdateTool::class,
         VariantSetDefaultTool::class,
