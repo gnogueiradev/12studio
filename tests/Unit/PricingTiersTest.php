@@ -6,6 +6,7 @@ use App\Services\PricingCalculator;
 use App\Services\PricingSettings;
 use App\Services\SettingService;
 use App\Support\Micros;
+use App\Support\PriceEvaluation;
 use App\Support\PriceTier;
 use App\Support\PriceTiers;
 use App\Support\PricingInput;
@@ -216,6 +217,115 @@ class PricingTiersTest extends TestCase
 
         $this->assertSame($plain->productionCostMicros, $catalog->productionCostMicros);
         $this->assertSame(5, $catalog->laborMinutes);
+    }
+
+    /**
+     * A peca de producao que revelou o bug: PLA Mate, 30 g, 2h20. Como
+     * orcamento dava 7,99 / 11,99 / 14,49, todos pelo lucro minimo do
+     * trabalho — muito acima dos 4-5 EUR da Etsy.
+     */
+    private function smallCatalogPart(bool $quote = false): PricingResult
+    {
+        return $this->part(grams: 30, minutes: 140, quote: $quote);
+    }
+
+    public function test_a_small_part_without_quote_ignores_the_job_minimum(): void
+    {
+        $result = $this->smallCatalogPart();
+
+        foreach ($result->tiers->all() as $name => $tier) {
+            $this->assertNotSame(PriceTier::RULE_MIN_JOB, $tier->rule, $name);
+            $this->assertNull($tier->candidatesExVatMicros['min_job'], $name);
+        }
+
+        $this->assertFalse($result->quote);
+        $this->assertSame(['base' => 5, 'quote_minimum' => 0, 'plates' => 0, 'color_changes' => 0], $result->laborBreakdownMinutes);
+        $this->assertSame(5, $result->laborMinutes);
+        $this->assertSame(5_490_000, $result->tiers->minimum->priceMicros, 'Minimo: '.self::euros($result->tiers->minimum->priceMicros));
+    }
+
+    public function test_the_same_small_part_as_a_quote_keeps_todays_prices(): void
+    {
+        $tiers = $this->smallCatalogPart(quote: true)->tiers;
+
+        $this->assertSame(7_990_000, $tiers->minimum->priceMicros);
+        $this->assertSame(11_990_000, $tiers->recommended->priceMicros);
+        $this->assertSame(14_490_000, $tiers->premium->priceMicros);
+
+        foreach ($tiers->all() as $name => $tier) {
+            $this->assertSame(PriceTier::RULE_MIN_JOB, $tier->rule, $name);
+        }
+    }
+
+    public function test_design_minutes_only_count_in_a_quote(): void
+    {
+        $catalog = $this->part(grams: 30, minutes: 140, designMinutes: 60);
+        $plain = $this->smallCatalogPart();
+
+        $this->assertSame(0, $catalog->designMinutes);
+        $this->assertSame(0, $catalog->tiers->premium->designCostMicros);
+        $this->assertSame($plain->tiers->premium->priceMicros, $catalog->tiers->premium->priceMicros);
+
+        // 60 min a 15 EUR/h, so no Premium do orcamento.
+        $quote = $this->part(grams: 30, minutes: 140, quote: true, designMinutes: 60);
+        $this->assertSame(15_000_000, $quote->tiers->premium->designCostMicros);
+    }
+
+    public function test_a_chosen_price_below_the_minimum_is_evaluated_not_blocked(): void
+    {
+        $evaluation = $this->smallCatalogPart()->evaluate(499);
+
+        // 4,99 / 1,23 = 4,06 sem IVA; menos ~0,94 de custo = 3,12 (a conta a
+        // mao do pedido dizia "~3,10" e "~1,33/h").
+        $this->assertSame(4_056_911, $evaluation->priceExVatMicros);
+        $this->assertSame(312, PriceEvaluation::cents($evaluation->profitMicros()));
+        // 3,12 em 2h20 de impressora.
+        $this->assertSame(134, PriceEvaluation::cents($evaluation->profitPerPrintHourMicros()));
+        $this->assertSame(PriceEvaluation::BELOW_MINIMUM, $evaluation->position);
+        $this->assertTrue($evaluation->isBelowMinimum());
+        $this->assertNull($evaluation->matchesTier);
+        $this->assertSame('price_below_minimum', $evaluation->warnings()[0]['code']);
+        $this->assertStringContainsString('abaixo do Mínimo', $evaluation->warnings()[0]['message']);
+    }
+
+    public function test_a_chosen_price_is_placed_among_the_tiers(): void
+    {
+        $result = $this->smallCatalogPart();
+        $cents = fn (string $name): int => Micros::toCents($result->tiers->get($name)->priceMicros);
+
+        $this->assertSame(PriceEvaluation::MINIMUM_TO_RECOMMENDED, $result->evaluate($cents('minimum'))->position);
+        $this->assertSame(PriceTier::MINIMUM, $result->evaluate($cents('minimum'))->matchesTier);
+        $this->assertSame(PriceEvaluation::RECOMMENDED_TO_PREMIUM, $result->evaluate($cents('recommended'))->position);
+        $this->assertSame(PriceEvaluation::RECOMMENDED_TO_PREMIUM, $result->evaluate($cents('premium'))->position);
+        $this->assertSame(PriceEvaluation::ABOVE_PREMIUM, $result->evaluate($cents('premium') + 1)->position);
+        $this->assertSame([], $result->evaluate($cents('recommended'))->warnings());
+
+        // Num nivel, a avaliacao diz o mesmo que o cartao do nivel.
+        $minimum = $result->tiers->minimum;
+        $this->assertSame($minimum->profitMicros(), $result->evaluate($cents('minimum'))->profitMicros());
+        $this->assertSame($minimum->profitPerPrintHourMicros(), $result->evaluate($cents('minimum'))->profitPerPrintHourMicros());
+    }
+
+    public function test_a_price_below_cost_gives_a_negative_profit_rounded_like_a_positive_one(): void
+    {
+        $evaluation = $this->smallCatalogPart()->evaluate(49);
+
+        $this->assertLessThan(0, $evaluation->profitMicros());
+        $this->assertSame(-PriceEvaluation::cents(-$evaluation->profitMicros()), PriceEvaluation::cents($evaluation->profitMicros()));
+        $this->assertLessThan(0, $evaluation->marginBp());
+    }
+
+    public function test_in_a_batch_the_profit_per_hour_is_per_piece(): void
+    {
+        // Uma mesa de 4 pecas: 120 g e 6h40 no total -> 100 min de impressora
+        // por peca.
+        $result = $this->part(grams: 120, minutes: 400, quantity: 4, mode: PricingInput::MODE_BATCH);
+        $evaluation = $result->evaluate(799);
+
+        $this->assertSame(100_000, $evaluation->printMilliMinutes);
+        $this->assertSame(Micros::divRoundSigned($evaluation->profitMicros() * 60, 100), $evaluation->profitPerPrintHourMicros());
+        $this->assertSame(4, $evaluation->quantity);
+        $this->assertSame(PriceEvaluation::cents($evaluation->profitMicros() * 4), $evaluation->toArray()['jobProfitCents']);
     }
 
     public function test_wholesale_is_half_the_recommended_but_never_below_the_cost_floor(): void

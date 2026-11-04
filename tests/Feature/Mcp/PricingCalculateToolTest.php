@@ -78,10 +78,10 @@ class PricingCalculateToolTest extends TestCase
     }
 
     /**
-     * A calculadora livre e um ORCAMENTO e a variante nao: os precos podem
-     * diferir (o lucro minimo do trabalho so entra no orcamento). O que tem de
-     * continuar igual e o CUSTO — com trabalho ativo acima do minimo de um
-     * orcamento (20 min) e sem placas nem trocas de cor, e a mesma conta.
+     * Sem quote, a calculadora livre e uma peca de catalogo: a MESMA conta da
+     * variante, precos incluidos. Com quote=true e um orcamento: o custo e o
+     * mesmo (trabalho ativo acima do minimo de 20 min, sem placas nem trocas),
+     * mas os precos podem subir pelo lucro minimo do trabalho.
      */
     public function test_it_costs_the_same_as_the_variant_preview(): void
     {
@@ -100,15 +100,22 @@ class PricingCalculateToolTest extends TestCase
         ]);
 
         $saved = $this->structured($this->server()->tool(PricingPreviewTool::class, ['variant_id' => $variant->id]));
-        $free = $this->structured($this->server()->tool(PricingCalculateTool::class, $this->piece([
+        $same = [
             'weight_grams' => 80,
             'hours' => 1,
             'minutes' => 35,
             'packaging_cost' => '0,35',
             'components_cost' => '1.20',
             'active_labor_minutes' => 20,
-        ])));
+        ];
+        $catalog = $this->structured($this->server()->tool(PricingCalculateTool::class, $this->piece($same)));
+        $free = $this->structured($this->server()->tool(PricingCalculateTool::class, $this->piece([...$same, 'quote' => true])));
 
+        $this->assertFalse($catalog['inputs']['quote']);
+        $this->assertSame($saved['costs'], $catalog['costs']);
+        $this->assertSame($saved['suggested'], $catalog['suggested']);
+
+        $this->assertTrue($free['inputs']['quote']);
         $this->assertSame($saved['costs'], $free['costs']);
         $this->assertSame($saved['labor']['minutes'], $free['labor']['minutes']);
 
@@ -129,6 +136,7 @@ class PricingCalculateToolTest extends TestCase
     public function test_the_quote_inputs_reach_the_labor(): void
     {
         $response = $this->structured($this->server()->tool(PricingCalculateTool::class, $this->piece([
+            'quote' => true,
             'plates' => 3,
             'manual_color_changes' => 2,
             'design_minutes' => 30,
@@ -149,6 +157,74 @@ class PricingCalculateToolTest extends TestCase
         $this->assertSame(750, $response['labor']['design_cost_per_unit']['cents']);
         $this->assertSame(750, $response['suggested']['tiers']['premium']['design_cost']['cents']);
         $this->assertSame(0, $response['suggested']['tiers']['recommended']['design_cost']['cents']);
+    }
+
+    public function test_without_quote_the_quote_inputs_are_ignored_and_it_says_so(): void
+    {
+        $response = $this->structured($this->server()->tool(PricingCalculateTool::class, $this->piece([
+            'plates' => 3,
+            'manual_color_changes' => 2,
+            'design_minutes' => 30,
+        ])));
+
+        $this->assertFalse($response['inputs']['quote']);
+        $this->assertSame(1, $response['inputs']['plates']);
+        $this->assertSame(0, $response['inputs']['manual_color_changes']);
+        $this->assertSame(0, $response['inputs']['design_minutes']);
+        $this->assertSame(
+            ['base' => 5, 'quote_minimum' => 0, 'plates' => 0, 'color_changes' => 0, 'total' => 5],
+            $response['labor']['minutes'],
+        );
+        $this->assertSame(0, $response['suggested']['tiers']['premium']['design_cost']['cents']);
+        $this->assertSame(['quote_inputs_ignored'], array_column($response['warnings'], 'code'));
+
+        foreach ($response['suggested']['tiers'] as $tier) {
+            $this->assertNotSame('min_job', $tier['rule']);
+        }
+    }
+
+    public function test_a_chosen_price_comes_back_evaluated(): void
+    {
+        $pla = Material::factory()->create(['name' => 'PLA Mate', 'price_per_kg_cents' => 1_699]);
+        app(SettingService::class)->set(PricingSettings::KEY_LABOR_RATE_MICROS_PER_HOUR, 2_000_000);
+
+        $response = $this->structured($this->server()->tool(PricingCalculateTool::class, [
+            'material_id' => $pla->id,
+            'weight_grams' => 30,
+            'hours' => 2,
+            'minutes' => 20,
+            'price' => '4,99',
+        ]));
+        $evaluation = $response['evaluation'];
+
+        $this->assertSame(499, $evaluation['price']['cents']);
+        $this->assertSame('4,99 €', $evaluation['price']['eur']);
+        $this->assertEqualsWithDelta(310, $evaluation['profit']['cents'], 3, '~3,10');
+        $this->assertEqualsWithDelta(133, $evaluation['profit_per_print_hour']['cents'], 2, '~1,33/h');
+        $this->assertSame('below_minimum', $evaluation['position']);
+        $this->assertTrue($evaluation['below_minimum']);
+        $this->assertSame('price_below_minimum', $evaluation['warnings'][0]['code']);
+        // So informa: os niveis sao os mesmos que sem preco.
+        $this->assertSame(549, $response['suggested']['tiers']['minimum']['price']['cents']);
+
+        $without = $this->structured($this->server()->tool(PricingCalculateTool::class, [
+            'material_id' => $pla->id,
+            'weight_grams' => 30,
+            'hours' => 2,
+            'minutes' => 20,
+        ]));
+        $this->assertNull($without['evaluation']);
+        $this->assertSame($without['suggested'], $response['suggested']);
+    }
+
+    public function test_a_price_that_is_not_a_number_is_refused(): void
+    {
+        $this->server()->tool(PricingCalculateTool::class, $this->piece(['price' => 'barato']))
+            ->assertHasErrors()
+            ->assertSee('Dados inválidos');
+
+        // Zero e "nao avaliar", nao um erro.
+        $this->assertNull($this->structured($this->server()->tool(PricingCalculateTool::class, $this->piece(['price' => '0'])))['evaluation']);
     }
 
     public function test_it_returns_three_tiers_and_keeps_the_old_fields(): void
@@ -187,6 +263,7 @@ class PricingCalculateToolTest extends TestCase
         app(SettingService::class)->set(PricingSettings::TIER_KEYS['recommended']['min_job'], 20_000);
 
         $response = $this->structured($this->server()->tool(PricingCalculateTool::class, $this->piece([
+            'quote' => true,
             'mode' => 'batch',
             'quantity' => 20,
             'weight_grams' => 200,

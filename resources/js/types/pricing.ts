@@ -48,6 +48,14 @@ export type PricingFormFields = {
      */
     material_id: number | null;
     printer_profile_id: number | null;
+    /**
+     * Trabalho por encomenda (orçamento). Desligado é uma peça de catálogo: a
+     * mesma conta das variantes. Só ligado entram o lucro mínimo por trabalho,
+     * o mínimo de mão de obra, as placas, as trocas de cor e o design.
+     */
+    quote: boolean;
+    /** Um preço com IVA a avaliar. Vazio = não avaliar. Não muda os níveis. */
+    price: string;
     /** Placas de impressão: da peça, ou da mesa em lote. */
     plates: number;
     /** Trocas manuais de filamento, no mesmo âmbito das placas. */
@@ -303,4 +311,41 @@ export type PricingSettingsForm = {
     wholesale_share_percent: string;
     wholesale_floor_percent: string;
     filament_reference_tolerance_percent: string;
+};
+
+/** Onde cai um preço escolhido face aos três níveis. */
+export type PriceEvaluationPosition =
+    | 'below_minimum'
+    | 'minimum_to_recommended'
+    | 'recommended_to_premium'
+    | 'above_premium';
+
+export const PRICE_EVALUATION_POSITION_LABELS: Record<
+    PriceEvaluationPosition,
+    string
+> = {
+    below_minimum: 'Abaixo do Mínimo',
+    minimum_to_recommended: 'Entre o Mínimo e o Recomendado',
+    recommended_to_premium: 'Entre o Recomendado e o Premium',
+    above_premium: 'Acima do Premium',
+};
+
+/**
+ * Um preço escolhido à mão, ao lado do cálculo. Só informa: abaixo do Mínimo
+ * aparece um aviso, mas nada fica bloqueado. Por unidade; o lucro pode ser
+ * negativo.
+ */
+export type PriceEvaluation = {
+    priceCents: number;
+    priceExVatCents: number;
+    vatCents: number;
+    costCents: number;
+    profitCents: number;
+    jobProfitCents: number;
+    marginBp: number;
+    profitPerPrintHourCents: number;
+    position: PriceEvaluationPosition;
+    matchesTier: PriceTierName | null;
+    belowMinimum: boolean;
+    warnings: { code: string; message: string }[];
 };

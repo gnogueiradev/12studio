@@ -31,13 +31,16 @@ class PricingCalculatorController extends Controller
 
     public function __invoke(PricingPreviewRequest $request): Response
     {
-        // A calculadora livre e um ORCAMENTO: placas, trocas de cor, minimo de
-        // trabalho e lucro minimo por trabalho entram todos.
-        $simulation = $this->preview->simulate($request, null, quote: true);
+        // So e um ORCAMENTO quando o toggle "Trabalho por encomenda" esta
+        // ligado: ai entram placas, trocas de cor, design, minimo de trabalho e
+        // lucro minimo por trabalho. Desligado e uma peca de catalogo — a mesma
+        // conta das variantes.
+        $simulation = $this->preview->simulate($request, null, quote: $request->isQuote());
         $result = $request->materialId() === null ? null : $simulation['result'];
+        $price = $request->priceCents();
 
         if ($result !== null) {
-            PricingLog::calculated('calculadora', $request->materialId(), $request->weightGrams(), $result);
+            PricingLog::calculated('calculadora', $request->materialId(), $request->weightGrams(), $result, $price);
         }
 
         $preview = [
@@ -64,6 +67,8 @@ class PricingCalculatorController extends Controller
             // exigi-lo la apagava em silencio a sugestao de todas as variantes
             // que ainda nao tem material.
             'result' => $preview['result'],
+            // O preco escolhido face aos niveis. Null sem preco ou sem calculo.
+            'evaluation' => $result === null || $price === null ? null : $result->evaluate($price)->toArray(),
             'hourlyCostMicros' => $preview['hourlyCostMicros'],
             'usingFallbackRate' => $preview['usingFallbackRate'],
             'printers' => PrinterOptions::all($this->settings->electricityPriceMicrosPerKwh()),

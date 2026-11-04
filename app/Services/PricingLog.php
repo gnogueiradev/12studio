@@ -18,8 +18,17 @@ use Illuminate\Support\Facades\Log;
  */
 class PricingLog
 {
-    public static function calculated(string $source, ?int $materialId, int $weightGrams, PricingResult $result): void
-    {
+    /**
+     * `$evaluatedPriceCents` e o preco escolhido a avaliar (com IVA), quando
+     * veio um.
+     */
+    public static function calculated(
+        string $source,
+        ?int $materialId,
+        int $weightGrams,
+        PricingResult $result,
+        ?int $evaluatedPriceCents = null,
+    ): void {
         $tiers = [];
 
         foreach ($result->tiers->all() as $name => $tier) {
@@ -44,6 +53,8 @@ class PricingLog
             'production_cost_cents' => Micros::toCents($result->productionCostMicros),
             'tiers' => $tiers,
             'wholesale_cents' => Micros::toCents($result->wholesalePriceMicros),
+            'evaluated_price_cents' => $evaluatedPriceCents,
+            'evaluated_position' => $evaluatedPriceCents === null ? null : $result->evaluate($evaluatedPriceCents)->position,
         ]);
     }
 

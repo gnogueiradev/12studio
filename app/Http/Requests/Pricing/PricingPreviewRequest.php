@@ -33,12 +33,18 @@ class PricingPreviewRequest extends FormRequest
      */
     protected function prepareForValidation(): void
     {
-        foreach (['packaging_cost', 'components_cost', 'reference_filament_cost'] as $field) {
+        foreach (['packaging_cost', 'components_cost', 'reference_filament_cost', 'price'] as $field) {
             $value = $this->input($field);
 
             if (is_string($value) && $value !== '') {
                 $this->merge([$field => str_replace(',', '.', $value)]);
             }
+        }
+
+        // O URL traz "true"/"false" (o Inertia serializa assim os booleanos) e
+        // a regra `boolean` do Laravel so aceita 0/1. Normaliza-se antes.
+        if ($this->has('quote')) {
+            $this->merge(['quote' => $this->boolean('quote')]);
         }
     }
 
@@ -62,8 +68,15 @@ class PricingPreviewRequest extends FormRequest
             'quantity' => ['nullable', 'integer', 'min:1', 'max:9999'],
             'material_id' => ['nullable', 'integer', Rule::exists('materials', 'id')],
             'printer_profile_id' => ['nullable', 'integer', Rule::exists('printer_profiles', 'id')],
-            // So contam em orcamentos (calculadora livre, pricing_calculate);
-            // a ficha de variante nao os manda.
+            // Desligado por omissao: uma peca de catalogo nao e um orcamento.
+            // So com ele entram o lucro minimo por trabalho, o minimo de mao de
+            // obra, as placas, as trocas de cor e o design.
+            'quote' => ['nullable', 'boolean'],
+            // Um preco escolhido a avaliar, com IVA. Nao muda o calculo. Zero
+            // e "nao avaliar" (e o que fica a meio de escrever no campo).
+            'price' => ['nullable', 'numeric', 'min:0', 'max:99999.99'],
+            // So contam em orcamentos (quote = true); a ficha de variante nao
+            // os manda.
             'plates' => ['nullable', 'integer', 'min:1', 'max:100'],
             'manual_color_changes' => ['nullable', 'integer', 'min:0', 'max:100'],
             'design_minutes' => ['nullable', 'integer', 'min:0', 'max:6000'],
@@ -78,6 +91,8 @@ class PricingPreviewRequest extends FormRequest
     {
         return [
             'mode' => 'modo',
+            'quote' => 'orçamento',
+            'price' => 'preço a avaliar',
             'weight_grams' => 'peso',
             'hours' => 'horas',
             'minutes' => 'minutos',
@@ -92,6 +107,24 @@ class PricingPreviewRequest extends FormRequest
             'design_minutes' => 'tempo de design',
             'reference_filament_cost' => 'filamento do slicer',
         ];
+    }
+
+    /** Trabalho por encomenda? Sem o campo, nao. */
+    public function isQuote(): bool
+    {
+        return $this->boolean('quote');
+    }
+
+    /** O preco a avaliar, com IVA, em centimos. Null quando nao veio ou e zero. */
+    public function priceCents(): ?int
+    {
+        $value = $this->input('price');
+
+        $cents = (is_string($value) && $value !== '') || is_numeric($value)
+            ? Money::fromDecimal((string) $value)
+            : 0;
+
+        return $cents > 0 ? $cents : null;
     }
 
     public function plates(): int
@@ -229,6 +262,8 @@ class PricingPreviewRequest extends FormRequest
      * Eco dos campos para a pagina os repor nos inputs.
      *
      * @return array{
+     *     quote: bool,
+     *     price: string,
      *     mode: string,
      *     weight_grams: int,
      *     hours: int,
@@ -248,8 +283,11 @@ class PricingPreviewRequest extends FormRequest
     public function toFormFields(): array
     {
         $reference = $this->referenceFilamentCostCents();
+        $price = $this->priceCents();
 
         return [
+            'quote' => $this->isQuote(),
+            'price' => $price === null ? '' : Money::toDecimal($price),
             'plates' => $this->plates(),
             'manual_color_changes' => $this->manualColorChanges(),
             'design_minutes' => $this->designMinutes(),
