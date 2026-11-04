@@ -19,6 +19,20 @@ class McpAuditorTest extends TestCase
         $this->assertSame(['name' => 'Vaso', 'nested' => ['ok' => 1]], $clean);
     }
 
+    /**
+     * Os bytes de uma fotografia nao sao rasto, e um URL pode trazer um token
+     * na query string: este rasto vai para o #seguranca do Discord.
+     */
+    public function test_an_image_leaves_only_its_host_in_the_log(): void
+    {
+        $clean = (new McpAuditor)->sanitize([
+            'image_base64' => 'aGVsbG8=',
+            'image_url' => 'https://cdn.loja.example/a.jpg?token=segredo',
+        ]);
+
+        $this->assertSame(['image_url' => 'cdn.loja.example'], $clean);
+    }
+
     public function test_personal_data_is_masked(): void
     {
         $clean = (new McpAuditor)->sanitize([
