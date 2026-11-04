@@ -107,25 +107,42 @@ class VariantProductionService
      * agora e os que ficariam. Null quando nao ha conta possivel. E o
      * "ensaio" que o MCP mostra antes de aplicar (dry run).
      *
-     * @return array{normal_cents: int, sale_cents: int|null, wholesale_cents: int|null}|null
+     * @return array{normal_cents: int, sale_cents: int|null, wholesale_cents: int|null, suggested_normal_cents: int, kept_current: bool}|null
      */
     public function calculatedPricesFor(Variant $variant): ?array
     {
         $result = $this->pricing->forVariant($variant);
 
-        if ($result === null) {
-            return null;
-        }
+        return $result === null ? null : $this->guardedPrices($variant, $result->toArray());
+    }
 
-        $array = $result->toArray();
-        $retailCents = (int) $array['retailPriceCents'];
+    /**
+     * Os precos a gravar, com a regra da casa: NUNCA se baixa um preco ja
+     * definido. A calculadora sugere o Recomendado; se o preco gravado ja esta
+     * acima, fica o gravado. O mesmo para a revenda.
+     *
+     * Uma variante sem preco (zero) recebe o sugerido.
+     *
+     * @param  array<string, mixed>  $result  O PricingResult::toArray().
+     * @return array{normal_cents: int, sale_cents: int|null, wholesale_cents: int|null, suggested_normal_cents: int, kept_current: bool}
+     */
+    private function guardedPrices(Variant $variant, array $result): array
+    {
+        $suggested = (int) $result['retailPriceCents'];
+        $current = $variant->normalPriceCents();
+        $normal = max($current, $suggested);
+
+        $currentWholesale = $variant->wholesale_price_cents ?? 0;
+        $wholesale = max($currentWholesale, (int) $result['wholesalePriceCents']);
 
         $sale = $variant->salePriceCents();
 
         return [
-            'normal_cents' => $retailCents,
-            'sale_cents' => $sale !== null && $sale < $retailCents ? $sale : null,
-            'wholesale_cents' => (int) $array['wholesalePriceCents'],
+            'normal_cents' => $normal,
+            'sale_cents' => $sale !== null && $sale < $normal ? $sale : null,
+            'wholesale_cents' => $wholesale,
+            'suggested_normal_cents' => $suggested,
+            'kept_current' => $current > $suggested,
         ];
     }
 
@@ -151,18 +168,14 @@ class VariantProductionService
      */
     private function applyTo(Variant $variant, array $result): void
     {
-        $retailCents = (int) $result['retailPriceCents'];
-        $wholesaleCents = (int) $result['wholesalePriceCents'];
-
-        $sale = $variant->salePriceCents();
-        $keepSale = $sale !== null && $sale < $retailCents;
+        $prices = $this->guardedPrices($variant, $result);
 
         // Pelo VariantService e nao por um update() cru: e la que vive a
         // traducao normal/promocional -> price_cents/compare_at_cents, e so la.
         $this->variants->update($variant, [
-            'normal_price' => Money::toDecimal($retailCents),
-            'sale_price' => $keepSale ? Money::toDecimal((int) $sale) : null,
-            'wholesale_price' => Money::toDecimal($wholesaleCents),
+            'normal_price' => Money::toDecimal($prices['normal_cents']),
+            'sale_price' => $prices['sale_cents'] === null ? null : Money::toDecimal($prices['sale_cents']),
+            'wholesale_price' => Money::toDecimal((int) $prices['wholesale_cents']),
         ]);
     }
 }

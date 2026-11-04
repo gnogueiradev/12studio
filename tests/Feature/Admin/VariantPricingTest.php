@@ -76,8 +76,13 @@ class VariantPricingTest extends TestCase
             'material_id' => $this->material->id,
         ])->assertInertia(fn (AssertableInertia $page) => $page
             ->where('pricing.result.productionCostMicros', 1_929_623)
-            ->where('pricing.result.wholesalePriceCents', 350)
-            ->where('pricing.result.retailPriceCents', 600)
+            // Recomendado: 1,929623 + 2,5 h x 1,90 = 6,68 -> 6,99 (acima da
+            // margem, 5,83). Revenda: 50% = 3,495 -> 3,99.
+            ->where('pricing.result.wholesalePriceCents', 399)
+            ->where('pricing.result.retailPriceCents', 699)
+            // Uma variante nao e um orcamento: nada de minimo de trabalho.
+            ->where('pricing.result.quote', false)
+            ->where('pricing.result.laborMinutes', 5)
             ->where('pricing.usingFallbackRate', false)
         );
     }
@@ -100,7 +105,10 @@ class VariantPricingTest extends TestCase
         ])->assertInertia(fn (AssertableInertia $page) => $page
             ->where('pricing.result.depreciationCostMicros', 125_000)
             ->where('pricing.result.productionCostMicros', 1_718_321)
-            ->where('pricing.result.wholesalePriceCents', 300)
+            // A margem (5,00 -> 5,49) manda no Minimo, e o Recomendado sobe
+            // a terminacao seguinte, 5,99. Revenda: 50% = 2,995 -> 3,49.
+            ->where('pricing.result.retailPriceCents', 599)
+            ->where('pricing.result.wholesalePriceCents', 349)
         );
     }
 

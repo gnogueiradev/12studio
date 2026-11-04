@@ -459,6 +459,74 @@ export default function CalculadoraIndex({
                                 de falhas — quando uma impressão falha, o que já
                                 lá estava perde-se com ela.
                             </p>
+
+                            <fieldset className="grid gap-3 border-t border-border/60 pt-4">
+                                <legend className="mb-1 text-sm font-medium">
+                                    Orçamento
+                                </legend>
+                                <div className="grid grid-cols-2 gap-3">
+                                    <NumberField
+                                        id="plates"
+                                        label="Placas"
+                                        min={1}
+                                        value={fields.plates}
+                                        onChange={(value) =>
+                                            patch({
+                                                plates: Math.max(1, value || 1),
+                                            })
+                                        }
+                                    />
+                                    <NumberField
+                                        id="manual_color_changes"
+                                        label="Trocas de cor"
+                                        min={0}
+                                        value={fields.manual_color_changes}
+                                        onChange={(value) =>
+                                            patch({
+                                                manual_color_changes: value,
+                                            })
+                                        }
+                                    />
+                                    <NumberField
+                                        id="design_minutes"
+                                        label="Design (min)"
+                                        min={0}
+                                        value={fields.design_minutes}
+                                        onChange={(value) =>
+                                            patch({ design_minutes: value })
+                                        }
+                                    />
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="reference_filament_cost">
+                                            Filamento no slicer (€)
+                                        </Label>
+                                        <Input
+                                            id="reference_filament_cost"
+                                            type="number"
+                                            step="0.01"
+                                            min={0}
+                                            placeholder="opcional"
+                                            value={
+                                                fields.reference_filament_cost
+                                            }
+                                            onChange={(event) =>
+                                                patch({
+                                                    reference_filament_cost:
+                                                        event.target.value,
+                                                })
+                                            }
+                                        />
+                                    </div>
+                                </div>
+                                <p className="text-xs text-muted-foreground">
+                                    Cada placa a mais e cada troca manual de cor
+                                    somam minutos de trabalho, por cima do
+                                    mínimo de um orçamento. O design cobra-se
+                                    uma vez e só no Premium. O filamento do
+                                    slicer (com IVA, como o Bambu Studio o
+                                    mostra) serve só para comparar.
+                                </p>
+                            </fieldset>
                         </div>
                     </Panel>
 
@@ -482,12 +550,41 @@ export default function CalculadoraIndex({
                         <p role="status" className="sr-only">
                             {result === null
                                 ? 'Sem cálculo: falta o filamento, o peso ou o tempo.'
-                                : `Custo ${formatCents(result.productionCostCents)}, revenda ${formatCents(result.wholesalePriceCents)}, cliente ${formatCents(result.retailPriceCents)}.`}
+                                : `Custo ${formatCents(result.productionCostCents)}. Mínimo ${formatCents(result.tiers.minimum.priceCents)}, recomendado ${formatCents(result.tiers.recommended.priceCents)}, premium ${formatCents(result.tiers.premium.priceCents)}. Revenda ${formatCents(result.wholesalePriceCents)}.`}
                         </p>
                     </div>
                 </div>
             </div>
         </>
+    );
+}
+
+/** Um campo inteiro: vazio lê-se como zero, e quem chama aplica o mínimo. */
+function NumberField({
+    id,
+    label,
+    min,
+    value,
+    onChange,
+}: {
+    id: string;
+    label: string;
+    min: number;
+    value: number;
+    onChange: (value: number) => void;
+}) {
+    return (
+        <div className="grid gap-2">
+            <Label htmlFor={id}>{label}</Label>
+            <Input
+                id={id}
+                type="number"
+                min={min}
+                step={1}
+                value={value}
+                onChange={(event) => onChange(Number(event.target.value || 0))}
+            />
+        </div>
     );
 }
 

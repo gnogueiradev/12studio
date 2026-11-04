@@ -76,7 +76,7 @@ class PricingBatchTest extends TestCase
         );
 
         $this->assertSame(1_904_860, $result->productionCostMicros);
-        $this->assertSame(350, Micros::toCents($result->wholesalePriceMicros), '3,50 EUR de revenda');
+        $this->assertSame(350, Micros::toCents($result->marginWholesalePriceMicros), '3,50 EUR de revenda pela regra da margem');
     }
 
     /**
@@ -93,7 +93,13 @@ class PricingBatchTest extends TestCase
         $this->assertSame(14_871, $batch->electricityCostMicros, '0,089223 EUR de luz / 6');
         $this->assertSame(72_222, $batch->depreciationCostMicros, '0,433333 EUR de amortizacao / 6');
 
-        $this->assertSame(1_500, $batch->toArray()['job']['wholesalePriceCents'], '6 x 2,50 EUR');
+        $this->assertSame(2_500_000, $batch->marginWholesalePriceMicros, '2,50 EUR por unidade pela regra da margem');
+
+        // O total do trabalho e a unidade x 6, seja qual for a revenda sugerida.
+        $this->assertSame(
+            6 * Micros::toCents($batch->wholesalePriceMicros),
+            $batch->toArray()['job']['wholesalePriceCents'],
+        );
     }
 
     /**
@@ -221,10 +227,17 @@ class PricingBatchTest extends TestCase
             'cada peca custa bem menos do que o chao de 1,50 EUR',
         );
         $this->assertSame(1_500_000, $batch->rawWholesalePriceMicros, 'o chao aplicado a UNIDADE');
-        $this->assertSame(1_500_000, $batch->wholesalePriceMicros);
+        $this->assertSame(1_500_000, $batch->marginWholesalePriceMicros);
+
+        // A revenda sugerida tambem respeita o chao por unidade (1,50 sobe a
+        // terminacao seguinte, 1,99) — e o total e essa unidade x 12.
+        $this->assertGreaterThanOrEqual(1_500_000, $batch->wholesalePriceMicros);
 
         // O trabalho todo custa uns 10 EUR; passa-lo pela formula e dividir
         // depois dava um preco por peca que ignorava o chao de cada uma.
-        $this->assertSame(1_800, $batch->toArray()['job']['wholesalePriceCents'], '12 x 1,50 EUR');
+        $this->assertSame(
+            12 * Micros::toCents($batch->wholesalePriceMicros),
+            $batch->toArray()['job']['wholesalePriceCents'],
+        );
     }
 }

@@ -21,10 +21,10 @@ return [
     |      `fallback_printer_*`, e so a rede de seguranca para quando nao ha
     |      nenhuma impressora ativa;
     |
-    |   2. o degrau de 0,50 EUR do preco de revenda e as tres faixas de
-    |      arredondamento do preco ao cliente (0,50 / 1 / 5 EUR nos limiares de
-    |      20 e 50 EUR). Sao regras comerciais fixas — ninguem anuncia uma peca
-    |      a 63,40 EUR — e vivem no PricingCalculator.
+    |   2. os arredondamentos: a regra da margem continua a usar o degrau de
+    |      0,50 EUR (revenda) e as faixas 0,50 / 1 / 5 EUR (cliente); os tres
+    |      precos sugeridos terminam sempre em ,49 ou ,99, para cima. Sao
+    |      regras comerciais fixas e vivem no PricingCalculator.
     |
     | Unidades: `_cents` sao centimos inteiros, `_bp` sao pontos base
     | (500 = 5%), `_micros` sao milionesimos de euro. Os micros aparecem onde o
@@ -115,6 +115,56 @@ return [
     // mexe quando estes numeros mudam — o que se mexe e o que sobra.
     'sales_channel_fixed_fee_cents' => 0,
     'sales_channel_percentage_fee_bp' => 0,
+
+    /*
+     * Orcamentos (calculadora livre e pricing_calculate)
+     *
+     * So contam quando a peca e um ORCAMENTO, e nunca no custo de uma variante
+     * do catalogo: e esse custo que a Etsy e o travao de precos do MCP leem, e
+     * nao pode mudar por uma regra que so existe para trabalhos por medida.
+     */
+
+    // O minimo de trabalho de um orcamento, por impressao: falar com o
+    // cliente, preparar o ficheiro, lancar. Cinco minutos de acabamento nao
+    // pagam isso. Substitui o trabalho ativo quando este e menor.
+    'quote_min_labor_minutes' => 20,
+
+    // Cada placa a mais e outra vez tirar, limpar e relancar.
+    'labor_minutes_per_extra_plate' => 5,
+
+    // Cada troca manual de filamento e ficar a espera da pausa e trocar a bobine.
+    'labor_minutes_per_color_change' => 5,
+
+    // O valor da hora de DESIGN, a parte da mao de obra: modelar nao e
+    // rebarbar. Cobra-se uma vez por trabalho e so no preco Premium.
+    'design_rate_micros_per_hour' => 15_000_000,
+
+    /*
+     * Os tres precos sugeridos (Minimo, Recomendado, Premium)
+     *
+     * Cada nivel e o MAIOR de tres precos sem IVA: a regra da margem de
+     * sempre, custo + horas de impressao x lucro por hora, e (so em
+     * orcamentos) custo + lucro minimo do trabalho a dividir pelas pecas. E a
+     * segunda que paga as pecas leves e demoradas, que a margem sobre o custo
+     * deixava a 0,85 EUR por hora de impressora.
+     */
+    'tier_minimum_profit_micros_per_hour' => 1_400_000,
+    'tier_recommended_profit_micros_per_hour' => 1_900_000,
+    'tier_premium_profit_micros_per_hour' => 2_300_000,
+
+    'tier_minimum_job_profit_cents' => 500,
+    'tier_recommended_job_profit_cents' => 800,
+    'tier_premium_job_profit_cents' => 1_000,
+
+    // A revenda sugerida, em fracao do Recomendado (5000 = 50%)...
+    'wholesale_share_of_recommended_bp' => 5_000,
+
+    // ...mas nunca abaixo de custo x (1 + IVA) x isto (13000 = 1,3x).
+    'wholesale_floor_markup_bp' => 13_000,
+
+    // Avisa quando o custo do filamento calculado e o do slicer diferem mais
+    // do que isto (1500 = 15%).
+    'filament_reference_tolerance_bp' => 1_500,
 
     /*
      * Rede de seguranca: a maquina imaginaria

@@ -12,6 +12,8 @@ use App\Models\PrinterProfile;
 use App\Models\Product;
 use App\Models\User;
 use App\Models\Variant;
+use App\Services\PricingSettings;
+use App\Services\SettingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Testing\Fluent\AssertableJson;
 use Laravel\Mcp\Server\Testing\PendingTestResponse;
@@ -75,7 +77,13 @@ class PricingCalculateToolTest extends TestCase
         $this->assertSame(0, Product::query()->count());
     }
 
-    public function test_it_gives_the_same_numbers_as_the_variant_preview(): void
+    /**
+     * A calculadora livre e um ORCAMENTO e a variante nao: os precos podem
+     * diferir (o lucro minimo do trabalho so entra no orcamento). O que tem de
+     * continuar igual e o CUSTO — com trabalho ativo acima do minimo de um
+     * orcamento (20 min) e sem placas nem trocas de cor, e a mesma conta.
+     */
+    public function test_it_costs_the_same_as_the_variant_preview(): void
     {
         $printer = PrinterProfile::factory()->isDefault()->create();
         // A calculadora solta usa o IVA da loja; a variante, o do produto.
@@ -88,7 +96,7 @@ class PricingCalculateToolTest extends TestCase
             'printing_time_minutes' => 95,
             'packaging_cost_cents' => 35,
             'components_cost_cents' => 120,
-            'active_labor_minutes' => 4,
+            'active_labor_minutes' => 20,
         ]);
 
         $saved = $this->structured($this->server()->tool(PricingPreviewTool::class, ['variant_id' => $variant->id]));
@@ -98,12 +106,126 @@ class PricingCalculateToolTest extends TestCase
             'minutes' => 35,
             'packaging_cost' => '0,35',
             'components_cost' => '1.20',
-            'active_labor_minutes' => 4,
+            'active_labor_minutes' => 20,
         ])));
 
-        $this->assertSame($saved['suggested'], $free['suggested']);
         $this->assertSame($saved['costs'], $free['costs']);
-        $this->assertSame($saved['margins_percent'], $free['margins_percent']);
+        $this->assertSame($saved['labor']['minutes'], $free['labor']['minutes']);
+
+        // A variante nunca usa o lucro minimo do trabalho...
+        foreach ($saved['suggested']['tiers'] as $tier) {
+            $this->assertNotSame('min_job', $tier['rule']);
+        }
+
+        // ...e por isso o orcamento nunca sai mais barato do que ela.
+        foreach (['minimum', 'recommended', 'premium'] as $name) {
+            $this->assertGreaterThanOrEqual(
+                $saved['suggested']['tiers'][$name]['price']['cents'],
+                $free['suggested']['tiers'][$name]['price']['cents'],
+            );
+        }
+    }
+
+    public function test_the_quote_inputs_reach_the_labor(): void
+    {
+        $response = $this->structured($this->server()->tool(PricingCalculateTool::class, $this->piece([
+            'plates' => 3,
+            'manual_color_changes' => 2,
+            'design_minutes' => 30,
+        ])));
+
+        $this->assertSame(3, $response['inputs']['plates']);
+        $this->assertSame(2, $response['inputs']['manual_color_changes']);
+        $this->assertSame(30, $response['inputs']['design_minutes']);
+
+        // 5 de base + 15 para o minimo de 20 + 2 placas a mais x 5 + 2 trocas x 5.
+        $this->assertSame(
+            ['base' => 5, 'quote_minimum' => 15, 'plates' => 10, 'color_changes' => 10, 'total' => 40],
+            $response['labor']['minutes'],
+        );
+        $this->assertSame(40, $response['inputs']['labor_minutes']);
+        $this->assertSame(30, $response['labor']['design_minutes']);
+        // 30 min a 15 EUR/h = 7,50 EUR, so no Premium.
+        $this->assertSame(750, $response['labor']['design_cost_per_unit']['cents']);
+        $this->assertSame(750, $response['suggested']['tiers']['premium']['design_cost']['cents']);
+        $this->assertSame(0, $response['suggested']['tiers']['recommended']['design_cost']['cents']);
+    }
+
+    public function test_it_returns_three_tiers_and_keeps_the_old_fields(): void
+    {
+        $response = $this->structured($this->server()->tool(PricingCalculateTool::class, $this->piece()));
+        $tiers = $response['suggested']['tiers'];
+
+        $this->assertSame(['minimum', 'recommended', 'premium'], array_keys($tiers));
+
+        foreach ($tiers as $tier) {
+            foreach (['price', 'price_ex_vat', 'vat', 'profit', 'profit_total', 'margin_percent', 'profit_per_print_hour', 'earnings_per_print_hour', 'rule'] as $field) {
+                $this->assertArrayHasKey($field, $tier);
+            }
+            $this->assertContains($tier['rule'], ['margin', 'per_hour', 'min_job']);
+            $this->assertSame(49, $tier['price']['cents'] % 50, 'termina em ,49 ou ,99');
+        }
+
+        $this->assertLessThan($tiers['recommended']['price']['cents'], $tiers['minimum']['price']['cents']);
+        $this->assertLessThan($tiers['premium']['price']['cents'], $tiers['recommended']['price']['cents']);
+
+        // Compatibilidade: os campos de sempre, com o Recomendado.
+        $this->assertSame($tiers['recommended']['price'], $response['suggested']['retail_price']);
+        $this->assertSame($tiers['recommended']['price_ex_vat'], $response['suggested']['retail_price_ex_vat']);
+        $this->assertArrayHasKey('wholesale_price', $response['suggested']);
+        $this->assertArrayHasKey('wholesale_price_ex_vat', $response['suggested']);
+        $this->assertSame([], $response['warnings']);
+    }
+
+    /**
+     * O lucro minimo do trabalho divide-se pelas pecas. Para o ver ganhar numa
+     * mesa de 20, sobe-se o do Recomendado para 200 EUR: 10 EUR por peca.
+     */
+    public function test_a_batch_of_twenty_splits_the_minimum_job_profit(): void
+    {
+        $this->pricesWithoutVat();
+        app(SettingService::class)->set(PricingSettings::TIER_KEYS['recommended']['min_job'], 20_000);
+
+        $response = $this->structured($this->server()->tool(PricingCalculateTool::class, $this->piece([
+            'mode' => 'batch',
+            'quantity' => 20,
+            'weight_grams' => 200,
+            'hours' => 2,
+        ])));
+        $recommended = $response['suggested']['tiers']['recommended'];
+
+        $this->assertSame('min_job', $recommended['rule']);
+        // Sem IVA: preco = custo + 10,00 arredondado ate ,49/,99 — o lucro por
+        // peca fica entre 10,00 e 10,49, e nao nos 200 EUR do trabalho.
+        $this->assertGreaterThanOrEqual(1_000, $recommended['profit']['cents']);
+        $this->assertLessThan(1_050, $recommended['profit']['cents']);
+        $this->assertGreaterThanOrEqual(20_000, $recommended['profit_total']['cents']);
+    }
+
+    public function test_a_slicer_filament_cost_far_from_ours_is_flagged(): void
+    {
+        $pla = Material::factory()->create(['name' => 'PLA Mate', 'price_per_kg_cents' => 1_699]);
+
+        // 66 g a 16,99 EUR/kg = 1,12 EUR com IVA; o Bambu Studio disse 1,32.
+        $this->server()->tool(PricingCalculateTool::class, [
+            'material_id' => $pla->id,
+            'weight_grams' => 66,
+            'hours' => 4,
+            'minutes' => 37,
+            'reference_filament_cost' => '1,32',
+        ])
+            ->assertOk()
+            ->assertSee('filament_reference_mismatch');
+
+        $this->server()->tool(PricingCalculateTool::class, [
+            'material_id' => $pla->id,
+            'weight_grams' => 66,
+            'hours' => 4,
+            'minutes' => 37,
+            'reference_filament_cost' => '1,20',
+        ])
+            ->assertOk()
+            ->assertDontSee('filament_reference_mismatch');
     }
 
     public function test_the_filament_cost_comes_from_the_material(): void

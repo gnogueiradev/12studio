@@ -65,10 +65,11 @@ class PricingVatTest extends TestCase
     /**
      * A peca de referencia com tudo a 23%, parcela a parcela.
      *
-     * Os precos ficam onde estavam (4,00 e 7,00 EUR): tirar 23% ao que se
-     * compra e somar 23% ao que se vende anula-se, e o que sobra — o IVA sobre
-     * a mao de obra — nao chega para saltar um degrau de 0,50 EUR. O que muda
-     * e o lucro: dos 7,00 EUR, 1,31 sao do Estado.
+     * Os precos da regra da margem ficam onde estavam (4,00 e 7,00 EUR): tirar
+     * 23% ao que se compra e somar 23% ao que se vende anula-se, e o que sobra
+     * — o IVA sobre a mao de obra — nao chega para saltar um degrau de 0,50
+     * EUR. O Recomendado sai da hora de impressora (9,49 EUR), e dele 1,77
+     * sao do Estado.
      */
     public function test_the_reference_part_with_vat_on_both_sides(): void
     {
@@ -83,19 +84,26 @@ class PricingVatTest extends TestCase
         $this->assertSame(1_749_407, $result->baseProductionCostMicros);
         $this->assertSame(1_841_481, $result->productionCostMicros, 'subtotal / 0,95');
 
+        // A regra da margem: os precos de sempre, 4,00 e 7,00 EUR.
         $this->assertSame(3_775_036, $result->rawWholesalePriceMicros, 'custo / 0,60 x 1,23');
-        $this->assertSame(4_000_000, $result->wholesalePriceMicros);
+        $this->assertSame(4_000_000, $result->marginWholesalePriceMicros);
         $this->assertSame(6_666_667, $result->rawRetailPriceMicros, 'revenda / 0,60');
-        $this->assertSame(7_000_000, $result->retailPriceMicros);
+        $this->assertSame(7_000_000, $result->marginRetailPriceMicros);
 
-        $this->assertSame(3_252_033, $result->wholesalePriceExVatMicros(), '4,00 EUR / 1,23');
-        $this->assertSame(5_691_057, $result->retailPriceExVatMicros(), '7,00 EUR / 1,23');
-        $this->assertSame(1_308_943, $result->retailVatMicros(), 'o que se entrega ao Estado');
+        // O Recomendado: 1,841481 + 3 h x 1,90 = 7,541481 sem IVA (> margem
+        // 6,666667 / 1,23 = 5,420054) x 1,23 = 9,276022 -> 9,49.
+        // A revenda: 50% de 9,49 = 4,745 -> 4,99.
+        $this->assertSame(9_490_000, $result->retailPriceMicros);
+        $this->assertSame(4_990_000, $result->wholesalePriceMicros);
 
-        $this->assertSame(1_410_552, $result->wholesaleProfitMicros());
-        $this->assertSame(4_337, $result->wholesaleMarginBp(), '43,37% do que fica depois do IVA');
-        $this->assertSame(3_849_576, $result->directProfitMicros());
-        $this->assertSame(6_764, $result->directMarginBp(), '67,64%');
+        $this->assertSame(4_056_911, $result->wholesalePriceExVatMicros(), '4,99 EUR / 1,23');
+        $this->assertSame(7_715_447, $result->retailPriceExVatMicros(), '9,49 EUR / 1,23');
+        $this->assertSame(1_774_553, $result->retailVatMicros(), 'o que se entrega ao Estado');
+
+        $this->assertSame(2_215_430, $result->wholesaleProfitMicros(), '4,056911 - 1,841481');
+        $this->assertSame(5_461, $result->wholesaleMarginBp(), '54,61% do que fica depois do IVA');
+        $this->assertSame(5_873_966, $result->directProfitMicros(), '7,715447 - 1,841481');
+        $this->assertSame(7_613, $result->directMarginBp(), '76,13%');
     }
 
     /**
@@ -112,12 +120,16 @@ class PricingVatTest extends TestCase
         $this->assertSame(61_770, $result->electricityCostMicros);
         $this->assertSame(2_103_618, $result->productionCostMicros);
         $this->assertSame(3_506_030, $result->rawWholesalePriceMicros);
-        $this->assertSame(4_000_000, $result->wholesalePriceMicros);
-        $this->assertSame(7_000_000, $result->retailPriceMicros);
-        $this->assertSame(4_000_000, $result->wholesalePriceExVatMicros(), 'sem IVA, o preco e todo meu');
+        $this->assertSame(4_000_000, $result->marginWholesalePriceMicros);
+        $this->assertSame(7_000_000, $result->marginRetailPriceMicros);
+
+        // Os sugeridos sao os do PricingCalculatorTest: 7,99 e 4,49.
+        $this->assertSame(7_990_000, $result->retailPriceMicros);
+        $this->assertSame(4_490_000, $result->wholesalePriceMicros);
+        $this->assertSame(4_490_000, $result->wholesalePriceExVatMicros(), 'sem IVA, o preco e todo meu');
         $this->assertSame(0, $result->retailVatMicros());
-        $this->assertSame(4_741, $result->wholesaleMarginBp());
-        $this->assertSame(6_995, $result->directMarginBp());
+        $this->assertSame(5_315, $result->wholesaleMarginBp(), '(4,49 - 2,103618) / 4,49');
+        $this->assertSame(7_367, $result->directMarginBp(), '(7,99 - 2,103618) / 7,99');
     }
 
     /**
@@ -133,9 +145,14 @@ class PricingVatTest extends TestCase
         $this->assertSame(850_000, $result->filamentCostMicros, 'nao ha IVA para tirar');
         $this->assertSame(2_103_618, $result->productionCostMicros);
         $this->assertSame(4_312_417, $result->rawWholesalePriceMicros, '3,506 EUR x 1,23');
-        $this->assertSame(4_500_000, $result->wholesalePriceMicros);
-        $this->assertSame(7_500_000, $result->retailPriceMicros);
-        $this->assertSame(4_250, $result->wholesaleMarginBp());
+        $this->assertSame(4_500_000, $result->marginWholesalePriceMicros);
+        $this->assertSame(7_500_000, $result->marginRetailPriceMicros);
+
+        // Recomendado: (2,103618 + 3 x 1,90) x 1,23 = 9,598 -> 9,99; revenda
+        // 50% = 4,995 -> 5,49. Margem: (5,49/1,23 - 2,103618) / (5,49/1,23).
+        $this->assertSame(9_990_000, $result->retailPriceMicros);
+        $this->assertSame(5_490_000, $result->wholesalePriceMicros);
+        $this->assertSame(5_287, $result->wholesaleMarginBp());
     }
 
     /**
@@ -149,8 +166,9 @@ class PricingVatTest extends TestCase
 
         $this->assertSame($standard->productionCostMicros, $reduced->productionCostMicros, 'o custo nao depende de a quem vendo');
         $this->assertSame(3_253_283, $reduced->rawWholesalePriceMicros, 'custo / 0,60 x 1,06');
-        $this->assertSame(3_500_000, $reduced->wholesalePriceMicros);
-        $this->assertSame(6_000_000, $reduced->retailPriceMicros);
+        $this->assertSame(3_500_000, $reduced->marginWholesalePriceMicros);
+        $this->assertSame(6_000_000, $reduced->marginRetailPriceMicros);
+        $this->assertLessThan($standard->retailPriceMicros, $reduced->retailPriceMicros, 'o Recomendado tambem desce');
         $this->assertSame(600, $reduced->vatRateBp);
     }
 
@@ -216,18 +234,27 @@ class PricingVatTest extends TestCase
      */
     public function test_the_reseller_margin_is_untouched_by_vat(): void
     {
-        $this->assertSame(4_286, $this->part()->resellerMarginBp());
-        $this->assertSame(7_500, $this->part()->resellerMarkupBp());
+        // Sobre os precos da REGRA DA MARGEM, que e quem promete a margem do
+        // revendedor: 4,00 -> 7,00, com ou sem IVA.
+        $reseller = fn (PricingResult $r): int => Micros::divRound(
+            ($r->marginRetailPriceMicros - $r->marginWholesalePriceMicros) * 10_000,
+            $r->marginRetailPriceMicros,
+        );
+
+        $this->assertSame(4_286, $reseller($this->part()));
 
         for ($minutes = 10; $minutes <= 3_000; $minutes += 37) {
             $result = $this->part(grams: (int) ($minutes / 3), minutes: $minutes);
 
             $this->assertGreaterThanOrEqual(
                 $result->targetResellerMarginBp,
-                $result->resellerMarginBp(),
+                $reseller($result),
                 "o revendedor ficou abaixo do alvo aos {$minutes} min",
             );
         }
+
+        // Com os sugeridos (9,49 e 4,99) e o mesmo racio dos precos com IVA.
+        $this->assertSame(4_742, $this->part()->resellerMarginBp(), '(9,49 - 4,99) / 9,49');
     }
 
     /** Mas o que ele ganha em euros, depois de entregar o IVA dele, nao. */
@@ -235,7 +262,8 @@ class PricingVatTest extends TestCase
     {
         $result = $this->part();
 
-        $this->assertSame(5_691_057 - 3_252_033, $result->resellerProfitMicros());
+        // 9,49 / 1,23 - 4,99 / 1,23.
+        $this->assertSame(7_715_447 - 4_056_911, $result->resellerProfitMicros());
     }
 
     /**
@@ -250,8 +278,8 @@ class PricingVatTest extends TestCase
 
         $result = $this->part();
 
-        $this->assertSame(1_050_000, $result->channelFeeMicros, '0,35 EUR + 10% de 7,00 EUR');
-        $this->assertSame(3_849_576 - 1_050_000, $result->netDirectProfitMicros());
+        $this->assertSame(1_299_000, $result->channelFeeMicros, '0,35 EUR + 10% de 9,49 EUR (o Recomendado)');
+        $this->assertSame(5_873_966 - 1_299_000, $result->netDirectProfitMicros());
     }
 
     /**
@@ -274,11 +302,11 @@ class PricingVatTest extends TestCase
 
         $this->assertSame(2_300, $payload['vatRateBp']);
         $this->assertSame(2_300, $payload['costVatRateBp']);
-        $this->assertSame(325, $payload['wholesalePriceExVatCents']);
-        $this->assertSame(569, $payload['retailPriceExVatCents']);
-        $this->assertSame(131, $payload['retailVatCents']);
-        $this->assertSame(700, $payload['retailPriceExVatCents'] + $payload['retailVatCents'], 'as duas partes fecham o preco');
-        $this->assertSame(Micros::toCents(1_410_552), $payload['wholesaleProfitCents']);
+        $this->assertSame(406, $payload['wholesalePriceExVatCents'], '4,99 / 1,23');
+        $this->assertSame(772, $payload['retailPriceExVatCents'], '9,49 / 1,23');
+        $this->assertSame(177, $payload['retailVatCents']);
+        $this->assertSame(949, $payload['retailPriceExVatCents'] + $payload['retailVatCents'], 'as duas partes fecham o preco');
+        $this->assertSame(Micros::toCents(2_215_430), $payload['wholesaleProfitCents']);
     }
 
     /**

@@ -8,6 +8,7 @@ use App\Models\Product;
 use App\Models\User;
 use App\Models\Variant;
 use App\Services\PricingSettings;
+use App\Services\SettingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
@@ -41,6 +42,12 @@ class PricingVatPageTest extends TestCase
             'maintenance_micros_per_hour' => 40_000,
         ]);
         $this->material = Material::factory()->create(['price_per_kg_cents' => 1_700]);
+
+        // A calculadora livre e um orcamento (minimo de 20 min de trabalho).
+        // Aqui prova-se so de onde vem cada taxa, com a peca de referencia de
+        // 5 min — o mesmo custo do PricingVatTest. (Os precos da calculadora
+        // levam ainda o lucro minimo do trabalho; os da variante nao.)
+        app(SettingService::class)->set(PricingSettings::KEY_QUOTE_MIN_LABOR_MINUTES, 0);
     }
 
     /**
@@ -62,6 +69,10 @@ class PricingVatPageTest extends TestCase
             'material_id' => $this->material->id,
             'filament_weight_grams' => 50,
             'printing_time_minutes' => 180,
+            // Abaixo de qualquer sugestao: aplicar precos nunca baixa um preco
+            // ja definido, e a fabrica sorteia um entre 5 e 99 EUR.
+            'price_cents' => 100,
+            'wholesale_price_cents' => null,
         ]);
     }
 
@@ -78,19 +89,24 @@ class PricingVatPageTest extends TestCase
                 ->where('result.costVatRateBp', 2_300)
                 ->where('result.filamentCostMicros', 691_057)
                 ->where('result.productionCostMicros', 1_841_481)
-                ->where('result.wholesalePriceCents', 400)
-                ->where('result.retailPriceCents', 700)
-                ->where('result.wholesalePriceExVatCents', 325)
-                ->where('result.retailPriceExVatCents', 569)
-                ->where('result.retailVatCents', 131)
-                ->where('result.wholesaleMarginBp', 4_337)
-                ->where('result.directMarginBp', 6_764)
+                // Um orcamento de uma peca: o lucro minimo do trabalho manda.
+                // Recomendado: (1,841481 + 8) x 1,23 = 12,105 -> 12,49;
+                // revenda: 50% = 6,245 -> 6,49.
+                ->where('result.wholesalePriceCents', 649)
+                ->where('result.retailPriceCents', 1_249)
+                ->where('result.wholesalePriceExVatCents', 528)
+                ->where('result.retailPriceExVatCents', 1_015)
+                ->where('result.retailVatCents', 234)
+                ->where('result.wholesaleMarginBp', 6_510)
+                ->where('result.directMarginBp', 8_187)
             );
     }
 
     /**
      * O painel de custo da ficha de variante vive na pagina de um produto, e e
-     * a taxa DESSE produto que conta: a 6% a mesma peca sai a 3,50 e 6,00 EUR.
+     * a taxa DESSE produto que conta: a 6% a mesma peca sai a 4,49 e 8,49 EUR
+     * (Recomendado: (1,841481 + 3 h x 1,90) x 1,06 = 7,994 -> 8,49; revenda:
+     * 50% = 4,245 -> 4,49). A 23% seriam 4,99 e 9,49.
      */
     public function test_the_variant_panel_prices_with_the_rate_of_its_product(): void
     {
@@ -101,8 +117,8 @@ class PricingVatPageTest extends TestCase
             ->assertInertia(fn (AssertableInertia $page) => $page
                 ->where('pricing.result.vatRateBp', 600)
                 ->where('pricing.result.productionCostMicros', 1_841_481)
-                ->where('pricing.result.wholesalePriceCents', 350)
-                ->where('pricing.result.retailPriceCents', 600)
+                ->where('pricing.result.wholesalePriceCents', 449)
+                ->where('pricing.result.retailPriceCents', 849)
             );
     }
 
@@ -121,15 +137,15 @@ class PricingVatPageTest extends TestCase
         $this->actingAs($this->admin)
             ->get(route('admin.produtos.edit', $standard))
             ->assertInertia(fn (AssertableInertia $page) => $page
-                ->where('editing.variants.0.suggestedWholesaleCents', 400)
-                ->where('editing.variants.0.suggestedRetailCents', 700)
+                ->where('editing.variants.0.suggestedWholesaleCents', 499)
+                ->where('editing.variants.0.suggestedRetailCents', 949)
             );
 
         $this->actingAs($this->admin)
             ->get(route('admin.produtos.edit', $reduced))
             ->assertInertia(fn (AssertableInertia $page) => $page
-                ->where('editing.variants.0.suggestedWholesaleCents', 350)
-                ->where('editing.variants.0.suggestedRetailCents', 600)
+                ->where('editing.variants.0.suggestedWholesaleCents', 449)
+                ->where('editing.variants.0.suggestedRetailCents', 849)
             );
     }
 
@@ -142,8 +158,8 @@ class PricingVatPageTest extends TestCase
             ->post(route('admin.produtos.variantes.precos', $reduced))
             ->assertRedirect();
 
-        $this->assertSame(600, $variant->refresh()->price_cents);
-        $this->assertSame(350, $variant->wholesale_price_cents);
+        $this->assertSame(849, $variant->refresh()->price_cents);
+        $this->assertSame(449, $variant->wholesale_price_cents);
     }
 
     /**
@@ -172,8 +188,10 @@ class PricingVatPageTest extends TestCase
                 ->where('result.costVatRateBp', 0)
                 ->where('result.filamentCostMicros', 850_000)
                 ->where('result.productionCostMicros', 2_103_618)
-                ->where('result.wholesalePriceCents', 450)
-                ->where('result.retailPriceCents', 750)
+                // Custos ja sem IVA, orcamento: (2,103618 + 8) x 1,23 = 12,43
+                // -> 12,49; revenda 6,49.
+                ->where('result.wholesalePriceCents', 649)
+                ->where('result.retailPriceCents', 1_249)
             );
     }
 

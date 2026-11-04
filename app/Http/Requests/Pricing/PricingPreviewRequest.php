@@ -33,7 +33,7 @@ class PricingPreviewRequest extends FormRequest
      */
     protected function prepareForValidation(): void
     {
-        foreach (['packaging_cost', 'components_cost'] as $field) {
+        foreach (['packaging_cost', 'components_cost', 'reference_filament_cost'] as $field) {
             $value = $this->input($field);
 
             if (is_string($value) && $value !== '') {
@@ -62,6 +62,12 @@ class PricingPreviewRequest extends FormRequest
             'quantity' => ['nullable', 'integer', 'min:1', 'max:9999'],
             'material_id' => ['nullable', 'integer', Rule::exists('materials', 'id')],
             'printer_profile_id' => ['nullable', 'integer', Rule::exists('printer_profiles', 'id')],
+            // So contam em orcamentos (calculadora livre, pricing_calculate);
+            // a ficha de variante nao os manda.
+            'plates' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'manual_color_changes' => ['nullable', 'integer', 'min:0', 'max:100'],
+            'design_minutes' => ['nullable', 'integer', 'min:0', 'max:6000'],
+            'reference_filament_cost' => ['nullable', 'numeric', 'min:0', 'max:9999.99'],
         ];
     }
 
@@ -81,7 +87,36 @@ class PricingPreviewRequest extends FormRequest
             'quantity' => 'quantidade',
             'material_id' => 'material',
             'printer_profile_id' => 'impressora',
+            'plates' => 'placas',
+            'manual_color_changes' => 'trocas de cor',
+            'design_minutes' => 'tempo de design',
+            'reference_filament_cost' => 'filamento do slicer',
         ];
+    }
+
+    public function plates(): int
+    {
+        return max(1, (int) $this->input('plates', 1));
+    }
+
+    public function manualColorChanges(): int
+    {
+        return max(0, (int) $this->input('manual_color_changes', 0));
+    }
+
+    public function designMinutes(): int
+    {
+        return max(0, (int) $this->input('design_minutes', 0));
+    }
+
+    /** Null quando nao veio: vazio nao e "o slicer disse zero". */
+    public function referenceFilamentCostCents(): ?int
+    {
+        $value = $this->input('reference_filament_cost');
+
+        return (is_string($value) && $value !== '') || is_numeric($value)
+            ? Money::fromDecimal((string) $value)
+            : null;
     }
 
     public function mode(): string
@@ -204,11 +239,21 @@ class PricingPreviewRequest extends FormRequest
      *     quantity: int,
      *     material_id: int|null,
      *     printer_profile_id: int|null,
+     *     plates: int,
+     *     manual_color_changes: int,
+     *     design_minutes: int,
+     *     reference_filament_cost: string,
      * }
      */
     public function toFormFields(): array
     {
+        $reference = $this->referenceFilamentCostCents();
+
         return [
+            'plates' => $this->plates(),
+            'manual_color_changes' => $this->manualColorChanges(),
+            'design_minutes' => $this->designMinutes(),
+            'reference_filament_cost' => $reference === null ? '' : Money::toDecimal($reference),
             'mode' => $this->mode(),
             'weight_grams' => $this->weightGrams(),
             'hours' => intdiv($this->printTimeMinutes(), 60),

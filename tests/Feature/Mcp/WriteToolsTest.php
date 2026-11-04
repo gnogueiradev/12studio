@@ -380,7 +380,14 @@ class WriteToolsTest extends TestCase
     public function test_calculated_prices_are_a_dry_run_unless_told_otherwise(): void
     {
         $material = Material::factory()->create(['price_per_kg_cents' => 2000]);
-        $variant = $this->variant(['material_id' => $material->id, 'filament_weight_grams' => 50, 'printing_time_minutes' => 120]);
+        // A 1,00 EUR, abaixo de qualquer sugestao: aplicar nunca baixa um preco.
+        $variant = $this->variant([
+            'material_id' => $material->id,
+            'filament_weight_grams' => 50,
+            'printing_time_minutes' => 120,
+            'price_cents' => 100,
+            'wholesale_price_cents' => 100,
+        ]);
         $blank = $this->variant(['product_id' => $variant->product_id]);
 
         $this->writer()->tool(VariantsApplyCalculatedPricesTool::class, ['product_id' => $variant->product_id])
@@ -388,14 +395,39 @@ class WriteToolsTest extends TestCase
             ->assertSee('"dry_run":true')
             ->assertSee('suggested');
 
-        $this->assertSame(2000, $variant->refresh()->price_cents);
+        $this->assertSame(100, $variant->refresh()->price_cents);
 
         $this->writer()->tool(VariantsApplyCalculatedPricesTool::class, ['product_id' => $variant->product_id, 'dry_run' => false])
             ->assertOk()
             ->assertSee('aplicados a 1');
 
-        $this->assertNotSame(2000, $variant->refresh()->price_cents);
+        $this->assertGreaterThan(100, $variant->refresh()->price_cents);
+        $this->assertGreaterThan(100, $variant->wholesale_price_cents);
         $this->assertSame(2000, $blank->refresh()->price_cents);
+    }
+
+    /** Um preco ja acima do Recomendado nunca se baixa, e o ensaio di-lo. */
+    public function test_calculated_prices_keep_a_higher_current_price_and_say_so(): void
+    {
+        $material = Material::factory()->create(['price_per_kg_cents' => 2000]);
+        $variant = $this->variant([
+            'material_id' => $material->id,
+            'filament_weight_grams' => 50,
+            'printing_time_minutes' => 120,
+            'price_cents' => 5_000,
+            'wholesale_price_cents' => 3_000,
+        ]);
+
+        $this->writer()->tool(VariantsApplyCalculatedPricesTool::class, ['product_id' => $variant->product_id])
+            ->assertOk()
+            ->assertSee('Mantém o preço atual');
+
+        $this->writer()->tool(VariantsApplyCalculatedPricesTool::class, ['product_id' => $variant->product_id, 'dry_run' => false])
+            ->assertOk();
+
+        $variant->refresh();
+        $this->assertSame(5_000, $variant->price_cents);
+        $this->assertSame(3_000, $variant->wholesale_price_cents);
     }
 
     public function test_calculated_prices_are_capped_at_fifty_variants(): void

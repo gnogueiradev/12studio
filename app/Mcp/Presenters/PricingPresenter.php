@@ -3,7 +3,9 @@
 namespace App\Mcp\Presenters;
 
 use App\Mcp\McpFormat;
+use App\Services\PricingSettings;
 use App\Support\Micros;
+use App\Support\PriceTier;
 use App\Support\PricingResult;
 
 /**
@@ -22,6 +24,9 @@ final class PricingPresenter
     public static function suggested(PricingResult $result): array
     {
         return [
+            // Compatibilidade: retail_price e wholesale_price sao os de
+            // sempre, agora com o valor do Recomendado (e da revenda que sai
+            // dele). Os tres niveis estao em `tiers`.
             'retail_price' => McpFormat::micros($result->retailPriceMicros),
             'wholesale_price' => McpFormat::micros($result->wholesalePriceMicros),
             // Os mesmos dois sem IVA: e sobre estes, e nao sobre os de
@@ -29,7 +34,112 @@ final class PricingPresenter
             'retail_price_ex_vat' => McpFormat::micros($result->retailPriceExVatMicros()),
             'wholesale_price_ex_vat' => McpFormat::micros($result->wholesalePriceExVatMicros()),
             'vat_percent' => $result->vatRateBp / 100,
+            'wholesale_rule' => $result->tiers->wholesaleRule,
+            'tiers' => self::tiers($result),
         ];
+    }
+
+    /**
+     * Os tres niveis, por unidade, com os totais do trabalho ao lado.
+     *
+     * `rule` diz qual das regras decidiu o preco: margin (a margem de sempre),
+     * per_hour (horas de impressora x lucro por hora) ou min_job (lucro minimo
+     * do trabalho, so em orcamentos).
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    public static function tiers(PricingResult $result): array
+    {
+        $out = [];
+
+        foreach ($result->tiers->all() as $name => $tier) {
+            $out[$name] = [
+                'price' => McpFormat::micros($tier->priceMicros),
+                'price_ex_vat' => McpFormat::micros($tier->priceExVatMicros),
+                'vat' => McpFormat::money(Micros::toCents($tier->priceMicros) - Micros::toCents($tier->priceExVatMicros)),
+                'profit' => self::cents($tier->profitMicros()),
+                'profit_total' => self::cents($tier->profitMicros() * $result->quantity),
+                'margin_percent' => round($tier->marginBp() / 100, 1),
+                'profit_per_print_hour' => self::cents($tier->profitPerPrintHourMicros()),
+                // O lucro mais o meu trabalho e o design, por hora de impressora.
+                'earnings_per_print_hour' => self::cents($tier->earningsPerPrintHourMicros()),
+                'rule' => $tier->rule,
+                'raised_for_order' => $tier->raisedForOrder,
+                'design_cost' => self::cents($tier->designCostMicros),
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
+     * A mao de obra discriminada, em minutos do trabalho, e o design.
+     *
+     * @return array<string, mixed>
+     */
+    public static function labor(PricingResult $result): array
+    {
+        return [
+            'minutes' => [
+                'base' => $result->laborBreakdownMinutes['base'],
+                'quote_minimum' => $result->laborBreakdownMinutes['quote_minimum'],
+                'plates' => $result->laborBreakdownMinutes['plates'],
+                'color_changes' => $result->laborBreakdownMinutes['color_changes'],
+                'total' => $result->laborMinutes,
+            ],
+            'design_minutes' => $result->designMinutes,
+            'design_cost_per_unit' => self::cents($result->tiers->premium->designCostMicros),
+        ];
+    }
+
+    /**
+     * Os avisos do calculo. O do preco atual so existe para uma variante, e e
+     * quem a tem que o passa.
+     *
+     * @return list<array{code: string, message: string}>
+     */
+    public static function warnings(PricingResult $result, ?int $currentPriceCents = null): array
+    {
+        $warnings = [];
+        $minimum = $result->tiers->minimum;
+
+        if ($currentPriceCents !== null) {
+            $minimumCents = Micros::toCents($minimum->priceMicros);
+
+            if ($currentPriceCents < $minimumCents) {
+                $warnings[] = [
+                    'code' => 'current_price_below_minimum',
+                    'message' => 'O preço atual ('.self::eur($currentPriceCents).') está abaixo do Mínimo sugerido ('.self::eur($minimumCents).').',
+                ];
+            }
+
+            $currentExVat = $result->exVat(Micros::fromCents($currentPriceCents));
+            $hours = $minimum->printMilliMinutes;
+            $currentPerHour = $hours <= 0 ? 0 : Micros::divRound(($currentExVat - $result->productionCostMicros) * 60_000, $hours);
+            $floorPerHour = app(PricingSettings::class)->tierProfitMicrosPerHour(PriceTier::MINIMUM);
+
+            if ($currentPerHour < $floorPerHour) {
+                $warnings[] = [
+                    'code' => 'profit_per_hour_below_minimum',
+                    'message' => 'Ao preço atual, o lucro é '.self::eur(Micros::toCents($currentPerHour)).' por hora de impressora — abaixo dos '.self::eur(Micros::toCents($floorPerHour)).' do Mínimo.',
+                ];
+            }
+        }
+
+        if ($result->filamentReferenceExceeded()) {
+            $warnings[] = [
+                'code' => 'filament_reference_mismatch',
+                'message' => 'O filamento calculado ('.self::eur(Micros::toCents($result->filamentJobCostAsWrittenMicros)).' com IVA) difere '
+                    .str_replace('.', ',', (string) round((int) $result->filamentReferenceDiffBp() / 100, 1)).'% do valor do slicer ('.self::eur((int) $result->referenceFilamentCostCents).'). Confirma o €/kg do material e o peso.',
+            ];
+        }
+
+        return $warnings;
+    }
+
+    private static function eur(int $cents): string
+    {
+        return McpFormat::money($cents)['eur'];
     }
 
     /**

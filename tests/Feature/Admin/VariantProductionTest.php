@@ -17,8 +17,12 @@ use Tests\TestCase;
  * de 20cm nao e a de 10cm — e os precos calculados a partir deles vao para
  * todas as variantes.
  *
- * Os numeros sao os da peca de referencia do PricingCalculatorTest: 50 g a
- * 17,00 EUR/kg, 3 h na Bambu Lab A1 -> 4,00 EUR de revenda, 7,00 EUR ao cliente.
+ * Os numeros sao os da peca de referencia do PricingVatTest: 50 g a 17,00
+ * EUR/kg, 3 h na Bambu Lab A1, IVA a 23% -> Recomendado 9,49 EUR, revenda
+ * 4,99 EUR.
+ *
+ * Aplicar precos NUNCA baixa um preco ja definido: as variantes que tem de
+ * receber a sugestao nascem a 1,00 EUR (a fabrica sorteia entre 5 e 99).
  */
 class VariantProductionTest extends TestCase
 {
@@ -191,8 +195,8 @@ class VariantProductionTest extends TestCase
      */
     public function test_applying_prices_after_saving_per_size_prices_each_size_apart(): void
     {
-        $small = Variant::factory()->for($this->product)->create(['size_label' => '10cm', 'material_id' => $this->material->id]);
-        $big = Variant::factory()->for($this->product)->create(['size_label' => '20cm', 'material_id' => $this->material->id]);
+        $small = Variant::factory()->for($this->product)->create(['size_label' => '10cm', 'material_id' => $this->material->id, 'price_cents' => 100]);
+        $big = Variant::factory()->for($this->product)->create(['size_label' => '20cm', 'material_id' => $this->material->id, 'price_cents' => 100]);
 
         $this->actingAs($this->admin)
             ->patch(route('admin.produtos.variantes.producao', $this->product), ['sizes' => [
@@ -205,8 +209,8 @@ class VariantProductionTest extends TestCase
             ->post(route('admin.produtos.variantes.precos', $this->product))
             ->assertSessionHasNoErrors();
 
-        $this->assertSame(700, $small->refresh()->price_cents);
-        $this->assertGreaterThan(700, $big->refresh()->price_cents);
+        $this->assertSame(949, $small->refresh()->price_cents);
+        $this->assertGreaterThan(949, $big->refresh()->price_cents);
     }
 
     public function test_a_request_without_sizes_is_refused(): void
@@ -289,14 +293,14 @@ class VariantProductionTest extends TestCase
             'material_id' => $this->material->id,
             'filament_weight_grams' => 50,
             'printing_time_minutes' => 180,
-            'price_cents' => 1_000,
+            'price_cents' => 100,
             'wholesale_price_cents' => null,
         ]);
         $premium = Variant::factory()->for($this->product)->create([
             'material_id' => $pricier->id,
             'filament_weight_grams' => 50,
             'printing_time_minutes' => 180,
-            'price_cents' => 1_000,
+            'price_cents' => 100,
             'wholesale_price_cents' => null,
         ]);
         $noMaterial = Variant::factory()->for($this->product)->create([
@@ -311,13 +315,13 @@ class VariantProductionTest extends TestCase
             ->post(route('admin.produtos.variantes.precos', $this->product))
             ->assertRedirect(route('admin.produtos.edit', $this->product));
 
-        $this->assertSame(700, $reference->refresh()->price_cents);
-        $this->assertSame(400, $reference->wholesale_price_cents);
+        $this->assertSame(949, $reference->refresh()->price_cents);
+        $this->assertSame(499, $reference->wholesale_price_cents);
         $this->assertNull($reference->compare_at_cents);
 
         $premium->refresh();
-        $this->assertGreaterThan(700, $premium->price_cents);
-        $this->assertGreaterThan(400, $premium->wholesale_price_cents);
+        $this->assertGreaterThan(949, $premium->price_cents);
+        $this->assertGreaterThan(499, $premium->wholesale_price_cents);
 
         // Sem material o plastico seria de graca: fica como estava.
         $this->assertSame(1_000, $noMaterial->refresh()->price_cents);
@@ -350,7 +354,7 @@ class VariantProductionTest extends TestCase
             'material_id' => $this->material->id,
             'filament_weight_grams' => 50,
             'printing_time_minutes' => 180,
-            'price_cents' => 1_000,
+            'price_cents' => 100,
             'active' => false,
         ]);
 
@@ -358,8 +362,8 @@ class VariantProductionTest extends TestCase
             ->post(route('admin.produtos.variantes.precos', $this->product))
             ->assertRedirect();
 
-        $this->assertSame(700, $archived->refresh()->price_cents);
-        $this->assertSame(400, $archived->wholesale_price_cents);
+        $this->assertSame(949, $archived->refresh()->price_cents);
+        $this->assertSame(499, $archived->wholesale_price_cents);
     }
 
     /**
@@ -373,7 +377,8 @@ class VariantProductionTest extends TestCase
             'filament_weight_grams' => 50,
             'printing_time_minutes' => 180,
             'price_cents' => 500,
-            'compare_at_cents' => 1_000,
+            // Normal abaixo do Recomendado (9,49), para a sugestao entrar.
+            'compare_at_cents' => 800,
         ]);
 
         $this->actingAs($this->admin)
@@ -381,14 +386,16 @@ class VariantProductionTest extends TestCase
 
         $variant->refresh();
         $this->assertSame(500, $variant->price_cents);
-        $this->assertSame(700, $variant->compare_at_cents);
+        $this->assertSame(949, $variant->compare_at_cents);
     }
 
     /**
-     * Uma promocao igual ou acima do novo preco normal era um anuncio de
-     * aumento, nao um desconto — a mesma regra do StoreVariantRequest. Cai.
+     * Uma promocao esta sempre abaixo do preco normal atual, e o normal nunca
+     * desce ao aplicar precos: por isso uma promocao nunca deixa de ser
+     * desconto, e nunca cai. (Antes do "nunca baixar", um normal que descesse
+     * ate a promocao fazia-a cair.)
      */
-    public function test_applying_prices_drops_a_sale_that_would_no_longer_be_a_discount(): void
+    public function test_applying_prices_never_drops_a_sale_because_the_normal_never_drops(): void
     {
         $variant = Variant::factory()->for($this->product)->create([
             'material_id' => $this->material->id,
@@ -402,8 +409,41 @@ class VariantProductionTest extends TestCase
             ->post(route('admin.produtos.variantes.precos', $this->product));
 
         $variant->refresh();
-        $this->assertSame(700, $variant->price_cents);
-        $this->assertNull($variant->compare_at_cents);
+        $this->assertSame(800, $variant->price_cents);
+        $this->assertSame(1_000, $variant->compare_at_cents, 'o normal (10,00) fica acima do Recomendado (9,49)');
+    }
+
+    /** A regra da casa: um preco ja definido nunca se baixa, nem o normal nem a revenda. */
+    public function test_applying_prices_keeps_higher_normal_and_wholesale_prices(): void
+    {
+        $variant = Variant::factory()->for($this->product)->create([
+            'material_id' => $this->material->id,
+            'filament_weight_grams' => 50,
+            'printing_time_minutes' => 180,
+            'price_cents' => 1_500,
+            'compare_at_cents' => null,
+            'wholesale_price_cents' => 600,
+        ]);
+        $low = Variant::factory()->for($this->product)->create([
+            'material_id' => $this->material->id,
+            'filament_weight_grams' => 50,
+            'printing_time_minutes' => 180,
+            'price_cents' => 1_500,
+            'wholesale_price_cents' => 100,
+        ]);
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.produtos.variantes.precos', $this->product))
+            ->assertRedirect();
+
+        $variant->refresh();
+        $this->assertSame(1_500, $variant->price_cents, 'acima do Recomendado (9,49): fica');
+        $this->assertSame(600, $variant->wholesale_price_cents, 'acima da revenda sugerida (4,99): fica');
+
+        // So a revenda abaixo da sugerida sobe; o normal fica.
+        $low->refresh();
+        $this->assertSame(1_500, $low->price_cents);
+        $this->assertSame(499, $low->wholesale_price_cents);
     }
 
     public function test_applying_prices_uses_the_variant_own_printer(): void
@@ -422,13 +462,13 @@ class VariantProductionTest extends TestCase
             'filament_weight_grams' => 50,
             'printing_time_minutes' => 180,
             'printer_profile_id' => $expensive->id,
-            'price_cents' => 1_000,
+            'price_cents' => 100,
         ]);
 
         $this->actingAs($this->admin)
             ->post(route('admin.produtos.variantes.precos', $this->product));
 
-        $this->assertGreaterThan(700, $variant->refresh()->price_cents);
+        $this->assertGreaterThan(949, $variant->refresh()->price_cents);
     }
 
     public function test_the_product_modal_shows_the_suggested_prices_per_variant(): void
@@ -446,8 +486,8 @@ class VariantProductionTest extends TestCase
                 ->where('editing.variants', function ($variants) use ($variant, $blank): bool {
                     $rows = collect($variants)->keyBy('id');
 
-                    return $rows[$variant->id]['suggestedRetailCents'] === 700
-                        && $rows[$variant->id]['suggestedWholesaleCents'] === 400
+                    return $rows[$variant->id]['suggestedRetailCents'] === 949
+                        && $rows[$variant->id]['suggestedWholesaleCents'] === 499
                         && $rows[$blank->id]['suggestedRetailCents'] === null
                         && $rows[$blank->id]['suggestedWholesaleCents'] === null;
                 }));

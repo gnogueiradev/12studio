@@ -62,13 +62,17 @@ class PricingPreview
      * `printer` a null quer dizer que nao ha impressora ativa nenhuma e que a
      * maquina veio do config.
      *
+     * `$quote` e true na calculadora livre e no pricing_calculate: so ai entram
+     * as placas, as trocas de cor, o minimo de trabalho e o lucro minimo por
+     * trabalho. A ficha de variante chama sem ele — e uma peca de catalogo.
+     *
      * @return array{
      *     result: PricingResult|null,
      *     printer: PrinterProfile|null,
      *     hourlyCostMicros: int,
      * }
      */
-    public function simulate(PricingPreviewRequest $request, ?Product $product = null): array
+    public function simulate(PricingPreviewRequest $request, ?Product $product = null, bool $quote = false): array
     {
         $printer = $this->printers->resolve($request->printerProfileId());
 
@@ -93,6 +97,11 @@ class PricingPreview
                 vatRateBp: $this->vatRateBp($product),
                 mode: $request->mode(),
                 quantity: $request->quantity(),
+                quote: $quote,
+                plates: $request->plates(),
+                manualColorChanges: $request->manualColorChanges(),
+                designMinutes: $request->designMinutes(),
+                referenceFilamentCostCents: $request->referenceFilamentCostCents(),
             )
             : null;
 
@@ -172,6 +181,11 @@ class PricingPreview
         int $vatRateBp,
         string $mode = PricingInput::MODE_PER_UNIT,
         int $quantity = 1,
+        bool $quote = false,
+        int $plates = 1,
+        int $manualColorChanges = 0,
+        int $designMinutes = 0,
+        ?int $referenceFilamentCostCents = null,
     ): PricingResult {
         return $this->calculator->calculate(new PricingInput(
             mode: $mode,
@@ -188,6 +202,11 @@ class PricingPreview
             activeLaborMinutes: $activeLaborMinutes,
             quantity: $quantity,
             printerProfileId: $printerProfileId,
+            quote: $quote,
+            plates: $plates,
+            manualColorChanges: $manualColorChanges,
+            designMinutes: $designMinutes,
+            referenceFilamentCostCents: $referenceFilamentCostCents,
         ));
     }
 

@@ -48,6 +48,56 @@ export type PricingFormFields = {
      */
     material_id: number | null;
     printer_profile_id: number | null;
+    /** Placas de impressão: da peça, ou da mesa em lote. */
+    plates: number;
+    /** Trocas manuais de filamento, no mesmo âmbito das placas. */
+    manual_color_changes: number;
+    /** Minutos de design do trabalho todo — só no preço Premium. */
+    design_minutes: number;
+    /** O filamento que o slicer mostra (€ com IVA). Vazio = não comparar. */
+    reference_filament_cost: string;
+};
+
+export const PRICE_TIER_NAMES = ['minimum', 'recommended', 'premium'] as const;
+
+export type PriceTierName = (typeof PRICE_TIER_NAMES)[number];
+
+export const PRICE_TIER_LABELS: Record<PriceTierName, string> = {
+    minimum: 'Mínimo',
+    recommended: 'Recomendado',
+    premium: 'Premium',
+};
+
+/** A regra que decidiu o preço de um nível. */
+export type PriceTierRule = 'margin' | 'per_hour' | 'min_job';
+
+/** "Decidido …": porque é que o preço é este. */
+export const PRICE_TIER_RULE_LABELS: Record<PriceTierRule, string> = {
+    margin: 'pela margem',
+    per_hour: 'pelas horas de impressora',
+    min_job: 'pelo lucro mínimo do trabalho',
+};
+
+/** Um dos três preços sugeridos, por unidade. */
+export type PriceTier = {
+    /** Com IVA, terminado em ,49 / ,99. */
+    priceCents: number;
+    priceExVatCents: number;
+    vatCents: number;
+    /** O custo deste nível: produção, mais o design no Premium. Sem IVA. */
+    costCents: number;
+    designCostCents: number;
+    /** Sem IVA, por unidade e do trabalho todo. */
+    profitCents: number;
+    jobProfitCents: number;
+    marginBp: number;
+    /** Lucro por hora de impressora. */
+    profitPerPrintHourCents: number;
+    /** O lucro mais o meu trabalho e o design, por hora de impressora. */
+    earningsPerPrintHourCents: number;
+    rule: PriceTierRule;
+    /** Subiu para não empatar com o nível de baixo. */
+    raisedForOrder: boolean;
 };
 
 /**
@@ -67,6 +117,29 @@ export type PricingBreakdown = {
     quantity: number;
     /** Minutos de trabalho humano do trabalho todo (em lote: montagem + peças). */
     laborMinutes: number;
+    /** Os mesmos minutos, parcela a parcela. Fora dos orçamentos só a base conta. */
+    laborBreakdownMinutes: {
+        base: number;
+        quote_minimum: number;
+        plates: number;
+        color_changes: number;
+    };
+    /** Orçamento (calculadora livre) ou peça de catálogo. */
+    quote: boolean;
+    designMinutes: number;
+    plates: number;
+    manualColorChanges: number;
+    /** Os três preços sugeridos. O Recomendado é o retailPriceCents. */
+    tiers: Record<PriceTierName, PriceTier>;
+    wholesaleRule: 'share' | 'floor' | 'minimum_price';
+    /** O preço ao cliente da regra da margem sozinha, como era antes. */
+    marginRetailPriceCents: number;
+    filamentReference: {
+        referenceCents: number;
+        calculatedCents: number;
+        diffBp: number | null;
+        exceeded: boolean;
+    } | null;
 
     // As sete parcelas do custo, já por unidade.
     filamentCostMicros: number;
@@ -217,4 +290,17 @@ export type PricingSettingsForm = {
     channel_percentage_fee: string;
     /** O IVA que vem dentro dos custos escritos. "0" = já estão sem IVA. */
     cost_vat_percent: string;
+    quote_min_labor_minutes: number;
+    labor_minutes_per_extra_plate: number;
+    labor_minutes_per_color_change: number;
+    design_rate: string;
+    tier_minimum_profit_per_hour: string;
+    tier_recommended_profit_per_hour: string;
+    tier_premium_profit_per_hour: string;
+    tier_minimum_job_profit: string;
+    tier_recommended_job_profit: string;
+    tier_premium_job_profit: string;
+    wholesale_share_percent: string;
+    wholesale_floor_percent: string;
+    filament_reference_tolerance_percent: string;
 };

@@ -55,6 +55,25 @@ final readonly class PricingInput
         public ?int $activeLaborMinutes = null,
         public int $quantity = 1,
         public ?int $printerProfileId = null,
+        /*
+         * ORCAMENTO (calculadora livre, pricing_calculate) ou peca de catalogo
+         * (variante). So os orcamentos levam o minimo de trabalho, as placas,
+         * as trocas de cor e o lucro minimo por trabalho: uma variante e uma
+         * peca que se repete, e o custo dela e o que a Etsy e o travao de
+         * precos do MCP leem — nao pode mudar por regras de trabalho por medida.
+         */
+        public bool $quote = false,
+        /** Placas do trabalho: de UMA peca em per_unit, da mesa em batch. */
+        public int $plates = 1,
+        /** Trocas manuais de filamento, no mesmo ambito das placas. */
+        public int $manualColorChanges = 0,
+        /** Minutos de design do trabalho TODO: cobra-se uma vez, so no Premium. */
+        public int $designMinutes = 0,
+        /**
+         * O custo do filamento que o slicer mostra, COM IVA (e como o Bambu
+         * Studio o da), no mesmo ambito do peso. Null = nao ha com que comparar.
+         */
+        public ?int $referenceFilamentCostCents = null,
     ) {}
 
     public function isBatch(): bool
