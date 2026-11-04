@@ -20,7 +20,8 @@ return [
     | Imagens de produto (12studio)
     |--------------------------------------------------------------------------
     |
-    | Limites do product_image_add. Nao sao os da galeria do backoffice (5 MB,
+    | Limites do product_image_add (e do envio as fatias, que acaba no mesmo
+    | sitio). Nao sao os da galeria do backoffice (5 MB,
     | sem minimo de dimensoes): esses vivem no StoreProductImageRequest. Os
     | megapixeis travam imagens que pesam pouco e descomprimem para muito.
     |
@@ -30,6 +31,15 @@ return [
         'max_bytes' => (int) env('MCP_IMAGE_MAX_BYTES', 8 * 1024 * 1024),
         'min_side' => (int) env('MCP_IMAGE_MIN_SIDE', 600),
         'max_megapixels' => (float) env('MCP_IMAGE_MAX_MEGAPIXELS', 50),
+
+        // Envio as fatias (product_image_upload_*): quanto tempo um upload
+        // por acabar fica guardado, o maior pedaco aceite (bytes ja
+        // descodificados), quantos pedacos no maximo, e quantos pedacos por
+        // minuto cada chave pode mandar (a parte do limite das escritas).
+        'upload_ttl_minutes' => (int) env('MCP_IMAGE_UPLOAD_TTL_MINUTES', 60),
+        'upload_max_chunk_bytes' => (int) env('MCP_IMAGE_UPLOAD_MAX_CHUNK_BYTES', 64 * 1024),
+        'upload_max_chunks' => (int) env('MCP_IMAGE_UPLOAD_MAX_CHUNKS', 1024),
+        'upload_chunks_per_minute' => (int) env('MCP_IMAGE_UPLOAD_CHUNKS_PER_MINUTE', 240),
     ],
 
     /*
