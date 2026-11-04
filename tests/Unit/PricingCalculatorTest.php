@@ -87,22 +87,36 @@ class PricingCalculatorTest extends TestCase
         $this->assertSame(105_181, $result->failureCostMicros(), 'o que o risco acrescentou');
         $this->assertSame(2_103_618, $result->productionCostMicros, 'subtotal / 0,95');
 
+        // A REGRA DA MARGEM sozinha, com os arredondamentos dela: e a ancora
+        // da formula antiga, e a regra (a) dos tres niveis.
         $this->assertSame(3_506_030, $result->rawWholesalePriceMicros, 'custo / 0,60');
-        $this->assertSame(4_000_000, $result->wholesalePriceMicros, 'para cima, ao proximo 0,50 EUR');
+        $this->assertSame(4_000_000, $result->marginWholesalePriceMicros, 'para cima, ao proximo 0,50 EUR');
 
         $this->assertSame(6_666_667, $result->rawRetailPriceMicros, 'revenda / 0,60');
-        $this->assertSame(7_000_000, $result->retailPriceMicros, 'para cima, ao proximo 0,50 EUR');
+        $this->assertSame(7_000_000, $result->marginRetailPriceMicros, 'para cima, ao proximo 0,50 EUR');
+
+        // Os tres niveis (IVA a 0%, 3 h de impressora):
+        //   Minimo:      max(margem 6,666667; 2,103618 + 3 x 1,40 = 6,303618) -> 6,67 -> 6,99
+        //   Recomendado: max(margem 6,666667; 2,103618 + 3 x 1,90 = 7,803618) -> 7,81 -> 7,99
+        //   Premium:     max(margem 6,666667; 2,103618 + 3 x 2,30 = 9,003618) -> 9,01 -> 9,49
+        $this->assertSame(6_990_000, $result->tiers->minimum->priceMicros);
+        $this->assertSame(7_990_000, $result->tiers->recommended->priceMicros);
+        $this->assertSame(9_490_000, $result->tiers->premium->priceMicros);
+        $this->assertSame(7_990_000, $result->retailPriceMicros, 'o preco sugerido e o Recomendado');
+
+        // Revenda: max(50% de 7,99 = 3,995; 2,103618 x 1,3 = 2,73; 1,50) -> 4,00 -> 4,49.
+        $this->assertSame(4_490_000, $result->wholesalePriceMicros);
 
         // O meu lucro, nas duas vendas.
-        $this->assertSame(1_896_382, $result->wholesaleProfitMicros());
-        $this->assertSame(4_741, $result->wholesaleMarginBp(), '47,41% — acima dos 40% pedidos, por causa do arredondamento');
-        $this->assertSame(4_896_382, $result->directProfitMicros());
-        $this->assertSame(6_995, $result->directMarginBp(), '69,95%');
+        $this->assertSame(2_386_382, $result->wholesaleProfitMicros(), '4,49 - 2,103618');
+        $this->assertSame(5_315, $result->wholesaleMarginBp(), '2,386382 / 4,49 = 53,15%');
+        $this->assertSame(5_886_382, $result->directProfitMicros(), '7,99 - 2,103618');
+        $this->assertSame(7_367, $result->directMarginBp(), '5,886382 / 7,99 = 73,67%');
 
-        // O lucro de quem revende: compra a 4, vende a 7.
-        $this->assertSame(3_000_000, $result->resellerProfitMicros());
-        $this->assertSame(4_286, $result->resellerMarginBp(), '42,86%');
-        $this->assertSame(7_500, $result->resellerMarkupBp(), '75% sobre o que pagou');
+        // O lucro de quem revende: compra a 4,49, vende a 7,99.
+        $this->assertSame(3_500_000, $result->resellerProfitMicros());
+        $this->assertSame(4_380, $result->resellerMarginBp(), '3,50 / 7,99 = 43,80%');
+        $this->assertSame(7_795, $result->resellerMarkupBp(), '3,50 / 4,49 = 77,95% sobre o que pagou');
     }
 
     /**
@@ -172,9 +186,11 @@ class PricingCalculatorTest extends TestCase
         for ($minutes = 10; $minutes <= 3_000; $minutes += 37) {
             $result = $this->part(grams: (int) ($minutes / 3), minutes: $minutes);
 
+            // A regra da margem, com as faixas dela. Os niveis tem as
+            // terminacoes ,49 / ,99 e estao no PricingTiersTest.
             $this->assertGreaterThanOrEqual(
                 $result->rawRetailPriceMicros,
-                $result->retailPriceMicros,
+                $result->marginRetailPriceMicros,
                 "o preco desceu abaixo do bruto aos {$minutes} min",
             );
 
@@ -184,7 +200,10 @@ class PricingCalculatorTest extends TestCase
                 default => 5_000_000,
             };
 
-            $this->assertSame(0, $result->retailPriceMicros % $step, "nao e um preco comercial aos {$minutes} min");
+            $this->assertSame(0, $result->marginRetailPriceMicros % $step, "nao e um preco comercial aos {$minutes} min");
+
+            // E o Recomendado nunca fica abaixo do bruto da margem.
+            $this->assertGreaterThanOrEqual($result->rawRetailPriceMicros, $result->retailPriceMicros);
         }
     }
 
@@ -201,9 +220,17 @@ class PricingCalculatorTest extends TestCase
         for ($minutes = 10; $minutes <= 3_000; $minutes += 37) {
             $result = $this->part(grams: (int) ($minutes / 3), minutes: $minutes);
 
+            // Sobre os dois precos da REGRA DA MARGEM: e ela que promete a
+            // margem do revendedor. A revenda sugerida dos niveis e outra
+            // regra (fracao do Recomendado, com chao) e esta no PricingTiersTest.
+            $resellerMarginBp = Micros::divRound(
+                ($result->marginRetailPriceMicros - $result->marginWholesalePriceMicros) * Rate::PER_UNIT,
+                $result->marginRetailPriceMicros,
+            );
+
             $this->assertGreaterThanOrEqual(
                 $result->targetResellerMarginBp,
-                $result->resellerMarginBp(),
+                $resellerMarginBp,
                 "o revendedor ficou abaixo do alvo aos {$minutes} min",
             );
         }
@@ -272,7 +299,7 @@ class PricingCalculatorTest extends TestCase
 
         $this->assertLessThan(900_000, $result->productionCostMicros);
         $this->assertSame(1_500_000, $result->rawWholesalePriceMicros, 'o chao ganhou a margem');
-        $this->assertSame(1_500_000, $result->wholesalePriceMicros, 'e ja e um degrau exato de 0,50');
+        $this->assertSame(1_500_000, $result->marginWholesalePriceMicros, 'e ja e um degrau exato de 0,50');
     }
 
     /**
@@ -334,7 +361,7 @@ class PricingCalculatorTest extends TestCase
         $result = $this->part(grams: 500, minutes: 600);
 
         $this->assertSame(31_666_667, $result->rawRetailPriceMicros);
-        $this->assertSame(32_000_000, $result->retailPriceMicros, 'entre 20 e 50 EUR sobe ao euro');
+        $this->assertSame(32_000_000, $result->marginRetailPriceMicros, 'entre 20 e 50 EUR sobe ao euro');
     }
 
     public function test_the_retail_price_uses_the_five_euro_band_above_fifty(): void
@@ -342,7 +369,7 @@ class PricingCalculatorTest extends TestCase
         $result = $this->part(grams: 1_000, minutes: 1_200);
 
         $this->assertSame(61_666_667, $result->rawRetailPriceMicros);
-        $this->assertSame(65_000_000, $result->retailPriceMicros, 'acima de 50 EUR sobe aos 5 EUR');
+        $this->assertSame(65_000_000, $result->marginRetailPriceMicros, 'acima de 50 EUR sobe aos 5 EUR');
     }
 
     /**
@@ -364,10 +391,10 @@ class PricingCalculatorTest extends TestCase
         $this->assertSame($free->retailPriceMicros, $marketplace->retailPriceMicros, 'o preco publico e o mesmo');
         $this->assertSame($free->productionCostMicros, $marketplace->productionCostMicros, 'e o custo tambem');
 
-        // 0,35 EUR fixos + 10% de 7,00 EUR.
-        $this->assertSame(1_050_000, $marketplace->channelFeeMicros);
+        // 0,35 EUR fixos + 10% de 7,99 EUR (o Recomendado).
+        $this->assertSame(1_149_000, $marketplace->channelFeeMicros);
         $this->assertSame(
-            $marketplace->directProfitMicros() - 1_050_000,
+            $marketplace->directProfitMicros() - 1_149_000,
             $marketplace->netDirectProfitMicros(),
         );
     }

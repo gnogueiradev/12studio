@@ -6,6 +6,7 @@ use App\Models\Material;
 use App\Models\PrinterProfile;
 use App\Models\User;
 use App\Services\PricingSettings;
+use App\Services\SettingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia;
 use Tests\Concerns\PricesWithoutVat;
@@ -31,6 +32,9 @@ class PricingSettingsTest extends TestCase
     private function validPayload(): array
     {
         return [
+            // Os campos dos orcamentos e dos tres niveis, tal como estao: estes
+            // testes sao sobre os de baixo, e o formulario manda sempre todos.
+            ...app(PricingSettings::class)->toForm(),
             'electricity_price' => '0.1420',
             'labor_rate' => '8.00',
             'active_labor_minutes' => 5,
@@ -82,6 +86,10 @@ class PricingSettingsTest extends TestCase
     {
         // Os numeros sao os da formula por baixo do IVA: ver o trait.
         $this->pricesWithoutVat();
+
+        // A calculadora livre e um orcamento (minimo de 20 min de trabalho);
+        // os numeros aqui sao os da peca de referencia, com 5 min.
+        app(SettingService::class)->set(PricingSettings::KEY_QUOTE_MIN_LABOR_MINUTES, 0);
 
         PrinterProfile::factory()->isDefault()->create([
             'average_power_watts' => 145,
@@ -141,6 +149,48 @@ class PricingSettingsTest extends TestCase
         $this->assertSame(173_500, $pricing->electricityPriceMicrosPerKwh());
         $this->assertSame(12_500_000, $pricing->laborRateMicrosPerHour());
         $this->assertSame(200, $pricing->minimumWholesalePriceCents());
+    }
+
+    /** Os orcamentos e os tres niveis gravam-se no mesmo formulario, com virgula. */
+    public function test_the_quote_and_tier_settings_are_saved(): void
+    {
+        $this->actingAs($this->admin)
+            ->patch(route('admin.definicoes.precos'), [
+                ...$this->validPayload(),
+                'quote_min_labor_minutes' => 25,
+                'labor_minutes_per_extra_plate' => 6,
+                'labor_minutes_per_color_change' => 4,
+                'design_rate' => '20,00',
+                'tier_recommended_profit_per_hour' => '2,10',
+                'tier_premium_job_profit' => '12,50',
+                'wholesale_share_percent' => '45',
+                'wholesale_floor_percent' => '140',
+                'filament_reference_tolerance_percent' => '10',
+            ])
+            ->assertRedirect(route('admin.definicoes.index'));
+
+        $pricing = app(PricingSettings::class);
+
+        $this->assertSame(25, $pricing->quoteMinLaborMinutes());
+        $this->assertSame(6, $pricing->laborMinutesPerExtraPlate());
+        $this->assertSame(4, $pricing->laborMinutesPerColorChange());
+        $this->assertSame(20_000_000, $pricing->designRateMicrosPerHour());
+        $this->assertSame(2_100_000, $pricing->tierProfitMicrosPerHour('recommended'));
+        $this->assertSame(1_400_000, $pricing->tierProfitMicrosPerHour('minimum'), 'o que nao mudou fica');
+        $this->assertSame(1_250, $pricing->tierJobProfitCents('premium'));
+        $this->assertSame(4_500, $pricing->wholesaleShareOfRecommendedBp());
+        $this->assertSame(14_000, $pricing->wholesaleFloorMarkupBp());
+        $this->assertSame(1_000, $pricing->filamentReferenceToleranceBp());
+    }
+
+    public function test_the_new_settings_are_required(): void
+    {
+        $payload = $this->validPayload();
+        unset($payload['tier_minimum_profit_per_hour'], $payload['quote_min_labor_minutes']);
+
+        $this->actingAs($this->admin)
+            ->patch(route('admin.definicoes.precos'), $payload)
+            ->assertSessionHasErrors(['tier_minimum_profit_per_hour', 'quote_min_labor_minutes']);
     }
 
     /**

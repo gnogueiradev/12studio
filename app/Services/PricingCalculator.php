@@ -3,6 +3,8 @@
 namespace App\Services;
 
 use App\Support\Micros;
+use App\Support\PriceTier;
+use App\Support\PriceTiers;
 use App\Support\PricingInput;
 use App\Support\PricingResult;
 use App\Support\Rate;
@@ -53,6 +55,19 @@ use App\Support\Rate;
  * O que NAO e configuravel, e vive aqui: o degrau de 0,50 EUR do preco de
  * revenda e as tres faixas de arredondamento do preco ao cliente. Sao regras
  * comerciais fixas — ninguem anuncia uma peca a 63,40 EUR.
+ *
+ * OS TRES PRECOS SUGERIDOS. A cadeia de cima e so a REGRA DA MARGEM, e sozinha
+ * ignora o tempo: uma peca de 66 g e 4h37 saia a 7,00 EUR, 0,85 EUR por hora
+ * de impressora. Cada nivel (Minimo, Recomendado, Premium) e por isso o MAIOR
+ * de tres precos sem IVA:
+ *
+ *   (a) a regra da margem, antes do arredondamento dela;
+ *   (b) custo + horas de impressao x lucro por hora do nivel;
+ *   (c) custo + lucro minimo do trabalho / quantidade — SO em orcamentos.
+ *
+ * x (1 + IVA), para cima ate ,49 / ,99, e cada nivel estritamente acima do de
+ * baixo. O Recomendado e o `retailPrice` de sempre (quem le o preco sugerido
+ * continua a ler o mesmo campo); a revenda sai dele. Ver tiers().
  *
  * Os dois arredondamentos sao SEMPRE para cima. Ja foram ao mais proximo, e
  * arredondar para baixo comia a margem que se acabou de pedir — a ponto de ter
@@ -121,7 +136,8 @@ class PricingCalculator
             60,
         );
 
-        $laborMinutes = $this->laborMinutes($input, $quantity);
+        $laborBreakdown = $this->laborBreakdown($input, $quantity);
+        $laborMinutes = array_sum($laborBreakdown);
         $labor = Micros::divRound(
             $laborMinutes * $this->settings->laborRateMicrosPerHour(),
             60,
@@ -168,7 +184,7 @@ class PricingCalculator
             // como os outros, portanto com IVA incluido.
             Micros::fromCents($this->settings->minimumWholesalePriceCents()),
         );
-        $wholesale = Micros::ceilTo($rawWholesale, self::WHOLESALE_STEP);
+        $marginWholesale = Micros::ceilTo($rawWholesale, self::WHOLESALE_STEP);
 
         // O preco ao cliente sai do preco de REVENDA, e nao do meu custo: e o
         // que garante que quem me compra para revender consegue mesmo viver da
@@ -179,19 +195,33 @@ class PricingCalculator
         // revendedor e um racio entre dois precos com a mesma taxa — da o
         // mesmo com ou sem ele.
         $resellerMarginBp = $this->marginBp($this->settings->targetResellerMarginBp());
-        $rawRetail = Micros::divRound($wholesale * Rate::PER_UNIT, Rate::PER_UNIT - $resellerMarginBp);
-        $retail = Micros::ceilTo($rawRetail, self::retailStep($rawRetail));
+        $rawRetail = Micros::divRound($marginWholesale * Rate::PER_UNIT, Rate::PER_UNIT - $resellerMarginBp);
+        $marginRetail = Micros::ceilTo($rawRetail, self::retailStep($rawRetail));
+
+        $tiers = $this->tiers($input, $quantity, $divisor, $production, $unitLabor, $rawRetail, $vatBp);
 
         // Comissoes do canal: fora do custo industrial de proposito (nao custam
         // nada produzir), so no lucro liquido. Sobre o preco COM IVA, que e
         // sobre o que os marketplaces as cobram.
         $channelFee = Micros::fromCents($this->settings->salesChannelFixedFeeCents())
-            + Micros::applyBp($retail, $this->settings->salesChannelPercentageFeeBp());
+            + Micros::applyBp($tiers->recommended->priceMicros, $this->settings->salesChannelPercentageFeeBp());
 
         return new PricingResult(
             mode: $input->mode,
             quantity: $quantity,
             laborMinutes: $laborMinutes,
+            laborBreakdownMinutes: $laborBreakdown,
+            printMinutes: $input->minutes,
+            quote: $input->quote,
+            designMinutes: max(0, $input->designMinutes),
+            plates: max(1, $input->plates),
+            manualColorChanges: max(0, $input->manualColorChanges),
+            tiers: $tiers,
+            marginWholesalePriceMicros: $marginWholesale,
+            marginRetailPriceMicros: $marginRetail,
+            filamentJobCostAsWrittenMicros: $filament,
+            referenceFilamentCostCents: $input->referenceFilamentCostCents,
+            filamentReferenceToleranceBp: max(0, $this->settings->filamentReferenceToleranceBp()),
             filamentCostMicros: $unitFilament,
             electricityCostMicros: $unitElectricity,
             depreciationCostMicros: $unitDepreciation,
@@ -202,9 +232,9 @@ class PricingCalculator
             baseProductionCostMicros: $base,
             productionCostMicros: $production,
             rawWholesalePriceMicros: $rawWholesale,
-            wholesalePriceMicros: $wholesale,
+            wholesalePriceMicros: $tiers->wholesalePriceMicros,
             rawRetailPriceMicros: $rawRetail,
-            retailPriceMicros: $retail,
+            retailPriceMicros: $tiers->recommended->priceMicros,
             channelFeeMicros: $channelFee,
             failureRateBp: $failureRateBp,
             targetWholesaleMarginBp: $wholesaleMarginBp,
@@ -232,20 +262,161 @@ class PricingCalculator
     }
 
     /**
-     * Os minutos de trabalho humano do TRABALHO todo.
+     * Os minutos de trabalho humano do TRABALHO todo, parcela a parcela.
      *
      * Em lote o trabalho decompoe-se no que se faz UMA vez (montar a mesa,
      * lancar, tirar a placa) e no que se faz a CADA peca (rebarbar, limpar,
      * ensacar). E dai que vem a economia real de imprimir doze de uma vez: a
      * preparacao dilui-se, o acabamento nao.
+     *
+     * Num ORCAMENTO somam-se tres coisas, ao mesmo nivel do resto (a peca em
+     * per_unit, a mesa em batch): o que falta para o minimo de um orcamento,
+     * cada placa a mais e cada troca manual de cor. Numa variante as tres sao
+     * zero — e e isso que deixa intacto o custo que a Etsy le.
+     *
+     * @return array{base: int, quote_minimum: int, plates: int, color_changes: int}
      */
-    private function laborMinutes(PricingInput $input, int $quantity): int
+    private function laborBreakdown(PricingInput $input, int $quantity): array
     {
         $active = $input->activeLaborMinutes ?? $this->settings->activeLaborMinutes();
 
-        return $input->isBatch()
+        $base = $input->isBatch()
             ? $this->settings->setupLaborMinutes() + $active * $quantity
             : $active;
+
+        if (! $input->quote) {
+            return ['base' => $base, 'quote_minimum' => 0, 'plates' => 0, 'color_changes' => 0];
+        }
+
+        return [
+            'base' => $base,
+            'quote_minimum' => max(0, $this->settings->quoteMinLaborMinutes() - $base),
+            'plates' => max(0, $input->plates - 1) * max(0, $this->settings->laborMinutesPerExtraPlate()),
+            'color_changes' => max(0, $input->manualColorChanges) * max(0, $this->settings->laborMinutesPerColorChange()),
+        ];
+    }
+
+    /**
+     * Os tres precos sugeridos e a revenda.
+     *
+     * Tudo por UNIDADE. Os candidatos sao precos sem IVA; o IVA e o
+     * arredondamento para ,49 / ,99 entram uma vez, no fim de cada nivel.
+     *
+     * - A regra da margem entra ANTES do arredondamento dela (o rawRetail):
+     *   arredondar aos 0,50 EUR e depois outra vez a ,49 / ,99 era subir duas
+     *   vezes pela mesma razao.
+     * - As horas e o lucro minimo dividem-se pelas mesmas contas que o custo:
+     *   em lote o tempo e da mesa (/ quantidade); o lucro minimo e do
+     *   trabalho, nos dois modos (/ quantidade).
+     * - O design e um custo so do Premium: soma-se a todos os candidatos dele.
+     *   Nao passa pela taxa de falhas — o modelo nao se perde quando a
+     *   impressao falha — nem pelo IVA dos custos, porque e trabalho meu.
+     */
+    private function tiers(
+        PricingInput $input,
+        int $quantity,
+        int $divisor,
+        int $production,
+        int $unitLabor,
+        int $rawRetail,
+        int $vatBp,
+    ): PriceTiers {
+        $printMilliMinutes = Micros::divRound($input->minutes * 1000, $divisor);
+        $designUnit = Micros::divRound(
+            max(0, $input->designMinutes) * max(0, $this->settings->designRateMicrosPerHour()),
+            60 * $quantity,
+        );
+        $marginExVat = Micros::divRound($rawRetail * Rate::PER_UNIT, Rate::PER_UNIT + $vatBp);
+
+        $built = [];
+        $previous = null;
+
+        foreach (PriceTier::NAMES as $name) {
+            $design = $name === PriceTier::PREMIUM ? $designUnit : 0;
+            $cost = $production + $design;
+
+            $candidates = [
+                PriceTier::RULE_MARGIN => $marginExVat + $design,
+                PriceTier::RULE_PER_HOUR => $cost + Micros::divRound(
+                    max(0, $this->settings->tierProfitMicrosPerHour($name)) * $input->minutes,
+                    60 * $divisor,
+                ),
+                PriceTier::RULE_MIN_JOB => $input->quote
+                    ? $cost + Micros::divRound(Micros::fromCents(max(0, $this->settings->tierJobProfitCents($name))), $quantity)
+                    : null,
+            ];
+
+            // Empate: ganha a primeira, pela ordem margem -> hora -> trabalho.
+            // A regra que ja existia e a explicacao mais curta.
+            $rule = PriceTier::RULE_MARGIN;
+            foreach ($candidates as $candidateRule => $value) {
+                if ($value !== null && $value > $candidates[$rule]) {
+                    $rule = $candidateRule;
+                }
+            }
+
+            $price = Micros::ceilToEnding(
+                Micros::divRound((int) $candidates[$rule] * (Rate::PER_UNIT + $vatBp), Rate::PER_UNIT),
+            );
+
+            $raised = false;
+            if ($previous !== null && $price <= $previous) {
+                $price = Micros::nextEnding($previous);
+                $raised = true;
+            }
+            $previous = $price;
+
+            $built[$name] = new PriceTier(
+                name: $name,
+                priceMicros: $price,
+                priceExVatMicros: Micros::divRound($price * Rate::PER_UNIT, Rate::PER_UNIT + $vatBp),
+                costMicros: $cost,
+                designCostMicros: $design,
+                laborCostMicros: $unitLabor,
+                printMilliMinutes: $printMilliMinutes,
+                rule: $rule,
+                candidatesExVatMicros: $candidates,
+                raisedForOrder: $raised,
+            );
+        }
+
+        [$wholesale, $wholesaleRule] = $this->wholesale($built[PriceTier::RECOMMENDED]->priceMicros, $production, $vatBp);
+
+        return new PriceTiers(
+            minimum: $built[PriceTier::MINIMUM],
+            recommended: $built[PriceTier::RECOMMENDED],
+            premium: $built[PriceTier::PREMIUM],
+            wholesalePriceMicros: $wholesale,
+            wholesaleRule: $wholesaleRule,
+        );
+    }
+
+    /**
+     * A revenda sugerida: uma fracao do Recomendado, com dois chaos — o custo
+     * com IVA x markup minimo, e o preco minimo de revenda das definicoes. Com
+     * IVA, para cima ate ,49 / ,99.
+     *
+     * @return array{0: int, 1: string}
+     */
+    private function wholesale(int $recommended, int $production, int $vatBp): array
+    {
+        $candidates = [
+            PriceTiers::WHOLESALE_RULE_SHARE => Micros::applyBp($recommended, max(0, $this->settings->wholesaleShareOfRecommendedBp())),
+            PriceTiers::WHOLESALE_RULE_FLOOR => Micros::applyBp(
+                Micros::divRound($production * (Rate::PER_UNIT + $vatBp), Rate::PER_UNIT),
+                max(0, $this->settings->wholesaleFloorMarkupBp()),
+            ),
+            PriceTiers::WHOLESALE_RULE_MINIMUM => Micros::fromCents($this->settings->minimumWholesalePriceCents()),
+        ];
+
+        $rule = PriceTiers::WHOLESALE_RULE_SHARE;
+        foreach ($candidates as $candidateRule => $value) {
+            if ($value > $candidates[$rule]) {
+                $rule = $candidateRule;
+            }
+        }
+
+        return [Micros::ceilToEnding($candidates[$rule]), $rule];
     }
 
     /**

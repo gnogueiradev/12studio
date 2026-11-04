@@ -45,6 +45,16 @@ class UpdatePricingSettingsRequest extends FormRequest
             'channel_fixed_fee',
             'channel_percentage_fee',
             'cost_vat_percent',
+            'design_rate',
+            'tier_minimum_profit_per_hour',
+            'tier_recommended_profit_per_hour',
+            'tier_premium_profit_per_hour',
+            'tier_minimum_job_profit',
+            'tier_recommended_job_profit',
+            'tier_premium_job_profit',
+            'wholesale_share_percent',
+            'wholesale_floor_percent',
+            'filament_reference_tolerance_percent',
         ] as $field) {
             $value = $this->input($field);
 
@@ -93,6 +103,32 @@ class UpdatePricingSettingsRequest extends FormRequest
             // Zero e uma resposta valida: "escrevo os custos ja sem IVA". O
             // tecto de 30% cobre qualquer taxa da UE; acima disso e engano.
             'cost_vat_percent' => ['required', 'numeric', 'min:0', 'max:30'],
+
+            // Orcamentos: os mesmos tectos do trabalho ativo.
+            'quote_min_labor_minutes' => ['required', 'integer', 'min:0', 'max:600'],
+            'labor_minutes_per_extra_plate' => ['required', 'integer', 'min:0', 'max:600'],
+            'labor_minutes_per_color_change' => ['required', 'integer', 'min:0', 'max:600'],
+            'design_rate' => ['required', 'numeric', 'min:0', 'max:999.99'],
+
+            /*
+             * Os tres niveis. A ORDEM entre eles nao se valida aqui de
+             * proposito: o calculador ja garante Minimo < Recomendado <
+             * Premium no preco final, e recusar um Premium por hora abaixo do
+             * Recomendado obrigava a mexer em dois campos para baixar um.
+             */
+            'tier_minimum_profit_per_hour' => ['required', 'numeric', 'min:0', 'max:999.99'],
+            'tier_recommended_profit_per_hour' => ['required', 'numeric', 'min:0', 'max:999.99'],
+            'tier_premium_profit_per_hour' => ['required', 'numeric', 'min:0', 'max:999.99'],
+            'tier_minimum_job_profit' => ['required', 'numeric', 'min:0', 'max:9999.99'],
+            'tier_recommended_job_profit' => ['required', 'numeric', 'min:0', 'max:9999.99'],
+            'tier_premium_job_profit' => ['required', 'numeric', 'min:0', 'max:9999.99'],
+
+            // A revenda e uma fracao do Recomendado: acima de 100% era vender
+            // ao revendedor mais caro do que ao cliente.
+            'wholesale_share_percent' => ['required', 'numeric', 'min:0', 'max:100'],
+            // O chao da revenda, em % do custo com IVA: 130 = 1,3x.
+            'wholesale_floor_percent' => ['required', 'numeric', 'min:0', 'max:1000'],
+            'filament_reference_tolerance_percent' => ['required', 'numeric', 'min:0', 'max:100'],
         ];
     }
 
@@ -113,6 +149,19 @@ class UpdatePricingSettingsRequest extends FormRequest
             'channel_fixed_fee' => 'taxa fixa do canal',
             'channel_percentage_fee' => 'comissão do canal',
             'cost_vat_percent' => 'IVA dos custos',
+            'quote_min_labor_minutes' => 'trabalho mínimo de um orçamento',
+            'labor_minutes_per_extra_plate' => 'minutos por placa adicional',
+            'labor_minutes_per_color_change' => 'minutos por troca de cor',
+            'design_rate' => 'valor da hora de design',
+            'tier_minimum_profit_per_hour' => 'lucro por hora do Mínimo',
+            'tier_recommended_profit_per_hour' => 'lucro por hora do Recomendado',
+            'tier_premium_profit_per_hour' => 'lucro por hora do Premium',
+            'tier_minimum_job_profit' => 'lucro mínimo por trabalho do Mínimo',
+            'tier_recommended_job_profit' => 'lucro mínimo por trabalho do Recomendado',
+            'tier_premium_job_profit' => 'lucro mínimo por trabalho do Premium',
+            'wholesale_share_percent' => 'revenda em % do Recomendado',
+            'wholesale_floor_percent' => 'revenda mínima em % do custo',
+            'filament_reference_tolerance_percent' => 'tolerância do filamento',
         ];
     }
 }

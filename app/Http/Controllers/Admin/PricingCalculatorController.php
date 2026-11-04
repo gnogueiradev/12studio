@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Pricing\PricingPreviewRequest;
+use App\Services\PricingLog;
 use App\Services\PricingPreview;
 use App\Services\PricingSettings;
 use App\Support\MaterialOptions;
@@ -30,7 +31,21 @@ class PricingCalculatorController extends Controller
 
     public function __invoke(PricingPreviewRequest $request): Response
     {
-        $preview = $this->preview->fromRequest($request);
+        // A calculadora livre e um ORCAMENTO: placas, trocas de cor, minimo de
+        // trabalho e lucro minimo por trabalho entram todos.
+        $simulation = $this->preview->simulate($request, null, quote: true);
+        $result = $request->materialId() === null ? null : $simulation['result'];
+
+        if ($result !== null) {
+            PricingLog::calculated('calculadora', $request->materialId(), $request->weightGrams(), $result);
+        }
+
+        $preview = [
+            'result' => $result?->toArray(),
+            'printerProfileId' => $simulation['printer']?->id,
+            'hourlyCostMicros' => $simulation['hourlyCostMicros'],
+            'usingFallbackRate' => $simulation['printer'] === null,
+        ];
 
         return Inertia::render('admin/calculadora/index', [
             'inputs' => [
@@ -48,7 +63,7 @@ class PricingCalculatorController extends Controller
             // partilhado com a ficha de variante, onde o material e opcional:
             // exigi-lo la apagava em silencio a sugestao de todas as variantes
             // que ainda nao tem material.
-            'result' => $request->materialId() === null ? null : $preview['result'],
+            'result' => $preview['result'],
             'hourlyCostMicros' => $preview['hourlyCostMicros'],
             'usingFallbackRate' => $preview['usingFallbackRate'],
             'printers' => PrinterOptions::all($this->settings->electricityPriceMicrosPerKwh()),

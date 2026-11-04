@@ -48,6 +48,43 @@ class PricingSettings
 
     public const KEY_COST_VAT_RATE_BP = 'pricing.cost_vat_rate_bp';
 
+    public const KEY_QUOTE_MIN_LABOR_MINUTES = 'pricing.quote_min_labor_minutes';
+
+    public const KEY_LABOR_MINUTES_PER_EXTRA_PLATE = 'pricing.labor_minutes_per_extra_plate';
+
+    public const KEY_LABOR_MINUTES_PER_COLOR_CHANGE = 'pricing.labor_minutes_per_color_change';
+
+    public const KEY_DESIGN_RATE_MICROS_PER_HOUR = 'pricing.design_rate_micros_per_hour';
+
+    public const KEY_WHOLESALE_SHARE_OF_RECOMMENDED_BP = 'pricing.wholesale_share_of_recommended_bp';
+
+    public const KEY_WHOLESALE_FLOOR_MARKUP_BP = 'pricing.wholesale_floor_markup_bp';
+
+    public const KEY_FILAMENT_REFERENCE_TOLERANCE_BP = 'pricing.filament_reference_tolerance_bp';
+
+    /**
+     * Os tres niveis de preco e as duas chaves de cada um: lucro por hora de
+     * impressora (micros) e lucro minimo por trabalho (centimos). Um mapa e nao
+     * seis constantes soltas, para o calculador e o formulario percorrerem os
+     * niveis pela mesma ordem sem a repetir.
+     *
+     * @var array<string, array{per_hour: string, min_job: string}>
+     */
+    public const TIER_KEYS = [
+        'minimum' => [
+            'per_hour' => 'pricing.tier_minimum_profit_micros_per_hour',
+            'min_job' => 'pricing.tier_minimum_job_profit_cents',
+        ],
+        'recommended' => [
+            'per_hour' => 'pricing.tier_recommended_profit_micros_per_hour',
+            'min_job' => 'pricing.tier_recommended_job_profit_cents',
+        ],
+        'premium' => [
+            'per_hour' => 'pricing.tier_premium_profit_micros_per_hour',
+            'min_job' => 'pricing.tier_premium_job_profit_cents',
+        ],
+    ];
+
     /** Todas as chaves que esta seccao possui — usado pelo "repor omissoes". */
     public const KEYS = [
         self::KEY_ELECTRICITY_PRICE_MICROS_PER_KWH,
@@ -61,6 +98,19 @@ class PricingSettings
         self::KEY_SALES_CHANNEL_FIXED_FEE_CENTS,
         self::KEY_SALES_CHANNEL_PERCENTAGE_FEE_BP,
         self::KEY_COST_VAT_RATE_BP,
+        self::KEY_QUOTE_MIN_LABOR_MINUTES,
+        self::KEY_LABOR_MINUTES_PER_EXTRA_PLATE,
+        self::KEY_LABOR_MINUTES_PER_COLOR_CHANGE,
+        self::KEY_DESIGN_RATE_MICROS_PER_HOUR,
+        self::KEY_WHOLESALE_SHARE_OF_RECOMMENDED_BP,
+        self::KEY_WHOLESALE_FLOOR_MARKUP_BP,
+        self::KEY_FILAMENT_REFERENCE_TOLERANCE_BP,
+        'pricing.tier_minimum_profit_micros_per_hour',
+        'pricing.tier_minimum_job_profit_cents',
+        'pricing.tier_recommended_profit_micros_per_hour',
+        'pricing.tier_recommended_job_profit_cents',
+        'pricing.tier_premium_profit_micros_per_hour',
+        'pricing.tier_premium_job_profit_cents',
     ];
 
     public function __construct(
@@ -134,6 +184,55 @@ class PricingSettings
         return $this->int(self::KEY_COST_VAT_RATE_BP, 'cost_vat_rate_bp');
     }
 
+    /** Minimo de trabalho de um orcamento, por impressao. */
+    public function quoteMinLaborMinutes(): int
+    {
+        return $this->int(self::KEY_QUOTE_MIN_LABOR_MINUTES, 'quote_min_labor_minutes');
+    }
+
+    public function laborMinutesPerExtraPlate(): int
+    {
+        return $this->int(self::KEY_LABOR_MINUTES_PER_EXTRA_PLATE, 'labor_minutes_per_extra_plate');
+    }
+
+    public function laborMinutesPerColorChange(): int
+    {
+        return $this->int(self::KEY_LABOR_MINUTES_PER_COLOR_CHANGE, 'labor_minutes_per_color_change');
+    }
+
+    /** A hora de design. So entra no preco Premium. */
+    public function designRateMicrosPerHour(): int
+    {
+        return $this->int(self::KEY_DESIGN_RATE_MICROS_PER_HOUR, 'design_rate_micros_per_hour');
+    }
+
+    /** Lucro por hora de impressora de um nivel ('minimum', 'recommended', 'premium'). */
+    public function tierProfitMicrosPerHour(string $tier): int
+    {
+        return $this->int(self::TIER_KEYS[$tier]['per_hour'], self::configKey(self::TIER_KEYS[$tier]['per_hour']));
+    }
+
+    /** Lucro minimo de um trabalho inteiro, num nivel. */
+    public function tierJobProfitCents(string $tier): int
+    {
+        return $this->int(self::TIER_KEYS[$tier]['min_job'], self::configKey(self::TIER_KEYS[$tier]['min_job']));
+    }
+
+    public function wholesaleShareOfRecommendedBp(): int
+    {
+        return $this->int(self::KEY_WHOLESALE_SHARE_OF_RECOMMENDED_BP, 'wholesale_share_of_recommended_bp');
+    }
+
+    public function wholesaleFloorMarkupBp(): int
+    {
+        return $this->int(self::KEY_WHOLESALE_FLOOR_MARKUP_BP, 'wholesale_floor_markup_bp');
+    }
+
+    public function filamentReferenceToleranceBp(): int
+    {
+        return $this->int(self::KEY_FILAMENT_REFERENCE_TOLERANCE_BP, 'filament_reference_tolerance_bp');
+    }
+
     /**
      * A maquina imaginaria, para quando nao ha nenhuma impressora ativa.
      *
@@ -182,11 +281,38 @@ class PricingSettings
      *     channel_fixed_fee: string,
      *     channel_percentage_fee: string,
      *     cost_vat_percent: string,
+     *     quote_min_labor_minutes: int,
+     *     labor_minutes_per_extra_plate: int,
+     *     labor_minutes_per_color_change: int,
+     *     design_rate: string,
+     *     tier_minimum_profit_per_hour: string,
+     *     tier_recommended_profit_per_hour: string,
+     *     tier_premium_profit_per_hour: string,
+     *     tier_minimum_job_profit: string,
+     *     tier_recommended_job_profit: string,
+     *     tier_premium_job_profit: string,
+     *     wholesale_share_percent: string,
+     *     wholesale_floor_percent: string,
+     *     filament_reference_tolerance_percent: string,
      * }
      */
     public function toForm(): array
     {
         return [
+            'quote_min_labor_minutes' => $this->quoteMinLaborMinutes(),
+            'labor_minutes_per_extra_plate' => $this->laborMinutesPerExtraPlate(),
+            'labor_minutes_per_color_change' => $this->laborMinutesPerColorChange(),
+            'design_rate' => Micros::toDecimal($this->designRateMicrosPerHour(), 2),
+            'tier_minimum_profit_per_hour' => Micros::toDecimal($this->tierProfitMicrosPerHour('minimum'), 2),
+            'tier_recommended_profit_per_hour' => Micros::toDecimal($this->tierProfitMicrosPerHour('recommended'), 2),
+            'tier_premium_profit_per_hour' => Micros::toDecimal($this->tierProfitMicrosPerHour('premium'), 2),
+            'tier_minimum_job_profit' => Money::toDecimal($this->tierJobProfitCents('minimum')),
+            'tier_recommended_job_profit' => Money::toDecimal($this->tierJobProfitCents('recommended')),
+            'tier_premium_job_profit' => Money::toDecimal($this->tierJobProfitCents('premium')),
+            'wholesale_share_percent' => Rate::toPercent($this->wholesaleShareOfRecommendedBp()),
+            'wholesale_floor_percent' => Rate::toPercent($this->wholesaleFloorMarkupBp()),
+            'filament_reference_tolerance_percent' => Rate::toPercent($this->filamentReferenceToleranceBp()),
+
             'electricity_price' => Micros::toDecimal($this->electricityPriceMicrosPerKwh()),
             'labor_rate' => Micros::toDecimal($this->laborRateMicrosPerHour(), 2),
             'active_labor_minutes' => $this->activeLaborMinutes(),
@@ -211,6 +337,20 @@ class PricingSettings
     public function fromForm(array $form): array
     {
         return [
+            self::KEY_QUOTE_MIN_LABOR_MINUTES => (int) $form['quote_min_labor_minutes'],
+            self::KEY_LABOR_MINUTES_PER_EXTRA_PLATE => (int) $form['labor_minutes_per_extra_plate'],
+            self::KEY_LABOR_MINUTES_PER_COLOR_CHANGE => (int) $form['labor_minutes_per_color_change'],
+            self::KEY_DESIGN_RATE_MICROS_PER_HOUR => Micros::fromDecimal((string) $form['design_rate']),
+            self::TIER_KEYS['minimum']['per_hour'] => Micros::fromDecimal((string) $form['tier_minimum_profit_per_hour']),
+            self::TIER_KEYS['recommended']['per_hour'] => Micros::fromDecimal((string) $form['tier_recommended_profit_per_hour']),
+            self::TIER_KEYS['premium']['per_hour'] => Micros::fromDecimal((string) $form['tier_premium_profit_per_hour']),
+            self::TIER_KEYS['minimum']['min_job'] => Money::fromDecimal((string) $form['tier_minimum_job_profit']),
+            self::TIER_KEYS['recommended']['min_job'] => Money::fromDecimal((string) $form['tier_recommended_job_profit']),
+            self::TIER_KEYS['premium']['min_job'] => Money::fromDecimal((string) $form['tier_premium_job_profit']),
+            self::KEY_WHOLESALE_SHARE_OF_RECOMMENDED_BP => Rate::fromPercent((string) $form['wholesale_share_percent']),
+            self::KEY_WHOLESALE_FLOOR_MARKUP_BP => Rate::fromPercent((string) $form['wholesale_floor_percent']),
+            self::KEY_FILAMENT_REFERENCE_TOLERANCE_BP => Rate::fromPercent((string) $form['filament_reference_tolerance_percent']),
+
             self::KEY_ELECTRICITY_PRICE_MICROS_PER_KWH => Micros::fromDecimal((string) $form['electricity_price']),
             self::KEY_LABOR_RATE_MICROS_PER_HOUR => Micros::fromDecimal((string) $form['labor_rate']),
             self::KEY_ACTIVE_LABOR_MINUTES => (int) $form['active_labor_minutes'],
@@ -245,5 +385,11 @@ class PricingSettings
         }
 
         return (int) config("pricing.{$configKey}");
+    }
+
+    /** 'pricing.tier_x' -> 'tier_x': as chaves dos niveis tem o mesmo nome nos dois sitios. */
+    private static function configKey(string $settingKey): string
+    {
+        return substr($settingKey, strlen('pricing.'));
     }
 }

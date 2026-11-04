@@ -5,6 +5,8 @@ namespace Tests\Feature\Admin;
 use App\Models\Material;
 use App\Models\PrinterProfile;
 use App\Models\User;
+use App\Services\PricingSettings;
+use App\Services\SettingService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Inertia\Testing\AssertableInertia;
 use Tests\Concerns\PricesWithoutVat;
@@ -30,6 +32,12 @@ class PricingCalculatorPageTest extends TestCase
 
         // A formula por baixo do IVA: ver o trait. O IVA esta no PricingVatPageTest.
         $this->pricesWithoutVat();
+
+        // A calculadora livre e um ORCAMENTO, com um minimo de 20 min de
+        // trabalho. Estes testes fixam o custo da peca de referencia (5 min)
+        // e o fallback do trabalho ativo, por isso desligam o minimo; o
+        // orcamento em si esta no test_the_calculator_prices_a_quote.
+        app(SettingService::class)->set(PricingSettings::KEY_QUOTE_MIN_LABOR_MINUTES, 0);
 
         $this->admin = User::factory()->admin()->create();
         PrinterProfile::factory()->isDefault()->create([
@@ -86,12 +94,50 @@ class PricingCalculatorPageTest extends TestCase
                 ->where('result.failureCostMicros', 105_181)
                 ->where('result.productionCostMicros', 2_103_618)
                 ->where('result.productionCostCents', 210)
-                ->where('result.wholesalePriceCents', 400)
-                ->where('result.retailPriceCents', 700)
-                ->where('result.wholesaleMarginBp', 4_741)
-                ->where('result.directMarginBp', 6_995)
-                ->where('result.resellerMarginBp', 4_286)
-                ->where('result.resellerMarkupBp', 7_500)
+                // Um orcamento de UMA peca: o lucro minimo do trabalho manda
+                // nos tres niveis (2,103618 + 5 / 8 / 10 EUR -> 7,49 / 10,49 /
+                // 12,49), acima da hora (7,80) e da margem (6,67 -> 7,00).
+                // Revenda: 50% de 10,49 = 5,245 -> 5,49.
+                ->where('result.wholesalePriceCents', 549)
+                ->where('result.retailPriceCents', 1_049)
+                ->where('result.marginRetailPriceCents', 700)
+                ->where('result.wholesaleMarginBp', 6_168)
+                ->where('result.directMarginBp', 7_995)
+                ->where('result.resellerMarginBp', 4_766)
+                ->where('result.resellerMarkupBp', 9_107)
+                ->where('result.tiers.minimum.priceCents', 749)
+                ->where('result.tiers.recommended.priceCents', 1_049)
+                ->where('result.tiers.recommended.rule', 'min_job')
+                ->where('result.tiers.premium.priceCents', 1_249)
+            );
+    }
+
+    /**
+     * A calculadora livre e um ORCAMENTO: o minimo de trabalho (20 min), as
+     * placas a mais e as trocas de cor entram na mao de obra.
+     */
+    public function test_the_calculator_prices_a_quote(): void
+    {
+        app(SettingService::class)->forget(PricingSettings::KEY_QUOTE_MIN_LABOR_MINUTES);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.calculadora', [
+                'weight_grams' => 66,
+                'hours' => 4,
+                'minutes' => 37,
+                'material_id' => $this->material->id,
+                'plates' => 2,
+                'manual_color_changes' => 1,
+            ]))
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->where('result.quote', true)
+                ->where('result.laborBreakdownMinutes', ['base' => 5, 'quote_minimum' => 15, 'plates' => 5, 'color_changes' => 5])
+                ->where('result.laborMinutes', 30)
+                ->where('inputs.plates', 2)
+                ->where('inputs.manual_color_changes', 1)
+                ->has('result.tiers.minimum')
+                ->has('result.tiers.recommended')
+                ->has('result.tiers.premium')
             );
     }
 
@@ -131,8 +177,12 @@ class PricingCalculatorPageTest extends TestCase
                 ->where('result.mode', 'batch')
                 ->where('result.filamentCostMicros', 374_000)
                 ->where('result.productionCostMicros', 1_334_484)
-                ->where('result.wholesalePriceCents', 250)
-                ->where('result.job.wholesalePriceCents', 1_500)
+                // A margem da 4,17 por unidade em todos os niveis (a hora e o
+                // lucro minimo / 6 — 1,33 a 1,67 EUR — ficam abaixo): 4,49 /
+                // 4,99 / 5,49. A revenda
+                // e 50% de 4,99 = 2,495 -> 2,99; o trabalho, 6 x 2,99.
+                ->where('result.wholesalePriceCents', 299)
+                ->where('result.job.wholesalePriceCents', 1_794)
             );
     }
 

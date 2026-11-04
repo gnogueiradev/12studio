@@ -32,6 +32,35 @@ final readonly class PricingResult
         public int $quantity,
         /** Minutos de trabalho humano do trabalho todo, para o painel explicar a conta. */
         public int $laborMinutes,
+        /**
+         * Os mesmos minutos, parcela a parcela. Fora dos orcamentos so a base
+         * tem valor.
+         *
+         * @var array{base: int, quote_minimum: int, plates: int, color_changes: int}
+         */
+        public array $laborBreakdownMinutes,
+        /** Os minutos de impressao como vieram: da peca, ou da mesa em lote. */
+        public int $printMinutes,
+        /** Orcamento (calculadora livre) ou variante do catalogo. */
+        public bool $quote,
+        /** Minutos de design do trabalho todo (so no Premium). */
+        public int $designMinutes,
+        public int $plates,
+        public int $manualColorChanges,
+        /** Os tres precos sugeridos e a revenda que sai do Recomendado. */
+        public PriceTiers $tiers,
+        /**
+         * Os dois precos da REGRA DA MARGEM sozinha, arredondados como sempre
+         * foram (0,50 EUR; 0,50/1/5 EUR). Sao a regra (a) dos niveis e a ancora
+         * dos testes que fixam a formula antiga ao micro.
+         */
+        public int $marginWholesalePriceMicros,
+        public int $marginRetailPriceMicros,
+        /** Peso x EUR/kg, com o IVA com que o EUR/kg foi escrito: o que o slicer mostra. */
+        public int $filamentJobCostAsWrittenMicros,
+        /** O custo do filamento que o slicer deu, para comparar. Null = nao veio. */
+        public ?int $referenceFilamentCostCents,
+        public int $filamentReferenceToleranceBp,
         // As sete parcelas do custo, ja por unidade.
         public int $filamentCostMicros,
         public int $electricityCostMicros,
@@ -44,10 +73,12 @@ final readonly class PricingResult
         public int $baseProductionCostMicros,
         /** O subtotal depois de dividido por (1 - taxa de falhas). */
         public int $productionCostMicros,
-        // Revenda.
+        // Revenda: o bruto e o da regra da margem; o preco e o sugerido, a
+        // partir do Recomendado.
         public int $rawWholesalePriceMicros,
         public int $wholesalePriceMicros,
-        // Cliente final.
+        // Cliente final: o bruto e o da regra da margem; o preco e o
+        // RECOMENDADO — o mesmo campo de sempre, para quem ja o le.
         public int $rawRetailPriceMicros,
         public int $retailPriceMicros,
         /** Comissoes do canal sobre o preco ao cliente. Fora do custo. */
@@ -166,6 +197,62 @@ final readonly class PricingResult
     }
 
     /**
+     * Quanto o filamento calculado se afasta do valor do slicer, em pontos
+     * base sobre o valor do slicer. Null quando nao veio valor nenhum.
+     *
+     * Compara-se o filamento COM o IVA com que o EUR/kg foi escrito, e nao o
+     * custo sem IVA: e esse o numero que o slicer mostra, e sem IVA o aviso
+     * disparava sempre pelos 23%.
+     */
+    public function filamentReferenceDiffBp(): ?int
+    {
+        if ($this->referenceFilamentCostCents === null || $this->referenceFilamentCostCents <= 0) {
+            return null;
+        }
+
+        $reference = Micros::fromCents($this->referenceFilamentCostCents);
+
+        return Micros::divRound(abs($this->filamentJobCostAsWrittenMicros - $reference) * Rate::PER_UNIT, $reference);
+    }
+
+    public function filamentReferenceExceeded(): bool
+    {
+        $diff = $this->filamentReferenceDiffBp();
+
+        return $diff !== null && $diff > $this->filamentReferenceToleranceBp;
+    }
+
+    /**
+     * Os tres niveis para o Inertia, em centimos (o que se mostra e se copia)
+     * e com os lucros ja em total do trabalho.
+     *
+     * @return array<string, array<string, mixed>>
+     */
+    public function tiersToArray(): array
+    {
+        $out = [];
+
+        foreach ($this->tiers->all() as $name => $tier) {
+            $out[$name] = [
+                'priceCents' => Micros::toCents($tier->priceMicros),
+                'priceExVatCents' => Micros::toCents($tier->priceExVatMicros),
+                'vatCents' => Micros::toCents($tier->priceMicros) - Micros::toCents($tier->priceExVatMicros),
+                'costCents' => Micros::toCents($tier->costMicros),
+                'designCostCents' => Micros::toCents($tier->designCostMicros),
+                'profitCents' => Micros::toCents($tier->profitMicros()),
+                'jobProfitCents' => Micros::toCents($tier->profitMicros() * $this->quantity),
+                'marginBp' => $tier->marginBp(),
+                'profitPerPrintHourCents' => Micros::toCents($tier->profitPerPrintHourMicros()),
+                'earningsPerPrintHourCents' => Micros::toCents($tier->earningsPerPrintHourMicros()),
+                'rule' => $tier->rule,
+                'raisedForOrder' => $tier->raisedForOrder,
+            ];
+        }
+
+        return $out;
+    }
+
+    /**
      * O payload que vai para o Inertia. Micros E centimos: os primeiros para o
      * calculo detalhado (0,06177 EUR de eletricidade nao cabe num centimo), os
      * segundos para os numeros grandes e para o botao "Aplicar precos".
@@ -178,6 +265,20 @@ final readonly class PricingResult
             'mode' => $this->mode,
             'quantity' => $this->quantity,
             'laborMinutes' => $this->laborMinutes,
+            'laborBreakdownMinutes' => $this->laborBreakdownMinutes,
+            'quote' => $this->quote,
+            'designMinutes' => $this->designMinutes,
+            'plates' => $this->plates,
+            'manualColorChanges' => $this->manualColorChanges,
+            'tiers' => $this->tiersToArray(),
+            'wholesaleRule' => $this->tiers->wholesaleRule,
+            'marginRetailPriceCents' => Micros::toCents($this->marginRetailPriceMicros),
+            'filamentReference' => $this->referenceFilamentCostCents === null ? null : [
+                'referenceCents' => $this->referenceFilamentCostCents,
+                'calculatedCents' => Micros::toCents($this->filamentJobCostAsWrittenMicros),
+                'diffBp' => $this->filamentReferenceDiffBp(),
+                'exceeded' => $this->filamentReferenceExceeded(),
+            ],
 
             'filamentCostMicros' => $this->filamentCostMicros,
             'electricityCostMicros' => $this->electricityCostMicros,

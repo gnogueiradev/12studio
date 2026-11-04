@@ -26,6 +26,8 @@ use App\Models\Tag;
 use App\Models\User;
 use App\Models\Variant;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Testing\Fluent\AssertableJson;
 use Laravel\Mcp\Server\Testing\PendingTestResponse;
 use Tests\TestCase;
 
@@ -133,6 +135,52 @@ class ReadToolsTest extends TestCase
             // resposta tem de trazer as duas leituras e a taxa que as separa.
             ->assertSee('retail_price_ex_vat')
             ->assertSee('"vat_percent":23');
+    }
+
+    /**
+     * Uma variante gravada abaixo do Minimo: o pricing_preview avisa (e regista
+     * um warning). 50 g e 2 h custam ~1,6 EUR; o Minimo fica bem acima de 1 EUR.
+     */
+    public function test_pricing_preview_warns_when_the_current_price_is_below_the_minimum(): void
+    {
+        Log::spy();
+
+        $material = Material::factory()->create(['price_per_kg_cents' => 2000]);
+        $variant = Variant::factory()->create([
+            'material_id' => $material->id,
+            'filament_weight_grams' => 50,
+            'printing_time_minutes' => 120,
+            'price_cents' => 100,
+            'compare_at_cents' => null,
+        ]);
+
+        $this->server()->tool(PricingPreviewTool::class, ['variant_id' => $variant->id])
+            ->assertOk()
+            ->assertSee('current_price_below_minimum')
+            ->assertSee('profit_per_hour_below_minimum')
+            ->assertStructuredContent(fn (AssertableJson $json) => $json
+                ->has('suggested.tiers.minimum.price')
+                ->where('suggested.tiers.minimum.rule', fn (string $rule): bool => $rule !== 'min_job')
+                ->etc());
+
+        Log::shouldHaveReceived('warning')->withArgs(fn (string $message): bool => str_contains($message, 'abaixo do Mínimo'))->once();
+    }
+
+    public function test_pricing_preview_does_not_warn_when_the_current_price_is_above_the_minimum(): void
+    {
+        $material = Material::factory()->create(['price_per_kg_cents' => 2000]);
+        $variant = Variant::factory()->create([
+            'material_id' => $material->id,
+            'filament_weight_grams' => 50,
+            'printing_time_minutes' => 120,
+            'price_cents' => 5_000,
+            'compare_at_cents' => null,
+        ]);
+
+        $this->server()->tool(PricingPreviewTool::class, ['variant_id' => $variant->id])
+            ->assertOk()
+            ->assertDontSee('current_price_below_minimum')
+            ->assertSee('"warnings":[]');
     }
 
     public function test_stock_low_lists_only_variants_at_or_below_the_threshold(): void

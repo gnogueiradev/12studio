@@ -1,8 +1,14 @@
 import type { ReactNode } from 'react';
+import { PriceTierCards } from '@/components/admin/price-tier-cards';
 import { StatCard } from '@/components/admin/stat-card';
 import { formatCents, formatMicros, formatPercentBp } from '@/lib/money';
 import { cn } from '@/lib/utils';
 import type { PricingBreakdown as Breakdown } from '@/types/pricing';
+import {
+    PRICE_TIER_LABELS,
+    PRICE_TIER_NAMES,
+    PRICE_TIER_RULE_LABELS,
+} from '@/types/pricing';
 
 type Props = {
     /** Null enquanto faltar peso ou tempo — sem tempo não há cálculo nenhum. */
@@ -84,7 +90,24 @@ export function PricingBreakdown({
                 </p>
             )}
 
-            <div className="grid gap-3 sm:grid-cols-3">
+            {result.filamentReference?.exceeded && (
+                <p
+                    role="alert"
+                    className="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-warning"
+                >
+                    O filamento calculado (
+                    {formatCents(result.filamentReference.calculatedCents)} com
+                    IVA) difere{' '}
+                    {formatPercentBp(result.filamentReference.diffBp ?? 0)} do
+                    valor do slicer (
+                    {formatCents(result.filamentReference.referenceCents)}).
+                    Confirma o €/kg do material e o peso.
+                </p>
+            )}
+
+            <PriceTierCards result={result} />
+
+            <div className="grid gap-3 sm:grid-cols-2">
                 <StatCard
                     label={`Custo real de produção (${unit})`}
                     value={formatCents(result.productionCostCents)}
@@ -103,23 +126,6 @@ export function PricingBreakdown({
                                 `${formatCents(result.wholesalePriceExVatCents)} sem IVA · `}
                             Lucro {formatCents(result.wholesaleProfitCents)} ·
                             margem {formatPercentBp(result.wholesaleMarginBp)}
-                        </>
-                    }
-                />
-                <StatCard
-                    label={
-                        hasVat
-                            ? 'Preço final recomendado (IVA incl.)'
-                            : 'Preço final recomendado'
-                    }
-                    value={formatCents(result.retailPriceCents)}
-                    hint={
-                        <>
-                            {hasVat &&
-                                `${formatCents(result.retailPriceExVatCents)} sem IVA · `}
-                            Venda direta: lucro{' '}
-                            {formatCents(result.directProfitCents)} · margem{' '}
-                            {formatPercentBp(result.directMarginBp)}
                         </>
                     }
                 />
@@ -292,11 +298,7 @@ export function PricingBreakdown({
                                 />
                                 <Step
                                     label="Mão de obra"
-                                    detail={
-                                        isBatch
-                                            ? `${result.laborMinutes} min da mesa: preparação + acabamento de cada peça`
-                                            : `${result.laborMinutes} min de trabalho ativo`
-                                    }
+                                    detail={laborDetail(result)}
                                     value={formatMicros(result.laborCostMicros)}
                                 />
                                 <Step
@@ -347,34 +349,51 @@ export function PricingBreakdown({
                         <h3 className="mb-2 text-xs font-semibold tracking-wide text-muted-foreground uppercase">
                             Preços
                         </h3>
+                        <p className="mb-2 text-xs text-muted-foreground">
+                            Cada nível é o maior de: a regra da margem; o custo
+                            mais as horas de impressora × o lucro por hora do
+                            nível
+                            {result.quote &&
+                                '; o custo mais o lucro mínimo do trabalho, a dividir pelas peças'}
+                            . Com IVA, sempre para cima até ,49 ou ,99.
+                        </p>
                         <table className="w-full text-sm">
                             <tbody className="[&_td]:py-1.5 [&_th]:py-1.5">
                                 <Step
-                                    label="Preço bruto de revenda"
-                                    detail={`custo ÷ (1 − ${formatPercentBp(result.targetWholesaleMarginBp)})${hasVat ? ` × (1 + ${vat} de IVA)` : ''}`}
+                                    label="Regra da margem: revenda bruta"
+                                    detail={`custo ÷ (1 − ${formatPercentBp(result.targetWholesaleMarginBp)})${hasVat ? ` × (1 + ${vat} de IVA)` : ''}, depois aos 0,50 €`}
                                     value={formatMicros(
                                         result.rawWholesalePriceMicros,
                                     )}
                                 />
                                 <Step
-                                    label="Preço para revenda"
-                                    detail={`arredondado para cima aos 0,50 €${hasVat ? ', IVA incluído' : ''}`}
-                                    value={formatCents(
-                                        result.wholesalePriceCents,
-                                    )}
-                                    emphasis
-                                />
-                                <Step
-                                    label="Preço bruto ao cliente"
-                                    detail={`revenda ÷ (1 − ${formatPercentBp(result.targetResellerMarginBp)})`}
+                                    label="Regra da margem: cliente"
+                                    detail={`revenda ÷ (1 − ${formatPercentBp(result.targetResellerMarginBp)}). Era o preço sugerido antes: ${formatCents(result.marginRetailPriceCents)}`}
                                     value={formatMicros(
                                         result.rawRetailPriceMicros,
                                     )}
                                 />
+                                {PRICE_TIER_NAMES.map((name) => (
+                                    <Step
+                                        key={name}
+                                        label={PRICE_TIER_LABELS[name]}
+                                        detail={`decidido ${PRICE_TIER_RULE_LABELS[result.tiers[name].rule]}${hasVat ? ', IVA incluído' : ''}`}
+                                        value={formatCents(
+                                            result.tiers[name].priceCents,
+                                        )}
+                                        emphasis={name === 'recommended'}
+                                    />
+                                ))}
                                 <Step
-                                    label="Preço final recomendado"
-                                    detail={`sempre para cima: 0,50 € até 20 €, 1 € até 50 €, 5 € acima disso${hasVat ? '. IVA incluído' : ''}`}
-                                    value={formatCents(result.retailPriceCents)}
+                                    label="Preço para revenda"
+                                    detail={
+                                        WHOLESALE_RULE_LABELS[
+                                            result.wholesaleRule
+                                        ]
+                                    }
+                                    value={formatCents(
+                                        result.wholesalePriceCents,
+                                    )}
                                     emphasis
                                 />
                                 {hasVat && (
@@ -402,6 +421,30 @@ export function PricingBreakdown({
             </details>
         </div>
     );
+}
+
+const WHOLESALE_RULE_LABELS: Record<Breakdown['wholesaleRule'], string> = {
+    share: 'uma fração do Recomendado, para cima até ,49 ou ,99',
+    floor: 'o chão: custo com IVA × o mínimo das definições',
+    minimum_price: 'o preço mínimo de revenda das definições',
+};
+
+/** "30 min: 5 de trabalho ativo + 15 para o mínimo + 5 de placas + 5 de cor". */
+function laborDetail(result: Breakdown): string {
+    const { base, quote_minimum, plates, color_changes } =
+        result.laborBreakdownMinutes;
+    const baseLabel =
+        result.mode === 'batch'
+            ? `${base} da mesa (preparação + acabamento)`
+            : `${base} de trabalho ativo`;
+    const parts = [
+        baseLabel,
+        quote_minimum > 0 && `${quote_minimum} até ao mínimo de um orçamento`,
+        plates > 0 && `${plates} das placas a mais`,
+        color_changes > 0 && `${color_changes} das trocas de cor`,
+    ].filter(Boolean);
+
+    return `${result.laborMinutes} min: ${parts.join(' + ')}`;
 }
 
 /** Um bloco "receita − custo = lucro" por tipo de venda. */

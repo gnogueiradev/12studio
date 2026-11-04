@@ -69,6 +69,26 @@ final class Micros
     }
 
     /**
+     * Para CIMA, ate ao proximo preco terminado em ,49 ou ,99. Idempotente:
+     * 11,49 EUR fica 11,49; 11,50 sobe a 11,99; 11,00 sobe a 11,49.
+     *
+     * Primeiro ao centimo (para cima — nem um micro se perde), depois ao
+     * proximo centimo c com (c + 1) multiplo de 50.
+     */
+    public static function ceilToEnding(int $micros): int
+    {
+        $cents = intdiv(max(0, $micros) + self::PER_CENT - 1, self::PER_CENT);
+
+        return (intdiv($cents + 1 + 49, 50) * 50 - 1) * self::PER_CENT;
+    }
+
+    /** A terminacao ,49 / ,99 seguinte, estritamente acima. */
+    public static function nextEnding(int $micros): int
+    {
+        return self::ceilToEnding(self::ceilToEnding($micros) + self::PER_CENT);
+    }
+
+    /**
      * Euros escritos por humanos -> micros. Gemeo do Money::fromDecimal, mas
      * com quatro casas a mais.
      *

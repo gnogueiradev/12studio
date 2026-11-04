@@ -14,6 +14,28 @@ type Props = {
     pricing: PricingSettingsForm;
 };
 
+/** Os três níveis, pela ordem em que os preços sobem. */
+const TIERS = [
+    {
+        key: 'minimum',
+        label: 'Mínimo',
+        perHour: 'tier_minimum_profit_per_hour',
+        jobProfit: 'tier_minimum_job_profit',
+    },
+    {
+        key: 'recommended',
+        label: 'Recomendado',
+        perHour: 'tier_recommended_profit_per_hour',
+        jobProfit: 'tier_recommended_job_profit',
+    },
+    {
+        key: 'premium',
+        label: 'Premium',
+        perHour: 'tier_premium_profit_per_hour',
+        jobProfit: 'tier_premium_job_profit',
+    },
+] as const;
+
 /**
  * Os parâmetros da calculadora de preços.
  *
@@ -23,9 +45,9 @@ type Props = {
  *      manutenção. São propriedades de cada impressora e vivem em Impressoras;
  *      duas máquinas não custam o mesmo por hora. O que é global é a tarifa da
  *      luz, porque o contrato é da casa;
- *   2. o degrau de 0,50 € do preço de revenda e as faixas de arredondamento do
- *      preço ao cliente. São regras comerciais fixas — ninguém anuncia uma peça
- *      a 63,40 € — e mexer-lhes partia a lista de preços em vez de a afinar.
+ *   2. os arredondamentos: os preços sugeridos terminam sempre em ,49 ou ,99,
+ *      para cima. São regras comerciais fixas — ninguém anuncia uma peça a
+ *      63,40 € — e mexer-lhes partia a lista de preços em vez de a afinar.
  */
 export function PricingSettingsPanel({ pricing }: Props) {
     const { data, setData, patch, processing, errors } =
@@ -238,6 +260,152 @@ export function PricingSettingsPanel({ pricing }: Props) {
                                 error={errors.channel_percentage_fee}
                                 onChange={(value) =>
                                     change('channel_percentage_fee', value)
+                                }
+                            />
+                        </div>
+                    </fieldset>
+
+                    <fieldset className="border-t border-border/60 pt-6">
+                        <legend className="text-sm font-medium">
+                            Orçamentos
+                        </legend>
+                        <p className="mt-1 mb-3 text-sm text-muted-foreground">
+                            Só na calculadora livre (e no pricing_calculate): um
+                            trabalho por medida leva sempre mais tempo teu do
+                            que uma peça de catálogo. Nunca mexem no custo das
+                            variantes.
+                        </p>
+                        <div className="grid gap-4 sm:grid-cols-2">
+                            <Field
+                                id="quote_min_labor_minutes"
+                                label="Trabalho mínimo (min)"
+                                step="1"
+                                hint="Por impressão: falar com o cliente, preparar o ficheiro, lançar. Substitui o trabalho ativo quando este é menor."
+                                value={String(data.quote_min_labor_minutes)}
+                                error={errors.quote_min_labor_minutes}
+                                onChange={(value) =>
+                                    change(
+                                        'quote_min_labor_minutes',
+                                        Number(value || 0),
+                                    )
+                                }
+                            />
+                            <Field
+                                id="labor_minutes_per_extra_plate"
+                                label="Por placa adicional (min)"
+                                step="1"
+                                value={String(
+                                    data.labor_minutes_per_extra_plate,
+                                )}
+                                error={errors.labor_minutes_per_extra_plate}
+                                onChange={(value) =>
+                                    change(
+                                        'labor_minutes_per_extra_plate',
+                                        Number(value || 0),
+                                    )
+                                }
+                            />
+                            <Field
+                                id="labor_minutes_per_color_change"
+                                label="Por troca manual de cor (min)"
+                                step="1"
+                                value={String(
+                                    data.labor_minutes_per_color_change,
+                                )}
+                                error={errors.labor_minutes_per_color_change}
+                                onChange={(value) =>
+                                    change(
+                                        'labor_minutes_per_color_change',
+                                        Number(value || 0),
+                                    )
+                                }
+                            />
+                            <Field
+                                id="design_rate"
+                                label="Hora de design (€/h)"
+                                hint="Cobra-se uma vez por trabalho, e só no preço Premium."
+                                value={data.design_rate}
+                                error={errors.design_rate}
+                                onChange={(value) =>
+                                    change('design_rate', value)
+                                }
+                            />
+                        </div>
+                    </fieldset>
+
+                    <fieldset className="border-t border-border/60 pt-6">
+                        <legend className="text-sm font-medium">
+                            Os três preços sugeridos
+                        </legend>
+                        <p className="mt-1 mb-3 text-sm text-muted-foreground">
+                            Cada nível é o MAIOR de três preços: a margem de
+                            cima, o custo mais as horas de impressora × o lucro
+                            por hora, e (só em orçamentos) o custo mais o lucro
+                            mínimo do trabalho, a dividir pelas peças. É a hora
+                            que paga as peças leves e demoradas.
+                        </p>
+                        <div className="grid gap-4 sm:grid-cols-3">
+                            {TIERS.map((tier) => (
+                                <div key={tier.key} className="grid gap-4">
+                                    <p className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+                                        {tier.label}
+                                    </p>
+                                    <Field
+                                        id={tier.perHour}
+                                        label="Lucro por hora (€/h)"
+                                        value={data[tier.perHour]}
+                                        error={errors[tier.perHour]}
+                                        onChange={(value) =>
+                                            change(tier.perHour, value)
+                                        }
+                                    />
+                                    <Field
+                                        id={tier.jobProfit}
+                                        label="Lucro mínimo por trabalho (€)"
+                                        value={data[tier.jobProfit]}
+                                        error={errors[tier.jobProfit]}
+                                        onChange={(value) =>
+                                            change(tier.jobProfit, value)
+                                        }
+                                    />
+                                </div>
+                            ))}
+                        </div>
+                        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+                            <Field
+                                id="wholesale_share_percent"
+                                label="Revenda (% do Recomendado)"
+                                value={data.wholesale_share_percent}
+                                error={errors.wholesale_share_percent}
+                                onChange={(value) =>
+                                    change('wholesale_share_percent', value)
+                                }
+                            />
+                            <Field
+                                id="wholesale_floor_percent"
+                                label="Revenda mínima (% do custo com IVA)"
+                                hint="130 = nunca abaixo de 1,3 × o custo com IVA."
+                                value={data.wholesale_floor_percent}
+                                error={errors.wholesale_floor_percent}
+                                onChange={(value) =>
+                                    change('wholesale_floor_percent', value)
+                                }
+                            />
+                            <Field
+                                id="filament_reference_tolerance_percent"
+                                label="Tolerância do filamento (%)"
+                                hint="Avisa quando o filamento calculado e o do slicer diferem mais do que isto."
+                                value={
+                                    data.filament_reference_tolerance_percent
+                                }
+                                error={
+                                    errors.filament_reference_tolerance_percent
+                                }
+                                onChange={(value) =>
+                                    change(
+                                        'filament_reference_tolerance_percent',
+                                        value,
+                                    )
                                 }
                             />
                         </div>

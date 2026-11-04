@@ -22,7 +22,7 @@ use Laravel\Mcp\Server\Tools\Annotations\IsIdempotent;
 
 #[Name('variants_apply_calculated_prices')]
 #[Title('Aplicar preços calculados')]
-#[Description('Põe nas variantes de um produto o preço normal e de revenda que a calculadora sugere (a mesma do backoffice). Por omissão é só um ENSAIO (dry_run: true): mostra o antes e o depois sem gravar. Para aplicar, mostra o ensaio ao utilizador e, se ele aprovar, repete com "dry_run": false. Uma promoção que continue abaixo do preço novo mantém-se. Variantes sem peso, tempo ou material ficam como estão.')]
+#[Description('Põe nas variantes de um produto o preço normal e de revenda que a calculadora sugere (a mesma do backoffice): o Recomendado e a revenda que sai dele. Nunca baixa um preço já definido — se o atual for mais alto, fica o atual. Por omissão é só um ENSAIO (dry_run: true): mostra o antes e o depois sem gravar. Para aplicar, mostra o ensaio ao utilizador e, se ele aprovar, repete com "dry_run": false. Uma promoção que continue abaixo do preço novo mantém-se. Variantes sem peso, tempo ou material ficam como estão.')]
 #[IsDestructive(false)]
 #[IsIdempotent]
 class VariantsApplyCalculatedPricesTool extends WriteTool
@@ -110,11 +110,17 @@ class VariantsApplyCalculatedPricesTool extends WriteTool
     }
 
     /**
-     * @param  array{normal_cents: int, sale_cents: int|null, wholesale_cents: int|null}|null  $prices
+     * @param  array{normal_cents: int, sale_cents: int|null, wholesale_cents: int|null, suggested_normal_cents: int, kept_current: bool}|null  $prices
      * @return array<string, mixed>
      */
     private function row(Variant $variant, ?array $prices): array
     {
+        $note = match (true) {
+            $prices === null => 'Sem peso, tempo de impressão ou material: não há cálculo.',
+            $prices['kept_current'] => 'Mantém o preço atual: o Recomendado ('.McpFormat::money($prices['suggested_normal_cents'])['eur'].') é mais baixo, e um preço definido nunca se baixa.',
+            default => null,
+        };
+
         return [
             'variant_id' => $variant->id,
             'sku' => $variant->sku,
@@ -128,7 +134,7 @@ class VariantsApplyCalculatedPricesTool extends WriteTool
                 'sale_price' => McpFormat::moneyOrNull($prices['sale_cents']),
                 'wholesale_price' => McpFormat::moneyOrNull($prices['wholesale_cents']),
             ],
-            'note' => $prices === null ? 'Sem peso, tempo de impressão ou material: não há cálculo.' : null,
+            'note' => $note,
         ];
     }
 }
