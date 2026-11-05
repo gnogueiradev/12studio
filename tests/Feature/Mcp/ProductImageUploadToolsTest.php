@@ -257,7 +257,10 @@ class ProductImageUploadToolsTest extends TestCase
     public function test_many_chunks_do_not_hit_the_general_write_limit(): void
     {
         $bytes = $this->photo();
-        $chunks = $this->split($bytes, 2 * 1024);
+        // O tamanho da fotografia gerada varia de corrida para corrida: a fatia
+        // sai do tamanho dela para dar sempre ~40 pedaços, acima do limite
+        // geral de 20 escritas por minuto.
+        $chunks = $this->split($bytes, intdiv(strlen($bytes), 40) + 1);
         $this->assertGreaterThan(25, count($chunks));
 
         $id = $this->start($bytes, $chunks);
