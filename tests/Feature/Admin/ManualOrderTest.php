@@ -106,6 +106,25 @@ class ManualOrderTest extends TestCase
         ]);
     }
 
+    public function test_an_order_can_be_attached_to_a_registered_customer(): void
+    {
+        // Regressao: o Rule::exists com ->where('is_admin', false) passava a
+        // regra a texto e o false virava "" — `is_admin = ''` nao apanhava
+        // ninguem, e todo o cliente registado dava "user id is invalid".
+        $customer = User::factory()->create(['name' => 'Rui Martins']);
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.encomendas.store'), [
+                ...$this->payload(),
+                'user_id' => $customer->id,
+                'customer_name' => 'Rui Martins',
+            ])
+            ->assertSessionHasNoErrors()
+            ->assertRedirect();
+
+        $this->assertSame($customer->id, Order::query()->firstOrFail()->user_id);
+    }
+
     public function test_the_shipping_address_is_snapshotted(): void
     {
         $this->actingAs($this->admin)
