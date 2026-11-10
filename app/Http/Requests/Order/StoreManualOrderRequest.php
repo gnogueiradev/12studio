@@ -4,6 +4,7 @@ namespace App\Http\Requests\Order;
 
 use App\Models\Order;
 use App\Models\Variant;
+use Illuminate\Database\Query\Builder;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Validator;
@@ -48,8 +49,11 @@ class StoreManualOrderRequest extends FormRequest
             // Cliente registado e opcional: o canal Instagram e quase sempre
             // gente sem conta. customer_name, esse, e sempre obrigatorio.
             // So clientes: uma encomenda nunca fica presa a uma conta da equipa.
+            // O is_admin vai num closure de proposito: ->where('is_admin', false)
+            // passa a regra a texto, o false vira "" e `is_admin = ''` nao
+            // apanha cliente nenhum. No closure o false segue como binding.
             'user_id' => ['nullable', 'integer', Rule::exists('users', 'id')
-                ->where('is_admin', false)
+                ->where(fn (Builder $query) => $query->where('is_admin', false))
                 ->whereNull('staff_role')],
             'customer_name' => ['required', 'string', 'max:120'],
             // O canal `manual` e a venda em maos: o cliente esta a frente, leva
