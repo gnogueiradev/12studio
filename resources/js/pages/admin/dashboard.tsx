@@ -145,7 +145,7 @@ export default function AdminDashboard({
                     </div>
                 )}
 
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
                     <StatCard
                         label={`Faturação · ${kpis.year}`}
                         value={formatCents(kpis.revenueYearCents)}
@@ -153,6 +153,15 @@ export default function AdminDashboard({
                             kpis.paidOrdersYear === 1
                                 ? `1 encomenda paga em ${kpis.year}`
                                 : `${kpis.paidOrdersYear} encomendas pagas em ${kpis.year}`
+                        }
+                    />
+                    <StatCard
+                        label={`Faturação · ${kpis.month}`}
+                        value={formatCents(kpis.revenueMonthCents)}
+                        hint={
+                            kpis.paidOrdersMonth === 1
+                                ? `1 encomenda paga em ${kpis.month}`
+                                : `${kpis.paidOrdersMonth} encomendas pagas em ${kpis.month}`
                         }
                     />
                     <StatCard

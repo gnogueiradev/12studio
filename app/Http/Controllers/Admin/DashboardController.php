@@ -94,13 +94,16 @@ class DashboardController extends Controller
         // a contabilidade e com o que se declara.
         $yearStart = $now->startOfYear();
 
+        // O mesmo raciocinio para o mes: 1 do mes corrente ate hoje.
+        $monthStart = $now->startOfMonth();
+
         return [
             'year' => $now->year,
             'revenueYearCents' => $this->paidTotalBetween($yearStart, $now),
-            'paidOrdersYear' => Order::query()
-                ->where('payment_status', 'paid')
-                ->whereBetween('paid_at', [$yearStart, $now])
-                ->count(),
+            'paidOrdersYear' => $this->paidCountBetween($yearStart, $now),
+            'month' => $this->inPortuguese($now)->translatedFormat('F'),
+            'revenueMonthCents' => $this->paidTotalBetween($monthStart, $now),
+            'paidOrdersMonth' => $this->paidCountBetween($monthStart, $now),
             'revenue30Cents' => $revenue,
             // null (e nao 0) quando nao ha periodo anterior: "+100%" a partir
             // do nada nao quer dizer nada, e a interface esconde a linha.
@@ -129,6 +132,14 @@ class DashboardController extends Controller
             ->where('payment_status', 'paid')
             ->whereBetween('paid_at', [$from, $to])
             ->sum('total_cents');
+    }
+
+    private function paidCountBetween(CarbonImmutable $from, CarbonImmutable $to): int
+    {
+        return Order::query()
+            ->where('payment_status', 'paid')
+            ->whereBetween('paid_at', [$from, $to])
+            ->count();
     }
 
     /**

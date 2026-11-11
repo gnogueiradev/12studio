@@ -6,6 +6,11 @@ export type DashboardKpis = {
     /** Receita paga desde 1 de janeiro. */
     revenueYearCents: number;
     paidOrdersYear: number;
+    /** Mês corrente por extenso ("novembro"), para o rótulo do cartão. */
+    month: string;
+    /** Receita paga desde o dia 1 do mês corrente. */
+    revenueMonthCents: number;
+    paidOrdersMonth: number;
     revenue30Cents: number;
     /** null quando não há período anterior com que comparar. */
     revenueDeltaPercent: number | null;
