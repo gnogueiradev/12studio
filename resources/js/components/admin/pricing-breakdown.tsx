@@ -136,12 +136,16 @@ export function PricingBreakdown({
                     rows={[
                         {
                             label: 'Venda a revendedor',
+                            price: hasVat
+                                ? result.wholesalePriceCents
+                                : undefined,
                             revenue: result.wholesalePriceExVatCents,
                             profit: result.wholesaleProfitCents,
                             marginBp: result.wholesaleMarginBp,
                         },
                         {
                             label: 'Venda direta',
+                            price: hasVat ? result.retailPriceCents : undefined,
                             revenue: result.retailPriceExVatCents,
                             profit: result.directProfitCents,
                             marginBp: result.directMarginBp,
@@ -416,6 +420,13 @@ function Party({
     note?: string;
     rows: {
         label: string;
+        /**
+         * O preço com IVA de onde a receita saiu. Sem ele, "5,69 €" não se
+         * liga aos 7,00 € do cartão de cima e o lucro da venda direta parece
+         * não estar em lado nenhum. Fica de fora quando não há IVA: aí a
+         * receita já é o preço.
+         */
+        price?: number;
         revenue: number;
         profit: number;
         marginBp: number;
@@ -435,6 +446,15 @@ function Party({
                     <div key={row.label}>
                         <p className="text-xs text-muted-foreground">
                             {row.label}
+                            {row.price !== undefined && (
+                                <>
+                                    {' a '}
+                                    <span className="font-medium text-foreground tabular-nums">
+                                        {formatCents(row.price)}
+                                    </span>
+                                    {' (IVA incl.)'}
+                                </>
+                            )}
                         </p>
                         <p className="text-sm tabular-nums">
                             {formatCents(row.revenue)} − {formatCents(cost)} ={' '}
