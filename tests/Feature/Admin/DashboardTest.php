@@ -107,6 +107,41 @@ class DashboardTest extends TestCase
                 ->where('kpis.paidOrdersYear', 2));
     }
 
+    /**
+     * A faturacao do mes e o mes civil ate hoje: nao apanha o ultimo dia do
+     * mes anterior, mesmo estando dentro da janela de 30 dias.
+     */
+    public function test_month_revenue_counts_paid_orders_since_the_first_of_the_month(): void
+    {
+        $this->travelTo(now()->setDate(2026, 11, 11));
+
+        Order::factory()->paid()->create(['total_cents' => 5000]);
+        Order::factory()->paid()->create([
+            'total_cents' => 3000,
+            'paid_at' => now()->setDate(2026, 11, 1)->startOfDay(),
+        ]);
+
+        // Paga no ultimo dia de outubro: fica no mes anterior.
+        Order::factory()->paid()->create([
+            'total_cents' => 9900,
+            'paid_at' => now()->setDate(2026, 10, 31)->endOfDay(),
+        ]);
+
+        // Por pagar: nao e faturacao.
+        Order::factory()->create([
+            'status' => 'shipped',
+            'payment_status' => 'pending',
+            'total_cents' => 7700,
+        ]);
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.dashboard'))
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('kpis.month', 'novembro')
+                ->where('kpis.revenueMonthCents', 8000)
+                ->where('kpis.paidOrdersMonth', 2));
+    }
+
     public function test_the_revenue_delta_is_null_without_a_previous_window(): void
     {
         Order::factory()->paid()->create(['total_cents' => 5000]);
