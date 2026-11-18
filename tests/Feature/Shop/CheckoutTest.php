@@ -11,8 +11,11 @@ use App\Models\PromoCode;
 use App\Models\Variant;
 use App\Services\SettingService;
 use App\Services\StoreSettings;
+use App\Shop\CheckoutService;
+use App\Stripe\StripeException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Routing\Middleware\ThrottleRequests;
+use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Testing\TestResponse;
 use Inertia\Testing\AssertableInertia as Assert;
@@ -223,6 +226,8 @@ class CheckoutTest extends TestCase
         $refused(['name' => ''], 'name');
         $refused(['email' => ''], 'email');
         $refused(['email' => 'ana'], 'email');
+        $refused(['email' => 'ana@localhost'], 'email');
+        $refused(['email' => 'ana@exemplo.1'], 'email');
         $refused(['phone' => ''], 'phone');
         $refused(['phone' => 'liga-me'], 'phone');
         $refused(['postal_code' => '1000'], 'postal_code');
@@ -245,6 +250,14 @@ class CheckoutTest extends TestCase
         $this->assertNull($first->customer['nif']);
         $this->assertNull($first->shipping_address['line2']);
         $this->assertSame('PT', $first->shipping_address['country']);
+    }
+
+    public function test_an_email_stripe_would_refuse_gets_the_normal_email_message(): void
+    {
+        $cart = $this->cartWith();
+
+        $this->pay($cart, $this->customer(3000, ['email' => 'ana@localhost']))
+            ->assertSessionHasErrors(['email' => trans('validation.email', ['attribute' => trans('store.attributes.email')])]);
     }
 
     public function test_the_errors_speak_the_language_of_the_page(): void
@@ -441,6 +454,132 @@ class CheckoutTest extends TestCase
         }
 
         $this->pay($cart, $this->customer(3000))->assertStatus(429);
+    }
+
+    public function test_a_personal_code_the_page_did_not_confirm_shows_the_new_total(): void
+    {
+        PromoCode::factory()->create(['code' => 'PESSOAL', 'email' => 'ana@example.com', 'value' => 500]);
+        $cart = $this->cartWith();
+        $cart->update(['promo_code' => 'PESSOAL']);
+
+        // O email veio do preenchimento automatico e o campo nunca perdeu o
+        // foco: a pagina manda o total sem desconto.
+        $this->pay($cart, $this->customer(3000))
+            ->assertRedirect('/finalizar')
+            ->assertSessionHasErrors(['cart' => trans('store.checkout.errors.total_changed')]);
+        $this->assertSame(0, Checkout::query()->count());
+
+        // O que o cliente ve a seguir: as contas com este email, com o desconto.
+        $this->assertSame(2500, $this->flashed()['totalCents']);
+        $this->assertSame('applied', $this->flashed()['promo']['status']);
+
+        $this->pay($cart, $this->customer($this->flashed()['totalCents']))->assertSessionHasNoErrors();
+        $this->assertSame(2500, Checkout::query()->firstOrFail()->total_cents);
+    }
+
+    public function test_a_changed_price_shows_the_new_total(): void
+    {
+        $cart = $this->cartWith(2400, 1);
+        $cart->items()->firstOrFail()->variant->update(['price_cents' => 2600]);
+
+        $this->pay($cart, $this->customer(2850))->assertSessionHasErrors('cart');
+
+        $this->assertSame(2600, $this->flashed()['totalCents']);
+    }
+
+    public function test_a_paid_session_wins_over_a_changed_price(): void
+    {
+        $cart = $this->cartWith();
+        $this->pay($cart, $this->customer(3000));
+        $first = Checkout::query()->firstOrFail();
+        $this->stripe['sessions'][$first->stripe_session_id]['status'] = 'complete';
+
+        $cart->items()->firstOrFail()->variant->update(['price_cents' => 1800]);
+
+        $this->pay($cart, $this->customer(3000))
+            ->assertSessionHasNoErrors()
+            ->assertRedirect(url("/compra/{$first->token}"));
+        $this->assertSame(1, Checkout::query()->count());
+    }
+
+    public function test_a_session_stripe_no_longer_knows_does_not_block_the_cart(): void
+    {
+        Exceptions::fake();
+        $cart = $this->cartWith();
+        $this->pay($cart, $this->customer(3000));
+        $first = Checkout::query()->firstOrFail();
+
+        // As chaves de teste trocadas pelas de producao: a sessao nao existe.
+        unset($this->stripe['sessions'][$first->stripe_session_id]);
+
+        $this->pay($cart, $this->customer(3000))->assertSessionHasNoErrors();
+
+        $this->assertSame('expired', $first->fresh()?->status);
+        $second = Checkout::query()->orderByDesc('id')->firstOrFail();
+        $this->assertNotSame($first->id, $second->id);
+        $this->assertSame('open', $this->stripe['sessions'][$second->stripe_session_id]['status']);
+        Exceptions::assertReported(fn (StripeException $exception): bool => $exception->status === 404);
+    }
+
+    public function test_a_session_stripe_cannot_read_stops_the_payment(): void
+    {
+        $cart = $this->cartWith();
+        $this->pay($cart, $this->customer(3000));
+        $first = Checkout::query()->firstOrFail();
+        config(['stripe.secret' => 'sk_'.'test_outra']);
+
+        $this->pay($cart, $this->customer(3000))->assertSessionHasErrors('payment');
+
+        $this->assertSame('open', $first->fresh()?->status);
+        $this->assertSame(1, Checkout::query()->count());
+    }
+
+    public function test_what_stripe_says_reaches_the_report_without_the_customer(): void
+    {
+        $cart = $this->cartWith();
+        $customer = ['name' => 'Ana Silva', 'email' => 'Ana@Localhost', 'phone' => '912 345 678', 'nif' => null];
+        $address = ['line1' => 'Rua das Flores 12', 'line2' => null, 'postal_code' => '1000-001', 'city' => 'Lisboa'];
+
+        // O formulario ja recusa este email; aqui chega direto ao servico, e o
+        // Stripe recusa-o repetindo-o na mensagem.
+        try {
+            app(CheckoutService::class)->start($cart, $customer, $address, 'pt', 3000);
+            $this->fail('Devia ter falhado.');
+        } catch (StripeException $exception) {
+            $this->assertStringContainsString('Invalid email address', $exception->getMessage());
+            $this->assertStringNotContainsStringIgnoringCase('ana@localhost', $exception->getMessage());
+            $this->assertInstanceOf(StripeException::class, $exception->getPrevious());
+            $this->assertStringNotContainsStringIgnoringCase('ana@localhost', $exception->getPrevious()->getMessage());
+        }
+
+        $this->assertSame('expired', Checkout::query()->firstOrFail()->status);
+    }
+
+    public function test_shipping_reaches_the_session(): void
+    {
+        $cart = $this->cartWith(2400, 1);
+
+        $this->pay($cart, $this->customer(2850))->assertSessionHasNoErrors();
+
+        $checkout = Checkout::query()->firstOrFail();
+        $this->assertSame(450, $checkout->shipping_cents);
+        $session = array_values($this->stripe['sessions'])[0];
+        $this->assertSame('450', $session['request']['shipping_options'][0]['shipping_rate_data']['fixed_amount']['amount']);
+        $this->assertSame('Portes', $session['request']['shipping_options'][0]['shipping_rate_data']['display_name']);
+        $this->assertSame(2850, $session['amount_total']);
+    }
+
+    public function test_paying_without_a_cart_creates_nothing(): void
+    {
+        $this->cartWith();
+        $this->stripeCalls = [];
+
+        $this->from('/finalizar')->post('/finalizar/pagar', $this->customer(3000))
+            ->assertRedirect('/finalizar')
+            ->assertSessionHasErrors(['cart' => trans('store.checkout.errors.cart')]);
+
+        $this->assertSame(0, Checkout::query()->count());
+        $this->assertSame([], $this->stripeCalls);
     }
 
     public function test_old_checkouts_without_an_order_are_pruned(): void

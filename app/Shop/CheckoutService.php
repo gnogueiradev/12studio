@@ -62,6 +62,14 @@ class CheckoutService
      */
     private function startLocked(Cart $cart, array $customer, array $address, string $locale, int $expectedTotalCents): string
     {
+        // Ja pago vem primeiro: quem pagou (ou gerou a referencia) e voltou
+        // atras vai ver essa compra, mesmo que um preco tenha mudado entretanto.
+        [$previous, $paid] = $this->previous($cart);
+
+        if ($paid !== null) {
+            return url(LocalizedUrl::path("/compra/{$paid->token}", $locale));
+        }
+
         $quote = $this->quoter->quote($cart, $customer['email']);
 
         if (! $quote->canCheckout()) {
@@ -78,7 +86,7 @@ class CheckoutService
             throw ValidationException::withMessages(['cart' => trans('store.checkout.errors.total_changed')]);
         }
 
-        $paid = $this->closePrevious($cart);
+        $paid = $this->expire($previous);
 
         if ($paid !== null) {
             return url(LocalizedUrl::path("/compra/{$paid->token}", $locale));
@@ -130,50 +138,80 @@ class CheckoutService
         } catch (StripeException $exception) {
             $checkout->update(['status' => 'expired']);
 
-            // O que o Stripe diz sobe para o report(); o email do cliente,
-            // se o Stripe o repetir, nao vai para os registos.
-            throw new StripeException(
-                str_replace($customer['email'], '[email]', $exception->getMessage()),
-                $exception->status,
-                $exception->stripeCode,
-            );
+            // O que o Stripe diz sobe para o report(), mas sem os dados do
+            // cliente: o Stripe pode repetir o email que recebeu.
+            throw $exception->withoutPersonalData([$customer['email'], $customer['phone'], $customer['name']]);
         }
     }
 
     /**
-     * Uma so sessao viva por carrinho: as compras anteriores ainda abertas
-     * passam a expiradas, e as sessoes delas tambem. Uma que o Stripe ja deu
-     * por completa (pago, ou referencia Multibanco gerada) nao se fecha: e
-     * devolvida, para o cliente ir ver essa em vez de pagar duas vezes.
+     * As compras ainda abertas deste carrinho, e a que o Stripe ja deu por
+     * completa (pago, ou referencia Multibanco gerada), se houver uma.
+     *
+     * Uma sessao que o Stripe nao conhece (404: por exemplo, depois de
+     * trocar as chaves de teste pelas de producao) nunca se vai poder pagar:
+     * essa compra passa logo a expirada. Qualquer outra falha a ler sobe —
+     * sem saber se a anterior foi paga, nao se abre outra.
+     *
+     * @return array{0: array<int, array{checkout: Checkout, status: string|null}>, 1: Checkout|null}
      */
-    private function closePrevious(Cart $cart): ?Checkout
+    private function previous(Cart $cart): array
     {
-        $open = Checkout::query()->where('cart_id', $cart->id)->where('status', 'open')->get();
+        $open = [];
 
-        foreach ($open as $previous) {
-            if ($previous->stripe_session_id !== null) {
-                $session = $this->stripe->get("checkout/sessions/{$previous->stripe_session_id}");
+        foreach (Checkout::query()->where('cart_id', $cart->id)->where('status', 'open')->get() as $checkout) {
+            $status = null;
 
-                if (($session['status'] ?? null) === 'complete') {
-                    return $previous;
+            if ($checkout->stripe_session_id !== null) {
+                try {
+                    $status = $this->stripe->get("checkout/sessions/{$checkout->stripe_session_id}")['status'] ?? null;
+                } catch (StripeException $exception) {
+                    if ($exception->status !== 404) {
+                        throw $exception;
+                    }
+
+                    report($exception);
+                    $checkout->update(['status' => 'expired']);
+
+                    continue;
                 }
+            }
 
-                if (($session['status'] ?? null) === 'open') {
-                    try {
-                        $this->stripe->post("checkout/sessions/{$previous->stripe_session_id}/expire");
-                    } catch (StripeException $exception) {
-                        // Ja nao estava aberta: expirou sozinha entretanto (nao
-                        // impede a nova) ou o cliente acabou de a pagar.
-                        report($exception);
+            if ($status === 'complete') {
+                return [[], $checkout];
+            }
 
-                        if (($this->stripe->get("checkout/sessions/{$previous->stripe_session_id}")['status'] ?? null) === 'complete') {
-                            return $previous;
-                        }
+            $open[] = ['checkout' => $checkout, 'status' => is_string($status) ? $status : null];
+        }
+
+        return [$open, null];
+    }
+
+    /**
+     * Uma so sessao viva por carrinho: as compras anteriores ainda abertas
+     * passam a expiradas, e as sessoes delas tambem. Se uma foi paga entre a
+     * leitura e o expire, e devolvida em vez de se abrir outra.
+     *
+     * @param  array<int, array{checkout: Checkout, status: string|null}>  $previous
+     */
+    private function expire(array $previous): ?Checkout
+    {
+        foreach ($previous as ['checkout' => $checkout, 'status' => $status]) {
+            if ($status === 'open') {
+                try {
+                    $this->stripe->post("checkout/sessions/{$checkout->stripe_session_id}/expire");
+                } catch (StripeException $exception) {
+                    // Ja nao estava aberta: expirou sozinha entretanto (nao
+                    // impede a nova) ou o cliente acabou de a pagar.
+                    report($exception);
+
+                    if (($this->stripe->get("checkout/sessions/{$checkout->stripe_session_id}")['status'] ?? null) === 'complete') {
+                        return $checkout;
                     }
                 }
             }
 
-            $previous->update(['status' => 'expired']);
+            $checkout->update(['status' => 'expired']);
         }
 
         return null;

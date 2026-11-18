@@ -1,7 +1,7 @@
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { ArrowLeft, Lock, Tag, X } from 'lucide-react';
 import type { ComponentProps, FormEvent } from 'react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import InputError from '@/components/input-error';
 import { CartTotals } from '@/components/store/cart-totals';
 import { Button } from '@/components/ui/button';
@@ -16,23 +16,33 @@ import type { CartData, CartLine, CheckoutFormData } from '@/types/shop';
 
 type Field = Exclude<keyof CheckoutFormData, 'expected_total_cents'>;
 
-/** A ordem dos campos no ecrã: o primeiro com erro recebe o foco. */
-const FIELDS: Field[] = [
-    'name',
-    'email',
-    'phone',
-    'nif',
-    'line1',
-    'line2',
-    'postal_code',
-    'city',
-    'terms',
-];
-
 /** Só para decidir quando vale a pena confirmar o código; quem valida é o servidor. */
 const LOOKS_LIKE_EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const fieldId = (name: Field) => `checkout-${name}`;
+
+const PROMO_ERROR_ID = 'checkout-promo-error';
+const PAY_ERROR_ID = 'checkout-pay-error';
+
+/**
+ * Onde aparece cada erro, pela ordem da página: o primeiro que vier recebe o
+ * foco e é trazido à vista — no telemóvel o "Pagar" da barra fica longe dele.
+ */
+const ERROR_TARGETS: [string, string][] = [
+    ['name', fieldId('name')],
+    ['email', fieldId('email')],
+    ['phone', fieldId('phone')],
+    ['nif', fieldId('nif')],
+    ['line1', fieldId('line1')],
+    ['line2', fieldId('line2')],
+    ['postal_code', fieldId('postal_code')],
+    ['city', fieldId('city')],
+    ['promo_code', PROMO_ERROR_ID],
+    ['terms', fieldId('terms')],
+    ['cart', PAY_ERROR_ID],
+    ['payment', PAY_ERROR_ID],
+    ['expected_total_cents', PAY_ERROR_ID],
+];
 
 /** Um campo de texto com rótulo, ajuda e erro, ligados por aria-describedby. */
 function TextField({
@@ -142,7 +152,10 @@ function SummaryLine({ line }: { line: CartLine }) {
  *
  * Um código pessoal só se confirma com o email: quando o carrinho traz um à
  * espera e o email parece certo, a página pergunta ao servidor (sem gravar
- * nada) ao sair do campo, e o resumo passa a ser o que ele devolve.
+ * nada) ao sair do campo, ou no "Pagar" se o campo nunca perdeu o foco
+ * (preenchimento automático, Enter) — e só paga depois, com o total novo. O
+ * resumo passa a ser o que o servidor devolve; quando o "Pagar" volta com as
+ * contas mudadas, também.
  */
 export default function CheckoutPage({ cart }: { cart: CartData }) {
     const t = useT();
@@ -157,6 +170,31 @@ export default function CheckoutPage({ cart }: { cart: CartData }) {
     } | null>(null);
     const [checking, setChecking] = useState(false);
     const [removing, setRemoving] = useState(false);
+    // O "Pagar" foi aceite e o browser está a caminho do Stripe: o Inertia
+    // dá o pedido por acabado antes de a página sair, e um segundo clique
+    // expirava a sessão que se está a abrir. Nada volta a ligar-se.
+    const [leaving, setLeaving] = useState(false);
+    // Os mesmos dois estados, mas já certos no próprio clique (o estado do
+    // React só muda no render seguinte): um duplo clique não manda dois.
+    const confirming = useRef(false);
+    const paying = useRef(false);
+    // O "Pagar" que espera pela confirmação do código.
+    const afterConfirm = useRef<((answer: CartData | null) => void) | null>(
+        null,
+    );
+    // O erro a trazer à vista depois de a página o mostrar.
+    const focusNext = useRef<string | null>(null);
+
+    useEffect(() => {
+        if (focusNext.current === null) {
+            return;
+        }
+
+        const target = document.getElementById(focusNext.current);
+        focusNext.current = null;
+        target?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+        target?.focus({ preventScroll: true });
+    });
 
     const { data, setData, post, processing, errors, transform } =
         useForm<CheckoutFormData>({
@@ -177,35 +215,97 @@ export default function CheckoutPage({ cart }: { cart: CartData }) {
     // A confirmação só vale para o email com que foi feita.
     const summary =
         confirmed && confirmed.email === email ? confirmed.cart : cart;
-    const busy = processing || checking;
+    const busy = processing || checking || leaving;
+    const needsConfirmation =
+        waitsForEmail &&
+        LOOKS_LIKE_EMAIL.test(email) &&
+        confirmed?.email !== email;
 
     const confirmCode = () => {
-        if (
-            !waitsForEmail ||
-            checking ||
-            !LOOKS_LIKE_EMAIL.test(email) ||
-            confirmed?.email === email
-        ) {
+        if (!needsConfirmation || confirming.current) {
             return;
         }
 
+        const asked = email;
+        let answer: CartData | null = null;
+        confirming.current = true;
+
         router.post(
             url('/finalizar/codigo'),
-            { email },
+            { email: asked },
             {
                 preserveScroll: true,
                 preserveState: true,
                 onStart: () => setChecking(true),
-                onFinish: () => setChecking(false),
                 onSuccess: (page) => {
                     const flash = page.flash as { cart?: CartData };
 
                     if (flash.cart) {
-                        setConfirmed({ email, cart: flash.cart });
+                        answer = flash.cart;
+                        setConfirmed({ email: asked, cart: flash.cart });
                     }
+                },
+                onFinish: () => {
+                    confirming.current = false;
+                    setChecking(false);
+
+                    const next = afterConfirm.current;
+                    afterConfirm.current = null;
+                    next?.(answer);
                 },
             },
         );
+    };
+
+    const showFirstError = (errors: Record<string, string>) => {
+        focusNext.current =
+            ERROR_TARGETS.find(([key]) => errors[key])?.[1] ?? null;
+    };
+
+    const stopPaying = () => {
+        paying.current = false;
+        setLeaving(false);
+    };
+
+    const pay = (expectedTotalCents: number) => {
+        paying.current = true;
+        transform((form) => ({
+            ...form,
+            expected_total_cents: expectedTotalCents,
+        }));
+        post(url('/finalizar/pagar'), {
+            preserveScroll: true,
+            onStart: () => setLeaving(true),
+            // As contas mudaram: o servidor manda-as feitas com este email, e
+            // o resumo (e o próximo "Pagar") passa a ser esse.
+            onFlash: (flash) => {
+                const changed = (flash as { cart?: CartData }).cart;
+
+                if (changed) {
+                    setConfirmed({ email, cart: changed });
+                }
+            },
+            onError: (errors) => {
+                stopPaying();
+                showFirstError(errors);
+            },
+            // O pedido falhou sem resposta de validação: também não se saiu.
+            onHttpException: stopPaying,
+            onNetworkError: stopPaying,
+        });
+    };
+
+    // Depois da confirmação: paga com o total novo se o código ficou
+    // aplicado; se foi recusado, para e mostra porquê. Sem resposta (o
+    // servidor recusou o email), paga e deixa o servidor dizer o que falta.
+    const payAfterConfirm = (answer: CartData | null) => {
+        if (answer && answer.promo?.status !== 'applied') {
+            focusNext.current = PROMO_ERROR_ID;
+
+            return;
+        }
+
+        pay((answer ?? cart).totalCents);
     };
 
     const removeCode = () => {
@@ -220,30 +320,20 @@ export default function CheckoutPage({ cart }: { cart: CartData }) {
     const submit = (event: FormEvent) => {
         event.preventDefault();
 
-        if (busy) {
+        if (paying.current) {
             return;
         }
 
-        transform((form) => ({
-            ...form,
-            expected_total_cents: summary.totalCents,
-        }));
-        post(url('/finalizar/pagar'), {
-            preserveScroll: true,
-            onError: (errors) => {
-                const first = FIELDS.find((field) => errors[field]);
+        // A confirmação já vai a caminho (o clique tirou o foco ao email) ou
+        // ainda falta: o "Pagar" segue quando ela voltar.
+        if (confirming.current || needsConfirmation) {
+            afterConfirm.current = payAfterConfirm;
+            confirmCode();
 
-                if (first) {
-                    document.getElementById(fieldId(first))?.focus();
-                }
+            return;
+        }
 
-                // As contas mudaram: o resumo volta a ser o da página, e um
-                // código pessoal confirma-se outra vez com o carrinho novo.
-                if (errors.cart || errors.promo_code) {
-                    setConfirmed(null);
-                }
-            },
-        });
+        pay(summary.totalCents);
     };
 
     // Os erros que não são de um campo: o carrinho, o código, o Stripe.
@@ -262,7 +352,7 @@ export default function CheckoutPage({ cart }: { cart: CartData }) {
             aria-describedby="checkout-secure"
             className={cn('h-12 text-base', className)}
         >
-            {processing ? (
+            {processing || leaving ? (
                 <>
                     <Spinner aria-hidden="true" />
                     {t('checkout.paying')}
@@ -496,11 +586,19 @@ export default function CheckoutPage({ cart }: { cart: CartData }) {
                                 )}
                                 {summary.promo.status === 'refused' &&
                                 summary.promo.message ? (
-                                    <p className="text-destructive">
+                                    <p
+                                        id={PROMO_ERROR_ID}
+                                        role="alert"
+                                        tabIndex={-1}
+                                        className="text-destructive"
+                                    >
                                         {summary.promo.message}
                                     </p>
                                 ) : (
                                     <InputError
+                                        id={PROMO_ERROR_ID}
+                                        role="alert"
+                                        tabIndex={-1}
                                         message={otherErrors.promo_code}
                                     />
                                 )}
@@ -567,7 +665,12 @@ export default function CheckoutPage({ cart }: { cart: CartData }) {
                         </div>
 
                         <div className="flex flex-col gap-3">
-                            <InputError message={payError} role="alert" />
+                            <InputError
+                                id={PAY_ERROR_ID}
+                                role="alert"
+                                tabIndex={-1}
+                                message={payError}
+                            />
                             {payButton('w-full')}
                             <p
                                 id="checkout-secure"

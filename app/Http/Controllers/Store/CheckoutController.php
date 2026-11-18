@@ -67,14 +67,23 @@ class CheckoutController extends Controller
             throw ValidationException::withMessages(['cart' => trans('store.checkout.errors.cart')]);
         }
 
+        $customer = $request->customer();
+
         try {
             $url = $checkouts->start(
                 $cart,
-                $request->customer(),
+                $customer,
                 $request->address(),
                 app()->getLocale(),
                 $request->integer('expected_total_cents'),
             );
+        } catch (ValidationException $exception) {
+            // As contas mudaram (um preco, o stock, ou um codigo pessoal que
+            // este email confirmou): a pagina mostra as de agora, ja com este
+            // email, e o proximo "Pagar" leva o total que la esta.
+            Inertia::flash('cart', CartPresenter::make($cart, $customer['email']));
+
+            throw $exception;
         } catch (StripeException $exception) {
             // O cliente nao precisa de saber o que o Stripe disse; o dono sim.
             report($exception);

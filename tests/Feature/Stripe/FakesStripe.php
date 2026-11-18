@@ -215,6 +215,12 @@ trait FakesStripe
             return $this->stripeError(400, 'Missing required param: mode, line_items or success_url.');
         }
 
+        // O Stripe recusa um email sem um dominio a serio ("ana@localhost"),
+        // e repete-o na mensagem.
+        if (isset($data['customer_email']) && preg_match('/^[^@\s]+@[^@\s]+\.[A-Za-z]{2,}$/', (string) $data['customer_email']) !== 1) {
+            return $this->stripeError(400, "Invalid email address: {$data['customer_email']}");
+        }
+
         if (isset($data['expires_at'])) {
             $seconds = (int) $data['expires_at'] - now()->getTimestamp();
 

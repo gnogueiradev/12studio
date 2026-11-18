@@ -35,7 +35,9 @@ class StartCheckoutRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:120'],
-            'email' => ['required', 'string', 'email:rfc', 'max:255'],
+            // O RFC aceita "ana@localhost"; o Stripe nao, e falhava so no fim
+            // com o erro generico. Um dominio com ponto e extensao de letras.
+            'email' => ['required', 'string', 'email:rfc', 'max:255', 'regex:/@[^@\s]+\.[A-Za-z]{2,}$/'],
             'phone' => ['required', 'string', 'max:30', 'regex:/^\+?[0-9\s\-()]{6,}$/'],
             'nif' => ['nullable', 'string', function (string $attribute, mixed $value, Closure $fail): void {
                 if (! self::validNif((string) $value)) {
@@ -57,6 +59,7 @@ class StartCheckoutRequest extends FormRequest
     public function messages(): array
     {
         return [
+            'email.regex' => trans('validation.email'),
             'phone.regex' => trans('store.checkout.errors.phone'),
             'postal_code.regex' => trans('store.checkout.errors.postal_code'),
             'terms.accepted' => trans('store.checkout.errors.terms'),

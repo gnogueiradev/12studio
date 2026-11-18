@@ -5,6 +5,7 @@ namespace App\Stripe;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Str;
 use RuntimeException;
+use Throwable;
 
 /**
  * Tudo o que corre mal ao falar com o Stripe.
@@ -18,8 +19,25 @@ class StripeException extends RuntimeException
         string $message,
         public readonly ?int $status = null,
         public readonly ?string $stripeCode = null,
+        ?Throwable $previous = null,
     ) {
-        parent::__construct($message);
+        parent::__construct($message, 0, $previous);
+    }
+
+    /**
+     * A mesma falha sem os dados de um cliente na mensagem (o Stripe pode
+     * repetir o email que recebeu), para poder ir para os registos. A
+     * original fica como `previous`, pelo stack trace — e tambem sem eles,
+     * porque os registos escrevem a mensagem da `previous`.
+     *
+     * @param  list<string>  $values
+     */
+    public function withoutPersonalData(array $values): self
+    {
+        $values = array_values(array_filter($values, fn (string $value): bool => trim($value) !== ''));
+        $this->message = str_ireplace($values, '[dados do cliente]', $this->message);
+
+        return new self($this->message, $this->status, $this->stripeCode, $this);
     }
 
     public static function disabled(): self

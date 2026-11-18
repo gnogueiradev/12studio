@@ -376,7 +376,7 @@ return [
         'errors' => [
             'busy' => 'We are already opening the payment. Please wait a moment.',
             'cart' => 'Your cart has changed and can no longer be paid as it is. Please review it before continuing.',
-            'total_changed' => 'The total has changed since you opened this page. Check the new total and press Pay again.',
+            'total_changed' => 'The total has changed to the one you see now: check it and press Pay again.',
             'payment' => 'We could not open the payment. Please try again in a moment.',
             'nif' => 'This NIF is not valid. Please check the 9 digits.',
             'phone' => 'Please enter a valid mobile number.',

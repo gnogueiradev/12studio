@@ -376,7 +376,7 @@ return [
         'errors' => [
             'busy' => 'Ya estamos abriendo el pago. Espera un momento.',
             'cart' => 'Tu carrito ha cambiado y ya no se puede pagar así. Revísalo antes de continuar.',
-            'total_changed' => 'El total ha cambiado desde que abriste esta página. Revisa el nuevo total y pulsa Pagar otra vez.',
+            'total_changed' => 'El total ha cambiado al que ves ahora: revísalo y pulsa Pagar otra vez.',
             'payment' => 'No se ha podido abrir el pago. Inténtalo de nuevo dentro de un momento.',
             'nif' => 'Este NIF no es válido. Revisa los 9 dígitos.',
             'phone' => 'Escribe un número de móvil válido.',
