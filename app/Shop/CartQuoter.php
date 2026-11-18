@@ -114,6 +114,12 @@ final class CartQuoter
 
         $status = $result->reason === PromoCodeValidation::EMAIL_REQUIRED ? 'pending_email' : 'refused';
 
-        return [$status, $result->message, null, 0];
+        // O texto do validador e portugues (o backoffice usa-o assim): ao
+        // cliente a mensagem vai no idioma dele, pela razao da recusa.
+        $message = trans('store.cart.promo.'.$result->reason, [
+            'amount' => number_format(($result->promoCode->min_subtotal_cents ?? 0) / 100, 2, ',', ' '),
+        ]);
+
+        return [$status, $message, null, 0];
     }
 }

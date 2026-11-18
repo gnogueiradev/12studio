@@ -147,7 +147,22 @@ class CartQuoterTest extends TestCase
 
         $this->assertSame('refused', $wrong->promoStatus);
         $this->assertSame(0, $wrong->discountCents);
-        $this->assertSame('Este código é pessoal e pertence a outro email.', $wrong->promoMessage);
+        $this->assertSame(trans('store.cart.promo.wrong_email'), $wrong->promoMessage);
+
+        app()->setLocale('en');
+        $this->assertSame('This code is personal and belongs to another email.', $this->quote($cart, 'outra@example.com')->promoMessage);
+    }
+
+    public function test_the_minimum_message_carries_the_amount(): void
+    {
+        PromoCode::factory()->create(['code' => 'MINIMO', 'min_subtotal_cents' => 5000]);
+        $cart = $this->cartWith(2600);
+        $cart->update(['promo_code' => 'MINIMO']);
+
+        $this->assertSame(
+            trans('store.cart.promo.below_minimum', ['amount' => '50,00']),
+            $this->quote($cart)->promoMessage,
+        );
     }
 
     public function test_a_refused_code_does_not_block_the_checkout(): void

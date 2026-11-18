@@ -259,4 +259,29 @@ return [
         'replied_body' => 'We replied to your conversation :reference.',
         'view_reply' => 'View the reply',
     ],
+
+    'cart' => [
+        'errors' => [
+            'max_lines' => 'The cart holds at most :max different items.',
+            'qty_range' => 'The quantity must be between 1 and :max.',
+            'over_stock' => 'We only have :max in stock.',
+            'sold_out' => 'This item is sold out.',
+            'not_buyable' => 'This item cannot be bought.',
+            'required' => 'Please fill in the ":label" field.',
+            'number' => 'The ":label" field must be a number.',
+            'too_long' => 'The ":label" field accepts at most :max characters.',
+            'promo_too_long' => 'The code cannot be longer than :max characters.',
+        ],
+        'promo' => [
+            'not_found' => 'This code does not exist.',
+            'inactive' => 'This code is not active.',
+            'not_started' => 'This code is not valid yet.',
+            'expired' => 'This code has expired.',
+            'exhausted' => 'This code has been used the maximum number of times.',
+            'below_minimum' => 'This code only applies from :amount €.',
+            'email_required' => 'This code needs your email.',
+            'wrong_email' => 'This code is personal and belongs to another email.',
+            'already_used' => 'This email has already used this code.',
+        ],
+    ],
 ];

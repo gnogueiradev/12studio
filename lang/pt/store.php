@@ -266,4 +266,29 @@ return [
         'replied_body' => 'Respondemos à tua conversa :reference.',
         'view_reply' => 'Ver a resposta',
     ],
+
+    'cart' => [
+        'errors' => [
+            'max_lines' => 'O carrinho não leva mais de :max artigos diferentes.',
+            'qty_range' => 'A quantidade tem de ser entre 1 e :max.',
+            'over_stock' => 'Só temos :max em stock.',
+            'sold_out' => 'Este artigo está esgotado.',
+            'not_buyable' => 'Este artigo não se pode comprar.',
+            'required' => 'Preenche o campo «:label».',
+            'number' => 'O campo «:label» tem de ser um número.',
+            'too_long' => 'O campo «:label» aceita no máximo :max caracteres.',
+            'promo_too_long' => 'O código não pode ter mais de :max caracteres.',
+        ],
+        'promo' => [
+            'not_found' => 'Este código não existe.',
+            'inactive' => 'Este código não está ativo.',
+            'not_started' => 'Este código ainda não está em vigor.',
+            'expired' => 'Este código já expirou.',
+            'exhausted' => 'Este código já foi usado o número máximo de vezes.',
+            'below_minimum' => 'Este código só se aplica a partir de :amount €.',
+            'email_required' => 'Este código precisa do teu email.',
+            'wrong_email' => 'Este código é pessoal e pertence a outro email.',
+            'already_used' => 'Este email já usou este código.',
+        ],
+    ],
 ];

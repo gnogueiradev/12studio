@@ -7,7 +7,9 @@ use App\Models\CartItem;
 use App\Models\Product;
 use App\Models\Variant;
 use App\Shop\CartService;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
@@ -145,7 +147,7 @@ class CartServiceTest extends TestCase
         $item = $cart->items()->first();
 
         $this->travel(2)->days();
-        $this->service()->setQty($item, 4);
+        $this->service()->setQty($cart, $item, 4);
         $this->assertSame(4, $item->fresh()->qty);
         $this->assertTrue($cart->fresh()->updated_at->isToday());
 
@@ -158,9 +160,149 @@ class CartServiceTest extends TestCase
         $this->assertNull($cart->fresh()->promo_code);
 
         $this->travel(2)->days();
-        $this->service()->remove($item);
+        $this->service()->remove($cart, $item);
         $this->assertSame(0, $cart->items()->count());
         $this->assertTrue($cart->fresh()->updated_at->isToday());
+    }
+
+    public function test_an_item_of_another_cart_is_refused_and_left_untouched(): void
+    {
+        $mine = Cart::factory()->create();
+        $theirs = CartItem::factory()->for(Cart::factory())->create(['qty' => 2]);
+
+        foreach ([
+            fn () => $this->service()->setQty($mine, $theirs, 5),
+            fn () => $this->service()->remove($mine, $theirs),
+        ] as $attempt) {
+            try {
+                $attempt();
+                $this->fail('A linha de outro carrinho devia ser recusada.');
+            } catch (ModelNotFoundException) {
+                $this->assertSame(2, $theirs->fresh()->qty);
+            }
+        }
+    }
+
+    public function test_a_collision_on_the_same_line_is_added_up_instead_of_failing(): void
+    {
+        $variant = Variant::factory()->create();
+        $cart = Cart::factory()->create();
+        $raced = false;
+
+        // O outro pedido do duplo clique cria a linha entre a consulta e a escrita.
+        CartItem::creating(function (CartItem $item) use (&$raced): void {
+            if ($raced) {
+                return;
+            }
+            $raced = true;
+
+            DB::table('cart_items')->insert([
+                'cart_id' => $item->cart_id,
+                'variant_id' => $item->variant_id,
+                'qty' => 1,
+                'personalization' => null,
+                'personalization_hash' => $item->personalization_hash,
+                'created_at' => now(),
+                'updated_at' => now(),
+            ]);
+        });
+
+        $this->service()->add($cart, $variant, 2, []);
+
+        $this->assertTrue($raced);
+        $this->assertSame(1, $cart->items()->count());
+        $this->assertSame(3, $cart->items()->first()->qty);
+    }
+
+    public function test_a_collision_still_respects_the_quantity_limit(): void
+    {
+        $variant = Variant::factory()->stock(50)->create();
+        $cart = Cart::factory()->create();
+        $raced = false;
+
+        CartItem::creating(function (CartItem $item) use (&$raced): void {
+            if ($raced) {
+                return;
+            }
+            $raced = true;
+
+            DB::table('cart_items')->insert([
+                'cart_id' => $item->cart_id, 'variant_id' => $item->variant_id, 'qty' => 20,
+                'personalization' => null, 'personalization_hash' => $item->personalization_hash,
+                'created_at' => now(), 'updated_at' => now(),
+            ]);
+        });
+
+        $this->expectException(ValidationException::class);
+
+        $this->service()->add($cart, $variant, 1, []);
+    }
+
+    public function test_the_token_and_the_cart_of_a_line_cannot_be_mass_assigned(): void
+    {
+        $cart = (new Cart)->fill(['token' => 'x', 'promo_code' => 'A']);
+        $item = (new CartItem)->fill(['cart_id' => 9, 'qty' => 1]);
+
+        $this->assertNull($cart->token);
+        $this->assertNull($item->cart_id);
+    }
+
+    public function test_a_promo_code_over_40_characters_is_refused(): void
+    {
+        $cart = Cart::factory()->create();
+
+        try {
+            $this->service()->setPromoCode($cart, str_repeat('a', 41));
+            $this->fail('O código de 41 caracteres devia ser recusado.');
+        } catch (ValidationException $e) {
+            $this->assertSame([trans('store.cart.errors.promo_too_long', ['max' => 40])], $e->errors()['promo_code']);
+        }
+
+        $this->service()->setPromoCode($cart, str_repeat('a', 40));
+        $this->assertSame(40, strlen($cart->fresh()->promo_code));
+    }
+
+    public function test_errors_come_in_the_customers_language(): void
+    {
+        app()->setLocale('en');
+        $variant = Variant::factory()->stock(2)->create();
+
+        try {
+            $this->service()->add(null, $variant, 3, []);
+            $this->fail('Devia recusar.');
+        } catch (ValidationException $e) {
+            $this->assertSame('We only have 2 in stock.', $e->errors()['qty'][0]);
+        }
+    }
+
+    public function test_the_error_names_the_field_in_the_current_language(): void
+    {
+        $product = Product::factory()->create([
+            'personalization_fields' => [[
+                'key' => 'nome', 'label' => 'Nome', 'label_i18n' => ['en' => 'Name'], 'type' => 'text', 'required' => true,
+            ]],
+        ]);
+        app()->setLocale('en');
+
+        try {
+            $this->service()->personalizationFor($product, []);
+            $this->fail('Devia recusar.');
+        } catch (ValidationException $e) {
+            $this->assertSame(trans('store.cart.errors.required', ['label' => 'Name']), $e->errors()['personalization.nome'][0]);
+        }
+    }
+
+    public function test_personalisation_has_an_absolute_ceiling_of_200_characters(): void
+    {
+        $product = Product::factory()->create([
+            'personalization_fields' => [['key' => 'texto', 'label' => 'Texto', 'type' => 'text']],
+        ]);
+
+        $this->assertSame(['texto' => str_repeat('a', 200)], $this->service()->personalizationFor($product, ['texto' => str_repeat('a', 200)]));
+
+        $this->expectException(ValidationException::class);
+
+        $this->service()->personalizationFor($product, ['texto' => str_repeat('a', 201)]);
     }
 
     public function test_set_qty_refuses_what_cannot_be_bought(): void
@@ -170,7 +312,7 @@ class CartServiceTest extends TestCase
 
         $this->expectException(ValidationException::class);
 
-        $this->service()->setQty($cart->items()->first(), 3);
+        $this->service()->setQty($cart, $cart->items()->first(), 3);
     }
 
     public function test_clear_removes_the_lines_and_the_code(): void

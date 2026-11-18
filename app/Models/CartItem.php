@@ -21,7 +21,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property-read Cart $cart
  * @property-read Variant $variant
  */
-#[Fillable(['cart_id', 'variant_id', 'qty', 'personalization', 'personalization_hash'])]
+#[Fillable(['variant_id', 'qty', 'personalization', 'personalization_hash'])]
 class CartItem extends Model
 {
     /** @use HasFactory<CartItemFactory> */

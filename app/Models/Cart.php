@@ -21,7 +21,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
  */
-#[Fillable(['token', 'promo_code'])]
+#[Fillable(['promo_code'])]
 class Cart extends Model
 {
     /** @use HasFactory<CartFactory> */
