@@ -122,9 +122,24 @@ class PageController extends Controller
         ]);
     }
 
-    /** Autosave: grava o rascunho e devolve o estado da pagina. */
+    /**
+     * Autosave: grava o rascunho e devolve o estado da pagina.
+     *
+     * So grava se o editor se basear no rascunho que ca esta (o marcador da
+     * versao): outro separador, ou outra pessoa, pode ter gravado entretanto,
+     * e gravar a arvore velha por cima apagava esse trabalho sem aviso. Sem
+     * marcador tambem nao grava: um separador aberto antes desta mudanca
+     * cairia no mesmo erro. O "Gravar por cima" do editor manda force.
+     */
     public function saveDraft(SavePageDraftRequest $request, Page $page): JsonResponse
     {
+        if (! $request->boolean('force') && $request->string('version')->toString() !== $page->draftVersion()) {
+            return response()->json([
+                'message' => 'Esta página foi alterada noutro separador ou por outra pessoa. Nada foi gravado.',
+                'conflict' => true,
+            ], 409);
+        }
+
         $page = $this->builder->saveDraft($page, (array) $request->input('blocks', []), $request->has('seo') ? (array) $request->input('seo') : null);
 
         return response()->json(['page' => $this->status($page)]);
@@ -305,9 +320,11 @@ class PageController extends Controller
     {
         return $this->row($page) + [
             'blocks' => $page->draft_blocks,
-            'seo' => (object) ($page->seo ?? []),
+            // O do rascunho: o publicado so muda ao publicar.
+            'seo' => (object) $page->draftSeo(),
             'startsAtInput' => $page->starts_at?->format('Y-m-d\TH:i'),
             'endsAtInput' => $page->ends_at?->format('Y-m-d\TH:i'),
+            'version' => $page->draftVersion(),
         ];
     }
 
@@ -324,6 +341,8 @@ class PageController extends Controller
             // O rascunho limpo (ids novos, campos normalizados) para o editor
             // nao ficar com uma versao diferente da gravada.
             'blocks' => $page->draft_blocks,
+            // A base da gravacao seguinte.
+            'version' => $page->draftVersion(),
         ];
     }
 

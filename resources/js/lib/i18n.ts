@@ -15,6 +15,8 @@ export type StoreLocale = {
     name: string;
     /** Localização do Intl (preços, datas): "pt-PT", "en-IE"… */
     intl: string;
+    /** O valor do <html lang> e das alternates: "pt-PT", "en"… */
+    hreflang?: string;
 };
 
 export type LocaleProps = {

@@ -18,7 +18,8 @@ use Illuminate\Support\Carbon;
  * @property string|null $slug
  * @property string $name
  * @property string $status
- * @property array<string, array{title?: string, description?: string}>|null $seo
+ * @property array<string, array{title?: string, description?: string}>|null $seo O publicado: o que a montra le.
+ * @property array<string, array{title?: string, description?: string}>|null $draft_seo O do rascunho; null = igual ao publicado.
  * @property array<int, array<string, mixed>> $draft_blocks
  * @property array<int, array<string, mixed>>|null $published_blocks
  * @property Carbon|null $starts_at
@@ -27,7 +28,7 @@ use Illuminate\Support\Carbon;
  * @property Carbon|null $created_at
  * @property Carbon|null $updated_at
  */
-#[Fillable(['type', 'key', 'slug', 'name', 'status', 'seo', 'draft_blocks', 'published_blocks', 'starts_at', 'ends_at', 'published_at'])]
+#[Fillable(['type', 'key', 'slug', 'name', 'status', 'seo', 'draft_seo', 'draft_blocks', 'published_blocks', 'starts_at', 'ends_at', 'published_at'])]
 class Page extends Model
 {
     /** @use HasFactory<PageFactory> */
@@ -69,6 +70,7 @@ class Page extends Model
     {
         return [
             'seo' => 'array',
+            'draft_seo' => 'array',
             'draft_blocks' => 'array',
             'published_blocks' => 'array',
             'starts_at' => 'datetime',
@@ -108,10 +110,35 @@ class Page extends Model
             && ($this->ends_at === null || $this->ends_at->gt($now));
     }
 
-    /** O rascunho difere do que esta publicado. */
+    /** O rascunho (blocos ou SEO) difere do que esta publicado. */
     public function hasUnpublishedChanges(): bool
     {
-        return $this->published_blocks !== $this->draft_blocks;
+        return $this->published_blocks !== $this->draft_blocks
+            || $this->draftSeo() !== ($this->seo ?? []);
+    }
+
+    /**
+     * O SEO que o editor mostra e que vai para o ar ao publicar. Sem rascunho
+     * proprio (as paginas de antes da coluna, ou acabadas de publicar ou de
+     * descartar) e o publicado.
+     *
+     * @return array<string, array{title?: string, description?: string}>
+     */
+    public function draftSeo(): array
+    {
+        return $this->draft_seo ?? $this->seo ?? [];
+    }
+
+    /**
+     * O marcador da versao do rascunho (blocos e SEO), calculado do que esta
+     * guardado. O editor manda-o em cada gravacao: se ja nao bater, outro
+     * separador (ou outra pessoa) gravou entretanto e o servidor nao grava por
+     * cima. O updated_at nao serve: tem precisao ao segundo e muda com coisas
+     * que nao sao o rascunho. Unico sitio que o calcula.
+     */
+    public function draftVersion(): string
+    {
+        return hash('xxh128', json_encode([$this->draft_blocks, $this->draftSeo()], JSON_THROW_ON_ERROR));
     }
 
     /** O caminho publico (idioma por omissao), ou null num template. */

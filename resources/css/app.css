@@ -212,7 +212,13 @@
     --accent-foreground: #332f2b;
 
     --border: #ddd6cd;
-    --input: #ddd6cd;
+    /* O contorno e a unica coisa que diz onde esta um campo (o fundo e
+       transparente) ou uma caixa por marcar, e o WCAG 1.4.11 pede-lhe 3:1.
+       Com o #DDD6CD das bordas decorativas dava 1.36:1 sobre o fundo. Este
+       tom da 3.65:1 sobre o fundo, 3.87:1 sobre branco e 3.29:1 sobre
+       --muted. --border fica como estava: separar cartoes nao e identificar
+       um controlo. */
+    --input: #8a8076;
     /* Dourado escurecido: o #C6A77B da marca da 2.15:1 contra o fundo e nao
        chega aos 3:1 que um indicador de foco precisa. O valor tem de
        aguentar nao so o fundo da pagina mas a superficie clara mais escura
@@ -294,7 +300,11 @@
     --accent-foreground: #faf8f5;
 
     --border: #413b36;
-    --input: #413b36;
+    /* Mesma razao do modo claro: #413B36 dava 1.50:1 sobre o fundo. Este tom
+       da 4.11:1 sobre o fundo, 3.72:1 sobre --card e 3.29:1 sobre --muted.
+       Os preenchimentos que usavam --input a 30%/50% (select, textarea,
+       tabs) passaram para --secondary-hover, que e o #413B36 de sempre. */
+    --input: #877d73;
     /* Aqui o dourado da marca ja da 7.27:1 e nao precisa de ser escurecido. */
     --ring: #c6a77b;
 

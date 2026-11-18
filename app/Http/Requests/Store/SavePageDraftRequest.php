@@ -18,6 +18,10 @@ class SavePageDraftRequest extends AdminFormRequest
         return [
             'blocks' => ['present', 'array'],
             'seo' => ['sometimes', 'array'],
+            // O marcador da versao em que o editor se baseia; "force" e o
+            // "Gravar por cima" do aviso de conflito.
+            'version' => ['nullable', 'string'],
+            'force' => ['sometimes', 'boolean'],
         ];
     }
 }

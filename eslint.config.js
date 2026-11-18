@@ -104,6 +104,14 @@ export default [
     },
     {
         ignores: [
+            // Pastas de trabalho das sessoes (git worktrees em
+            // .claude/worktrees): cada uma traz o seu vendor/ e o seu
+            // public/build, e os padroes abaixo so apanham os da raiz. Sem
+            // isto o `eslint .` dava dezenas de milhares de erros em codigo
+            // de terceiros — e o `npm run lint`, que leva --fix, reescrevia-o.
+            '.claude',
+            '.omc',
+            '.superpowers',
             'vendor',
             'node_modules',
             'public',

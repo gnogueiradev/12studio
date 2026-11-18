@@ -221,6 +221,35 @@ class VariantCrudTest extends TestCase
         ]);
     }
 
+    /**
+     * O formulario so manda o stock quando o admin mexeu nele; sem a chave, o
+     * stock que la esta (ja mexido por uma venda) nao se toca nem gera movimento.
+     */
+    public function test_updating_without_stock_leaves_stock_and_movements_alone(): void
+    {
+        $variant = Variant::factory()->stock(4)->create(['product_id' => $this->product->id]);
+
+        $payload = $this->validPayload();
+        unset($payload['stock']);
+
+        $this->actingAs($this->admin)
+            ->patch(route('admin.variantes.update', $variant), [
+                ...$payload,
+                'sku' => $variant->sku,
+                'normal_price' => '30.00',
+            ])
+            ->assertSessionHasNoErrors();
+
+        $variant->refresh();
+
+        $this->assertSame(3000, $variant->price_cents);
+        $this->assertSame(4, $variant->stock);
+        $this->assertDatabaseMissing('stock_movements', [
+            'variant_id' => $variant->id,
+            'reason' => 'manual_adjust',
+        ]);
+    }
+
     public function test_duplicate_sku_is_rejected(): void
     {
         Variant::factory()->create(['sku' => 'VASO-PLA-20']);

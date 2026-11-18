@@ -49,18 +49,21 @@ class StorePage
         // o rascunho confere-se pela pre-visualizacao do editor.
         $draft = ! $live;
         $blocks = $draft || $preview ? $page->draft_blocks : (array) $page->published_blocks;
+        // O SEO acompanha os blocos: o publico (so paginas no ar) le sempre o
+        // publicado.
+        $pageSeo = $draft || $preview ? $page->draftSeo() : (array) $page->seo;
 
         $locale = app()->getLocale();
         $default = (string) config('locales.default');
         $context = new RenderContext($locale, $default, $request, $product, $subject);
 
-        $title = $props['title'] ?? $this->title($page, $locale, $default);
+        $title = $props['title'] ?? $this->title($page, $pageSeo, $locale, $default);
         unset($props['title']);
 
         $seo ??= Seo::make(
             path: $page->path() ?? '/',
             title: $title,
-            description: $this->description($page, $locale, $default),
+            description: $this->description($pageSeo, $locale, $default),
             jsonLd: $page->key === 'home' ? [Seo::organization()] : [],
             index: ! $draft && ! $preview,
         );
@@ -77,17 +80,19 @@ class StorePage
         ])->withViewData(['seo' => $seo]);
     }
 
-    private function description(Page $page, string $locale, string $default): ?string
+    /**
+     * @param  array<string, array{title?: string, description?: string}>  $seo
+     */
+    private function description(array $seo, string $locale, string $default): ?string
     {
-        $seo = (array) $page->seo;
-
         return $seo[$locale]['description'] ?? $seo[$default]['description'] ?? null;
     }
 
-    private function title(Page $page, string $locale, string $default): string
+    /**
+     * @param  array<string, array{title?: string, description?: string}>  $seo
+     */
+    private function title(Page $page, array $seo, string $locale, string $default): string
     {
-        $seo = (array) $page->seo;
-
         return (string) ($seo[$locale]['title'] ?? $seo[$default]['title'] ?? ($page->isLanding() ? $page->name : ''));
     }
 }

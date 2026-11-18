@@ -9,7 +9,7 @@ import { centsToInput, inputToCents } from '@/lib/money';
 import { cn } from '@/lib/utils';
 import { variantFormFromRow } from '@/lib/variant-form-data';
 import { destroy, update } from '@/routes/admin/variantes';
-import type { VariantRow } from '@/types/catalog';
+import type { VariantFormData, VariantRow } from '@/types/catalog';
 
 type Props = {
     variants: VariantRow[];
@@ -37,15 +37,20 @@ export function VariantRows({ variants, onOpenVariant, openId }: Props) {
     const [saving, setSaving] = useState<number | null>(null);
 
     /*
-     * O endpoint da variante herda as regras do `store` e exige o payload
-     * inteiro — por isso vai a linha toda, com o campo mexido por cima. É o
-     * mesmo pedido que a ficha faz; o que muda é quantos campos o admin viu.
+     * O endpoint da variante exige o payload inteiro menos o stock — por isso
+     * vai a linha toda, com o campo mexido por cima. O stock só segue quando é
+     * ele que muda: a linha foi desenhada quando a página carregou, e mandar
+     * esse valor de volta repunha o stock por cima de uma venda entretanto
+     * feita.
      */
     const save = (variant: VariantRow, changes: Record<string, unknown>) => {
+        const form: Partial<VariantFormData> = variantFormFromRow(variant);
+        delete form.stock;
+
         setSaving(variant.id);
         router.patch(
             update(variant.id).url,
-            { ...variantFormFromRow(variant), ...changes },
+            { ...form, ...changes },
             {
                 preserveScroll: true,
                 preserveState: true,

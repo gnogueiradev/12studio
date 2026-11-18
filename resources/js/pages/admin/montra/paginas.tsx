@@ -124,7 +124,7 @@ export default function PagesIndex({ system, landings }: Props) {
                                 type="button"
                                 onClick={() => setSearch('')}
                                 aria-label="Limpar pesquisa"
-                                className="absolute top-1/2 right-2 flex size-6 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                                className="absolute top-1/2 right-2 flex size-6 -translate-y-1/2 items-center justify-center rounded-sm text-muted-foreground outline-none hover:text-foreground focus-visible:ring-[3px] focus-visible:ring-ring"
                             >
                                 <X className="size-4" />
                             </button>

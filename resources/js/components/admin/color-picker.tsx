@@ -273,7 +273,7 @@ function SaturationArea({
                     track(event);
                 }
             }}
-            className="relative size-40 shrink-0 cursor-crosshair touch-none rounded-lg border border-border focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+            className="relative size-40 shrink-0 cursor-crosshair touch-none rounded-lg border border-border focus-visible:ring-[3px] focus-visible:ring-ring focus-visible:outline-none"
             style={{
                 backgroundImage:
                     'linear-gradient(to top, #000, transparent), linear-gradient(to right, #FFF, transparent)',
@@ -342,7 +342,7 @@ function HueSlider({
                     track(event);
                 }
             }}
-            className="relative h-4 cursor-pointer touch-none rounded-full border border-border focus-visible:ring-[3px] focus-visible:ring-ring/50 focus-visible:outline-none"
+            className="relative h-4 cursor-pointer touch-none rounded-full border border-border focus-visible:ring-[3px] focus-visible:ring-ring focus-visible:outline-none"
             style={{
                 backgroundImage:
                     'linear-gradient(to right, #F00, #FF0, #0F0, #0FF, #00F, #F0F, #F00)',
