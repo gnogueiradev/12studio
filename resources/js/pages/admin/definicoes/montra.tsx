@@ -62,6 +62,8 @@ type Props = {
     languages: (Option & { locked: boolean })[];
     /** ShopGate::ready(): Stripe e segredo do webhook configurados. */
     shopReady: boolean;
+    /** ShopGate::testMode(): produção com uma chave de teste do Stripe. */
+    shopTestMode: boolean;
 };
 
 /**
@@ -74,6 +76,7 @@ export default function StoreSettingsPage({
     networks,
     languages,
     shopReady,
+    shopTestMode,
 }: Props) {
     const { data, setData, patch, processing, errors } = useForm<StoreForm>({
         ...store,
@@ -218,6 +221,13 @@ export default function StoreSettingsPage({
                                     O Stripe ou o segredo do webhook não estão
                                     configurados: as compras ficam desligadas
                                     seja qual for a escolha.
+                                </p>
+                            )}
+                            {shopTestMode && (
+                                <p className="text-sm text-muted-foreground">
+                                    O Stripe está em modo de teste: as compras
+                                    só funcionam para a equipa, mesmo com
+                                    «Ligadas» escolhido.
                                 </p>
                             )}
                         </div>

@@ -31,6 +31,7 @@ class StoreSettingsController extends Controller
             'networks' => $this->store->networkOptions(),
             'languages' => $this->store->localeOptions(),
             'shopReady' => $this->gate->ready(),
+            'shopTestMode' => $this->gate->testMode(),
         ]);
     }
 

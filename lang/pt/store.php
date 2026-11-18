@@ -373,6 +373,8 @@ return [
         'terms_link' => 'termos e condições',
         'terms_middle' => ' e a política de ',
         'shipping_link' => 'envios e devoluções',
+        'privacy_middle' => ', e tomei conhecimento da ',
+        'privacy_link' => 'política de privacidade',
         'terms_after' => '.',
         'new_tab' => '(abre noutro separador)',
         'code_pending' => 'Escreve o teu email para confirmarmos este código.',

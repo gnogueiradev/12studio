@@ -7,6 +7,7 @@ use App\Services\SettingService;
 use App\Services\StoreSettings;
 use App\Shop\ShopGate;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Inertia\Testing\AssertableInertia as Assert;
 use Tests\Feature\Stripe\FakesStripe;
 use Tests\TestCase;
 
@@ -55,6 +56,53 @@ class ShopGateTest extends TestCase
         $this->mode('on');
 
         $this->assertTrue($this->gate()->allows(null));
+    }
+
+    public function test_in_production_a_test_key_keeps_the_shop_for_the_staff(): void
+    {
+        $this->fakeStripe();
+        $this->mode('on');
+        $this->app->detectEnvironment(fn (): string => 'production');
+
+        $this->assertTrue($this->gate()->testMode());
+        $this->assertFalse($this->gate()->allows(null));
+        $this->assertFalse($this->gate()->allows(User::factory()->create()));
+        $this->assertTrue($this->gate()->allows(User::factory()->admin()->create()));
+    }
+
+    public function test_in_production_a_live_key_opens_the_shop_to_everyone(): void
+    {
+        $this->fakeStripe();
+        $this->mode('on');
+        $this->app->detectEnvironment(fn (): string => 'production');
+        // Montada aos bocados, como a do FakesStripe, para o secret scanning.
+        config(['stripe.secret' => 'sk_'.'live_'.str_repeat('x', 24)]);
+
+        $this->assertFalse($this->gate()->testMode());
+        $this->assertTrue($this->gate()->allows(null));
+    }
+
+    public function test_outside_production_a_test_key_is_not_test_mode(): void
+    {
+        $this->fakeStripe();
+        $this->mode('on');
+
+        $this->assertFalse($this->gate()->testMode());
+        $this->assertTrue($this->gate()->allows(null));
+    }
+
+    public function test_the_settings_page_says_when_stripe_is_in_test_mode(): void
+    {
+        $this->fakeStripe();
+        $owner = User::factory()->owner()->create();
+
+        $this->actingAs($owner)->get(route('admin.montra.index'))
+            ->assertInertia(fn (Assert $page) => $page->where('shopTestMode', false));
+
+        $this->app->detectEnvironment(fn (): string => 'production');
+
+        $this->actingAs($owner)->get(route('admin.montra.index'))
+            ->assertInertia(fn (Assert $page) => $page->where('shopReady', true)->where('shopTestMode', true));
     }
 
     public function test_without_stripe_or_without_the_webhook_secret_it_behaves_as_off(): void

@@ -655,6 +655,19 @@ export default function CheckoutPage({ cart }: { cart: CartData }) {
                                             {t('checkout.new_tab')}
                                         </span>
                                     </a>
+                                    {t('checkout.privacy_middle')}
+                                    <a
+                                        href={url('/privacidade')}
+                                        target="_blank"
+                                        rel="noopener"
+                                        className="font-medium underline underline-offset-4"
+                                    >
+                                        {t('checkout.privacy_link')}
+                                        <span className="sr-only">
+                                            {' '}
+                                            {t('checkout.new_tab')}
+                                        </span>
+                                    </a>
                                     {t('checkout.terms_after')}
                                 </Label>
                             </div>

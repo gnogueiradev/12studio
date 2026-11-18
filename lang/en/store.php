@@ -366,6 +366,8 @@ return [
         'terms_link' => 'terms and conditions',
         'terms_middle' => ' and the ',
         'shipping_link' => 'shipping and returns policy',
+        'privacy_middle' => ', and I acknowledge the ',
+        'privacy_link' => 'privacy policy',
         'terms_after' => '.',
         'new_tab' => '(opens in a new tab)',
         'code_pending' => 'Enter your email so we can confirm this code.',

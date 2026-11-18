@@ -26,6 +26,18 @@ class ShopGate
         return $this->stripe->isEnabled() && $this->webhook->isConfigured();
     }
 
+    /**
+     * Producao com uma chave de teste do Stripe: o cartao de teste "pagava"
+     * encomendas a serio (email, stock) sem dinheiro nenhum. As chaves vivem
+     * no .env e o interruptor e um clique, por isso enquanto a chave for de
+     * teste o "Ligadas" vale so para a equipa. Fora de producao (local,
+     * staging, testes) a chave de teste e a normal e nada muda.
+     */
+    public function testMode(): bool
+    {
+        return app()->environment('production') && $this->stripe->usesTestKey();
+    }
+
     public function allows(?User $user): bool
     {
         if (! $this->ready()) {
@@ -33,7 +45,7 @@ class ShopGate
         }
 
         return match ($this->store->shopMode()) {
-            'on' => true,
+            'on' => ! $this->testMode() || $user?->isAdmin() === true,
             'staff' => $user?->isAdmin() === true,
             default => false,
         };

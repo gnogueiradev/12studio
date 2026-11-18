@@ -45,13 +45,7 @@ class StripeClient
      */
     public function isOtherMode(string $sessionId): bool
     {
-        $key = (string) config('stripe.secret');
-
-        $keyMode = match (true) {
-            str_starts_with($key, 'sk_test_'), str_starts_with($key, 'rk_test_') => 'test',
-            str_starts_with($key, 'sk_live_'), str_starts_with($key, 'rk_live_') => 'live',
-            default => null,
-        };
+        $keyMode = $this->keyMode();
 
         $sessionMode = match (true) {
             str_starts_with($sessionId, 'cs_test_') => 'test',
@@ -60,6 +54,26 @@ class StripeClient
         };
 
         return $keyMode !== null && $sessionMode !== null && $keyMode !== $sessionMode;
+    }
+
+    /**
+     * Se a chave em uso e de teste: com ela o Stripe aceita o cartao de teste
+     * e nao cobra nada. Um prefixo que nao se conhece nao conta como teste.
+     */
+    public function usesTestKey(): bool
+    {
+        return $this->keyMode() === 'test';
+    }
+
+    private function keyMode(): ?string
+    {
+        $key = (string) config('stripe.secret');
+
+        return match (true) {
+            str_starts_with($key, 'sk_test_'), str_starts_with($key, 'rk_test_') => 'test',
+            str_starts_with($key, 'sk_live_'), str_starts_with($key, 'rk_live_') => 'live',
+            default => null,
+        };
     }
 
     /**
