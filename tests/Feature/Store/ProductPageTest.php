@@ -7,13 +7,17 @@ use App\Models\Color;
 use App\Models\Product;
 use App\Models\User;
 use App\Models\Variant;
+use App\Services\SettingService;
+use App\Services\StoreSettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Arr;
 use Inertia\Testing\AssertableInertia as Assert;
+use Tests\Feature\Stripe\FakesStripe;
 use Tests\TestCase;
 
 class ProductPageTest extends TestCase
 {
+    use FakesStripe;
     use RefreshDatabase;
 
     protected function setUp(): void
@@ -77,6 +81,29 @@ class ProductPageTest extends TestCase
                 $this->assertStringNotContainsString($internal, $keys);
             }
         });
+    }
+
+    public function test_each_variant_says_whether_it_can_be_bought(): void
+    {
+        $this->fakeStripe();
+        $this->vaso();
+
+        // Desligadas (o valor por omissão): a página não oferece o carrinho.
+        $this->get('/produtos/vaso-ondas')->assertInertia(fn (Assert $page) => $page
+            ->where('storefront.shop', false)
+            ->where('product.variants.0.buy', ['ok' => true, 'mode' => 'in_stock', 'maxQty' => 3])
+            ->where('product.variants.1.buy', ['ok' => false, 'mode' => null, 'maxQty' => 0]));
+
+        app(SettingService::class)->set(StoreSettings::KEY_SHOP, 'on');
+
+        $this->get('/produtos/vaso-ondas')->assertInertia(fn (Assert $page) => $page
+            ->where('storefront.shop', true)
+            ->where('product.variants.0.buy.ok', true));
+
+        Product::query()->where('slug', 'vaso-ondas')->update(['fulfillment_mode' => 'custom']);
+
+        $this->get('/produtos/vaso-ondas')->assertInertia(fn (Assert $page) => $page
+            ->where('product.variants.0.buy', ['ok' => false, 'mode' => null, 'maxQty' => null]));
     }
 
     public function test_products_not_on_sale_are_only_previewed_by_the_admin(): void

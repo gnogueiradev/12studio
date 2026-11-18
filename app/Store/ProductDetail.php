@@ -8,14 +8,17 @@ use App\Models\Material;
 use App\Models\Product;
 use App\Models\ProductImage;
 use App\Models\Variant;
+use App\Shop\Buyable;
 use App\Support\LocalizedUrl;
 use App\Support\PriceRange;
 use Illuminate\Support\Collection;
 
 /**
  * A pagina de um produto na montra. Como o ProductCard: campos escolhidos a
- * mao, sem custos, stock exato, gramagem nem tempos. De cada variante o
- * cliente ve so o preco e se ha para entrega imediata.
+ * mao, sem custos, gramagem nem tempos. De cada variante o cliente ve o
+ * preco, se ha para entrega imediata e se a pode comprar. O stock so aparece
+ * como teto da quantidade (`buy.maxQty`, nunca acima do limite geral do
+ * carrinho): o seletor precisa dele, e o carrinho ja o dizia ao recusar.
  */
 final class ProductDetail
 {
@@ -44,6 +47,10 @@ final class ProductDetail
         $variants = $product->variants;
         $availability = ProductCard::availability($product, $variants);
         $default = $variants->firstWhere('is_default', true) ?? $variants->first();
+        // "Esta a venda?" numa so consulta para as variantes todas; e o
+        // Buyable le o produto de cada variante, que ja esta aqui.
+        $forSale = Buyable::forSale($variants);
+        $variants->each(fn (Variant $variant) => $variant->setRelation('product', $product));
 
         return [
             'id' => $product->id,
@@ -81,10 +88,24 @@ final class ProductDetail
                     'height' => $variant->height_mm,
                     'weight' => $variant->product_weight_grams,
                 ], fn (?int $value): bool => $value !== null && $value > 0),
+                'buy' => self::buy($variant, $forSale[$variant->id] ?? false),
             ])->values()->all(),
             'defaultVariantId' => $default?->id,
             'personalization' => self::personalization($product, $locale ?? app()->getLocale()),
         ];
+    }
+
+    /**
+     * Se a variante vai para o carrinho, e como. O teto da quantidade e o
+     * do seletor; de resto quem decide e o Buyable, como no carrinho.
+     *
+     * @return array{ok: bool, mode: string|null, maxQty: int|null}
+     */
+    private static function buy(Variant $variant, bool $forSale): array
+    {
+        $check = Buyable::check($variant, 1, $forSale);
+
+        return ['ok' => $check->ok, 'mode' => $check->mode, 'maxQty' => $check->maxQty];
     }
 
     /**

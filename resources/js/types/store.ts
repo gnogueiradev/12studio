@@ -180,6 +180,13 @@ export type ProductVariantData = {
         height?: number;
         weight?: number;
     };
+    /** Buyable::check(variante, 1): se vai para o carrinho, e como. */
+    buy: {
+        ok: boolean;
+        mode: 'in_stock' | 'made_to_order' | null;
+        /** O teto do seletor de quantidade; null = só o limite geral. */
+        maxQty: number | null;
+    };
 };
 
 export type ProductImageData = ResponsiveImageData & {

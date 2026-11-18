@@ -2,6 +2,7 @@ import { Link, router, usePage } from '@inertiajs/react';
 import { Menu, Search } from 'lucide-react';
 import { useState } from 'react';
 import AppLogoIcon from '@/components/app-logo-icon';
+import { CartButton } from '@/components/store/cart-button';
 import {
     LanguageLinks,
     LanguageSwitcher,
@@ -40,7 +41,7 @@ export function StoreHeader({
     /** O logotipo do tema; sem ele, o símbolo e o nome da loja. */
     logo?: string | null;
 }) {
-    const { brand } = usePage().props;
+    const { brand, storefront } = usePage().props;
     const { url } = usePage();
     const t = useT();
     const localized = useLocalizedUrl();
@@ -119,6 +120,10 @@ export function StoreHeader({
                     </Button>
 
                     <LanguageSwitcher className="hidden md:inline-flex" />
+
+                    {storefront?.shop && (
+                        <CartButton count={storefront.cartCount} />
+                    )}
 
                     <Sheet open={menuOpen} onOpenChange={setMenuOpen}>
                         <SheetTrigger asChild>

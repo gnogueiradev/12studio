@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { useMemo, useState, useSyncExternalStore } from 'react';
 import type { ReactNode } from 'react';
+import { BuyBox } from '@/components/store/buy-box';
 import { ConversationForm } from '@/components/store/conversation-form';
 import { ProductPrice } from '@/components/store/product-card';
 import { ResponsiveImage } from '@/components/store/responsive-image';
@@ -31,6 +32,7 @@ import type {
     ProductImageData,
     ProductVariantData,
     StoreBlock,
+    Storefront,
 } from '@/types/store';
 import { RichText } from './text';
 
@@ -401,8 +403,9 @@ export function ProductMainBlock({ block }: { block: StoreBlock }) {
     const data = block.data as Data;
     const t = useT();
     const format = usePrice();
-    const { product } = usePage().props as unknown as {
+    const { product, storefront } = usePage().props as unknown as {
         product: ProductDetailData;
+        storefront?: Storefront;
     };
     const { selected, choose, fits } = useVariantSelection(product);
     const [interestOpen, setInterestOpen] = useState(false);
@@ -472,6 +475,28 @@ export function ProductMainBlock({ block }: { block: StoreBlock }) {
             specs.weight);
 
     const galleryRight = block.variant === 'gallery_right';
+
+    // Comprar só quando a loja vende a quem visita e esta variante se pode
+    // comprar (Buyable). De resto, a página fica exatamente como sempre foi:
+    // "Tenho interesse" e "Fazer uma pergunta".
+    const canBuy =
+        storefront?.shop === true &&
+        selected !== null &&
+        selected.buy.ok &&
+        !product.isCustom;
+
+    // O nome e o preço da barra fixa do telemóvel, com ou sem compra.
+    const barInfo = (
+        <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-medium">{product.name}</p>
+            {!product.isCustom && (
+                <ProductPrice
+                    price={price}
+                    className="text-sm text-muted-foreground"
+                />
+            )}
+        </div>
+    );
 
     return (
         <section className="mx-auto w-full max-w-6xl px-4 py-6 md:py-10">
@@ -641,7 +666,25 @@ export function ProductMainBlock({ block }: { block: StoreBlock }) {
                         </fieldset>
                     )}
 
-                    {product.personalization && (
+                    {canBuy && (
+                        <div className="flex flex-col gap-2.5">
+                            <BuyBox
+                                product={product}
+                                variant={selected}
+                                barInfo={barInfo}
+                            />
+                            <Button
+                                variant="outline"
+                                size="lg"
+                                className="h-12 text-base"
+                                onClick={() => openSheet('question')}
+                            >
+                                {t('detail.ask')}
+                            </Button>
+                        </div>
+                    )}
+
+                    {!canBuy && product.personalization && (
                         <p className="rounded-lg bg-muted px-4 py-3 text-sm">
                             {t('detail.personalizable', {
                                 fields: product.personalization.fields
@@ -665,28 +708,30 @@ export function ProductMainBlock({ block }: { block: StoreBlock }) {
                         </p>
                     )}
 
-                    <div className="flex flex-col gap-2.5">
-                        <Button
-                            size="lg"
-                            className="h-12 text-base"
-                            onClick={() => openSheet('interest')}
-                        >
-                            {t('detail.interest')}
-                        </Button>
-                        <Button
-                            variant="outline"
-                            size="lg"
-                            className="h-12 text-base"
-                            onClick={() => openSheet('question')}
-                        >
-                            {t('detail.ask')}
-                        </Button>
-                        {data.interest_note && (
-                            <p className="text-center text-xs text-muted-foreground">
-                                {data.interest_note}
-                            </p>
-                        )}
-                    </div>
+                    {!canBuy && (
+                        <div className="flex flex-col gap-2.5">
+                            <Button
+                                size="lg"
+                                className="h-12 text-base"
+                                onClick={() => openSheet('interest')}
+                            >
+                                {t('detail.interest')}
+                            </Button>
+                            <Button
+                                variant="outline"
+                                size="lg"
+                                className="h-12 text-base"
+                                onClick={() => openSheet('question')}
+                            >
+                                {t('detail.ask')}
+                            </Button>
+                            {data.interest_note && (
+                                <p className="text-center text-xs text-muted-foreground">
+                                    {data.interest_note}
+                                </p>
+                            )}
+                        </div>
+                    )}
 
                     {product.isCustom && data.custom_note && (
                         <p className="text-sm text-muted-foreground">
@@ -755,23 +800,16 @@ export function ProductMainBlock({ block }: { block: StoreBlock }) {
                 </div>
             </div>
 
-            {/* Telemóvel: o preço e o botão ficam sempre à mão. */}
-            <div className="fixed inset-x-0 bottom-0 z-30 flex items-center gap-3 border-t border-border/60 bg-background/95 px-4 py-3 backdrop-blur md:hidden">
-                <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">
-                        {product.name}
-                    </p>
-                    {!product.isCustom && (
-                        <ProductPrice
-                            price={price}
-                            className="text-sm text-muted-foreground"
-                        />
-                    )}
+            {/* Telemóvel: o preço e o botão ficam sempre à mão. Quando se
+                pode comprar, a barra é do buy-box (o botão é o "Adicionar"). */}
+            {!canBuy && (
+                <div className="fixed inset-x-0 bottom-0 z-30 flex items-center gap-3 border-t border-border/60 bg-background/95 px-4 py-3 backdrop-blur md:hidden">
+                    {barInfo}
+                    <Button onClick={() => openSheet('interest')}>
+                        {t('detail.interest')}
+                    </Button>
                 </div>
-                <Button onClick={() => openSheet('interest')}>
-                    {t('detail.interest')}
-                </Button>
-            </div>
+            )}
 
             <InterestSheet
                 open={interestOpen}
