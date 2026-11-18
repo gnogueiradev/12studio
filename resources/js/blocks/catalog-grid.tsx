@@ -1,9 +1,14 @@
 import { InfiniteScroll, Link, router, usePage } from '@inertiajs/react';
-import { Check, Search, SlidersHorizontal, X } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { Check, ChevronDown, Search, SlidersHorizontal, X } from 'lucide-react';
+import { useId, useState } from 'react';
 import type { ReactNode } from 'react';
 import { ProductCard } from '@/components/store/product-card';
 import { Button } from '@/components/ui/button';
+import {
+    Collapsible,
+    CollapsibleContent,
+    CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 import { Input } from '@/components/ui/input';
 import {
     Select,
@@ -20,6 +25,8 @@ import {
     SheetTitle,
     SheetTrigger,
 } from '@/components/ui/sheet';
+import { familySwatch, groupByFamily } from '@/lib/color-families';
+import type { FamilyGroup } from '@/lib/color-families';
 import { useLocalizedUrl, useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import type {
@@ -31,6 +38,7 @@ import type {
 import { BlockSection } from './section';
 
 type Filters = CatalogData['filters'];
+type ColorFamilies = FamilyGroup<CatalogData['facets']['colors'][number]>[];
 
 const SORTS = ['destaques', 'novidades', 'preco-asc', 'preco-desc'] as const;
 
@@ -41,9 +49,6 @@ const SORTS = ['destaques', 'novidades', 'preco-asc', 'preco-desc'] as const;
  * seguinte continuavam a partir do estado antigo.
  */
 const VISIT = { only: ['catalog'], reset: ['products'] };
-
-/** Cores à vista no filtro antes do "Todas (n)". */
-const COLOR_LIMIT = 8;
 
 /** As categorias por cima da grelha: a forma principal de andar no catálogo. */
 const CATEGORY_PILL =
@@ -84,15 +89,6 @@ function toQuery(filters: Filters): Record<string, string | number> {
     return query;
 }
 
-function activeCount(filters: Filters): number {
-    return (
-        filters.cor.length +
-        filters.material.length +
-        (filters.preco_min !== null || filters.preco_max !== null ? 1 : 0) +
-        (filters.disponibilidade ? 1 : 0)
-    );
-}
-
 function FilterSection({
     title,
     children,
@@ -109,15 +105,48 @@ function FilterSection({
 }
 
 /**
+ * Um filtro que só abre a pedido (material, preço): estão lá para quem os
+ * procura, sem pesarem na coluna. Com o filtro já aplicado nasce aberto, para
+ * não esconder o que está a mexer na lista.
+ */
+function CollapsibleFilter({
+    title,
+    defaultOpen,
+    children,
+}: {
+    title: string;
+    defaultOpen: boolean;
+    children: ReactNode;
+}) {
+    return (
+        <Collapsible
+            defaultOpen={defaultOpen}
+            className="border-b border-border/60 pb-5 last:border-b-0 last:pb-0"
+        >
+            <CollapsibleTrigger className="group/trigger flex min-h-6 w-full items-center justify-between gap-3 rounded-md text-left text-sm font-semibold outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background">
+                {title}
+                <ChevronDown
+                    aria-hidden="true"
+                    className="size-4 text-muted-foreground transition-transform group-data-[state=open]/trigger:rotate-180"
+                />
+            </CollapsibleTrigger>
+            <CollapsibleContent className="pt-3">{children}</CollapsibleContent>
+        </Collapsible>
+    );
+}
+
+/**
  * Os filtros, iguais na coluna (desktop) e no painel (telemóvel). Cada
  * mudança é uma visita com o URL novo: os filtros partilham-se por link e o
  * "voltar" do browser funciona.
  */
 function FilterPanel({
     catalog,
+    families,
     apply,
 }: {
     catalog: CatalogData;
+    families: ColorFamilies;
     apply: (next: Partial<Filters>) => void;
 }) {
     const t = useT();
@@ -126,8 +155,6 @@ function FilterPanel({
         min: filters.preco_min?.toString() ?? '',
         max: filters.preco_max?.toString() ?? '',
     });
-    const [allColors, setAllColors] = useState(false);
-    const colorList = useRef<HTMLUListElement>(null);
 
     // Os campos seguem o filtro quando ele muda por fora (tirar a etiqueta,
     // limpar tudo): sem isto ficavam com o valor antigo, e o blur seguinte
@@ -155,29 +182,15 @@ function FilterPanel({
         });
     }
 
-    // Ao abrir a lista o botão "Todas (n)" desaparece: o foco passa para a
-    // primeira cor que estava escondida, em vez de se perder na página.
-    useEffect(() => {
-        if (allColors) {
-            colorList.current?.querySelectorAll('button')[COLOR_LIMIT]?.focus();
-        }
-    }, [allColors]);
+    // O painel existe duas vezes na página (coluna e painel do telemóvel):
+    // o id do rótulo do interruptor não pode ser fixo.
+    const readyLabel = useId();
 
-    // Com muitas cores a lista tapava os outros filtros: ficam as primeiras
-    // (e as escolhidas, que nunca se escondem) e o resto abre a pedido.
-    const colors =
-        allColors || facets.colors.length <= COLOR_LIMIT + 1
-            ? facets.colors
-            : facets.colors.filter(
-                  (color, index) =>
-                      index < COLOR_LIMIT || filters.cor.includes(color.id),
-              );
-
-    const toggle = (key: 'cor' | 'material', id: number) =>
+    const toggleMaterial = (id: number) =>
         apply({
-            [key]: filters[key].includes(id)
-                ? filters[key].filter((value) => value !== id)
-                : [...filters[key], id],
+            material: filters.material.includes(id)
+                ? filters.material.filter((value) => value !== id)
+                : [...filters.material, id],
         });
 
     const applyPrice = (event?: React.FormEvent) => {
@@ -203,22 +216,50 @@ function FilterPanel({
 
     return (
         <div className="flex flex-col gap-5">
-            {facets.colors.length > 0 && (
+            {families.length > 0 && (
                 <FilterSection title={t('catalog.colors')}>
-                    <ul ref={colorList} className="flex flex-col">
-                        {colors.map((color) => {
-                            const active = filters.cor.includes(color.id);
+                    <ul className="grid grid-cols-2 gap-x-2">
+                        {families.map(({ family, colors }) => {
+                            const ids = colors.map((color) => color.id);
+                            const active = ids.every((id) =>
+                                filters.cor.includes(id),
+                            );
 
                             return (
-                                <li key={color.id}>
+                                <li key={family} className="min-w-0">
                                     <button
                                         type="button"
-                                        onClick={() => toggle('cor', color.id)}
-                                        aria-pressed={active}
-                                        // Um nome comprido corta-se na coluna
-                                        // estreita: fica inteiro ao passar o rato.
-                                        title={color.name}
-                                        className="flex w-full items-center gap-2.5 rounded-md py-1.5 text-left text-sm text-muted-foreground transition-colors hover:text-foreground aria-pressed:font-medium aria-pressed:text-foreground"
+                                        onClick={() =>
+                                            apply({
+                                                cor: active
+                                                    ? filters.cor.filter(
+                                                          (id) =>
+                                                              !ids.includes(id),
+                                                      )
+                                                    : [
+                                                          ...new Set([
+                                                              ...filters.cor,
+                                                              ...ids,
+                                                          ]),
+                                                      ],
+                                            })
+                                        }
+                                        // "mixed": só alguns tons da família
+                                        // estão escolhidos (um link antigo).
+                                        aria-pressed={
+                                            active ||
+                                            (ids.some((id) =>
+                                                filters.cor.includes(id),
+                                            )
+                                                ? 'mixed'
+                                                : false)
+                                        }
+                                        // Os nomes dos tons que a família
+                                        // junta, para quem quiser saber.
+                                        title={colors
+                                            .map((color) => color.name)
+                                            .join(', ')}
+                                        className="flex w-full items-center gap-2 rounded-md py-1.5 text-left text-sm text-muted-foreground transition-colors hover:text-foreground aria-pressed:font-medium aria-pressed:text-foreground"
                                     >
                                         {/* A borda vem da cor do texto e não
                                             da `border`: um preto sobre o tema
@@ -231,7 +272,11 @@ function FilterPanel({
                                                     'ring-2 ring-foreground',
                                             )}
                                             style={{
-                                                backgroundColor: color.hex,
+                                                background: familySwatch(
+                                                    colors.map(
+                                                        (color) => color.hex,
+                                                    ),
+                                                ),
                                             }}
                                         >
                                             {active && (
@@ -239,35 +284,57 @@ function FilterPanel({
                                             )}
                                         </span>
                                         <span className="truncate">
-                                            {color.name}
+                                            {t(
+                                                `catalog.color_families.${family}`,
+                                            )}
                                         </span>
                                     </button>
                                 </li>
                             );
                         })}
                     </ul>
-                    {colors.length < facets.colors.length && (
-                        <button
-                            type="button"
-                            onClick={() => setAllColors(true)}
-                            className="mt-1 py-1.5 text-sm underline underline-offset-4 hover:text-foreground"
-                        >
-                            {t('catalog.all')} ({facets.colors.length})
-                        </button>
-                    )}
                 </FilterSection>
             )}
 
+            {/* Um interruptor e não três botões de rádio: a pergunta de quem
+                compra é só "há para já?". */}
+            <div className="border-b border-border/60 pb-5 last:border-b-0 last:pb-0">
+                <label className="flex cursor-pointer items-center justify-between gap-3 text-sm font-semibold">
+                    <span id={readyLabel}>{t('catalog.ready_only')}</span>
+                    <button
+                        type="button"
+                        role="switch"
+                        aria-labelledby={readyLabel}
+                        aria-checked={filters.disponibilidade === 'pronto'}
+                        onClick={() =>
+                            apply({
+                                disponibilidade:
+                                    filters.disponibilidade === 'pronto'
+                                        ? null
+                                        : 'pronto',
+                            })
+                        }
+                        className="group/switch inline-flex h-6 w-10 shrink-0 items-center rounded-full border border-muted-foreground px-0.5 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background aria-checked:border-foreground aria-checked:bg-foreground"
+                    >
+                        <span
+                            aria-hidden="true"
+                            className="size-4 rounded-full bg-muted-foreground transition-transform group-aria-checked/switch:translate-x-[18px] group-aria-checked/switch:bg-background"
+                        />
+                    </button>
+                </label>
+            </div>
+
             {facets.materials.length > 1 && (
-                <FilterSection title={t('catalog.materials')}>
+                <CollapsibleFilter
+                    title={t('catalog.materials')}
+                    defaultOpen={filters.material.length > 0}
+                >
                     <ul className="flex flex-wrap gap-2">
                         {facets.materials.map((material) => (
                             <li key={material.id}>
                                 <button
                                     type="button"
-                                    onClick={() =>
-                                        toggle('material', material.id)
-                                    }
+                                    onClick={() => toggleMaterial(material.id)}
                                     aria-pressed={filters.material.includes(
                                         material.id,
                                     )}
@@ -278,11 +345,16 @@ function FilterPanel({
                             </li>
                         ))}
                     </ul>
-                </FilterSection>
+                </CollapsibleFilter>
             )}
 
             {facets.price.max > facets.price.min && (
-                <FilterSection title={t('catalog.price')}>
+                <CollapsibleFilter
+                    title={t('catalog.price')}
+                    defaultOpen={
+                        filters.preco_min !== null || filters.preco_max !== null
+                    }
+                >
                     <form
                         onSubmit={applyPrice}
                         className="flex items-center gap-2"
@@ -313,36 +385,8 @@ function FilterPanel({
                             onBlur={() => applyPrice()}
                         />
                     </form>
-                </FilterSection>
+                </CollapsibleFilter>
             )}
-
-            <FilterSection title={t('catalog.availability')}>
-                <div className="flex flex-col gap-2 text-sm">
-                    {(
-                        [
-                            [null, t('catalog.any')],
-                            ['pronto', t('catalog.ready')],
-                            ['encomenda', t('catalog.to_order')],
-                        ] as const
-                    ).map(([value, label]) => (
-                        <label
-                            key={label}
-                            className="flex cursor-pointer items-center gap-2"
-                        >
-                            <input
-                                type="radio"
-                                name="disponibilidade"
-                                className="size-4 accent-foreground"
-                                checked={filters.disponibilidade === value}
-                                onChange={() =>
-                                    apply({ disponibilidade: value })
-                                }
-                            />
-                            {label}
-                        </label>
-                    ))}
-                </div>
-            </FilterSection>
         </div>
     );
 }
@@ -367,8 +411,21 @@ export function CatalogGridBlock({
     const [sheetOpen, setSheetOpen] = useState(false);
 
     const filters = catalog.filters;
-    const count = activeCount(filters);
     const side = block.variant !== 'filters_top';
+
+    // Uma família escolhida por inteiro é um filtro só, na etiqueta e na
+    // contagem; uma cor solta (um link antigo, com um só tom) fica com o nome.
+    const families = groupByFamily(catalog.facets.colors);
+    const chosenFamilies = families.filter(({ colors }) =>
+        colors.every((color) => filters.cor.includes(color.id)),
+    );
+    // Só as que ainda existem no catálogo: um id de um link antigo, de uma cor
+    // que já não tem peças à venda, dava uma etiqueta sem nome.
+    const looseColors = catalog.facets.colors.filter(
+        (color) =>
+            filters.cor.includes(color.id) &&
+            !chosenFamilies.some(({ colors }) => colors.includes(color)),
+    );
 
     const apply = (next: Partial<Filters>) =>
         router.get(catalog.path, toQuery({ ...filters, ...next }), {
@@ -387,16 +444,13 @@ export function CatalogGridBlock({
         );
     };
 
-    const colorName = (id: number) =>
-        catalog.facets.colors.find((color) => color.id === id)?.name ?? '';
-    const materialName = (id: number) =>
-        catalog.facets.materials.find((material) => material.id === id)?.name ??
-        '';
-
-    const chips: { label: string; remove: () => void }[] = [
+    // A `key` é o tipo e o id, não o texto: uma cor solta pode chamar-se como
+    // uma família ("Laranja") e as duas etiquetas chocavam.
+    const chips: { key: string; label: string; remove: () => void }[] = [
         ...(filters.q
             ? [
                   {
+                      key: 'q',
                       label: t('catalog.search_for', { q: filters.q }),
                       remove: () => {
                           setQuery('');
@@ -405,21 +459,38 @@ export function CatalogGridBlock({
                   },
               ]
             : []),
-        ...filters.cor.map((id) => ({
-            label: colorName(id),
+        ...chosenFamilies.map(({ family, colors }) => ({
+            key: `family:${family}`,
+            label: t(`catalog.color_families.${family}`),
+            remove: () =>
+                apply({
+                    cor: filters.cor.filter(
+                        (id) => !colors.some((color) => color.id === id),
+                    ),
+                }),
+        })),
+        ...looseColors.map(({ id, name }) => ({
+            key: `color:${id}`,
+            label: name,
             remove: () =>
                 apply({ cor: filters.cor.filter((value) => value !== id) }),
         })),
-        ...filters.material.map((id) => ({
-            label: materialName(id),
-            remove: () =>
-                apply({
-                    material: filters.material.filter((value) => value !== id),
-                }),
-        })),
+        ...catalog.facets.materials
+            .filter(({ id }) => filters.material.includes(id))
+            .map(({ id, name }) => ({
+                key: `material:${id}`,
+                label: name,
+                remove: () =>
+                    apply({
+                        material: filters.material.filter(
+                            (value) => value !== id,
+                        ),
+                    }),
+            })),
         ...(filters.preco_min !== null || filters.preco_max !== null
             ? [
                   {
+                      key: 'price',
                       label: `${filters.preco_min ?? catalog.facets.price.min}–${filters.preco_max ?? catalog.facets.price.max} €`,
                       remove: () => apply({ preco_min: null, preco_max: null }),
                   },
@@ -428,6 +499,7 @@ export function CatalogGridBlock({
         ...(filters.disponibilidade
             ? [
                   {
+                      key: 'availability',
                       label:
                           filters.disponibilidade === 'pronto'
                               ? t('catalog.ready')
@@ -438,7 +510,12 @@ export function CatalogGridBlock({
             : []),
     ];
 
-    const panel = <FilterPanel catalog={catalog} apply={apply} />;
+    // No botão "Filtros": os filtros ativos, sem contar a pesquisa.
+    const count = chips.length - (filters.q ? 1 : 0);
+
+    const panel = (
+        <FilterPanel catalog={catalog} families={families} apply={apply} />
+    );
 
     return (
         <BlockSection shell={!nested} style={block.style}>
@@ -593,7 +670,9 @@ export function CatalogGridBlock({
             <div
                 className={cn(
                     'mt-6 grid gap-8',
-                    side && '@blk-lg:grid-cols-[12rem_1fr]',
+                    // 13rem: duas colunas de cores onde "Castanho" e
+                    // "Vermelho" ainda cabem inteiros.
+                    side && '@blk-lg:grid-cols-[13rem_1fr]',
                 )}
             >
                 {side && (
@@ -619,7 +698,7 @@ export function CatalogGridBlock({
                         <div className="mb-5 flex flex-wrap items-center gap-2">
                             {chips.map((chip) => (
                                 <button
-                                    key={chip.label}
+                                    key={chip.key}
                                     type="button"
                                     onClick={chip.remove}
                                     className="flex items-center gap-1 rounded-full bg-muted px-3 py-1 text-xs transition-colors hover:bg-accent"
