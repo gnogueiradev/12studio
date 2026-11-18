@@ -75,7 +75,10 @@ class SecurityHeaders
         // A excecao: a pre-visualizacao do construtor da montra vive num
         // iframe do proprio editor. So o mesmo site a pode emoldurar.
         $response->headers->set('X-Frame-Options', $this->isFramable($request) ? 'SAMEORIGIN' : 'DENY');
-        $response->headers->set('Referrer-Policy', 'strict-origin-when-cross-origin');
+        // Um link privado (a conversa, a compra) pede mais: no-referrer.
+        if (! $response->headers->has('Referrer-Policy')) {
+            $response->headers->set('Referrer-Policy', 'strict-origin-when-cross-origin');
+        }
         // O payment=() sai daqui na Fase 3: o Stripe precisa da Payment Request
         // API para o Apple Pay / Google Pay.
         $response->headers->set(

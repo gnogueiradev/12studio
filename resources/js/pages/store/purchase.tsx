@@ -36,19 +36,31 @@ export default function PurchasePage({ purchase }: { purchase: PurchaseData }) {
         { autoStart: false },
     );
 
+    // O `usePoll` devolve `start`/`stop` novos a cada render (e cada resposta
+    // do poll renderiza), mas todos falam com o mesmo poll: guardam-se os do
+    // primeiro render, para o efeito só depender de `waiting`. O prazo fixa-se
+    // uma vez, na primeira espera, e nenhum render o mexe.
+    const controls = useRef({ start, stop });
+    const deadline = useRef<number | null>(null);
+
     useEffect(() => {
         if (!waiting) {
             return;
         }
 
-        start();
-        const timer = window.setTimeout(() => setGaveUp(true), GIVE_UP_MS);
+        deadline.current ??= Date.now() + GIVE_UP_MS;
+        const poll = controls.current;
+        poll.start();
+        const timer = window.setTimeout(
+            () => setGaveUp(true),
+            Math.max(0, deadline.current - Date.now()),
+        );
 
         return () => {
             window.clearTimeout(timer);
-            stop();
+            poll.stop();
         };
-    }, [waiting, start, stop]);
+    }, [waiting]);
 
     useEffect(() => {
         if (previous.current !== state) {
@@ -109,9 +121,7 @@ export default function PurchasePage({ purchase }: { purchase: PurchaseData }) {
 
     return (
         <>
-            <Head title={t('purchase.title')}>
-                <meta name="robots" content="noindex, nofollow" />
-            </Head>
+            <Head title={t('purchase.title')} />
 
             <div className="mx-auto flex w-full max-w-xl flex-col gap-8 px-4 py-10 md:py-16">
                 <div

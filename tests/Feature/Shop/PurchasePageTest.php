@@ -180,8 +180,11 @@ class PurchasePageTest extends TestCase
 
     public function test_it_is_not_indexed(): void
     {
-        $this->open($this->checkout())->assertOk()
-            ->assertSee('<meta name="robots" content="noindex">', false);
+        $response = $this->open($this->checkout())->assertOk()
+            ->assertSee('<meta name="robots" content="noindex">', false)
+            ->assertHeader('Referrer-Policy', 'no-referrer');
+
+        $this->assertStringContainsString('noindex', (string) $response->headers->get('X-Robots-Tag'));
     }
 
     public function test_it_still_opens_with_the_shop_off(): void
