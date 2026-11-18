@@ -144,6 +144,31 @@ class CheckoutTest extends TestCase
         $this->holding($this->cartWith())->get('/finalizar')->assertInertia(fn (Assert $page) => $page->where('customer', null));
     }
 
+    public function test_an_open_checkout_past_its_session_life_does_not_fill_the_form(): void
+    {
+        $cart = $this->cartWith();
+        $this->pay($cart, $this->customer(3000))->assertSessionHasNoErrors();
+
+        // Dentro da vida da sessao (60 minutos) ainda preenche...
+        $this->travel(59)->minutes();
+        $this->holding($cart)->get('/finalizar')->assertInertia(fn (Assert $page) => $page->where('customer.name', 'Ana Silva'));
+
+        // ...passada ela, quem abre o /finalizar com este carrinho (um
+        // browser partilhado) ja nao ve os dados de outra pessoa.
+        $this->travel(2)->minutes();
+        $this->assertSame('open', Checkout::query()->firstOrFail()->status);
+        $this->holding($cart)->get('/finalizar')->assertOk()->assertInertia(fn (Assert $page) => $page->where('customer', null));
+    }
+
+    public function test_an_open_checkout_without_an_expiry_does_not_fill_the_form(): void
+    {
+        $cart = $this->cartWith();
+        $this->pay($cart, $this->customer(3000))->assertSessionHasNoErrors();
+        Checkout::query()->update(['expires_at' => null]);
+
+        $this->holding($cart)->get('/finalizar')->assertOk()->assertInertia(fn (Assert $page) => $page->where('customer', null));
+    }
+
     public function test_a_completed_purchase_does_not_fill_the_form(): void
     {
         $cart = $this->cartWith();

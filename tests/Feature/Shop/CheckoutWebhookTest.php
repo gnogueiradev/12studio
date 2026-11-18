@@ -572,6 +572,85 @@ class CheckoutWebhookTest extends TestCase
         $this->assertNull($second->fresh()?->order_id);
     }
 
+    public function test_an_order_clears_the_personal_data_of_the_expired_leftovers_of_its_cart(): void
+    {
+        $cart = $this->cartWith();
+        $first = $this->pay($cart, 3000);
+        $second = $this->pay($cart, 3000);
+        $stranger = $this->pay($this->cartWith(), 3000);
+        $this->assertSame('expired', $first->fresh()?->status);
+        $this->assertNotNull($first->fresh()?->customer);
+
+        $this->send($this->event('checkout.session.completed', $this->stripeSession($second)))->assertNoContent();
+
+        // A primeira e sobra da mesma tentativa de compra: nao guarda dados.
+        $first->refresh();
+        $this->assertNull($first->customer);
+        $this->assertNull($first->shipping_address);
+        $this->assertSame('expired', $first->status);
+        $this->assertNull($first->order_id);
+
+        // O de outro carrinho nao se mexe.
+        $stranger->refresh();
+        $this->assertSame('open', $stranger->status);
+        $this->assertSame('Ana Silva', $stranger->customer['name'] ?? null);
+        $this->assertNotNull($stranger->shipping_address);
+    }
+
+    public function test_an_open_leftover_past_its_session_life_loses_its_personal_data_too(): void
+    {
+        $cart = $this->cartWith();
+        $first = $this->pay($cart, 3000);
+        $second = $this->pay($cart, 3000);
+        // Aberto na base, mas com a sessao ja passada do prazo.
+        Checkout::query()->whereKey($first->id)->update(['status' => 'open', 'expires_at' => now()->subMinute()]);
+
+        $this->send($this->event('checkout.session.completed', $this->stripeSession($second)))->assertNoContent();
+
+        $first->refresh();
+        $this->assertNull($first->customer);
+        $this->assertNull($first->shipping_address);
+        $this->assertSame('open', $first->status);
+    }
+
+    public function test_a_leftover_whose_session_can_still_be_paid_keeps_its_data_and_a_late_payment_makes_a_whole_order(): void
+    {
+        $cart = $this->cartWith();
+        $first = $this->pay($cart, 3000);
+        $second = $this->pay($cart, 3000);
+
+        // A primeira paga-se primeiro; a segunda ainda esta dentro da vida da
+        // sessao e pode ser paga: sem os dados a encomenda nasceria vazia.
+        $this->send($this->event('checkout.session.completed', $this->stripeSession($first)))->assertNoContent();
+
+        $second->refresh();
+        $this->assertSame('open', $second->status);
+        $this->assertSame('ana@example.com', $second->customer['email'] ?? null);
+        $this->assertNotNull($second->shipping_address);
+
+        $this->send($this->event('checkout.session.completed', $this->stripeSession($second)))->assertNoContent();
+
+        $late = Order::query()->where('stripe_session_id', $second->stripe_session_id)->sole();
+        $this->assertSame('Ana Silva', $late->customer_name);
+        $this->assertSame('ana@example.com', $late->email);
+        $this->assertSame('Rua das Flores 12', $late->shipping_address['line1'] ?? null);
+        $this->assertNull($second->fresh()?->customer);
+    }
+
+    public function test_a_late_payment_for_a_cleared_leftover_does_not_crash_the_webhook(): void
+    {
+        $cart = $this->cartWith();
+        $first = $this->pay($cart, 3000);
+        $second = $this->pay($cart, 3000);
+        $this->send($this->event('checkout.session.completed', $this->stripeSession($second)))->assertNoContent();
+        $this->assertNull($first->fresh()?->customer);
+
+        $this->send($this->event('checkout.session.completed', $this->stripeSession($first)))->assertNoContent();
+
+        $this->assertSame(2, Order::query()->count());
+        $this->assertSame('completed', $first->fresh()?->status);
+    }
+
     public function test_a_busy_checkout_fails_the_webhook_so_stripe_retries(): void
     {
         Exceptions::fake();

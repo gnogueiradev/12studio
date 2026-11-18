@@ -124,6 +124,8 @@ class CheckoutCompletion
                 'customer' => null,
                 'shipping_address' => null,
             ]);
+
+            $this->clearLeftovers($checkout);
         });
 
         // O carrinho pode ja ter sido limpo pelo prune: nesse caso nao ha o
@@ -140,5 +142,29 @@ class CheckoutCompletion
         }
 
         return $order;
+    }
+
+    /**
+     * Os outros checkouts do carrinho sem encomenda sao sobras da mesma
+     * tentativa de compra (um "Pagar" repetido): nao ficam com os dados
+     * pessoais. Fora ficam os que o Stripe ainda deixa pagar (abertos e dentro
+     * da vida da sessao): um pagamento tardio criaria a encomenda a partir do
+     * que eles guardam, e sem dados nasceria vazia.
+     */
+    private function clearLeftovers(Checkout $paid): void
+    {
+        if ($paid->cart_id === null) {
+            return;
+        }
+
+        Checkout::query()
+            ->where('cart_id', $paid->cart_id)
+            ->whereKeyNot($paid->getKey())
+            ->whereNull('order_id')
+            ->where(fn ($query) => $query
+                ->where('status', '!=', 'open')
+                ->orWhereNull('expires_at')
+                ->orWhere('expires_at', '<=', now()))
+            ->update(['customer' => null, 'shipping_address' => null]);
     }
 }

@@ -53,8 +53,10 @@ class CheckoutController extends Controller
     /**
      * Os dados do ultimo "Pagar" deste carrinho ainda em aberto: quem volta
      * atras na pagina do Stripe (o cancel_url e este) nao escreve tudo outra
-     * vez. Vem pelo cookie do proprio visitante, por isso sao os dados dele;
-     * uma compra concluida ja nao os tem. So le.
+     * vez. So durante a vida da sessao do Stripe (`expires_at`): e a unica
+     * janela em que se volta de la, e passada ela o cookie do carrinho (60
+     * dias) podia mostrar os dados de uma pessoa a quem abrisse o /finalizar
+     * num browser partilhado. Uma compra concluida ja nao os tem. So le.
      *
      * @return array{name: string, email: string, phone: string, nif: string, line1: string, line2: string, postal_code: string, city: string}|null
      */
@@ -63,6 +65,7 @@ class CheckoutController extends Controller
         $checkout = Checkout::query()
             ->where('cart_id', $cart->id)
             ->where('status', 'open')
+            ->where('expires_at', '>', now())
             ->latest('id')
             ->first();
 
