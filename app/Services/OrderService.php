@@ -309,6 +309,126 @@ class OrderService
     }
 
     /**
+     * Encomenda de uma compra da loja online, feita do retrato congelado no
+     * "Pagar" (o `checkout`) — nunca do carrinho, que pode ter mudado depois.
+     *
+     * Irma do createFromMarketplace: sem autor nem cliente com conta, e o
+     * preco e o que o cliente viu, nao se recalcula. Faltar stock NAO a trava
+     * — o Stripe ja cobrou —, entra marcada com `stock_issue`. Se uma linha e
+     * de stock ou de producao ficou decidido no retrato, e e isso que conta:
+     * uma linha feita por encomenda nao toca no stock, mesmo de um produto
+     * que normalmente o tem.
+     *
+     * Nasce por pagar. Marca-la paga e de quem chama (o aviso do Stripe).
+     *
+     * @param  array{
+     *     customer_name: string,
+     *     email: string,
+     *     phone: string|null,
+     *     nif: string|null,
+     *     shipping_address: array<string, mixed>|null,
+     *     subtotal_cents: int,
+     *     shipping_cents: int,
+     *     discount_cents: int,
+     *     promo_code_id: int|null,
+     *     promo_code: string|null,
+     *     total_cents: int,
+     *     note: string,
+     *     lines: array<int, array<string, mixed>>,
+     * }  $data
+     * @param  (Closure(Order): void)|null  $record
+     */
+    public function createFromStore(array $data, ?Closure $record = null): Order
+    {
+        return DB::transaction(function () use ($data, $record): Order {
+            $order = Order::query()->create([
+                'order_number' => $this->nextOrderNumber(),
+                'customer_name' => $data['customer_name'],
+                'email' => $data['email'],
+                'phone' => $data['phone'],
+                'nif' => $data['nif'],
+                'status' => 'pending_payment',
+                'payment_status' => 'pending',
+                'sales_channel' => 'website',
+                'subtotal_cents' => $data['subtotal_cents'],
+                'shipping_cents' => $data['shipping_cents'],
+                'discount_cents' => $data['discount_cents'],
+                'promo_code_id' => $data['promo_code_id'],
+                'promo_code' => $data['promo_code'],
+                'adjustment_cents' => 0,
+                'total_cents' => $data['total_cents'],
+                'currency' => 'EUR',
+                'shipping_address' => $data['shipping_address'],
+                'guest_access_token' => Str::random(64),
+            ]);
+
+            /** @var array<int, string> $short */
+            $short = [];
+
+            foreach ($data['lines'] as $line) {
+                // Apagada de vez entretanto (raro): a linha fica, sem variante
+                // e sem mexer em stock.
+                $variant = Variant::query()->find((int) ($line['variant_id'] ?? 0));
+                $unitPrice = (int) $line['unit_price_cents'];
+                $catalogPrice = $variant?->price_cents;
+                $fulfillmentMode = (string) $line['fulfillment_mode'];
+
+                $item = $order->items()->create([
+                    'variant_id' => $variant?->getKey(),
+                    'product_name' => $line['product_name'],
+                    'variant_label' => $line['variant_label'],
+                    'sku' => $line['sku'],
+                    'unit_price_cents' => $unitPrice,
+                    'catalog_unit_price_cents' => $catalogPrice,
+                    'price_override_reason' => $catalogPrice !== null && $catalogPrice !== $unitPrice
+                        ? 'Preço no momento da compra'
+                        : null,
+                    'personalization_surcharge_cents' => (int) $line['personalization_surcharge_cents'],
+                    'qty' => (int) $line['qty'],
+                    'line_total_cents' => (int) $line['line_total_cents'],
+                    'vat_rate' => (int) $line['vat_rate'],
+                    'personalization' => $line['personalization'] ?: null,
+                    'image_url' => $line['image_url'] ?? null,
+                    'fulfillment_mode' => $fulfillmentMode,
+                    'production_status' => $fulfillmentMode === 'in_stock' ? 'not_required' : 'awaiting_production',
+                ]);
+
+                if ($variant instanceof Variant && $fulfillmentMode === 'in_stock'
+                    && ! $this->stockService->decrement($variant, $item->qty, 'sale', $order)) {
+                    $short[] = $variant->sku;
+
+                    // Nao chega para tudo, mas o que houver e desta encomenda:
+                    // sai da prateleira, senao continuava a venda.
+                    $variant->refresh();
+                    $available = min($item->qty, $variant->stock - $variant->reserved_stock);
+
+                    if ($available > 0) {
+                        $this->stockService->decrement($variant, $available, 'sale', $order, null, 'Só havia parte do que foi vendido.');
+                    }
+                }
+            }
+
+            if ($short !== []) {
+                $order->update(['stock_issue' => true]);
+            }
+
+            $this->recordOrderHistory($order, null, 'pending_payment', null, $data['note']);
+
+            if ($record !== null) {
+                $record($order);
+            }
+
+            $this->alerts->created($order, null);
+
+            if ($short !== []) {
+                $this->alerts->soldWithoutStock($order, $short);
+            }
+
+            return $order->refresh();
+        });
+    }
+
+    /**
      * Transicao de fulfilment. Forward-only, com saltos.
      *
      * `$force` e a unica porta para avancar com pagamento por regularizar —
