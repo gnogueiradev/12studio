@@ -82,7 +82,7 @@ Modificados: `app/Services/StoreSettings.php`, `app/Http/Requests/Setting/Update
 **Interfaces:**
 - Produces: o ramo `worktree-loja-carrinho` com `App\Services\OrderTotalsCalculator`, `App\Services\PromoCodeValidator`, `App\Support\PromoCodeValidation`, `App\Stripe\StripeCheckout::payload()` e `config('shop.shipping')`.
 
-- [ ] **Step 1:** `git status --short --branch` no `main`, limpo. `git switch -c worktree-loja-carrinho`.
+- [ ] **Step 1:** `git status --short --branch` na pasta de trabalho: ramo `worktree-loja-carrinho`, limpo. O ramo já existe (foi criado com a pasta); não se cria outro.
 - [ ] **Step 2:** `git merge --no-ff gn/promo-codes-stripe-a62c3d`. Conflito esperado só em `resources/js/pages/admin/encomendas/show.tsx` (3 blocos).
 - [ ] **Step 3:** Resolver ficando com as duas coisas: a estrutura do `main` (redesenho das encomendas e os achados do frontend) e, do ramo, o código de desconto na ficha, o desconto nos totais e o link de pagamento. Nenhum bloco se resolve escolhendo um lado inteiro.
 - [ ] **Step 4:** `php artisan migrate --pretend` mostra só `promo_codes`, `promo_code_redemptions` e as três colunas em `orders`.
