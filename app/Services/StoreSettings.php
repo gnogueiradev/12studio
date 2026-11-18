@@ -17,6 +17,11 @@ class StoreSettings
 {
     public const KEY_OPEN = 'store.open';
 
+    /** Compras na montra: desligadas, so a equipa (admins) ou ligadas. */
+    public const KEY_SHOP = 'store.shop';
+
+    public const SHOP_MODES = ['off', 'staff', 'on'];
+
     public const KEY_CONTACT_EMAIL = 'store.contact_email';
 
     public const KEY_PHONE = 'store.phone';
@@ -63,6 +68,17 @@ class StoreSettings
     }
 
     /**
+     * Sem nada gravado (ou com um valor que ja nao existe), desligadas: a loja
+     * so passa a vender quando o dono o escolhe.
+     */
+    public function shopMode(): string
+    {
+        $value = $this->settings->get(self::KEY_SHOP);
+
+        return is_string($value) && in_array($value, self::SHOP_MODES, true) ? $value : 'off';
+    }
+
+    /**
      * Os idiomas ligados nesta loja, pela ordem do config/locales.php. O de
      * omissao esta sempre — e o da raiz do site, sem ele nao havia montra.
      * Sem nada gravado, estao todos.
@@ -94,7 +110,7 @@ class StoreSettings
      * Os valores tal como o formulario de Definicoes -> Montra os edita: todas
      * as redes presentes, vazias quando nao ha link.
      *
-     * @return array{open: bool, contact_email: string, phone: string, address: string, opening_hours: string, response_hours: int|null, social: array<string, string>, locales: array<int, string>, announcement: array{enabled: bool, text: array<string, string>, link: string}}
+     * @return array{open: bool, shop: string, contact_email: string, phone: string, address: string, opening_hours: string, response_hours: int|null, social: array<string, string>, locales: array<int, string>, announcement: array{enabled: bool, text: array<string, string>, link: string}}
      */
     public function toForm(): array
     {
@@ -110,6 +126,7 @@ class StoreSettings
 
         return [
             'open' => $this->isOpen(),
+            'shop' => $this->shopMode(),
             'contact_email' => $this->string(self::KEY_CONTACT_EMAIL),
             'phone' => $this->string(self::KEY_PHONE),
             'address' => $this->string(self::KEY_ADDRESS),
@@ -159,7 +176,8 @@ class StoreSettings
     /**
      * O payload ja validado do UpdateStoreSettingsRequest -> o mapa
      * chave => valor pronto para o SettingService::setMany(). Redes que a
-     * montra nao conhece ficam de fora.
+     * montra nao conhece ficam de fora. `shop` e obrigatorio (o pedido
+     * valida-o); sem ele nao ha modo para gravar.
      *
      * @param  array<string, mixed>  $form
      * @return array<string, mixed>
@@ -175,6 +193,7 @@ class StoreSettings
 
         $values = [
             self::KEY_OPEN => (bool) $form['open'],
+            self::KEY_SHOP => (string) $form['shop'],
             self::KEY_CONTACT_EMAIL => trim((string) ($form['contact_email'] ?? '')),
             self::KEY_PHONE => trim((string) ($form['phone'] ?? '')),
             self::KEY_ADDRESS => trim((string) ($form['address'] ?? '')),

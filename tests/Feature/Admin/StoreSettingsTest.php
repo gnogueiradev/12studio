@@ -25,6 +25,7 @@ class StoreSettingsTest extends TestCase
     {
         return array_replace_recursive([
             'open' => false,
+            'shop' => 'off',
             'contact_email' => 'ola@oficina.pt',
             'phone' => '+351 912 345 678',
             'address' => 'Rua das Flores 12, Porto',

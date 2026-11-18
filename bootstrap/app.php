@@ -7,6 +7,7 @@ use App\Http\Middleware\EnsureLoginGate;
 use App\Http\Middleware\EnsureMcpToken;
 use App\Http\Middleware\EnsureOwner;
 use App\Http\Middleware\EnsureProductionAccess;
+use App\Http\Middleware\EnsureShopOpen;
 use App\Http\Middleware\EnsureStoreOpen;
 use App\Http\Middleware\HandleAppearance;
 use App\Http\Middleware\HandleInertiaRequests;
@@ -91,6 +92,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'login-gate' => EnsureLoginGate::class,
             // Montra fechada -> "em breve" (o admin passa, em pre-visualizacao).
             'store.open' => EnsureStoreOpen::class,
+            // Carrinho e compra: 404 enquanto as compras estao desligadas.
+            'shop.open' => EnsureShopOpen::class,
             // Idioma da montra pelo prefixo do URL ('/en/...').
             'store.locale' => SetStoreLocale::class,
             // Menus, contactos e redes que o StoreLayout mostra.

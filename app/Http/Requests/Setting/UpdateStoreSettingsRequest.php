@@ -5,6 +5,7 @@ namespace App\Http\Requests\Setting;
 use App\Http\Requests\AdminFormRequest;
 use App\Services\StoreSettings;
 use Closure;
+use Illuminate\Validation\Rule;
 
 class UpdateStoreSettingsRequest extends AdminFormRequest
 {
@@ -15,6 +16,7 @@ class UpdateStoreSettingsRequest extends AdminFormRequest
     {
         $rules = [
             'open' => ['required', 'boolean'],
+            'shop' => ['required', Rule::in(StoreSettings::SHOP_MODES)],
             'contact_email' => ['nullable', 'string', 'email:rfc', 'max:120'],
             // Algarismos, espacos, hifens, parenteses e o "+" do indicativo —
             // vai num link tel: e tem de ser marcavel.
@@ -62,6 +64,7 @@ class UpdateStoreSettingsRequest extends AdminFormRequest
     {
         $attributes = [
             'open' => 'montra aberta',
+            'shop' => 'compras na montra',
             'contact_email' => 'email de contacto',
             'phone' => 'telefone',
             'address' => 'morada',

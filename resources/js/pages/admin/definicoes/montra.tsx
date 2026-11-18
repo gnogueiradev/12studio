@@ -10,6 +10,13 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select';
 import { Spinner } from '@/components/ui/spinner';
 import type { Option } from '@/lib/options';
 import { cn } from '@/lib/utils';
@@ -29,8 +36,16 @@ type AnnouncementForm = {
 /** O mesmo limite do StoreSettings::ANNOUNCEMENT_MAX. */
 const ANNOUNCEMENT_MAX = 160;
 
+/** Os mesmos modos do StoreSettings::SHOP_MODES. */
+const SHOP_MODES = [
+    { value: 'off', label: 'Desligadas' },
+    { value: 'staff', label: 'Só para a equipa' },
+    { value: 'on', label: 'Ligadas' },
+];
+
 type StoreForm = {
     open: boolean;
+    shop: string;
     contact_email: string;
     phone: string;
     address: string;
@@ -45,6 +60,8 @@ type Props = {
     store: StoreForm;
     networks: Option[];
     languages: (Option & { locked: boolean })[];
+    /** ShopGate::ready(): Stripe e segredo do webhook configurados. */
+    shopReady: boolean;
 };
 
 /**
@@ -56,6 +73,7 @@ export default function StoreSettingsPage({
     store,
     networks,
     languages,
+    shopReady,
 }: Props) {
     const { data, setData, patch, processing, errors } = useForm<StoreForm>({
         ...store,
@@ -173,6 +191,36 @@ export default function StoreSettingsPage({
                             </span>
                         </Label>
                         <InputError message={errors.open} />
+
+                        <div className="grid gap-2">
+                            <Label htmlFor="shop">Compras na montra</Label>
+                            <Select
+                                value={data.shop}
+                                onValueChange={(value) => change('shop', value)}
+                            >
+                                <SelectTrigger id="shop" className="w-64">
+                                    <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {SHOP_MODES.map((mode) => (
+                                        <SelectItem
+                                            key={mode.value}
+                                            value={mode.value}
+                                        >
+                                            {mode.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <InputError message={errors.shop} />
+                            {!shopReady && (
+                                <p className="text-sm text-muted-foreground">
+                                    O Stripe ou o segredo do webhook não estão
+                                    configurados: as compras ficam desligadas
+                                    seja qual for a escolha.
+                                </p>
+                            )}
+                        </div>
                     </Panel>
 
                     <Panel

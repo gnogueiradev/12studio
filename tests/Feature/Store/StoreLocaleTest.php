@@ -78,6 +78,7 @@ class StoreLocaleTest extends TestCase
         $this->actingAs(User::factory()->admin()->create())
             ->patch(route('admin.montra.update'), [
                 'open' => true,
+                'shop' => 'off',
                 'locales' => ['en'],
             ])
             ->assertSessionHasNoErrors();
@@ -90,6 +91,7 @@ class StoreLocaleTest extends TestCase
         $this->actingAs(User::factory()->admin()->create())
             ->patch(route('admin.montra.update'), [
                 'open' => true,
+                'shop' => 'off',
                 'locales' => ['pt', 'de'],
             ])
             ->assertSessionHasErrors('locales.1');
@@ -100,7 +102,7 @@ class StoreLocaleTest extends TestCase
         app(SettingService::class)->set(StoreSettings::KEY_LOCALES, ['pt', 'es']);
 
         $this->actingAs(User::factory()->admin()->create())
-            ->patch(route('admin.montra.update'), ['open' => true])
+            ->patch(route('admin.montra.update'), ['open' => true, 'shop' => 'off'])
             ->assertSessionHasNoErrors();
 
         $this->assertSame(['pt', 'es'], app(StoreSettings::class)->locales());
