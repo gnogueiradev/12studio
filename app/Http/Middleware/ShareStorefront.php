@@ -6,6 +6,9 @@ use App\Models\Category;
 use App\Services\StoreMenus;
 use App\Services\StoreSettings;
 use App\Services\ThemeSettings;
+use App\Shop\CartPresenter;
+use App\Shop\CartService;
+use App\Shop\ShopGate;
 use App\Support\LocalizedUrl;
 use Closure;
 use Illuminate\Http\Request;
@@ -52,11 +55,37 @@ class ShareStorefront
             'categories' => $this->categories(),
             'logo' => app(ThemeSettings::class)->logoUrl(),
             'announcement' => $this->store->announcement(),
+            // Se este visitante pode comprar (o interruptor das compras) e
+            // quantas pecas tem no carrinho: o cabecalho so mostra o carrinho
+            // a quem pode usa-lo.
+            'shop' => $shop = $this->shopOpen(),
+            'cartCount' => $shop ? $this->cartCount() : 0,
             // A hora a que a pagina abriu, encriptada: os formularios de
             // conversa devolvem-na, e um envio rapido demais e de um robo
             // (OpenConversationRequest).
             'form' => ['started' => Crypt::encryptString((string) now()->timestamp)],
         ]);
+    }
+
+    /**
+     * Resolvido so quando a pagina renderiza (as paginas de erro nao passam
+     * pelo ciclo normal), por isso o pedido vem do container.
+     */
+    private function shopOpen(): bool
+    {
+        return app(ShopGate::class)->allows(request()->user());
+    }
+
+    /** Sem cookie do carrinho nem se consulta a base de dados. */
+    private function cartCount(): int
+    {
+        $token = request()->cookie((string) config('shop.cart.cookie'));
+
+        if (! is_string($token) || $token === '') {
+            return 0;
+        }
+
+        return CartPresenter::count(app(CartService::class)->find($token));
     }
 
     /**

@@ -194,6 +194,7 @@ return [
         'files' => 'archivos',
         'file' => 'archivo',
         'deadline' => 'fecha límite',
+        'promo_code' => 'código',
     ],
 
     'conversation' => [
@@ -261,6 +262,8 @@ return [
     ],
 
     'cart' => [
+        'title' => 'Tu carrito',
+        'count' => 'Artículos: :count',
         'errors' => [
             'max_lines' => 'El carrito admite como máximo :max artículos distintos.',
             'qty_range' => 'La cantidad debe estar entre 1 y :max.',

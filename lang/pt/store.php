@@ -201,6 +201,7 @@ return [
         'files' => 'ficheiros',
         'file' => 'ficheiro',
         'deadline' => 'data limite',
+        'promo_code' => 'código',
     ],
 
     'conversation' => [
@@ -268,6 +269,8 @@ return [
     ],
 
     'cart' => [
+        'title' => 'O teu carrinho',
+        'count' => 'Artigos: :count',
         'errors' => [
             'max_lines' => 'O carrinho não leva mais de :max artigos diferentes.',
             'qty_range' => 'A quantidade tem de ser entre 1 e :max.',

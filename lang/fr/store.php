@@ -194,6 +194,7 @@ return [
         'files' => 'fichiers',
         'file' => 'fichier',
         'deadline' => 'date limite',
+        'promo_code' => 'code',
     ],
 
     'conversation' => [
@@ -261,6 +262,8 @@ return [
     ],
 
     'cart' => [
+        'title' => 'Votre panier',
+        'count' => 'Articles : :count',
         'errors' => [
             'max_lines' => 'Le panier accepte au plus :max articles différents.',
             'qty_range' => 'La quantité doit être comprise entre 1 et :max.',

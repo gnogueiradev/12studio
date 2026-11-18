@@ -194,6 +194,7 @@ return [
         'files' => 'files',
         'file' => 'file',
         'deadline' => 'deadline',
+        'promo_code' => 'code',
     ],
 
     'conversation' => [
@@ -261,6 +262,8 @@ return [
     ],
 
     'cart' => [
+        'title' => 'Your cart',
+        'count' => 'Items: :count',
         'errors' => [
             'max_lines' => 'The cart holds at most :max different items.',
             'qty_range' => 'The quantity must be between 1 and :max.',

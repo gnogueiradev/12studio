@@ -54,6 +54,10 @@ export type Storefront = {
     announcement: Announcement | null;
     /** A hora a que a página abriu, encriptada (anti-spam das conversas). */
     form: { started: string };
+    /** Este visitante pode comprar (o interruptor das compras). */
+    shop: boolean;
+    /** Peças no carrinho; 0 sem carrinho. */
+    cartCount: number;
 };
 
 /** Um link de bloco já resolvido (PageRenderer). */

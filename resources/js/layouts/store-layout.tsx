@@ -18,6 +18,8 @@ const EMPTY_STOREFRONT: Storefront = {
     logo: null,
     announcement: null,
     form: { started: '' },
+    shop: false,
+    cartCount: 0,
 };
 
 /**

@@ -39,7 +39,7 @@ class ReservedSlugs
             }
         }
 
-        $reserved = array_merge($reserved, array_keys((array) config('locales.available')), ['categoria', 'conversa']);
+        $reserved = array_merge($reserved, array_keys((array) config('locales.available')), ['categoria', 'conversa', 'carrinho', 'finalizar', 'compra']);
 
         return array_values(array_unique(array_map('strtolower', $reserved)));
     }

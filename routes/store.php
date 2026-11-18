@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Store\CartController;
 use App\Http\Controllers\Store\CatalogController;
 use App\Http\Controllers\Store\ConversationController;
 use App\Http\Controllers\Store\LandingPageController;
@@ -39,6 +40,29 @@ $storefront = function (): void {
     Route::post('conversas', [ConversationController::class, 'store'])
         ->middleware('throttle:conversations')
         ->name('store.conversations.store');
+
+    // O carrinho: so existe com as compras ligadas (`shop.open`, 404 se nao).
+    // Uma URI por acao, para o Wayfinder. O limite 'cart' esta no AppServiceProvider.
+    Route::middleware('shop.open')->group(function (): void {
+        Route::get('carrinho', [CartController::class, 'show'])->name('store.cart');
+        Route::post('carrinho/itens', [CartController::class, 'add'])
+            ->middleware('throttle:cart')
+            ->name('store.cart.add');
+        Route::patch('carrinho/itens/{item}/quantidade', [CartController::class, 'update'])
+            ->whereNumber('item')
+            ->middleware('throttle:cart')
+            ->name('store.cart.update');
+        Route::delete('carrinho/itens/{item}/remover', [CartController::class, 'remove'])
+            ->whereNumber('item')
+            ->middleware('throttle:cart')
+            ->name('store.cart.remove');
+        Route::post('carrinho/codigo', [CartController::class, 'promo'])
+            ->middleware('throttle:cart')
+            ->name('store.cart.promo');
+        Route::delete('carrinho/codigo/remover', [CartController::class, 'removePromo'])
+            ->middleware('throttle:cart')
+            ->name('store.cart.promo.remove');
+    });
 
     // Paginas de sistema montadas por blocos (App\PageBuilder).
     foreach ([
