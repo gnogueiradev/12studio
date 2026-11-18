@@ -94,7 +94,7 @@ final class ProductDetail
      *
      * @return array{int, int}|null
      */
-    private static function leadDays(Product $product, string $availability): ?array
+    public static function leadDays(Product $product, string $availability): ?array
     {
         if ($availability === 'ready') {
             return self::READY_DAYS;

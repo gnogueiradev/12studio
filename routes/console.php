@@ -1,6 +1,7 @@
 <?php
 
 use App\Alerts\SystemAlerts;
+use App\Models\Cart;
 use App\Models\Conversation;
 use App\Models\ConversationAttachment;
 use App\Models\McpActivity;
@@ -42,8 +43,9 @@ $alertOnFailure(Schedule::command('mcp:prune-clients')
     ->withoutOverlapping(), 'mcp:prune-clients');
 
 // Rasto do MCP com mais de 12 meses (McpActivity::prunable); conversas
-// fechadas ha mais de 24 meses e os anexos delas ao fim de 6 (RGPD).
-$alertOnFailure(Schedule::command('model:prune', ['--model' => [McpActivity::class, ConversationAttachment::class, Conversation::class]])
+// fechadas ha mais de 24 meses e os anexos delas ao fim de 6 (RGPD); carrinhos
+// parados ha mais dias do que o cookie vive.
+$alertOnFailure(Schedule::command('model:prune', ['--model' => [McpActivity::class, ConversationAttachment::class, Conversation::class, Cart::class]])
     ->dailyAt('04:45')
     ->withoutOverlapping(), 'model:prune');
 
