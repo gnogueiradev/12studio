@@ -11,6 +11,7 @@ use App\Models\Variant;
 use App\Services\SettingService;
 use App\Services\StoreSettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\RateLimiter;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\Feature\Stripe\FakesStripe;
@@ -79,6 +80,7 @@ class CartTest extends TestCase
             ->where('cart.count', 0)
             ->where('cart.canCheckout', false));
         $cart->assertCookieMissing($this->cookie());
+        $cart->assertSee('<meta name="robots" content="noindex">', false);
 
         $this->get('/produtos/vaso')->assertOk()->assertCookieMissing($this->cookie());
 
@@ -329,6 +331,25 @@ class CartTest extends TestCase
         for ($i = 0; $i < 60; $i++) {
             $this->post('/carrinho/itens', ['variant_id' => $variant->id, 'qty' => 1])->assertSessionHasErrors('qty');
         }
+
+        $this->post('/carrinho/itens', ['variant_id' => $variant->id, 'qty' => 1])->assertStatus(429);
+    }
+
+    public function test_the_cart_is_capped_per_day_per_ip(): void
+    {
+        $variant = Variant::factory()->create(['stock' => 0]);
+
+        // Duas mil escritas a serio demoravam demais: o dia do limite enche-se
+        // pela mesma chave que o throttle usa, e o limite por minuto fica
+        // intacto.
+        $day = collect(RateLimiter::limiter('cart')(Request::create('/carrinho/itens', 'POST', server: ['REMOTE_ADDR' => '127.0.0.1'])))
+            ->firstWhere('decaySeconds', 86400);
+        $this->assertNotNull($day);
+        $this->assertSame(2000, $day->maxAttempts);
+
+        $this->post('/carrinho/itens', ['variant_id' => $variant->id, 'qty' => 1])->assertSessionHasErrors('qty');
+
+        RateLimiter::increment(md5('cart'.$day->key), 86400, 1999);
 
         $this->post('/carrinho/itens', ['variant_id' => $variant->id, 'qty' => 1])->assertStatus(429);
     }

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Stripe;
 
+use App\Models\Checkout;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Variant;
@@ -187,6 +188,24 @@ class ChargeTest extends TestCase
         $this->expectException(StripeException::class);
 
         new Charge(...$arguments);
+    }
+
+    public function test_a_shop_purchase_speaks_the_buyers_language_on_stripe(): void
+    {
+        $english = Charge::fromCheckout(Checkout::factory()->create(['locale' => 'en']), 'https://12studio.test/en/compra/x', 'https://12studio.test/en/finalizar');
+
+        $this->assertSame('Purchase in the shop: 1× Vaso.', $english->summary);
+        $this->assertSame('Shipping', $english->shippingName);
+
+        $french = Charge::fromCheckout(Checkout::factory()->create(['locale' => 'fr']), 'https://12studio.test/fr/compra/x', 'https://12studio.test/fr/finalizar');
+        $this->assertSame(trans('store.checkout.stripe_shipping', [], 'fr'), $french->shippingName);
+        $this->assertNotSame('Portes', $french->shippingName);
+
+        // Sem idioma guardado, o da loja.
+        $unknown = Charge::fromCheckout(Checkout::factory()->create(['locale' => null]), 'https://12studio.test/compra/x', 'https://12studio.test/finalizar');
+
+        $this->assertSame('Compra na loja: 1× Vaso.', $unknown->summary);
+        $this->assertSame('Portes', $unknown->shippingName);
     }
 
     public function test_expires_at_reaches_the_session(): void

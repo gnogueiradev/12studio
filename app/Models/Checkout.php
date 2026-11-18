@@ -18,7 +18,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * Stripe.
  *
  * Guarda dados pessoais de quem pode nunca chegar a comprar: sem encomenda,
- * sai ao fim de 30 dias (prunable). Com encomenda fica, que e o rasto dela.
+ * sai ao fim de 30 dias (prunable). Com encomenda fica, que e o rasto dela,
+ * mas sem os dados pessoais, que passaram para a encomenda.
  *
  * @property int $id
  * @property int|null $user_id

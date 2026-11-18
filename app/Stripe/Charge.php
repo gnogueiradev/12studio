@@ -125,16 +125,19 @@ final readonly class Charge
             self::lineName((string) $line['product_name'], $line['variant_label'] ?? null),
         ), $snapshot);
 
+        // A pagina do Stripe fala a lingua de quem compra: a do "Pagar".
+        $locale = $checkout->locale ?? (string) config('locales.default');
+
         return new self(
             reference: 'checkout-'.$checkout->id,
             metadata: ['checkout_id' => (string) $checkout->id],
             label: "compra {$checkout->id}",
-            summary: self::limitSummary('Compra na loja: '.implode('; ', $summary).'.'),
+            summary: self::limitSummary(trans('store.checkout.stripe_summary', ['lines' => implode('; ', $summary)], $locale)),
             currency: 'eur',
             email: $checkout->customer['email'] ?? null,
             lines: $lines,
             shippingCents: $checkout->shipping_cents,
-            shippingName: 'Portes',
+            shippingName: trans('store.checkout.stripe_shipping', [], $locale),
             extraCents: 0,
             extraName: null,
             couponCents: $checkout->discount_cents,

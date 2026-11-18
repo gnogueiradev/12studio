@@ -375,6 +375,8 @@ return [
         'pay' => 'Pay :amount',
         'paying' => 'Opening the payment…',
         'secure' => 'You pay on Stripe’s secure page.',
+        'stripe_summary' => 'Purchase in the shop: :lines.',
+        'stripe_shipping' => 'Shipping',
         'errors' => [
             'busy' => 'We are already opening the payment. Please wait a moment.',
             'cart' => 'Your cart has changed and can no longer be paid as it is. Please review it before continuing.',

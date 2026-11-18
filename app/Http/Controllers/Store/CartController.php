@@ -10,6 +10,7 @@ use App\Models\Cart;
 use App\Models\Variant;
 use App\Shop\CartPresenter;
 use App\Shop\CartService;
+use App\Store\Seo;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -30,9 +31,14 @@ class CartController extends Controller
 
     public function show(Request $request): Response
     {
+        // O carrinho e de cada visitante: nao e para os motores de busca.
         return Inertia::render('store/cart', [
             'cart' => CartPresenter::make($this->current($request)),
-        ]);
+        ])->withViewData(['seo' => Seo::make(
+            path: '/carrinho',
+            title: trans('store.cart.title'),
+            index: false,
+        )]);
     }
 
     public function add(AddToCartRequest $request): RedirectResponse

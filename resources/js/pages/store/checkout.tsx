@@ -157,7 +157,14 @@ function SummaryLine({ line }: { line: CartLine }) {
  * resumo passa a ser o que o servidor devolve; quando o "Pagar" volta com as
  * contas mudadas, também.
  */
-export default function CheckoutPage({ cart }: { cart: CartData }) {
+export default function CheckoutPage({
+    cart,
+    customer,
+}: {
+    cart: CartData;
+    /** Os dados do último "Pagar" ainda em aberto (voltou do Stripe), ou null. */
+    customer: Omit<CheckoutFormData, 'terms' | 'expected_total_cents'> | null;
+}) {
     const t = useT();
     const url = useLocalizedUrl();
     const price = usePrice();
@@ -198,14 +205,15 @@ export default function CheckoutPage({ cart }: { cart: CartData }) {
 
     const { data, setData, post, processing, errors, transform } =
         useForm<CheckoutFormData>({
-            name: '',
-            email: '',
-            phone: '',
-            nif: '',
-            line1: '',
-            line2: '',
-            postal_code: '',
-            city: '',
+            name: customer?.name ?? '',
+            email: customer?.email ?? '',
+            phone: customer?.phone ?? '',
+            nif: customer?.nif ?? '',
+            line1: customer?.line1 ?? '',
+            line2: customer?.line2 ?? '',
+            postal_code: customer?.postal_code ?? '',
+            city: customer?.city ?? '',
+            // Os termos aceitam-se de cada vez: nunca vêm marcados.
             terms: false,
             expected_total_cents: cart.totalCents,
         });
@@ -368,9 +376,8 @@ export default function CheckoutPage({ cart }: { cart: CartData }) {
 
     return (
         <>
-            <Head title={t('checkout.title')}>
-                <meta name="robots" content="noindex, nofollow" />
-            </Head>
+            {/* O noindex vem do servidor (Seo), no HTML da primeira carga. */}
+            <Head title={t('checkout.title')} />
 
             <form
                 onSubmit={submit}

@@ -11,6 +11,7 @@ use App\Models\PromoCode;
 use App\Models\Variant;
 use App\Services\SettingService;
 use App\Services\StoreSettings;
+use App\Shop\CheckoutCompletion;
 use App\Shop\CheckoutService;
 use App\Stripe\StripeClient;
 use App\Stripe\StripeException;
@@ -105,6 +106,7 @@ class CheckoutTest extends TestCase
 
         $this->holding($cart)->get('/finalizar')
             ->assertOk()
+            ->assertSee('<meta name="robots" content="noindex">', false)
             ->assertInertia(fn (Assert $page) => $page
                 ->component('store/checkout')
                 ->where('cart.totalCents', 3000)
@@ -112,6 +114,48 @@ class CheckoutTest extends TestCase
 
         $this->assertSame(0, Checkout::query()->count());
         $this->assertSame([], $this->stripeCalls);
+    }
+
+    public function test_coming_back_from_stripe_keeps_the_details_typed(): void
+    {
+        $cart = $this->cartWith();
+
+        $this->holding($cart)->get('/finalizar')->assertInertia(fn (Assert $page) => $page->where('customer', null));
+
+        $this->pay($cart, $this->customer(3000))->assertSessionHasNoErrors();
+        $this->stripeCalls = [];
+
+        // O "voltar" da pagina do Stripe (cancel_url) traz o formulario cheio.
+        $this->holding($cart)->get('/finalizar')->assertInertia(fn (Assert $page) => $page->where('customer', [
+            'name' => 'Ana Silva',
+            'email' => 'ana@example.com',
+            'phone' => '912 345 678',
+            'nif' => '123456789',
+            'line1' => 'Rua das Flores 12',
+            'line2' => '2.º esq.',
+            'postal_code' => '1000-001',
+            'city' => 'Lisboa',
+        ]));
+
+        $this->assertSame(1, Checkout::query()->count());
+        $this->assertSame([], $this->stripeCalls);
+
+        // Outro visitante, com o seu carrinho, nao ve os dados deste.
+        $this->holding($this->cartWith())->get('/finalizar')->assertInertia(fn (Assert $page) => $page->where('customer', null));
+    }
+
+    public function test_a_completed_purchase_does_not_fill_the_form(): void
+    {
+        $cart = $this->cartWith();
+        $this->pay($cart, $this->customer(3000))->assertSessionHasNoErrors();
+
+        app(CheckoutCompletion::class)->orderFor(Checkout::query()->firstOrFail(), true);
+        $this->assertSame(0, $cart->items()->count());
+
+        // O mesmo visitante volta a encher o carrinho.
+        CartItem::factory()->for($cart)->for(Variant::factory()->create(['price_cents' => 1500]))->create(['qty' => 1]);
+
+        $this->holding($cart)->get('/finalizar')->assertOk()->assertInertia(fn (Assert $page) => $page->where('customer', null));
     }
 
     public function test_an_empty_or_blocked_cart_goes_back_to_the_cart(): void
@@ -490,6 +534,24 @@ class CheckoutTest extends TestCase
         }
 
         $this->pay($cart, $this->customer(3000))->assertStatus(429);
+    }
+
+    public function test_paying_is_capped_per_day_per_ip(): void
+    {
+        $cart = $this->cartWith();
+
+        // Dez por minuto, durante seis minutos: o limite por minuto nunca
+        // dispara, o do dia sim.
+        for ($minute = 0; $minute < 6; $minute++) {
+            for ($i = 0; $i < 10; $i++) {
+                $this->pay($cart, $this->customer(3000, ['name' => '']))->assertSessionHasErrors('name');
+            }
+
+            $this->travel(61)->seconds();
+        }
+
+        $this->pay($cart, $this->customer(3000))->assertStatus(429);
+        $this->assertSame(0, Checkout::query()->count());
     }
 
     public function test_a_personal_code_the_page_did_not_confirm_shows_the_new_total(): void

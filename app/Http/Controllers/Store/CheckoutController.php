@@ -4,9 +4,12 @@ namespace App\Http\Controllers\Store;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\Shop\StartCheckoutRequest;
+use App\Models\Cart;
+use App\Models\Checkout;
 use App\Shop\CartPresenter;
 use App\Shop\CartService;
 use App\Shop\CheckoutService;
+use App\Store\Seo;
 use App\Stripe\StripeException;
 use App\Support\LocalizedUrl;
 use Illuminate\Http\RedirectResponse;
@@ -18,9 +21,9 @@ use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 /**
  * O /finalizar: os dados de quem compra, o resumo e o "Pagar". Abrir a pagina
- * nao cria nada; so o "Pagar" congela a compra e abre a sessao do Stripe
- * (CheckoutService). Um carrinho que ainda nao se pode pagar volta ao
- * /carrinho, que explica porque.
+ * nao cria nada (nem e indexada); so o "Pagar" congela a compra e abre a
+ * sessao do Stripe (CheckoutService). Um carrinho que ainda nao se pode pagar
+ * volta ao /carrinho, que explica porque.
  */
 class CheckoutController extends Controller
 {
@@ -30,13 +33,56 @@ class CheckoutController extends Controller
 
     public function show(Request $request): Response|RedirectResponse
     {
-        $cart = CartPresenter::make($this->carts->fromRequest($request));
+        $current = $this->carts->fromRequest($request);
+        $cart = CartPresenter::make($current);
 
         if (! $cart['canCheckout']) {
             return redirect(LocalizedUrl::path('/carrinho'));
         }
 
-        return Inertia::render('store/checkout', ['cart' => $cart]);
+        return Inertia::render('store/checkout', [
+            'cart' => $cart,
+            'customer' => $current === null ? null : $this->lastCustomer($current),
+        ])->withViewData(['seo' => Seo::make(
+            path: '/finalizar',
+            title: trans('store.checkout.title'),
+            index: false,
+        )]);
+    }
+
+    /**
+     * Os dados do ultimo "Pagar" deste carrinho ainda em aberto: quem volta
+     * atras na pagina do Stripe (o cancel_url e este) nao escreve tudo outra
+     * vez. Vem pelo cookie do proprio visitante, por isso sao os dados dele;
+     * uma compra concluida ja nao os tem. So le.
+     *
+     * @return array{name: string, email: string, phone: string, nif: string, line1: string, line2: string, postal_code: string, city: string}|null
+     */
+    private function lastCustomer(Cart $cart): ?array
+    {
+        $checkout = Checkout::query()
+            ->where('cart_id', $cart->id)
+            ->where('status', 'open')
+            ->latest('id')
+            ->first();
+
+        $customer = $checkout?->customer;
+        $address = $checkout?->shipping_address;
+
+        if ($customer === null || $address === null) {
+            return null;
+        }
+
+        return [
+            'name' => $customer['name'],
+            'email' => $customer['email'],
+            'phone' => $customer['phone'],
+            'nif' => $customer['nif'] ?? '',
+            'line1' => $address['line1'],
+            'line2' => $address['line2'] ?? '',
+            'postal_code' => $address['postalCode'],
+            'city' => $address['city'],
+        ];
     }
 
     /**

@@ -375,6 +375,8 @@ return [
         'pay' => 'Pagar :amount',
         'paying' => 'Abriendo el pago…',
         'secure' => 'Pagas en la página segura de Stripe.',
+        'stripe_summary' => 'Compra en la tienda: :lines.',
+        'stripe_shipping' => 'Envío',
         'errors' => [
             'busy' => 'Ya estamos abriendo el pago. Espera un momento.',
             'cart' => 'Tu carrito ha cambiado y ya no se puede pagar así. Revísalo antes de continuar.',

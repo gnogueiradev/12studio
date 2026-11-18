@@ -141,11 +141,8 @@ export default function CartPage({ cart }: { cart: CartData }) {
     const url = useLocalizedUrl();
     const price = usePrice();
 
-    const head = (
-        <Head title={t('cart.title')}>
-            <meta name="robots" content="noindex, nofollow" />
-        </Head>
-    );
+    // O noindex vem do servidor (Seo), no HTML da primeira carga.
+    const head = <Head title={t('cart.title')} />;
 
     if (cart.lines.length === 0) {
         return (

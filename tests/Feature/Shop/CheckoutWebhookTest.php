@@ -7,6 +7,8 @@ use App\Mail\OrderConfirmationMail;
 use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\Checkout;
+use App\Models\Color;
+use App\Models\Material;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\Product;
@@ -210,6 +212,9 @@ class CheckoutWebhookTest extends TestCase
         $checkout->refresh();
         $this->assertSame('completed', $checkout->status);
         $this->assertSame($order->id, $checkout->order_id);
+        // Os dados pessoais ficam so na encomenda.
+        $this->assertNull($checkout->customer);
+        $this->assertNull($checkout->shipping_address);
 
         Mail::assertQueued(OrderConfirmationMail::class, fn (OrderConfirmationMail $mail): bool => $mail->hasTo('ana@example.com') && $mail->order->is($order));
         Mail::assertQueuedCount(1);
@@ -280,6 +285,37 @@ class CheckoutWebhookTest extends TestCase
 
         $this->assertSame('paid', $this->onlyOrder()->payment_status);
         $this->assertSame('completed', $checkout->fresh()?->status);
+    }
+
+    public function test_a_purchased_line_says_its_colour_material_and_size(): void
+    {
+        $cart = Cart::factory()->create();
+        $product = Product::factory()->create(['name' => 'Vaso']);
+        $color = Color::factory()->create(['name' => 'Azul', 'name_i18n' => ['en' => 'Blue']]);
+        $material = Material::factory()->create(['name' => 'PLA mate', 'name_i18n' => ['en' => 'Matte PLA']]);
+        $blue = Variant::factory()->for($product)->create(['price_cents' => 1500, 'size_label' => 'G', 'color_id' => $color->id, 'material_id' => $material->id]);
+        CartItem::factory()->for($cart)->for($blue)->create(['qty' => 1]);
+        // So com tamanho: fica so o tamanho.
+        $this->addTo($cart, $product, 1500, 1, [], 'P');
+
+        // Pago em ingles, guardado em portugues (como o resto da encomenda).
+        $this->withCookie((string) config('shop.cart.cookie'), $cart->token)
+            ->from('/en/finalizar')
+            ->post('/en/finalizar/pagar', [
+                'name' => 'Ana Silva', 'email' => 'ana@example.com', 'phone' => '912 345 678', 'nif' => '',
+                'line1' => 'Rua das Flores 12', 'line2' => '', 'postal_code' => '1000-001', 'city' => 'Lisboa',
+                'terms' => '1', 'expected_total_cents' => 3000,
+            ])
+            ->assertSessionHasNoErrors();
+        $checkout = Checkout::query()->sole();
+
+        $this->assertSame(['Azul · PLA mate · G', 'P'], array_column($checkout->items_snapshot, 'variant_label'));
+        $session = array_values($this->stripe['sessions'])[0];
+        $this->assertStringContainsString('1× Vaso (Azul · PLA mate · G); 1× Vaso (P)', $session['request']['custom_text']['submit']['message']);
+
+        $this->send($this->event('checkout.session.completed', $this->stripeSession($checkout)))->assertNoContent();
+
+        $this->assertSame(['Azul · PLA mate · G', 'P'], $this->onlyOrder()->items()->orderBy('id')->pluck('variant_label')->all());
     }
 
     public function test_a_snapshot_without_the_optional_keys_still_completes(): void

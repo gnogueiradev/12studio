@@ -382,6 +382,9 @@ return [
         'pay' => 'Pagar :amount',
         'paying' => 'A abrir o pagamento…',
         'secure' => 'Pagas na página segura do Stripe.',
+        // Na pagina do Stripe: o texto por baixo do botao e o nome dos portes.
+        'stripe_summary' => 'Compra na loja: :lines.',
+        'stripe_shipping' => 'Portes',
         'errors' => [
             'busy' => 'Já estamos a abrir o pagamento. Espera um momento.',
             'cart' => 'O teu carrinho mudou e já não se pode pagar assim. Revê-o antes de continuar.',

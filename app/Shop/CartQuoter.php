@@ -5,10 +5,12 @@ namespace App\Shop;
 use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\Product;
+use App\Models\Variant;
 use App\Services\OrderTotalsCalculator;
 use App\Services\PromoCodeValidator;
 use App\Store\ProductDetail;
 use App\Support\PromoCodeValidation;
+use Illuminate\Support\Number;
 
 /**
  * A unica conta do carrinho. O carrinho, a compra e a fotografia da encomenda
@@ -78,7 +80,7 @@ final class CartQuoter
             itemId: $item->id,
             variant: $variant,
             productName: $product->name,
-            variantLabel: $variant->size_label,
+            variantLabel: $this->variantLabel($variant),
             sku: $variant->sku,
             qty: $item->qty,
             maxQty: $check->maxQty,
@@ -92,6 +94,25 @@ final class CartQuoter
             leadDays: $check->mode === null ? null : ProductDetail::leadDays($product, $check->mode === 'in_stock' ? 'ready' : $check->mode),
             problem: $check->reason,
         );
+    }
+
+    /**
+     * O que distingue a variante na compra: cor · material · tamanho, o que
+     * ela tiver. So o tamanho deixava duas cores do mesmo tamanho iguais no
+     * Stripe, no email e na encomenda. Com os nomes da lingua da loja, como o
+     * resto da encomenda — o cliente ve-os traduzidos no CartPresenter.
+     */
+    private function variantLabel(Variant $variant): ?string
+    {
+        $locale = (string) config('locales.default');
+
+        $label = implode(' · ', array_filter([
+            $variant->color?->translatedName($locale),
+            $variant->material?->translatedName($locale),
+            $variant->size_label,
+        ], fn (?string $part): bool => $part !== null && $part !== ''));
+
+        return $label === '' ? null : $label;
     }
 
     /**
@@ -115,9 +136,16 @@ final class CartQuoter
         $status = $result->reason === PromoCodeValidation::EMAIL_REQUIRED ? 'pending_email' : 'refused';
 
         // O texto do validador e portugues (o backoffice usa-o assim): ao
-        // cliente a mensagem vai no idioma dele, pela razao da recusa.
+        // cliente a mensagem vai no idioma dele, pela razao da recusa, e o
+        // valor com os separadores dele — a mesma localizacao `intl` com que
+        // a montra formata os precos.
+        $locale = app()->getLocale();
         $message = trans('store.cart.promo.'.$result->reason, [
-            'amount' => number_format(($result->promoCode->min_subtotal_cents ?? 0) / 100, 2, ',', ' '),
+            'amount' => Number::format(
+                ($result->promoCode->min_subtotal_cents ?? 0) / 100,
+                precision: 2,
+                locale: (string) config("locales.available.{$locale}.intl", $locale),
+            ),
         ]);
 
         return [$status, $message, null, 0];

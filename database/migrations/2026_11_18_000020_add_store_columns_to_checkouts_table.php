@@ -27,6 +27,9 @@ return new class extends Migration
             $table->string('promo_code', 40)->nullable();
             $table->unsignedInteger('total_cents')->default(0);
             $table->string('locale', 5)->nullable();
+
+            // O "Pagar" e o /finalizar procuram as compras de um carrinho.
+            $table->index('cart_id');
         });
     }
 
@@ -36,6 +39,7 @@ return new class extends Migration
     public function down(): void
     {
         Schema::table('checkouts', function (Blueprint $table): void {
+            $table->dropIndex(['cart_id']);
             $table->dropUnique(['token']);
             $table->dropColumn([
                 'token', 'cart_id', 'order_id', 'customer', 'shipping_address', 'shipping_cents',

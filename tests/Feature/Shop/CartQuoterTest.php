@@ -163,6 +163,13 @@ class CartQuoterTest extends TestCase
             trans('store.cart.promo.below_minimum', ['amount' => '50,00']),
             $this->quote($cart)->promoMessage,
         );
+
+        // Com os separadores da lingua de quem le.
+        app()->setLocale('en');
+        $this->assertSame('This code only applies from 50.00 €.', $this->quote($cart)->promoMessage);
+
+        app()->setLocale('fr');
+        $this->assertStringContainsString('50,00 €', (string) $this->quote($cart)->promoMessage);
     }
 
     public function test_a_refused_code_does_not_block_the_checkout(): void

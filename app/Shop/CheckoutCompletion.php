@@ -115,7 +115,15 @@ class CheckoutCompletion
             'note' => 'Compra na loja online.',
             'lines' => $checkout->items_snapshot,
         ], function (Order $order) use ($checkout): void {
-            $checkout->update(['order_id' => $order->getKey(), 'status' => 'completed']);
+            // Os dados pessoais passam a viver na encomenda: o checkout, que
+            // fica como rasto dela, deixa de os guardar (a pagina /compra so
+            // le as linhas e os totais).
+            $checkout->update([
+                'order_id' => $order->getKey(),
+                'status' => 'completed',
+                'customer' => null,
+                'shipping_address' => null,
+            ]);
         });
 
         // O carrinho pode ja ter sido limpo pelo prune: nesse caso nao ha o
