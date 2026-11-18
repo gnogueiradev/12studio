@@ -467,6 +467,11 @@ export default function ProductForm({
                                         {drawer !== null && (
                                             <div className="mt-4 overflow-hidden rounded-xl border border-gold bg-card">
                                                 <VariantPanel
+                                                    key={
+                                                        drawer === 'new'
+                                                            ? 'new'
+                                                            : drawer.id
+                                                    }
                                                     productId={
                                                         editing.product.id
                                                     }

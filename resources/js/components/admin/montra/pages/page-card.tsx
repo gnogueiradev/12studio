@@ -55,7 +55,7 @@ export function PageCard({ page }: { page: PageRow }) {
         page.template === 'page' ? page.path : TEMPLATE_HINTS[page.template];
 
     return (
-        <article className="group relative flex flex-col overflow-hidden rounded-xl border border-border/60 bg-card transition-[border-color,box-shadow] hover:border-border hover:shadow-md has-[a:focus-visible]:border-ring has-[a:focus-visible]:ring-[3px] has-[a:focus-visible]:ring-ring/50">
+        <article className="group relative flex flex-col overflow-hidden rounded-xl border border-border/60 bg-card transition-[border-color,box-shadow] hover:border-border hover:shadow-md has-[a:focus-visible]:border-ring has-[a:focus-visible]:ring-[3px] has-[a:focus-visible]:ring-ring">
             <div className="relative border-b border-border/60">
                 <PageThumbnail pageId={page.id} title={page.name} />
                 <div className="pointer-events-none absolute inset-0 bg-foreground/0 transition-colors group-hover:bg-foreground/5" />
@@ -189,7 +189,7 @@ export function NewLandingTile({ onClick }: { onClick: () => void }) {
         <button
             type="button"
             onClick={onClick}
-            className="group flex min-h-56 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border p-6 text-center transition-colors outline-none hover:border-ring hover:bg-muted/50 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50"
+            className="group flex min-h-56 flex-col items-center justify-center gap-3 rounded-xl border border-dashed border-border p-6 text-center transition-colors outline-none hover:border-ring hover:bg-muted/50 focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring"
         >
             <span className="flex size-10 items-center justify-center rounded-full bg-muted text-muted-foreground transition-colors group-hover:bg-primary group-hover:text-primary-foreground">
                 <Plus aria-hidden className="size-5" />

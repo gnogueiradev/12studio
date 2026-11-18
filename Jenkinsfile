@@ -122,6 +122,31 @@ pipeline {
             }
         }
 
+        // Portoes do frontend. O `vite build` nao verifica tipos: sem este
+        // stage um erro de TypeScript, uma regra de hooks (ou do React
+        // Compiler) violada ou um ficheiro por formatar chegavam a producao
+        // com o build verde. Sao os mesmos tres comandos do `composer ci:check`.
+        //
+        // A imagem de teste e o stage `build` do Dockerfile, que acaba com
+        // `npm prune --omit=dev`: o eslint e o prettier ja la nao estao, e o
+        // `npm ci` repoe-os — so neste container, que e descartado. As rotas
+        // do Wayfinder (resources/js/{actions,routes,wayfinder}), de que o tsc
+        // precisa, ja vem geradas na imagem.
+        stage('Lint Frontend') {
+            steps {
+                timeout(time: 10, unit: 'MINUTES') {
+                    sh '''
+                        docker run --rm ${IMAGE_NAME}-test sh -c '
+                            npm ci &&
+                            npm run lint:check &&
+                            npm run format:check &&
+                            npm run types:check
+                        '
+                    '''
+                }
+            }
+        }
+
         stage('Build') {
             steps {
                 sh '''

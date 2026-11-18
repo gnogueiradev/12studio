@@ -1,10 +1,11 @@
 import { Link, usePage } from '@inertiajs/react';
 import { EyeOff } from 'lucide-react';
+import { useEffect } from 'react';
 import { AnnouncementBar } from '@/components/store/announcement-bar';
 import { ContactFab } from '@/components/store/contact-fab';
 import { StoreFooter } from '@/components/store/store-footer';
 import { StoreHeader } from '@/components/store/store-header';
-import { useT } from '@/lib/i18n';
+import { useLocale, useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { index as storeSettings } from '@/routes/admin/montra';
 import type { Storefront } from '@/types/store';
@@ -40,6 +41,29 @@ export default function StoreLayout({
     } = usePage().props;
     const t = useT();
     const { component } = usePage();
+    const { current, available, default: defaultCode } = useLocale();
+    // O mesmo valor que o Blade escreve (config/locales.php, `hreflang`),
+    // para o atributo não mudar de "en" para "en-IE" depois de hidratar.
+    const langOf = (code: string) => {
+        const option = available.find((item) => item.code === code);
+
+        return option?.hreflang ?? option?.intl ?? 'pt-PT';
+    };
+    const lang = langOf(current);
+    const defaultLang = langOf(defaultCode);
+
+    // O <html lang> só é escrito pelo Blade na primeira carga. Trocar de
+    // idioma é uma visita do Inertia, sem recarregar: sem isto o texto
+    // passava a inglês e o leitor de ecrã continuava a lê-lo com voz
+    // portuguesa (WCAG 3.1.1). Ao sair da montra para o backoffice — que é
+    // sempre no idioma por omissão — o atributo volta a esse.
+    useEffect(() => {
+        document.documentElement.lang = lang;
+
+        return () => {
+            document.documentElement.lang = defaultLang;
+        };
+    }, [lang, defaultLang]);
     // Na conversa, o cliente já está a falar connosco: sem o botão.
     const conversationPage = component === 'store/conversation';
 

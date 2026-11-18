@@ -157,6 +157,7 @@ class PageEditorTest extends TestCase
             ->putJson(route('admin.montra.paginas.rascunho', $page), [
                 'blocks' => [$this->banner('Depois')],
                 'seo' => ['pt' => ['title' => 'Natal']],
+                'version' => $page->fresh()->draftVersion(),
             ])
             ->assertOk()
             ->assertJsonPath('page.hasChanges', true);
@@ -168,6 +169,158 @@ class PageEditorTest extends TestCase
             ->where('page.blocks.0.children.0.data.title', 'Antes'));
     }
 
+    /** O marcador da versao do rascunho, tal como o editor o recebe ao abrir. */
+    private function editorVersion(Page $page): string
+    {
+        $version = null;
+
+        $this->actingAs($this->admin)
+            ->get(route('admin.montra.paginas.edit', $page))
+            ->assertOk()
+            // Uma closure normal: a arrow function copiava o $version.
+            ->assertInertia(function (Assert $inertia) use (&$version): void {
+                $inertia->where('page.version', function (mixed $value) use (&$version): bool {
+                    $version = $value;
+
+                    return is_string($value) && $value !== '';
+                });
+            });
+
+        $this->assertIsString($version);
+
+        return $version;
+    }
+
+    public function test_a_save_from_a_stale_editor_is_refused_and_the_draft_stays(): void
+    {
+        $page = $this->landing();
+        app(PageBuilderService::class)->saveDraft($page, [$this->banner('Antes')]);
+        $stale = $this->editorVersion($page);
+
+        // Outro separador (ou outra pessoa) grava entretanto.
+        app(PageBuilderService::class)->saveDraft($page->fresh(), [$this->banner('Do outro separador')]);
+
+        $this->actingAs($this->admin)
+            ->putJson(route('admin.montra.paginas.rascunho', $page), [
+                'blocks' => [$this->banner('Velho')],
+                'version' => $stale,
+            ])
+            ->assertConflict()
+            ->assertJsonPath('conflict', true)
+            ->assertJsonStructure(['message']);
+
+        $this->assertSame('Do outro separador', $page->fresh()->draft_blocks[0]['children'][0]['content']['pt']['title']);
+    }
+
+    public function test_a_seo_change_elsewhere_also_makes_the_editor_stale(): void
+    {
+        $page = $this->landing();
+        $stale = $this->editorVersion($page);
+
+        app(PageBuilderService::class)->saveDraft($page->fresh(), [], ['pt' => ['title' => 'Novo título']]);
+
+        $this->actingAs($this->admin)
+            ->putJson(route('admin.montra.paginas.rascunho', $page), [
+                'blocks' => [$this->banner('Velho')],
+                'version' => $stale,
+            ])
+            ->assertConflict();
+
+        $this->assertSame([], $page->fresh()->draft_blocks);
+    }
+
+    public function test_the_current_version_saves_and_two_saves_in_a_row_work(): void
+    {
+        $page = $this->landing();
+        $opened = $this->editorVersion($page);
+
+        $first = $this->actingAs($this->admin)
+            ->putJson(route('admin.montra.paginas.rascunho', $page), [
+                'blocks' => [$this->banner('Primeira')],
+                'version' => $opened,
+            ])
+            ->assertOk()
+            ->json('page.version');
+
+        $this->assertIsString($first);
+        $this->assertNotSame($opened, $first);
+
+        // A gravacao seguinte da mesma sessao vai com o marcador da resposta.
+        $second = $this->actingAs($this->admin)
+            ->putJson(route('admin.montra.paginas.rascunho', $page), [
+                'blocks' => [$this->banner('Segunda')],
+                'version' => $first,
+            ])
+            ->assertOk()
+            ->json('page.version');
+
+        $this->assertSame('Segunda', $page->fresh()->draft_blocks[0]['children'][0]['content']['pt']['title']);
+        // O que a resposta diz e o que o editor recebe ao abrir de novo.
+        $this->assertSame($second, $this->editorVersion($page));
+
+        // O marcador de quando se abriu ja nao serve.
+        $this->actingAs($this->admin)
+            ->putJson(route('admin.montra.paginas.rascunho', $page), [
+                'blocks' => [$this->banner('Velho')],
+                'version' => $opened,
+            ])
+            ->assertConflict();
+    }
+
+    public function test_a_save_without_a_version_is_refused(): void
+    {
+        $page = $this->landing();
+        app(PageBuilderService::class)->saveDraft($page, [$this->banner('Antes')]);
+
+        $this->actingAs($this->admin)
+            ->putJson(route('admin.montra.paginas.rascunho', $page), ['blocks' => [$this->banner('Sem marcador')]])
+            ->assertConflict();
+
+        $this->assertSame('Antes', $page->fresh()->draft_blocks[0]['children'][0]['content']['pt']['title']);
+    }
+
+    public function test_overwriting_on_purpose_saves_over_the_newer_draft(): void
+    {
+        $page = $this->landing();
+        $stale = $this->editorVersion($page);
+        app(PageBuilderService::class)->saveDraft($page->fresh(), [$this->banner('Do outro separador')]);
+
+        $this->actingAs($this->admin)
+            ->putJson(route('admin.montra.paginas.rascunho', $page), [
+                'blocks' => [$this->banner('Daqui')],
+                'version' => $stale,
+                'force' => true,
+            ])
+            ->assertOk()
+            ->assertJsonPath('page.version', fn (mixed $version) => is_string($version) && $version !== $stale);
+
+        $this->assertSame('Daqui', $page->fresh()->draft_blocks[0]['children'][0]['content']['pt']['title']);
+    }
+
+    public function test_restoring_a_revision_gives_the_editor_a_new_version(): void
+    {
+        $page = $this->landing();
+        $service = app(PageBuilderService::class);
+        $service->saveDraft($page, [$this->banner('Primeira')]);
+        $service->publish($page);
+        $service->saveDraft($page->fresh(), [$this->banner('Segunda')]);
+        $before = $this->editorVersion($page);
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.montra.paginas.repor', [$page, $page->revisions()->first()]))
+            ->assertRedirect();
+
+        $after = $this->editorVersion($page);
+        $this->assertNotSame($before, $after);
+
+        $this->actingAs($this->admin)
+            ->putJson(route('admin.montra.paginas.rascunho', $page), [
+                'blocks' => [$this->banner('Depois de repor')],
+                'version' => $after,
+            ])
+            ->assertOk();
+    }
+
     public function test_an_invalid_draft_comes_back_with_the_field_path(): void
     {
         $page = $this->landing();
@@ -175,6 +328,7 @@ class PageEditorTest extends TestCase
         $this->actingAs($this->admin)
             ->putJson(route('admin.montra.paginas.rascunho', $page), [
                 'blocks' => [['type' => 'banner', 'content' => ['pt' => ['title' => str_repeat('x', 500)]]]],
+                'version' => $page->draftVersion(),
             ])
             ->assertUnprocessable()
             ->assertJsonValidationErrors('blocks.0.children.0.content.pt.title');
@@ -189,6 +343,7 @@ class PageEditorTest extends TestCase
         $this->actingAs($this->admin)
             ->putJson(route('admin.montra.paginas.rascunho', $page), [
                 'blocks' => [['type' => 'text', 'content' => ['pt' => ['body' => '']]]],
+                'version' => $page->draftVersion(),
             ])
             ->assertOk();
 
@@ -290,7 +445,7 @@ class PageEditorTest extends TestCase
         $page = app(Pages::class)->system('product');
 
         $this->actingAs($this->admin)
-            ->putJson(route('admin.montra.paginas.rascunho', $page), ['blocks' => []])
+            ->putJson(route('admin.montra.paginas.rascunho', $page), ['blocks' => [], 'version' => $page->draftVersion()])
             ->assertUnprocessable()
             ->assertJsonValidationErrors('blocks');
     }

@@ -277,60 +277,100 @@ export default function PageEditor(props: Props) {
     const savedVersion = useRef(0);
     const queue = useRef<Promise<boolean>>(Promise.resolve(true));
     const latest = useRef({ blocks: nodes, seo });
+    // O rascunho do servidor em que esta sessão se baseia. Cada gravação
+    // manda-o e traz o novo; como a fila só envia uma de cada vez, a seguinte
+    // já leva o da anterior.
+    const serverVersion = useRef(page.version);
+    // Outro separador (ou outra pessoa) gravou entretanto: o autosave para
+    // até o dono escolher entre recarregar e gravar por cima.
+    const conflicted = useRef(false);
+    const [conflict, setConflict] = useState(false);
 
     useEffect(() => {
         latest.current = { blocks: nodes, seo };
     }, [nodes, seo]);
 
-    const saveNow = useCallback(async (): Promise<boolean> => {
-        const sending = version.current;
-        // Os erros voltam com as posições desta árvore, não as de agora.
-        const sent = latest.current;
-        setSaveState('saving');
+    const saveNow = useCallback(
+        async (force = false): Promise<boolean> => {
+            // Com um conflito por resolver nada sai daqui: nem o autosave insiste,
+            // nem "Publicar" ou "Duplicar" avançam com o rascunho do outro.
+            if (conflicted.current && !force) {
+                setSaveState('error');
 
-        try {
-            const response = await requestJson<{
-                page: {
-                    status: EditablePage['status'];
-                    hasChanges: boolean;
-                    live: boolean;
-                };
-            }>(rascunho(page.id).url, 'PUT', sent);
-            savedVersion.current = Math.max(savedVersion.current, sending);
-            setStatus({
-                status: response.page.status,
-                hasChanges: response.page.hasChanges,
-                live: response.page.live,
-            });
-            setErrors({});
-            setSaveState(version.current === sending ? 'saved' : 'dirty');
-
-            return true;
-        } catch (exception) {
-            if (exception instanceof HttpError && exception.status === 422) {
-                setErrors(
-                    keyErrorsByNode(
-                        sent.blocks,
-                        Object.fromEntries(
-                            Object.entries(exception.body.errors ?? {}).map(
-                                ([key, messages]) => [key, messages[0]],
-                            ),
-                        ),
-                    ),
-                );
+                return false;
             }
 
-            setSaveState('error');
+            const sending = version.current;
+            // Os erros voltam com as posições desta árvore, não as de agora.
+            const sent = latest.current;
+            setSaveState('saving');
 
-            return false;
-        }
-    }, [page.id]);
+            try {
+                const response = await requestJson<{
+                    page: {
+                        status: EditablePage['status'];
+                        hasChanges: boolean;
+                        live: boolean;
+                        version: string;
+                    };
+                }>(rascunho(page.id).url, 'PUT', {
+                    ...sent,
+                    version: serverVersion.current,
+                    ...(force ? { force: true } : {}),
+                });
+                serverVersion.current = response.page.version;
+                savedVersion.current = Math.max(savedVersion.current, sending);
+                setStatus({
+                    status: response.page.status,
+                    hasChanges: response.page.hasChanges,
+                    live: response.page.live,
+                });
+                setErrors({});
+                setSaveState(version.current === sending ? 'saved' : 'dirty');
 
-    const save = useCallback((): Promise<boolean> => {
-        queue.current = queue.current.then(saveNow, saveNow);
+                return true;
+            } catch (exception) {
+                if (
+                    exception instanceof HttpError &&
+                    exception.status === 409
+                ) {
+                    conflicted.current = true;
+                    setConflict(true);
+                }
 
-        return queue.current;
-    }, [saveNow]);
+                if (
+                    exception instanceof HttpError &&
+                    exception.status === 422
+                ) {
+                    setErrors(
+                        keyErrorsByNode(
+                            sent.blocks,
+                            Object.fromEntries(
+                                Object.entries(exception.body.errors ?? {}).map(
+                                    ([key, messages]) => [key, messages[0]],
+                                ),
+                            ),
+                        ),
+                    );
+                }
+
+                setSaveState('error');
+
+                return false;
+            }
+        },
+        [page.id],
+    );
+
+    const save = useCallback(
+        (force = false): Promise<boolean> => {
+            const next = () => saveNow(force);
+            queue.current = queue.current.then(next, next);
+
+            return queue.current;
+        },
+        [saveNow],
+    );
 
     useEffect(() => {
         if (first.current) {
@@ -351,6 +391,11 @@ export default function PageEditor(props: Props) {
     /** Grava já o que estiver por gravar (antes de publicar ou sair). */
     const flush = useCallback(async (): Promise<boolean> => {
         const ok = await queue.current;
+
+        // Mesmo sem nada por gravar aqui: o rascunho do servidor é outro.
+        if (conflicted.current) {
+            return false;
+        }
 
         if (savedVersion.current !== version.current) {
             return save();
@@ -790,6 +835,10 @@ export default function PageEditor(props: Props) {
                 resets.current += 1;
                 first.current = true;
                 savedVersion.current = version.current;
+                // A árvore é a do servidor: o conflito, se havia, acabou.
+                serverVersion.current = fresh.version;
+                conflicted.current = false;
+                setConflict(false);
                 setStatus(null);
                 resetBlocks(upgradeRoots(fresh.blocks));
                 setSeo(fresh.seo);
@@ -809,6 +858,7 @@ export default function PageEditor(props: Props) {
 
         // Os erros voltam com as posições desta árvore, não as de agora.
         const sent = latest.current.blocks;
+        const versionBefore = serverVersion.current;
 
         router.post(
             publicar(page.id).url,
@@ -817,8 +867,22 @@ export default function PageEditor(props: Props) {
                 preserveScroll: true,
                 preserveState: true,
                 // O estado do autosave já não vale, mesmo que o do servidor
-                // volte a ser igual ao que se viu ao abrir a página.
-                onSuccess: () => setStatus(null),
+                // volte a ser igual ao que se viu ao abrir a página. Publicar
+                // volta a limpar o rascunho: o marcador pode ter mudado.
+                //
+                // Só se nenhum autosave acabou entretanto: a resposta dele é
+                // mais recente do que a página que este redirect trouxe, e
+                // trocá-la pela antiga dava um conflito falso na gravação
+                // seguinte, sem haver outro separador.
+                onSuccess: (visit) => {
+                    setStatus(null);
+
+                    if (serverVersion.current === versionBefore) {
+                        serverVersion.current = (
+                            visit.props as unknown as Props
+                        ).page.version;
+                    }
+                },
                 onError: (failed) =>
                     setErrors(
                         keyErrorsByNode(sent, failed as Record<string, string>),
@@ -826,6 +890,13 @@ export default function PageEditor(props: Props) {
                 onFinish: () => setPublishing(false),
             },
         );
+    };
+
+    /** "Gravar por cima": o dono escolheu ficar com o que tem aqui. */
+    const overwrite = () => {
+        conflicted.current = false;
+        setConflict(false);
+        void save(true);
     };
 
     const action = (url: string, options: { reload?: boolean } = {}) =>
@@ -1180,7 +1251,18 @@ export default function PageEditor(props: Props) {
                             {page.template === 'page' && (
                                 <DropdownMenuItem
                                     onSelect={() =>
-                                        void flush().then(() =>
+                                        void flush().then((ok) => {
+                                            // Sem gravar, a cópia levava o
+                                            // rascunho do servidor e não o
+                                            // que se vê aqui.
+                                            if (!ok) {
+                                                toast.error(
+                                                    'Não foi possível guardar: a página não foi duplicada.',
+                                                );
+
+                                                return;
+                                            }
+
                                             // A cópia é outra página: começa
                                             // do zero, sem o estado (nem o
                                             // histórico) desta.
@@ -1188,8 +1270,8 @@ export default function PageEditor(props: Props) {
                                                 duplicar(page.id).url,
                                                 {},
                                                 { preserveState: false },
-                                            ),
-                                        )
+                                            );
+                                        })
                                     }
                                 >
                                     <Copy />
@@ -1236,6 +1318,7 @@ export default function PageEditor(props: Props) {
                         onClick={publish}
                         disabled={
                             publishing ||
+                            conflict ||
                             (status.status === 'published' &&
                                 !status.hasChanges &&
                                 saveState === 'saved')
@@ -1246,6 +1329,41 @@ export default function PageEditor(props: Props) {
                     </Button>
                 </div>
             </header>
+
+            {/* Fica até o dono escolher: gravar a árvore velha por cima sem
+                aviso apagava o trabalho do outro separador. */}
+            {conflict && (
+                <div
+                    role="alert"
+                    className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 border-b border-border/60 bg-destructive-soft px-3 py-2 text-sm text-destructive-soft-foreground"
+                >
+                    <p className="min-w-0 flex-1 basis-80">
+                        Esta página foi alterada noutro separador ou por outra
+                        pessoa, por isso as alterações daqui deixaram de ser
+                        gravadas. «Recarregar» traz a versão gravada e perde o
+                        que mudaste aqui desde a última gravação; «Gravar por
+                        cima» substitui essa versão pela que tens aqui.
+                    </p>
+                    <div className="flex shrink-0 gap-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={reloadFromServer}
+                        >
+                            Recarregar
+                        </Button>
+                        <Button
+                            type="button"
+                            variant="destructive"
+                            size="sm"
+                            onClick={overwrite}
+                        >
+                            Gravar por cima
+                        </Button>
+                    </div>
+                </div>
+            )}
 
             {/* Em ecrãs pequenos: um de cada vez */}
             <div className="shrink-0 border-b border-border/60 px-3 py-2 lg:hidden">

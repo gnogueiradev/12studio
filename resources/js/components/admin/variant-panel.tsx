@@ -1,5 +1,6 @@
 import { useForm } from '@inertiajs/react';
 import { X } from 'lucide-react';
+import { useState } from 'react';
 import VariantForm from '@/components/admin/variant-form';
 import type { VariantPricingPreview } from '@/components/admin/variant-form';
 import { Button } from '@/components/ui/button';
@@ -61,12 +62,31 @@ export function VariantPanel({
     defaultActiveLaborMinutes,
     onClose,
 }: Props) {
-    const { data, setData, post, patch, processing, errors } =
+    const { data, setData, post, patch, transform, processing, errors } =
         useForm<VariantFormData>(
             variant === null
                 ? newVariantForm(suggestedSku, production)
                 : variantFormFromRow(variant),
         );
+
+    // O stock com que a ficha abriu. Só segue no pedido se o admin o mexeu:
+    // mandá-lo sempre repunha o valor antigo por cima de vendas (ou de uma
+    // edição na linha) feitas entretanto. A ficha tem `key` por variante, por
+    // isso este valor nasce certo para cada uma. A ficha fica aberta depois
+    // de gravar, e por isso a referência acompanha o que acabou de seguir:
+    // sem isso, uma segunda gravação só do preço voltava a mandar o stock.
+    const [openedStock, setOpenedStock] = useState(variant?.stock);
+
+    transform((form) => {
+        if (variant === null || form.stock !== openedStock) {
+            return form;
+        }
+
+        const withoutStock: Partial<VariantFormData> = { ...form };
+        delete withoutStock.stock;
+
+        return withoutStock;
+    });
 
     const submit = (event: React.FormEvent) => {
         event.preventDefault();
@@ -80,7 +100,12 @@ export function VariantPanel({
             return;
         }
 
-        patch(updateVariant(variant.id).url, { preserveScroll: true });
+        const sentStock = data.stock;
+
+        patch(updateVariant(variant.id).url, {
+            preserveScroll: true,
+            onSuccess: () => setOpenedStock(sentStock),
+        });
     };
 
     return (

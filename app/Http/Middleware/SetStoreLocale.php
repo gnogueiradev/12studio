@@ -61,6 +61,9 @@ class SetStoreLocale
                     'code' => $code,
                     'name' => (string) config("locales.available.$code.name"),
                     'intl' => (string) config("locales.available.$code.intl"),
+                    // O <html lang> que o Blade escreve na primeira carga: o
+                    // StoreLayout repoe-no quando o idioma muda sem recarregar.
+                    'hreflang' => (string) config("locales.available.$code.hreflang"),
                 ])
                 ->all(),
         ]);

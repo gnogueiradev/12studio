@@ -38,7 +38,7 @@ class DesignTokensTest extends TestCase
             'accent' => '#F1ECE5',
             'accent-foreground' => '#332F2B',
             'border' => '#DDD6CD',
-            'input' => '#DDD6CD',
+            'input' => '#8A8076',
             'ring' => '#8B7556',
             'gold' => '#C6A77B',
             'brand-taupe' => '#A99582',
@@ -109,6 +109,12 @@ class DesignTokensTest extends TestCase
             'texto de apoio sobre o muted' => ['muted-foreground', 'muted', 4.5],
             'anel de foco sobre o muted' => ['ring', 'muted', 3.0],
             'anel da sidebar sobre a sidebar' => ['sidebar-ring', 'sidebar', 3.0],
+            // WCAG 1.4.11: o contorno e o que identifica um campo de fundo
+            // transparente ou uma caixa por marcar. --border (decorativo) fica
+            // de fora de proposito.
+            'contorno dos campos sobre o fundo' => ['input', 'background', 3.0],
+            'contorno dos campos sobre o cartao' => ['input', 'card', 3.0],
+            'contorno dos campos sobre o muted' => ['input', 'muted', 3.0],
             'erro sobre o cartao' => ['destructive', 'card', 4.5],
         ];
     }
@@ -117,6 +123,25 @@ class DesignTokensTest extends TestCase
     public function test_light_theme_meets_wcag(string $foreground, string $background, float $minimum): void
     {
         $this->assertContrast(':root', $foreground, $background, $minimum);
+    }
+
+    /**
+     * O --ring foi afinado para dar 3:1, mas so opaco: o `ring-ring/50` que
+     * vinha do shadcn deixava o anel de foco em 1.88:1 no modo claro. Um anel
+     * de foco nunca leva opacidade — os outros usos (marcar o selecionado, por
+     * exemplo) nao passam por aqui.
+     */
+    public function test_focus_rings_are_never_translucent(): void
+    {
+        $offenders = [];
+
+        foreach ($this->frontendFiles() as $relative => $absolute) {
+            if (preg_match('/(?:focus|has-)[^\s"\'`]*:ring-ring\/\d/', (string) file_get_contents($absolute)) === 1) {
+                $offenders[] = $relative;
+            }
+        }
+
+        $this->assertSame([], $offenders, 'Aneis de foco com opacidade: '.implode(', ', $offenders));
     }
 
     public function test_dark_theme_uses_the_derived_warm_palette(): void
@@ -139,7 +164,7 @@ class DesignTokensTest extends TestCase
             'accent' => '#332F2B',
             'accent-foreground' => '#FAF8F5',
             'border' => '#413B36',
-            'input' => '#413B36',
+            'input' => '#877D73',
             'ring' => '#C6A77B',
             'gold' => '#C6A77B',
             'brand-taupe' => '#A99582',

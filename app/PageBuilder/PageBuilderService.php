@@ -24,7 +24,7 @@ class PageBuilderService
     ) {}
 
     /**
-     * Grava o rascunho. O site publico nao muda.
+     * Grava o rascunho (blocos e, se vier, o SEO). O site publico nao muda.
      *
      * Um rascunho pode estar por acabar (um bloco acabado de juntar, com um
      * campo obrigatorio ainda vazio): so publicar exige os obrigatorios. O
@@ -38,8 +38,9 @@ class PageBuilderService
     {
         $page->draft_blocks = $this->sanitizer->clean($blocks, $page->template(), requireFields: false);
 
+        // O SEO publicado (seo) e o que a montra le: so muda ao publicar.
         if ($seo !== null) {
-            $page->seo = $this->seo($seo);
+            $page->draft_seo = $this->seo($seo);
         }
 
         $page->save();
@@ -58,6 +59,10 @@ class PageBuilderService
             $page->forceFill([
                 'draft_blocks' => $blocks,
                 'published_blocks' => $blocks,
+                // O SEO do rascunho vai para o ar; o rascunho volta a ser
+                // "igual ao publicado" (null).
+                'seo' => $page->draftSeo(),
+                'draft_seo' => null,
                 'status' => 'published',
                 'published_at' => Carbon::now(),
             ])->save();
@@ -102,7 +107,7 @@ class PageBuilderService
     public function discard(Page $page): Page
     {
         if ($page->published_blocks !== null) {
-            $page->forceFill(['draft_blocks' => $page->published_blocks])->save();
+            $page->forceFill(['draft_blocks' => $page->published_blocks, 'draft_seo' => null])->save();
         }
 
         return $page;
@@ -166,7 +171,8 @@ class PageBuilderService
             'slug' => $slug,
             'name' => $page->name.' (cópia)',
             'status' => 'draft',
-            'seo' => $page->seo,
+            // O SEO que o dono esta a ver no editor, nao o que esta no ar.
+            'seo' => $page->draftSeo(),
             'draft_blocks' => $this->withNewIds($this->sanitizer->clean($page->draft_blocks, 'page', requireFields: false)),
         ]);
     }

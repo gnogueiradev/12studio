@@ -144,6 +144,8 @@ export type EditablePage = PageRow & {
     seo: Record<string, { title?: string; description?: string }>;
     startsAtInput: string | null;
     endsAtInput: string | null;
+    /** O marcador da versão do rascunho no servidor (vai em cada gravação). */
+    version: string;
 };
 
 export type Revision = {
