@@ -16,7 +16,16 @@ export function CatalogHeaderBlock({
     const Heading = first || data.category ? 'h1' : 'h2';
 
     return (
-        <BlockSection shell={!nested} style={block.style}>
+        <BlockSection
+            shell={!nested}
+            style={block.style}
+            // Sem fundo próprio, o título e a grelha são a mesma zona: o
+            // espaço de baixo sai, para não somar ao de cima do bloco
+            // seguinte e deixar o título a boiar longe dos produtos.
+            className={
+                block.style.bg === 'default' ? 'pb-0 md:pb-0' : undefined
+            }
+        >
             <div className="max-w-2xl">
                 <Heading className="text-3xl font-semibold tracking-tight text-balance md:text-4xl">
                     {data.title}
