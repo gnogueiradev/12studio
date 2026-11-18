@@ -8,6 +8,7 @@ use App\Models\Product;
 use App\Models\Variant;
 use App\Shop\Buyable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 /**
@@ -129,5 +130,66 @@ class BuyableTest extends TestCase
 
         $this->assertTrue(Buyable::check($variant, config('shop.cart.max_qty'))->ok);
         $this->assertTrue(Buyable::check($variant, 1)->ok);
+    }
+
+    public function test_max_qty_is_the_smaller_of_the_stock_and_the_general_limit(): void
+    {
+        $this->assertSame(20, Buyable::check($this->variant(['stock' => 50]), 1)->maxQty);
+        $this->assertSame(5, Buyable::check($this->variant(['stock' => 5]), 1)->maxQty);
+    }
+
+    public function test_a_hidden_variant_of_a_visible_product_is_not_for_sale(): void
+    {
+        $product = Product::factory()->create();
+        $visible = $this->variant([], $product);
+        $inactive = $this->variant(['active' => false], $product);
+        $offColor = $this->variant(['color_id' => Color::factory()->create(['is_active' => false])->id], $product);
+
+        $this->assertTrue(Buyable::check($visible, 1)->ok);
+        $this->assertSame(Buyable::NOT_FOR_SALE, Buyable::check($inactive, 1)->reason);
+        $this->assertSame(Buyable::NOT_FOR_SALE, Buyable::check($offColor, 1)->reason);
+    }
+
+    public function test_for_sale_answers_a_whole_list_with_a_constant_number_of_queries(): void
+    {
+        $first = Product::factory()->create();
+        $second = Product::factory()->archived()->create();
+        $variants = collect([
+            $this->variant([], $first),
+            $this->variant([], $first),
+            $this->variant(['active' => false], $first),
+            $this->variant([], $second),
+            $this->variant([], $second),
+        ]);
+
+        DB::enableQueryLog();
+        Buyable::forSale([$variants[0]]);
+        $one = count(DB::getQueryLog());
+
+        DB::flushQueryLog();
+        $answers = Buyable::forSale($variants);
+        $many = count(DB::getQueryLog());
+
+        $this->assertSame($one, $many);
+        $this->assertSame([
+            $variants[0]->id => true,
+            $variants[1]->id => true,
+            $variants[2]->id => false,
+            $variants[3]->id => false,
+            $variants[4]->id => false,
+        ], $answers);
+    }
+
+    public function test_check_with_a_known_answer_runs_no_query(): void
+    {
+        $variant = $this->variant(['stock' => 5]);
+        $variant->load('product');
+
+        DB::enableQueryLog();
+        $result = Buyable::check($variant, 1, true);
+
+        $this->assertCount(0, DB::getQueryLog());
+        $this->assertTrue($result->ok);
+        $this->assertSame(Buyable::NOT_FOR_SALE, Buyable::check($variant, 1, false)->reason);
     }
 }

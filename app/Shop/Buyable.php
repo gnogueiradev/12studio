@@ -28,19 +28,43 @@ final readonly class Buyable
     private function __construct(
         public bool $ok,
         public ?string $mode, // 'in_stock' | 'made_to_order' quando ok
-        public ?int $maxQty, // teto por stock; null = so o limite geral
+        public ?int $maxQty, // teto da quantidade: min(stock, limite geral); null = so o limite geral
         public ?string $reason,
     ) {}
 
-    public static function check(Variant $variant, int $qty): self
+    /**
+     * Quais destas variantes estao a venda, numa so consulta. As mesmas
+     * condicoes da montra, pelos mesmos scopes: o que la nao se ve tambem nao
+     * se compra. Quem tem uma lista (pagina do produto, carrinho) pergunta
+     * aqui uma vez e passa a resposta a check().
+     *
+     * @param  iterable<Variant>  $variants
+     * @return array<int, bool> por id da variante
+     */
+    public static function forSale(iterable $variants): array
+    {
+        $ids = collect($variants)->map(fn (Variant $variant): int => $variant->id)->unique()->values();
+
+        // Os produtos saem de uma consulta de Product (e nao do whereHas da
+        // relacao, que e withTrashed): assim o apagado fica de fora.
+        $found = Variant::query()
+            ->visibleInStore()
+            ->whereIn('id', $ids)
+            ->whereIn('product_id', Product::query()->visibleInStore()->select('products.id'))
+            ->pluck('id')
+            ->flip();
+
+        return $ids->mapWithKeys(fn (int $id): array => [$id => $found->has($id)])->all();
+    }
+
+    /**
+     * @param  bool|null  $forSale  a resposta de forSale() para esta variante;
+     *                              sem ela, check() pergunta por si (uma consulta)
+     */
+    public static function check(Variant $variant, int $qty, ?bool $forSale = null): self
     {
         $product = $variant->product;
-
-        // As mesmas condicoes da montra, pelos mesmos scopes: o que la nao se
-        // ve tambem nao se compra (o scope do produto tira rascunhos,
-        // arquivados e apagados).
-        $forSale = Product::query()->visibleInStore()->whereKey($product->getKey())->exists()
-            && Variant::query()->scopes('visibleInStore')->whereKey($variant->getKey())->exists();
+        $forSale ??= self::forSale([$variant])[$variant->id];
 
         if (! $forSale) {
             return self::no(self::NOT_FOR_SALE);
@@ -60,16 +84,17 @@ final readonly class Buyable
         }
 
         $available = max(0, $variant->available_stock);
+        $ceiling = min($available, (int) config('shop.cart.max_qty'));
 
         if ($qty <= $available) {
-            return new self(true, 'in_stock', $available, null);
+            return new self(true, 'in_stock', $ceiling, null);
         }
 
         if ($product->allow_backorder) {
             return new self(true, 'made_to_order', null, null);
         }
 
-        return self::no($available === 0 ? self::SOLD_OUT : self::OVER_STOCK, $available);
+        return self::no($available === 0 ? self::SOLD_OUT : self::OVER_STOCK, $ceiling);
     }
 
     private static function no(string $reason, ?int $maxQty = null): self
