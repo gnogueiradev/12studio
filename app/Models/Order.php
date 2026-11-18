@@ -33,6 +33,9 @@ use Illuminate\Support\Carbon;
  * @property int $shipping_cents
  * @property int $adjustment_cents
  * @property string|null $adjustment_reason
+ * @property int|null $promo_code_id
+ * @property string|null $promo_code
+ * @property int $discount_cents
  * @property int $total_cents
  * @property string $currency
  * @property array<string, mixed>|null $shipping_address
@@ -60,7 +63,7 @@ use Illuminate\Support\Carbon;
     'status', 'payment_method', 'payment_status', 'sales_channel',
     'external_order_reference', 'created_by_user_id', 'stripe_session_id',
     'stripe_payment_intent_id', 'subtotal_cents', 'shipping_cents',
-    'adjustment_cents', 'adjustment_reason',
+    'adjustment_cents', 'adjustment_reason', 'promo_code_id', 'promo_code', 'discount_cents',
     'total_cents', 'currency', 'shipping_address', 'billing_address',
     'shipping_method_name', 'tracking_number', 'tracking_url', 'paid_at',
     'shipped_at', 'delivered_at', 'cancelled_at', 'admin_note', 'stock_issue',
@@ -74,6 +77,14 @@ class Order extends Model
     use HasFactory;
 
     use HasTags;
+
+    /**
+     * O default da coluna, tambem em memoria: as contas do total leem-no antes
+     * de a encomenda acabada de criar voltar da base de dados.
+     *
+     * @var array<string, mixed>
+     */
+    protected $attributes = ['discount_cents' => 0];
 
     public function tagScope(): string
     {
@@ -118,6 +129,7 @@ class Order extends Model
             'subtotal_cents' => 'integer',
             'shipping_cents' => 'integer',
             'adjustment_cents' => 'integer',
+            'discount_cents' => 'integer',
             'total_cents' => 'integer',
             'shipping_address' => 'array',
             'billing_address' => 'array',
@@ -140,6 +152,12 @@ class Order extends Model
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by_user_id');
+    }
+
+    /** @return BelongsTo<PromoCode, $this> */
+    public function promoCode(): BelongsTo
+    {
+        return $this->belongsTo(PromoCode::class);
     }
 
     /** @return HasMany<OrderItem, $this> */

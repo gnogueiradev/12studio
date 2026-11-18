@@ -72,6 +72,8 @@ final class OrderPresenter
                 'shipping' => McpFormat::money($order->shipping_cents),
                 'adjustment' => McpFormat::money($order->adjustment_cents),
                 'adjustment_reason' => $order->adjustment_reason,
+                'discount' => McpFormat::money($order->discount_cents),
+                'promo_code' => $order->promo_code,
                 'total' => McpFormat::money($order->total_cents),
             ],
             'shipping' => [

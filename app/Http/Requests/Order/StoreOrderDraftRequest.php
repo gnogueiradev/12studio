@@ -42,6 +42,7 @@ class StoreOrderDraftRequest extends FormRequest
 
             'shipping_price' => ['nullable', 'string', 'max:20'],
             'shipping_method_name' => ['nullable', 'string', 'max:120'],
+            'promo_code' => ['nullable', 'string', 'max:40'],
 
             'line1' => ['nullable', 'string', 'max:190'],
             'line2' => ['nullable', 'string', 'max:190'],
