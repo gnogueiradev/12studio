@@ -1,5 +1,5 @@
 import { InfiniteScroll, Link, router, usePage } from '@inertiajs/react';
-import { Check, ChevronDown, Search, SlidersHorizontal, X } from 'lucide-react';
+import { ChevronDown, Search, SlidersHorizontal, X } from 'lucide-react';
 import { useId, useState } from 'react';
 import type { ReactNode } from 'react';
 import { ProductCard } from '@/components/store/product-card';
@@ -263,11 +263,16 @@ function FilterPanel({
                                     >
                                         {/* A borda vem da cor do texto e não
                                             da `border`: um preto sobre o tema
-                                            escuro ficava sem contorno. */}
+                                            escuro ficava sem contorno.
+
+                                            Escolhida, leva o anel e o nome a
+                                            negrito — sem visto por dentro: não
+                                            há cor de token que se leia por
+                                            cima de um tom qualquer. */}
                                         <span
                                             aria-hidden="true"
                                             className={cn(
-                                                'flex size-5 shrink-0 items-center justify-center rounded-full border border-foreground/25 ring-offset-2 ring-offset-background transition-shadow',
+                                                'size-5 shrink-0 rounded-full border border-foreground/25 ring-offset-2 ring-offset-background transition-shadow',
                                                 active &&
                                                     'ring-2 ring-foreground',
                                             )}
@@ -278,11 +283,7 @@ function FilterPanel({
                                                     ),
                                                 ),
                                             }}
-                                        >
-                                            {active && (
-                                                <Check className="size-3 text-white mix-blend-difference" />
-                                            )}
-                                        </span>
+                                        />
                                         <span className="truncate">
                                             {t(
                                                 `catalog.color_families.${family}`,
