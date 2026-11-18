@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Shop;
 
+use App\Alerts\AlertChannel;
 use App\Mail\OrderConfirmationMail;
 use App\Models\Cart;
 use App\Models\CartItem;
@@ -27,6 +28,8 @@ use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use Inertia\Testing\AssertableInertia as Assert;
+use RuntimeException;
+use Tests\Feature\Alerts\FakesDiscord;
 use Tests\Feature\Stripe\FakesStripe;
 use Tests\TestCase;
 
@@ -39,6 +42,7 @@ use Tests\TestCase;
  */
 class CheckoutWebhookTest extends TestCase
 {
+    use FakesDiscord;
     use FakesStripe;
     use RefreshDatabase;
 
@@ -487,6 +491,67 @@ class CheckoutWebhookTest extends TestCase
         $this->assertSame('paid', $this->onlyOrder()->payment_status);
     }
 
+    public function test_the_payment_arriving_before_the_completed_event_creates_one_paid_order(): void
+    {
+        $checkout = $this->pay($this->cartWith(), 3000);
+
+        // O Stripe nao garante a ordem: o "pago" do Multibanco chega antes do
+        // "referencia gerada".
+        $this->send($this->event('checkout.session.async_payment_succeeded', $this->stripeSession($checkout)))->assertNoContent();
+        $this->send($this->event('checkout.session.completed', $this->stripeSession($checkout, ['payment_status' => 'unpaid'])))->assertNoContent();
+
+        $order = $this->onlyOrder();
+        $this->assertSame('paid', $order->payment_status);
+        $this->assertSame('ready_to_ship', $order->status);
+        $this->assertFalse($order->statusHistories()->where('note', 'like', '%a aguardar confirmação%')->exists());
+        Mail::assertQueuedCount(1);
+    }
+
+    public function test_a_checkout_pointing_to_a_missing_order_creates_none(): void
+    {
+        Exceptions::fake();
+        $checkout = $this->pay($this->cartWith(), 3000);
+        $checkout->update(['order_id' => 999, 'status' => 'completed']);
+
+        $this->send($this->event('checkout.session.completed', $this->stripeSession($checkout)))->assertNoContent();
+
+        $this->assertSame(0, Order::query()->count());
+        $this->assertSame(999, $checkout->fresh()?->order_id);
+        Mail::assertNothingQueued();
+        Exceptions::assertReported(fn (RuntimeException $exception): bool => str_contains($exception->getMessage(), 'encomenda 999, que já não existe'));
+    }
+
+    public function test_the_stock_alert_says_whether_the_purchase_is_paid(): void
+    {
+        $this->fakeDiscord();
+
+        $numbers = [];
+
+        // Cartao (pago na hora) e Multibanco (referencia por pagar).
+        foreach (['paid' => 'e está paga', 'unpaid' => 'com o pagamento pendente'] as $paymentStatus => $expected) {
+            $cart = $this->cartWith();
+            $checkout = $this->pay($cart, 3000);
+            $cart->items()->firstOrFail()->variant->update(['stock' => 0]);
+
+            $this->send($this->event('checkout.session.completed', $this->stripeSession($checkout, ['payment_status' => $paymentStatus])))->assertNoContent();
+
+            $order = Order::query()->latest('id')->firstOrFail();
+            $this->assertSame($order->id, $checkout->fresh()?->order_id);
+            $numbers[$paymentStatus] = $order->order_number;
+
+            $embed = $this->alertEmbed(AlertChannel::ORDERS, "Vendida sem stock — {$order->order_number}");
+            $this->assertStringContainsString("A venda já aconteceu {$expected}, mas o stock não chega para tudo.", (string) $embed['description']);
+        }
+
+        // Pela ordem em que aconteceu: nova, sem stock, paga.
+        $paid = $numbers['paid'];
+        $titles = array_values(array_filter(
+            $this->alertTitles(AlertChannel::ORDERS),
+            fn (string $title): bool => str_contains($title, $paid) && preg_match('/Nova encomenda|Vendida sem stock|Pagamento registado/', $title) === 1,
+        ));
+        $this->assertSame(["🛒 Nova encomenda {$paid}", "⚠️ Vendida sem stock — {$paid}", "💶 Pagamento registado — {$paid}"], $titles);
+    }
+
     public function test_the_payment_link_path_still_works(): void
     {
         $order = Order::factory()->create(['subtotal_cents' => 3000, 'shipping_cents' => 0, 'total_cents' => 3000]);
@@ -512,9 +577,10 @@ class CheckoutWebhookTest extends TestCase
 
     public function test_the_backoffice_shows_the_purchase_as_frozen(): void
     {
-        $cart = Cart::factory()->create();
+        PromoCode::factory()->create(['code' => 'BEMVINDO', 'value' => 500]);
+        $cart = Cart::factory()->create(['promo_code' => 'BEMVINDO']);
         $this->addTo($cart, $this->personalised(), 900, 2, ['nome' => 'Ana']);
-        $checkout = $this->pay($cart, 2850);
+        $checkout = $this->pay($cart, 2350);
 
         $this->send($this->event('checkout.session.completed', $this->stripeSession($checkout)))->assertNoContent();
         $order = $this->onlyOrder();
@@ -530,9 +596,12 @@ class CheckoutWebhookTest extends TestCase
                 ->where('order.items.0.personalizationSurchargeCents', 300)
                 ->where('order.items.0.lineTotalCents', 2400)
                 ->where('order.items.0.personalization.0.value', 'Ana')
+                // O que a pagina soma ao vivo quando se edita o ajuste:
+                // subtotal - desconto + portes (+ ajuste) = total.
                 ->where('order.subtotalCents', 2400)
+                ->where('order.discountCents', 500)
                 ->where('order.shippingCents', 450)
-                ->where('order.discountCents', 0)
-                ->where('order.totalCents', 2850));
+                ->where('order.adjustmentCents', 0)
+                ->where('order.totalCents', 2350));
     }
 }

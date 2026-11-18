@@ -5,6 +5,7 @@ namespace App\Alerts;
 use App\Models\Order;
 use App\Models\OrderItem;
 use App\Models\User;
+use Illuminate\Support\Facades\DB;
 use Throwable;
 
 /**
@@ -208,22 +209,29 @@ class OrderAlerts
     }
 
     /**
-     * Vendido num mercado sem haver na prateleira. A encomenda entrou na
-     * mesma — a venda ja aconteceu — e alguem tem de resolver: produzir, ou
-     * falar com o comprador pela Etsy.
+     * Vendido sem haver na prateleira: numa venda da Etsy (ja paga la) ou
+     * numa compra da loja online (paga, ou um Multibanco por pagar). A
+     * encomenda entrou na mesma — a venda ja aconteceu — e alguem tem de
+     * resolver: produzir, ou falar com o comprador.
+     *
+     * Quem cria a encomenda so a marca paga mais a frente, na mesma
+     * transacao. Por isso a mensagem monta-se depois do commit, quando o
+     * pagamento ja e o final; o envio fica na mesma ordem dos outros avisos.
      *
      * @param  array<int, string>  $skus
      */
     public function soldWithoutStock(Order $order, array $skus): void
     {
-        $this->guard(function () use ($order, $skus): void {
+        DB::afterCommit(fn () => $this->guard(function () use ($order, $skus): void {
+            $payment = ($order->fresh() ?? $order)->isPaid() ? 'e está paga' : 'com o pagamento pendente';
+
             $message = DiscordMessage::make("⚠️ Vendida sem stock — {$order->order_number}", DiscordMessage::DANGER)
-                ->description('A venda já aconteceu e está paga, mas o stock não chega para tudo. A encomenda entrou marcada; da prateleira saiu só o que havia.')
+                ->description("A venda já aconteceu {$payment}, mas o stock não chega para tudo. A encomenda entrou marcada; da prateleira saiu só o que havia.")
                 ->field('Canal', Labels::of(Labels::SALES_CHANNELS, $order->sales_channel))
                 ->field('Referências em falta', implode(', ', $skus), inline: false);
 
             $this->send(AlertChannel::ORDERS, $message, $order);
-        });
+        }));
     }
 
     /**

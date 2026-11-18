@@ -182,9 +182,11 @@ export default function OrdersShow({ order, tagSuggestions }: Props) {
 
     // Total ao vivo enquanto se escreve, como no formulário de criação. O
     // servidor é que manda: isto é só para o admin ver onde vai parar antes
-    // de gravar.
+    // de gravar. A mesma conta do OrderTotalsCalculator — o desconto do
+    // código também sai.
     const adjustedTotalCents =
-        order.subtotalCents +
+        order.subtotalCents -
+        order.discountCents +
         order.shippingCents +
         inputToCents(adjustmentForm.data.adjustment_price);
 
@@ -520,10 +522,31 @@ export default function OrdersShow({ order, tagSuggestions }: Props) {
                                                     {item.sku ?? 'Sem SKU'}
                                                 </span>
                                                 <span>·</span>
+                                                {/*
+                                                 * A sobretaxa de personalização é
+                                                 * por unidade: sem ela à vista,
+                                                 * "2 × 9,00 €" ao lado de 24,00 €
+                                                 * não batia certo.
+                                                 */}
                                                 <span>
                                                     {item.qty} ×{' '}
-                                                    {formatCents(
-                                                        item.unitPriceCents,
+                                                    {item.personalizationSurchargeCents >
+                                                    0 ? (
+                                                        <>
+                                                            (
+                                                            {formatCents(
+                                                                item.unitPriceCents,
+                                                            )}{' '}
+                                                            +{' '}
+                                                            {formatCents(
+                                                                item.personalizationSurchargeCents,
+                                                            )}{' '}
+                                                            personalização)
+                                                        </>
+                                                    ) : (
+                                                        formatCents(
+                                                            item.unitPriceCents,
+                                                        )
                                                     )}
                                                 </span>
                                                 {vatRates.length > 1 && (

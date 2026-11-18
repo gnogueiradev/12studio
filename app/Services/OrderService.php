@@ -270,35 +270,12 @@ class OrderService
                 ]);
 
                 if ($variant instanceof Variant && $fulfillmentMode === 'in_stock'
-                    && ! $this->stockService->decrement($variant, $item->qty, $data['stock_reason'], $order)) {
+                    && ! $this->takeStock($order, $item, $variant, $data['stock_reason'])) {
                     $short[] = $variant->sku;
-
-                    // Nao chega para tudo, mas o que houver e desta encomenda:
-                    // sai da prateleira, senao continuava a venda.
-                    $variant->refresh();
-                    $available = min($item->qty, $variant->stock - $variant->reserved_stock);
-
-                    if ($available > 0) {
-                        $this->stockService->decrement($variant, $available, $data['stock_reason'], $order, null, 'Só havia parte do que foi vendido.');
-                    }
                 }
             }
 
-            if ($short !== []) {
-                $order->update(['stock_issue' => true]);
-            }
-
-            $this->recordOrderHistory($order, null, 'pending_payment', null, $data['note']);
-
-            if ($record !== null) {
-                $record($order);
-            }
-
-            $this->alerts->created($order, null);
-
-            if ($short !== []) {
-                $this->alerts->soldWithoutStock($order, $short);
-            }
+            $this->finishCreated($order, $short, $data['note'], $record);
 
             // Pelas mesmas invariantes de sempre: e o pagamento que decide se
             // a encomenda vai para a producao ou direta para expedicao.
@@ -394,38 +371,64 @@ class OrderService
                 ]);
 
                 if ($variant instanceof Variant && $fulfillmentMode === 'in_stock'
-                    && ! $this->stockService->decrement($variant, $item->qty, 'sale', $order)) {
+                    && ! $this->takeStock($order, $item, $variant, 'sale')) {
                     $short[] = $variant->sku;
-
-                    // Nao chega para tudo, mas o que houver e desta encomenda:
-                    // sai da prateleira, senao continuava a venda.
-                    $variant->refresh();
-                    $available = min($item->qty, $variant->stock - $variant->reserved_stock);
-
-                    if ($available > 0) {
-                        $this->stockService->decrement($variant, $available, 'sale', $order, null, 'Só havia parte do que foi vendido.');
-                    }
                 }
             }
 
-            if ($short !== []) {
-                $order->update(['stock_issue' => true]);
-            }
-
-            $this->recordOrderHistory($order, null, 'pending_payment', null, $data['note']);
-
-            if ($record !== null) {
-                $record($order);
-            }
-
-            $this->alerts->created($order, null);
-
-            if ($short !== []) {
-                $this->alerts->soldWithoutStock($order, $short);
-            }
+            $this->finishCreated($order, $short, $data['note'], $record);
 
             return $order->refresh();
         });
+    }
+
+    /**
+     * Tira da prateleira a quantidade da linha de uma venda que ja aconteceu.
+     * Falso quando nao chega: sai o que houver, que e desta encomenda — senao
+     * continuava a venda —, e quem chama marca a falta.
+     */
+    private function takeStock(Order $order, OrderItem $item, Variant $variant, string $reason): bool
+    {
+        if ($this->stockService->decrement($variant, $item->qty, $reason, $order)) {
+            return true;
+        }
+
+        $variant->refresh();
+        $available = min($item->qty, $variant->stock - $variant->reserved_stock);
+
+        if ($available > 0) {
+            $this->stockService->decrement($variant, $available, $reason, $order, null, 'Só havia parte do que foi vendido.');
+        }
+
+        return false;
+    }
+
+    /**
+     * O fim comum de uma encomenda que chega feita de fora (um mercado, a
+     * loja online), por esta ordem: a marca de falta de stock, a linha do
+     * historico, a ancora de quem a criou (`$record`, na mesma transacao) e
+     * os avisos.
+     *
+     * @param  array<int, string>  $short  as referencias que nao chegaram
+     * @param  (Closure(Order): void)|null  $record
+     */
+    private function finishCreated(Order $order, array $short, string $note, ?Closure $record): void
+    {
+        if ($short !== []) {
+            $order->update(['stock_issue' => true]);
+        }
+
+        $this->recordOrderHistory($order, null, 'pending_payment', null, $note);
+
+        if ($record !== null) {
+            $record($order);
+        }
+
+        $this->alerts->created($order, null);
+
+        if ($short !== []) {
+            $this->alerts->soldWithoutStock($order, $short);
+        }
     }
 
     /**

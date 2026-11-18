@@ -64,22 +64,40 @@ class CheckoutCompletion
 
         // So depois do commit: soltar antes deixava outro pedido ler o
         // checkout ainda sem encomenda (a escrita deste ainda nao se via) e
-        // criar a segunda. Se a transacao se desfizer, solta-se pelo prazo.
+        // criar a segunda. Se a transacao se desfizer, o afterCommit nao
+        // corre: com a cache `database` sem ligacao propria para os trancos
+        // (a configuracao de hoje), a linha do tranco foi escrita nessa mesma
+        // transacao e desaparece com ela. O prazo so conta com os trancos
+        // noutra ligacao.
         DB::afterCommit(fn () => $lock->release());
 
         return $order;
     }
 
-    private function orderForLocked(Checkout $checkout): Order
+    private function orderForLocked(Checkout $checkout): ?Order
     {
         // Relido debaixo do tranco: o que o chamador tem pode ser de antes de
         // outro aviso ter criado a encomenda.
         $checkout = Checkout::query()->findOrFail($checkout->id);
 
-        if ($checkout->order !== null) {
+        // A ancora e o order_id. Se aponta para uma encomenda que ja nao
+        // existe, criar outra era cobrar a mesma compra duas vezes no
+        // backoffice: fica no relatorio de erros para alguem ver.
+        if ($checkout->order_id !== null) {
+            if ($checkout->order === null) {
+                report(new RuntimeException("A compra {$checkout->id} aponta para a encomenda {$checkout->order_id}, que já não existe. Nada foi criado."));
+            }
+
             return $checkout->order;
         }
 
+        // Tudo ou nada, mesmo fora da transacao do aviso: a encomenda, a
+        // ligacao ao checkout, o carrinho vazio e o email na fila.
+        return DB::transaction(fn (): Order => $this->create($checkout));
+    }
+
+    private function create(Checkout $checkout): Order
+    {
         $customer = $checkout->customer ?? [];
 
         $order = $this->orders->createFromStore([
@@ -108,7 +126,7 @@ class CheckoutCompletion
             $this->carts->clear($cart);
         }
 
-        // Queued e afterCommit: sai so se a encomenda ficar.
+        // Queued e afterCommit: sai so se a encomenda ficar, uma vez.
         if ($order->email !== null) {
             Mail::to($order->email)->send(new OrderConfirmationMail($order));
         }
