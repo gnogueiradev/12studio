@@ -15,7 +15,7 @@ use App\Models\Variant;
  */
 final readonly class Buyable
 {
-    public const NOT_FOR_SALE = 'not_for_sale'; // fora da montra, variante escondida
+    public const NOT_FOR_SALE = 'not_for_sale'; // fora da montra, variante escondida, sem preco
 
     public const CUSTOM = 'custom';
 
@@ -73,6 +73,12 @@ final readonly class Buyable
         // Por medida nao tem preco: continua pela conversa.
         if ($product->isCustom()) {
             return self::no(self::CUSTOM);
+        }
+
+        // Sem preco (ainda por definir) nao se vende: o Stripe nem aceita
+        // uma linha a zero.
+        if ($variant->price_cents <= 0) {
+            return self::no(self::NOT_FOR_SALE);
         }
 
         if ($qty < 1 || $qty > (int) config('shop.cart.max_qty')) {

@@ -39,6 +39,15 @@ class BuyableTest extends TestCase
         $this->assertNull($result->mode);
     }
 
+    public function test_a_variant_priced_at_zero_is_not_for_sale(): void
+    {
+        $result = Buyable::check($this->variant(['stock' => 5, 'price_cents' => 0]), 1);
+
+        $this->assertFalse($result->ok);
+        $this->assertSame(Buyable::NOT_FOR_SALE, $result->reason);
+        $this->assertNull($result->mode);
+    }
+
     public function test_made_to_order_is_bought_with_production(): void
     {
         $variant = $this->variant(['stock' => 0], Product::factory()->madeToOrder()->create());

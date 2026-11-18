@@ -348,23 +348,27 @@ class OrderService
                 $variant = Variant::query()->find((int) ($line['variant_id'] ?? 0));
                 $unitPrice = (int) $line['unit_price_cents'];
                 $catalogPrice = $variant?->price_cents;
-                $fulfillmentMode = (string) $line['fulfillment_mode'];
+                // As chaves opcionais do retrato leem-se com um valor por
+                // omissao: um checkout aberto antes de um deploy que mude a
+                // forma das linhas tem de acabar em encomenda na mesma. As
+                // obrigatorias (nome, quantidade, precos) nao.
+                $fulfillmentMode = (string) ($line['fulfillment_mode'] ?? 'in_stock');
 
                 $item = $order->items()->create([
                     'variant_id' => $variant?->getKey(),
                     'product_name' => $line['product_name'],
-                    'variant_label' => $line['variant_label'],
-                    'sku' => $line['sku'],
+                    'variant_label' => $line['variant_label'] ?? null,
+                    'sku' => $line['sku'] ?? $variant?->sku,
                     'unit_price_cents' => $unitPrice,
                     'catalog_unit_price_cents' => $catalogPrice,
                     'price_override_reason' => $catalogPrice !== null && $catalogPrice !== $unitPrice
                         ? 'Preço no momento da compra'
                         : null,
-                    'personalization_surcharge_cents' => (int) $line['personalization_surcharge_cents'],
+                    'personalization_surcharge_cents' => (int) ($line['personalization_surcharge_cents'] ?? 0),
                     'qty' => (int) $line['qty'],
                     'line_total_cents' => (int) $line['line_total_cents'],
-                    'vat_rate' => (int) $line['vat_rate'],
-                    'personalization' => $line['personalization'] ?: null,
+                    'vat_rate' => (int) ($line['vat_rate'] ?? $variant?->product->vat_rate ?? config('shop.default_vat_rate')),
+                    'personalization' => ($line['personalization'] ?? null) ?: null,
                     'image_url' => $line['image_url'] ?? null,
                     'fulfillment_mode' => $fulfillmentMode,
                     'production_status' => $fulfillmentMode === 'in_stock' ? 'not_required' : 'awaiting_production',

@@ -213,11 +213,20 @@ class CheckoutService
                 try {
                     $this->stripe->post("checkout/sessions/{$checkout->stripe_session_id}/expire");
                 } catch (StripeException $exception) {
+                    $now = $this->stripe->get("checkout/sessions/{$checkout->stripe_session_id}")['status'] ?? null;
+
+                    // Continua aberta (o expire falhou por outra razao): abrir
+                    // outra deixava duas por pagar. Sobe para o controlador,
+                    // que a reporta e mostra o erro generico; esta fica aberta.
+                    if ($now === 'open') {
+                        throw $exception;
+                    }
+
                     // Ja nao estava aberta: expirou sozinha entretanto (nao
                     // impede a nova) ou o cliente acabou de a pagar.
                     report($exception);
 
-                    if (($this->stripe->get("checkout/sessions/{$checkout->stripe_session_id}")['status'] ?? null) === 'complete') {
+                    if ($now === 'complete') {
                         return $checkout;
                     }
                 }

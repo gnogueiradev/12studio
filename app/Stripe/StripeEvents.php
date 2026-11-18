@@ -236,7 +236,8 @@ class StripeEvents
      * Ha duas formas. O link de pagamento de uma encomenda leva o id dela
      * ("42" e `order_id`). Uma compra da loja leva o do `checkout`
      * ("checkout-17" e `checkout_id`), e a encomenda vem dele — criada aqui,
-     * do retrato, se ainda nao existe e `$create`.
+     * do retrato, se ainda nao existe e `$create` — desde que a sessao seja
+     * a que esse checkout guardou.
      *
      * @param  array<string, mixed>  $session
      */
@@ -246,8 +247,26 @@ class StripeEvents
 
         if ($checkoutId !== null) {
             $checkout = Checkout::query()->find($checkoutId);
+            $sessionId = $this->string($session['id'] ?? null);
 
-            return $checkout === null ? null : $this->completion->orderFor($checkout, $create);
+            // So a sessao que o proprio checkout guardou lhe da uma encomenda.
+            // Um pagamento (ou uma referencia) que nao encontra a sua compra
+            // nao toca em nada, mas o dono tem de o ver: ha dinheiro sem
+            // encomenda. So os ids, nada do cliente.
+            if ($checkout === null || $sessionId === null || $checkout->stripe_session_id !== $sessionId) {
+                if ($create) {
+                    report(new RuntimeException(sprintf(
+                        'Stripe: a sessão %s diz ser do checkout %d, que %s. Nada foi criado.',
+                        $sessionId ?? '(sem id)',
+                        $checkoutId,
+                        $checkout === null ? 'não existe' : 'guardou outra sessão',
+                    )));
+                }
+
+                return null;
+            }
+
+            return $this->completion->orderFor($checkout, $create);
         }
 
         $reference = $this->string($session['client_reference_id'] ?? null);

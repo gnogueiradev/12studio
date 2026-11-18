@@ -18,6 +18,7 @@ use App\Models\Variant;
 use App\Models\WebhookEvent;
 use App\Services\SettingService;
 use App\Services\StoreSettings;
+use App\Stripe\Charge;
 use App\Stripe\StripeCheckout;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Response;
@@ -281,6 +282,42 @@ class CheckoutWebhookTest extends TestCase
         $this->assertSame('completed', $checkout->fresh()?->status);
     }
 
+    public function test_a_snapshot_without_the_optional_keys_still_completes(): void
+    {
+        $cart = $this->cartWith();
+        $variant = $cart->items()->firstOrFail()->variant;
+        $checkout = $this->pay($cart, 3000);
+
+        // Um retrato de antes de um deploy que mude a forma das linhas: so
+        // as chaves obrigatorias (e a variante).
+        $checkout->update(['items_snapshot' => array_map(
+            fn (array $line): array => array_intersect_key($line, array_flip(['variant_id', 'product_name', 'qty', 'unit_price_cents', 'line_total_cents'])),
+            $checkout->items_snapshot,
+        )]);
+        $checkout->refresh();
+
+        $charge = Charge::fromCheckout($checkout, 'https://12studio.test/compra', 'https://12studio.test/finalizar');
+        $this->assertSame('Vaso', $charge->lines[0]->name);
+        $this->assertSame(3000, $charge->lines[0]->lineTotalCents);
+
+        $this->get("/compra/{$checkout->token}")->assertOk()->assertInertia(fn (Assert $page) => $page
+            ->where('purchase.lines.0.name', 'Vaso')
+            ->where('purchase.lines.0.label', null));
+
+        $this->send($this->event('checkout.session.completed', $this->stripeSession($checkout)))->assertNoContent();
+
+        $item = $this->onlyOrder()->items()->sole();
+        $this->assertSame('paid', $this->onlyOrder()->payment_status);
+        $this->assertNull($item->variant_label);
+        $this->assertSame($variant->sku, $item->sku);
+        $this->assertSame(0, $item->personalization_surcharge_cents);
+        $this->assertSame($variant->product->vat_rate, $item->vat_rate);
+        $this->assertNull($item->personalization);
+        $this->assertNull($item->image_url);
+        $this->assertSame('in_stock', $item->fulfillment_mode);
+        $this->assertSame(8, $variant->fresh()?->stock);
+    }
+
     public function test_the_same_event_twice_creates_one_order(): void
     {
         $checkout = $this->pay($this->cartWith(), 3000);
@@ -423,8 +460,33 @@ class CheckoutWebhookTest extends TestCase
             ->exists());
     }
 
+    public function test_a_session_that_is_not_the_checkouts_own_touches_nothing_and_is_reported(): void
+    {
+        Exceptions::fake();
+        $cart = $this->cartWith();
+        $checkout = $this->pay($cart, 3000);
+        $other = 'cs_test_'.Str::random(20);
+
+        // A referencia e a metadata dizem este checkout, mas a sessao nao e a
+        // que ele guardou.
+        $session = $this->stripeSession($checkout, ['id' => $other]);
+        $this->send($this->event('checkout.session.completed', $session))->assertNoContent();
+        $this->send($this->event('checkout.session.async_payment_succeeded', $session))->assertNoContent();
+
+        $this->assertSame(0, Order::query()->count());
+        $checkout->refresh();
+        $this->assertSame('open', $checkout->status);
+        $this->assertNull($checkout->order_id);
+        $this->assertSame(1, $cart->items()->count());
+        Mail::assertNothingQueued();
+        Exceptions::assertReported(fn (RuntimeException $exception): bool => str_contains($exception->getMessage(), $other)
+            && str_contains($exception->getMessage(), "checkout {$checkout->id}")
+            && ! str_contains($exception->getMessage(), 'ana@example.com'));
+    }
+
     public function test_an_unknown_checkout_touches_nothing(): void
     {
+        Exceptions::fake();
         $cart = $this->cartWith();
         $checkout = $this->pay($cart, 3000);
         $missing = $checkout->id + 100;
@@ -451,6 +513,9 @@ class CheckoutWebhookTest extends TestCase
         $this->assertNull($checkout->order_id);
         $this->assertSame(1, $cart->items()->count());
         Mail::assertNothingQueued();
+        // Um pagamento sem encomenda: o dono tem de o ver.
+        Exceptions::assertReported(fn (RuntimeException $exception): bool => str_contains($exception->getMessage(), (string) $checkout->stripe_session_id)
+            && str_contains($exception->getMessage(), "checkout {$missing}"));
     }
 
     public function test_an_expired_checkout_that_is_paid_still_gets_its_order(): void

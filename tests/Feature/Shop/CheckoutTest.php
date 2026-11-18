@@ -400,6 +400,39 @@ class CheckoutTest extends TestCase
         $this->assertSame('open', $this->stripe['sessions'][$second->stripe_session_id]['status']);
     }
 
+    public function test_a_session_that_will_not_expire_and_is_still_open_stops_the_payment(): void
+    {
+        Exceptions::fake();
+        $cart = $this->cartWith();
+        $this->pay($cart, $this->customer(3000))->assertSessionHasNoErrors();
+        $first = Checkout::query()->firstOrFail();
+
+        // O expire falha (uma falha de rede, um 500) e a sessao continua
+        // aberta no Stripe. O FakesStripe nao se mexe: e so este cliente que
+        // falha o expire.
+        $this->app->instance(StripeClient::class, new class extends StripeClient
+        {
+            public function post(string $path, array $data = [], ?string $idempotencyKey = null): array
+            {
+                if (str_ends_with($path, '/expire')) {
+                    throw new StripeException('Stripe indisponivel.', 500);
+                }
+
+                return parent::post($path, $data, $idempotencyKey);
+            }
+        });
+
+        $this->pay($cart, $this->customer(3000))
+            ->assertRedirect('/finalizar')
+            ->assertSessionHasErrors(['payment' => trans('store.checkout.errors.payment')]);
+
+        $this->assertSame('open', $first->fresh()?->status);
+        $this->assertSame(1, Checkout::query()->count());
+        $this->assertCount(1, $this->stripe['sessions']);
+        $this->assertSame('open', $this->stripe['sessions'][$first->stripe_session_id]['status']);
+        Exceptions::assertReported(fn (StripeException $exception): bool => $exception->status === 500);
+    }
+
     public function test_a_paid_session_sends_the_customer_to_that_purchase(): void
     {
         $cart = $this->cartWith();
