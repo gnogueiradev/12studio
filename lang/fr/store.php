@@ -263,7 +263,6 @@ return [
 
     'cart' => [
         'title' => 'Votre panier',
-        'count' => 'Articles : :count',
         'add' => 'Ajouter au panier',
         'add_short' => 'Ajouter',
         'adding' => 'Ajout en cours…',
@@ -273,6 +272,7 @@ return [
         'decrease' => 'Une de moins',
         'increase' => 'Une de plus',
         'only_left' => 'Plus que :count',
+        'beyond_ready' => '{1} Nous en avons 1 prête à expédier ; au-delà, elles sont toutes fabriquées sur commande.|[2,*] Nous en avons :count prêtes à expédier ; au-delà, elles sont toutes fabriquées sur commande.',
         'personalization' => 'Personnalisation',
         'surcharge' => '+ :price par pièce',
         'required' => 'obligatoire',

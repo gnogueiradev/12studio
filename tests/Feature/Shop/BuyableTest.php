@@ -60,6 +60,17 @@ class BuyableTest extends TestCase
         $this->assertSame(5, $result->maxQty);
     }
 
+    public function test_with_backorder_the_stock_is_not_the_ceiling(): void
+    {
+        $variant = $this->variant(['stock' => 5], Product::factory()->create(['allow_backorder' => true]));
+
+        $result = Buyable::check($variant, 3);
+
+        $this->assertTrue($result->ok);
+        $this->assertSame('in_stock', $result->mode);
+        $this->assertNull($result->maxQty);
+    }
+
     public function test_short_stock_with_backorder_makes_the_whole_line_to_order(): void
     {
         $variant = $this->variant(['stock' => 2], Product::factory()->create(['allow_backorder' => true]));

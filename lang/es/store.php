@@ -263,7 +263,6 @@ return [
 
     'cart' => [
         'title' => 'Tu carrito',
-        'count' => 'Artículos: :count',
         'add' => 'Añadir al carrito',
         'add_short' => 'Añadir',
         'adding' => 'Añadiendo…',
@@ -273,6 +272,7 @@ return [
         'decrease' => 'Una menos',
         'increase' => 'Una más',
         'only_left' => 'Solo quedan :count',
+        'beyond_ready' => '{1} Tenemos 1 lista para enviar; con más, todas se hacen por encargo.|[2,*] Tenemos :count listas para enviar; con más, todas se hacen por encargo.',
         'personalization' => 'Personalización',
         'surcharge' => '+ :price por pieza',
         'required' => 'obligatorio',

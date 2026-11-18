@@ -28,7 +28,7 @@ final readonly class Buyable
     private function __construct(
         public bool $ok,
         public ?string $mode, // 'in_stock' | 'made_to_order' quando ok
-        public ?int $maxQty, // teto da quantidade: min(stock, limite geral); null = so o limite geral
+        public ?int $maxQty, // o maximo que o cliente pode levar: min(stock, limite geral); null = so o limite geral (encomenda)
         public ?string $reason,
     ) {}
 
@@ -87,7 +87,9 @@ final readonly class Buyable
         $ceiling = min($available, (int) config('shop.cart.max_qty'));
 
         if ($qty <= $available) {
-            return new self(true, 'in_stock', $ceiling, null);
+            // Com encomenda, pedir mais do que o stock tambem se aceita (a
+            // linha passa a ser feita por encomenda): o teto e so o geral.
+            return new self(true, 'in_stock', $product->allow_backorder ? null : $ceiling, null);
         }
 
         if ($product->allow_backorder) {

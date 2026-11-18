@@ -9,8 +9,10 @@ use App\Models\User;
 use App\Models\Variant;
 use App\Services\SettingService;
 use App\Services\StoreSettings;
+use App\Store\ProductDetail;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\Feature\Stripe\FakesStripe;
 use Tests\TestCase;
@@ -83,27 +85,79 @@ class ProductPageTest extends TestCase
         });
     }
 
+    /** O `buy` de quem não pode comprar: sem nada que se pareça com stock. */
+    private const OFF = ['ok' => false, 'mode' => null, 'maxQty' => null, 'ready' => 0];
+
+    private function shopMode(string $mode): void
+    {
+        app(SettingService::class)->set(StoreSettings::KEY_SHOP, $mode);
+    }
+
     public function test_each_variant_says_whether_it_can_be_bought(): void
     {
         $this->fakeStripe();
+        $this->shopMode('on');
         $this->vaso();
-
-        // Desligadas (o valor por omissão): a página não oferece o carrinho.
-        $this->get('/produtos/vaso-ondas')->assertInertia(fn (Assert $page) => $page
-            ->where('storefront.shop', false)
-            ->where('product.variants.0.buy', ['ok' => true, 'mode' => 'in_stock', 'maxQty' => 3])
-            ->where('product.variants.1.buy', ['ok' => false, 'mode' => null, 'maxQty' => 0]));
-
-        app(SettingService::class)->set(StoreSettings::KEY_SHOP, 'on');
 
         $this->get('/produtos/vaso-ondas')->assertInertia(fn (Assert $page) => $page
             ->where('storefront.shop', true)
-            ->where('product.variants.0.buy.ok', true));
+            ->where('product.orderLeadDays', null)
+            ->where('product.variants.0.buy', ['ok' => true, 'mode' => 'in_stock', 'maxQty' => 3, 'ready' => 3])
+            ->where('product.variants.1.buy', ['ok' => false, 'mode' => null, 'maxQty' => 0, 'ready' => 0]));
+
+        Product::query()->where('slug', 'vaso-ondas')->update(['allow_backorder' => true]);
+
+        // Com encomenda, o stock deixa de ser o teto; o que está pronto
+        // continua a dizer-se, para avisar antes de passar a encomenda.
+        $this->get('/produtos/vaso-ondas')->assertInertia(fn (Assert $page) => $page
+            ->where('product.variants.0.buy', ['ok' => true, 'mode' => 'in_stock', 'maxQty' => null, 'ready' => 3])
+            ->where('product.orderLeadDays', [5, 7]));
+
+        Product::query()->where('slug', 'vaso-ondas')->update(['fulfillment_mode' => 'made_to_order']);
+
+        $this->get('/produtos/vaso-ondas')->assertInertia(fn (Assert $page) => $page
+            ->where('product.variants.0.buy', ['ok' => true, 'mode' => 'made_to_order', 'maxQty' => null, 'ready' => 0]));
 
         Product::query()->where('slug', 'vaso-ondas')->update(['fulfillment_mode' => 'custom']);
 
         $this->get('/produtos/vaso-ondas')->assertInertia(fn (Assert $page) => $page
-            ->where('product.variants.0.buy', ['ok' => false, 'mode' => null, 'maxQty' => null]));
+            ->where('product.variants.0.buy', self::OFF));
+    }
+
+    public function test_with_buying_off_the_page_carries_no_buying_data(): void
+    {
+        $this->fakeStripe();
+        $this->vaso();
+
+        // Desligadas (o valor por omissão): como sempre foi, sem stock.
+        $this->get('/produtos/vaso-ondas')->assertInertia(fn (Assert $page) => $page
+            ->where('storefront.shop', false)
+            ->where('product.variants.0.buy', self::OFF)
+            ->where('product.variants.1.buy', self::OFF)
+            ->where('product.orderLeadDays', null));
+
+        // E sem perguntar nada à base de dados.
+        $product = Product::query()->where('slug', 'vaso-ondas')->with(ProductDetail::with())->firstOrFail();
+        DB::enableQueryLog();
+        ProductDetail::make($product, 'pt');
+        $this->assertSame([], DB::getQueryLog());
+    }
+
+    public function test_in_staff_mode_only_the_admin_gets_the_buying_data(): void
+    {
+        $this->fakeStripe();
+        $this->shopMode('staff');
+        $this->vaso();
+
+        $this->get('/produtos/vaso-ondas')->assertInertia(fn (Assert $page) => $page
+            ->where('storefront.shop', false)
+            ->where('product.variants.0.buy', self::OFF));
+
+        $this->actingAs(User::factory()->admin()->create())
+            ->get('/produtos/vaso-ondas')
+            ->assertInertia(fn (Assert $page) => $page
+                ->where('storefront.shop', true)
+                ->where('product.variants.0.buy', ['ok' => true, 'mode' => 'in_stock', 'maxQty' => 3, 'ready' => 3]));
     }
 
     public function test_products_not_on_sale_are_only_previewed_by_the_admin(): void

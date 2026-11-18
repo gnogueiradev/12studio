@@ -4,13 +4,14 @@ import { useId, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import InputError from '@/components/input-error';
 import { CartDrawer } from '@/components/store/cart-drawer';
-import { MAX_QTY, QuantityStepper } from '@/components/store/cart-lines';
+import { QuantityStepper, useMaxQty } from '@/components/store/cart-lines';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Spinner } from '@/components/ui/spinner';
 import { useLocalizedUrl, useT } from '@/lib/i18n';
 import { usePrice } from '@/lib/money';
+import { cn } from '@/lib/utils';
 import type { CartData } from '@/types/shop';
 import type { ProductDetailData, ProductVariantData } from '@/types/store';
 
@@ -46,10 +47,15 @@ export function BuyBox({
     const [cart, setCart] = useState<CartData | null>(null);
     const [drawerOpen, setDrawerOpen] = useState(false);
 
-    const max = variant.buy.maxQty ?? MAX_QTY;
+    const limit = useMaxQty();
+    const max = variant.buy.maxQty ?? limit;
     // Trocar para uma variante com menos stock não deixa a quantidade acima
     // do teto novo.
     const quantity = Math.min(qty, Math.max(1, max));
+    // Com encomenda, levar mais do que há pronto faz a linha toda por
+    // encomenda (Buyable): diz-se antes de adicionar, não depois.
+    const beyondReady =
+        variant.buy.mode === 'in_stock' && quantity > variant.buy.ready;
     const fields = product.personalization?.fields ?? [];
     const surcharge = product.personalization?.surcharge ?? null;
 
@@ -190,7 +196,7 @@ export function BuyBox({
                         />
                         {variant.buy.mode === 'in_stock' &&
                             variant.buy.maxQty !== null &&
-                            variant.buy.maxQty < MAX_QTY && (
+                            variant.buy.maxQty < limit && (
                                 <span className="text-sm text-muted-foreground">
                                     {t('cart.only_left', {
                                         count: variant.buy.maxQty,
@@ -198,6 +204,24 @@ export function BuyBox({
                                 </span>
                             )}
                     </div>
+                    {/* Sempre no DOM (vazio, fora do fluxo) para o leitor
+                        de ecrã anunciar quando aparece. */}
+                    <p
+                        aria-live="polite"
+                        className={cn(
+                            'text-sm text-muted-foreground',
+                            !beyondReady && 'sr-only',
+                        )}
+                    >
+                        {beyondReady &&
+                            t.choice('cart.beyond_ready', variant.buy.ready)}
+                        {beyondReady &&
+                            product.orderLeadDays &&
+                            ` ${t('detail.lead.made_to_order', {
+                                min: product.orderLeadDays[0],
+                                max: product.orderLeadDays[1],
+                            })}.`}
+                    </p>
                     <InputError message={errors.qty} />
 
                     <Button

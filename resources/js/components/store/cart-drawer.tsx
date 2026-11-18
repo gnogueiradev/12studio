@@ -1,7 +1,12 @@
 import { Link } from '@inertiajs/react';
 import { CheckCircle2 } from 'lucide-react';
+import { useId } from 'react';
 import { CartLines } from '@/components/store/cart-lines';
-import { CartTotals } from '@/components/store/cart-totals';
+import {
+    CartTotals,
+    CheckoutButton,
+    CheckoutReason,
+} from '@/components/store/cart-totals';
 import { Button } from '@/components/ui/button';
 import {
     Sheet,
@@ -32,6 +37,7 @@ export function CartDrawer({
 }) {
     const t = useT();
     const url = useLocalizedUrl();
+    const reasonId = useId();
     // Pode esvaziar-se aqui mesmo, removendo a última linha.
     const filled = cart !== null && cart.lines.length > 0;
 
@@ -70,25 +76,15 @@ export function CartDrawer({
                         <div className="flex flex-col gap-4 border-t border-border/60 p-6">
                             <CartTotals cart={cart} />
                             <div className="flex flex-col gap-2.5">
-                                {cart.canCheckout ? (
-                                    <Button
-                                        asChild
-                                        size="lg"
-                                        className="h-12 text-base"
-                                    >
-                                        <Link href={url('/finalizar')}>
-                                            {t('cart.checkout')}
-                                        </Link>
-                                    </Button>
-                                ) : (
-                                    <Button
-                                        size="lg"
-                                        className="h-12 text-base"
-                                        disabled
-                                    >
-                                        {t('cart.checkout')}
-                                    </Button>
-                                )}
+                                <CheckoutReason
+                                    cart={cart}
+                                    id={reasonId}
+                                    className="text-xs"
+                                />
+                                <CheckoutButton
+                                    cart={cart}
+                                    reasonId={reasonId}
+                                />
                                 <Button
                                     asChild
                                     variant="outline"
@@ -99,15 +95,6 @@ export function CartDrawer({
                                         {t('cart.view')}
                                     </Link>
                                 </Button>
-                                {!cart.canCheckout && (
-                                    <p className="text-center text-xs text-muted-foreground">
-                                        {t(
-                                            cart.belowMinimum
-                                                ? 'cart.below_minimum'
-                                                : 'cart.blocked',
-                                        )}
-                                    </p>
-                                )}
                             </div>
                         </div>
                     </>

@@ -3,7 +3,11 @@ import { ShoppingBag, Tag, X } from 'lucide-react';
 import { useState } from 'react';
 import InputError from '@/components/input-error';
 import { CartLines } from '@/components/store/cart-lines';
-import { CartTotals } from '@/components/store/cart-totals';
+import {
+    CartTotals,
+    CheckoutButton,
+    CheckoutReason,
+} from '@/components/store/cart-totals';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -126,22 +130,6 @@ function PromoCode({ cart }: { cart: CartData }) {
     );
 }
 
-/** "Finalizar compra", ou porque ainda não. */
-function Checkout({ cart, className }: { cart: CartData; className?: string }) {
-    const t = useT();
-    const url = useLocalizedUrl();
-
-    return cart.canCheckout ? (
-        <Button asChild size="lg" className={cn('h-12 text-base', className)}>
-            <Link href={url('/finalizar')}>{t('cart.checkout')}</Link>
-        </Button>
-    ) : (
-        <Button size="lg" className={cn('h-12 text-base', className)} disabled>
-            {t('cart.checkout')}
-        </Button>
-    );
-}
-
 /**
  * O carrinho: as linhas à esquerda e o resumo (código, contas, "Finalizar
  * compra") à direita; no telemóvel, uma coluna, com o total e o botão numa
@@ -180,32 +168,19 @@ export default function CartPage({ cart }: { cart: CartData }) {
         );
     }
 
-    const problems = cart.lines.some((line) => line.problem !== null);
-
-    const blocked = !cart.canCheckout && (
-        <p className="text-sm text-muted-foreground">
-            {cart.belowMinimum && !problems ? (
-                <>
-                    {t('cart.below_minimum')}{' '}
-                    <Link
-                        href={url('/contacto')}
-                        className="font-medium text-foreground underline underline-offset-4"
-                    >
-                        {t('cart.talk_to_us')}
-                    </Link>
-                    .
-                </>
-            ) : (
-                t('cart.blocked')
-            )}
-        </p>
-    );
+    // A barra do telemóvel cresce com a razão: o fundo da página também.
+    const blocked = !cart.canCheckout;
 
     return (
         <>
             {head}
 
-            <div className="mx-auto w-full max-w-6xl px-4 pt-8 pb-28 md:pt-12 md:pb-16">
+            <div
+                className={cn(
+                    'mx-auto w-full max-w-6xl px-4 pt-8 md:pt-12 md:pb-16',
+                    blocked ? 'pb-56' : 'pb-28',
+                )}
+            >
                 <div className="mb-6 flex items-baseline justify-between gap-4 md:mb-8">
                     <h1 className="text-2xl font-semibold tracking-tight md:text-3xl">
                         {t('cart.title')}
@@ -230,22 +205,42 @@ export default function CartPage({ cart }: { cart: CartData }) {
                         <PromoCode cart={cart} />
                         <CartTotals cart={cart} />
                         <div className="flex flex-col gap-3">
-                            <Checkout cart={cart} className="w-full" />
-                            {blocked}
+                            <CheckoutButton
+                                cart={cart}
+                                reasonId="cart-checkout-reason"
+                                className="w-full"
+                            />
+                            <CheckoutReason
+                                cart={cart}
+                                id="cart-checkout-reason"
+                            />
                         </div>
                     </aside>
                 </div>
             </div>
 
-            {/* Telemóvel: o total e o "Finalizar compra" sempre à mão. */}
-            <div className="fixed inset-x-0 bottom-0 z-30 flex items-center gap-3 border-t border-border/60 bg-background/95 px-4 py-3 backdrop-blur md:hidden">
-                <div className="min-w-0 flex-1">
-                    <p className="text-xs text-muted-foreground">
-                        {t('cart.total')}
-                    </p>
-                    <p className="font-semibold">{price(cart.totalCents)}</p>
+            {/* Telemóvel: o total e o "Finalizar compra" sempre à mão, e,
+                quando ainda não se pode, a razão ali mesmo. */}
+            <div className="fixed inset-x-0 bottom-0 z-30 flex flex-col gap-2 border-t border-border/60 bg-background/95 px-4 py-3 backdrop-blur md:hidden">
+                <CheckoutReason
+                    cart={cart}
+                    id="cart-checkout-reason-bar"
+                    className="text-xs"
+                />
+                <div className="flex items-center gap-3">
+                    <div className="min-w-0 flex-1">
+                        <p className="text-xs text-muted-foreground">
+                            {t('cart.total')}
+                        </p>
+                        <p className="font-semibold">
+                            {price(cart.totalCents)}
+                        </p>
+                    </div>
+                    <CheckoutButton
+                        cart={cart}
+                        reasonId="cart-checkout-reason-bar"
+                    />
                 </div>
-                <Checkout cart={cart} />
             </div>
         </>
     );

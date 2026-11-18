@@ -60,6 +60,9 @@ class ShareStorefront
             // a quem pode usa-lo.
             'shop' => $shop = $this->shopOpen(),
             'cartCount' => $shop ? $this->cartCount() : 0,
+            // O limite geral de pecas por linha: o seletor de quantidade
+            // desenha-o quando a variante nao tem outro teto.
+            'maxQty' => (int) config('shop.cart.max_qty'),
             // A hora a que a pagina abriu, encriptada: os formularios de
             // conversa devolvem-na, e um envio rapido demais e de um robo
             // (OpenConversationRequest).

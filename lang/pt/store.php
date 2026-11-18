@@ -270,7 +270,6 @@ return [
 
     'cart' => [
         'title' => 'O teu carrinho',
-        'count' => 'Artigos: :count',
         'add' => 'Adicionar ao carrinho',
         'add_short' => 'Adicionar',
         'adding' => 'A adicionar…',
@@ -280,6 +279,7 @@ return [
         'decrease' => 'Menos uma',
         'increase' => 'Mais uma',
         'only_left' => 'Só há :count',
+        'beyond_ready' => '{1} Temos 1 pronta a enviar; com mais do que isso, são todas produzidas por encomenda.|[2,*] Temos :count prontas a enviar; com mais do que isso, são todas produzidas por encomenda.',
         'personalization' => 'Personalização',
         'surcharge' => '+ :price por peça',
         'required' => 'obrigatório',

@@ -260,7 +260,8 @@ class CartTest extends TestCase
 
         $this->holding($cart)->get('/produtos')->assertInertia(fn (Assert $page) => $page
             ->where('storefront.cartCount', 3)
-            ->where('storefront.shop', true));
+            ->where('storefront.shop', true)
+            ->where('storefront.maxQty', 20));
     }
 
     public function test_the_header_count_is_zero_without_a_cookie(): void

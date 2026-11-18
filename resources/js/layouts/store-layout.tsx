@@ -21,6 +21,8 @@ const EMPTY_STOREFRONT: Storefront = {
     form: { started: '' },
     shop: false,
     cartCount: 0,
+    // Sem compras não há seletor de quantidade.
+    maxQty: 0,
 };
 
 /**

@@ -1,4 +1,4 @@
-import { Link, router } from '@inertiajs/react';
+import { Link, router, usePage } from '@inertiajs/react';
 import { Minus, Plus } from 'lucide-react';
 import { useState } from 'react';
 import InputError from '@/components/input-error';
@@ -10,11 +10,12 @@ import { cn } from '@/lib/utils';
 import type { CartData, CartLine } from '@/types/shop';
 
 /**
- * O limite geral de peças por linha (config('shop.cart.max_qty')). O
- * servidor é quem manda; isto só desenha o teto do seletor quando a
- * variante não tem outro mais baixo (o stock).
+ * O limite geral de peças por linha, do servidor (storefront.maxQty): o teto
+ * do seletor quando a variante não tem outro mais baixo (o stock).
  */
-export const MAX_QTY = 20;
+export function useMaxQty(): number {
+    return usePage().props.storefront?.maxQty ?? 0;
+}
 
 /**
  * − número +. O mínimo é 1 (tirar a linha é o "Remover"); o máximo, o teto
@@ -143,7 +144,8 @@ function CartLineRow({
         router.delete(url(`/carrinho/itens/${line.id}/remover`), options);
     };
 
-    const max = line.maxQty ?? MAX_QTY;
+    const limit = useMaxQty();
+    const max = line.maxQty ?? limit;
     const problem = problemText(line, t);
     const lead =
         line.leadDays && line.mode
@@ -271,7 +273,7 @@ function CartLineRow({
                     {line.problem === null &&
                         line.mode === 'in_stock' &&
                         line.maxQty !== null &&
-                        line.maxQty < MAX_QTY && (
+                        line.maxQty < limit && (
                             <span className="text-xs text-muted-foreground">
                                 {t('cart.only_left', { count: line.maxQty })}
                             </span>

@@ -263,7 +263,6 @@ return [
 
     'cart' => [
         'title' => 'Your cart',
-        'count' => 'Items: :count',
         'add' => 'Add to cart',
         'add_short' => 'Add',
         'adding' => 'Adding…',
@@ -273,6 +272,7 @@ return [
         'decrease' => 'One less',
         'increase' => 'One more',
         'only_left' => 'Only :count left',
+        'beyond_ready' => '{1} We have 1 ready to ship; with more than that, they are all made to order.|[2,*] We have :count ready to ship; with more than that, they are all made to order.',
         'personalization' => 'Personalisation',
         'surcharge' => '+ :price per piece',
         'required' => 'required',
