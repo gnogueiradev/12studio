@@ -12,11 +12,14 @@ use App\Models\Variant;
 use App\Services\SettingService;
 use App\Services\StoreSettings;
 use App\Shop\CheckoutService;
+use App\Stripe\StripeClient;
 use App\Stripe\StripeException;
+use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Routing\Middleware\ThrottleRequests;
 use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Str;
 use Illuminate\Testing\TestResponse;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\Feature\Stripe\FakesStripe;
@@ -502,15 +505,25 @@ class CheckoutTest extends TestCase
         $this->assertSame(1, Checkout::query()->count());
     }
 
-    public function test_a_session_stripe_no_longer_knows_does_not_block_the_cart(): void
+    /** Uma compra anterior deste carrinho, ainda aberta, com uma sessao que o fake nao tem. */
+    private function lostSession(Cart $cart, string $sessionId, CarbonImmutable $expiresAt): Checkout
+    {
+        return Checkout::factory()->create([
+            'cart_id' => $cart->id,
+            'status' => 'open',
+            'stripe_session_id' => $sessionId,
+            'expires_at' => $expiresAt,
+        ]);
+    }
+
+    public function test_a_session_of_the_other_mode_does_not_block_the_cart(): void
     {
         Exceptions::fake();
         $cart = $this->cartWith();
-        $this->pay($cart, $this->customer(3000));
-        $first = Checkout::query()->firstOrFail();
-
-        // As chaves de teste trocadas pelas de producao: a sessao nao existe.
-        unset($this->stripe['sessions'][$first->stripe_session_id]);
+        // As chaves trocadas: a compra anterior abriu-se com a chave do outro
+        // modo (o fake corre com uma chave de teste), e para esta chave a
+        // sessao nao existe nem vai poder ser paga.
+        $first = $this->lostSession($cart, 'cs_live_'.Str::random(20), now()->addMinutes(40));
 
         $this->pay($cart, $this->customer(3000))->assertSessionHasNoErrors();
 
@@ -519,6 +532,50 @@ class CheckoutTest extends TestCase
         $this->assertNotSame($first->id, $second->id);
         $this->assertSame('open', $this->stripe['sessions'][$second->stripe_session_id]['status']);
         Exceptions::assertReported(fn (StripeException $exception): bool => $exception->status === 404);
+    }
+
+    public function test_a_lost_session_past_its_deadline_does_not_block_the_cart(): void
+    {
+        $cart = $this->cartWith();
+        $first = $this->lostSession($cart, 'cs_test_'.Str::random(20), now()->subMinute());
+
+        $this->pay($cart, $this->customer(3000))->assertSessionHasNoErrors();
+
+        $this->assertSame('expired', $first->fresh()?->status);
+        $this->assertCount(1, $this->stripe['sessions']);
+    }
+
+    public function test_a_lost_session_that_may_still_be_paid_stops_the_payment(): void
+    {
+        Exceptions::fake();
+        $cart = $this->cartWith();
+        // O mesmo modo e ainda no prazo: nada prova que nao se possa pagar.
+        $first = $this->lostSession($cart, 'cs_test_'.Str::random(20), now()->addMinutes(40));
+
+        $this->pay($cart, $this->customer(3000))
+            ->assertRedirect('/finalizar')
+            ->assertSessionHasErrors(['payment' => 'Não foi possível abrir o pagamento. Tenta outra vez daqui a pouco.']);
+
+        $this->assertSame('open', $first->fresh()?->status);
+        $this->assertSame(1, Checkout::query()->count());
+        $this->assertSame([], $this->stripe['sessions']);
+        Exceptions::assertReported(fn (StripeException $exception): bool => $exception->status === 404);
+    }
+
+    public function test_a_session_id_or_key_of_an_unknown_kind_is_not_another_mode(): void
+    {
+        $stripe = app(StripeClient::class);
+
+        $this->assertTrue($stripe->isOtherMode('cs_live_abc'));
+        $this->assertFalse($stripe->isOtherMode('cs_test_abc'));
+        $this->assertFalse($stripe->isOtherMode('cs_abc'));
+
+        config(['stripe.secret' => 'rk_'.'live_'.str_repeat('x', 24)]);
+        $this->assertTrue($stripe->isOtherMode('cs_test_abc'));
+        $this->assertFalse($stripe->isOtherMode('cs_live_abc'));
+
+        config(['stripe.secret' => 'chave-estranha']);
+        $this->assertFalse($stripe->isOtherMode('cs_live_abc'));
     }
 
     public function test_a_session_stripe_cannot_read_stops_the_payment(): void
@@ -553,6 +610,30 @@ class CheckoutTest extends TestCase
         }
 
         $this->assertSame('expired', Checkout::query()->firstOrFail()->status);
+
+        // E o que o Stripe disser noutra forma: o email noutras maiusculas, o
+        // telefone com espacos, o NIF e a rua. O id da sessao fica, para o
+        // registo continuar a servir.
+        $sessionId = 'cs_test_a1B2c3D4e5F6g7H8i9J0';
+        $echo = new StripeException(
+            "Sessao {$sessionId}: ANA.SILVA@EXAMPLE.COM, tel. 912 345 678, NIF 123456789, RUA DAS  FLORES 12, ANA  SILVA.",
+            400,
+        );
+
+        $redacted = $echo->withoutPersonalData([
+            'ana.silva@example.com', '912345678', 'Ana Silva', '123456789', 'Rua das Flores 12', null, 'Lisboa', '1000-001',
+        ]);
+
+        foreach ([$redacted->getMessage(), $redacted->getPrevious()?->getMessage()] as $message) {
+            $this->assertIsString($message);
+            $this->assertStringNotContainsStringIgnoringCase('example.com', $message);
+            $this->assertStringNotContainsString('912 345 678', $message);
+            $this->assertStringNotContainsString('123456789', $message);
+            $this->assertStringNotContainsStringIgnoringCase('flores', $message);
+            $this->assertStringNotContainsStringIgnoringCase('silva', $message);
+            $this->assertStringContainsString($sessionId, $message);
+        }
+        $this->assertSame(400, $redacted->status);
     }
 
     public function test_shipping_reaches_the_session(): void

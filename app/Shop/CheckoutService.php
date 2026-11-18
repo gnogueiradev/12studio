@@ -140,7 +140,10 @@ class CheckoutService
 
             // O que o Stripe diz sobe para o report(), mas sem os dados do
             // cliente: o Stripe pode repetir o email que recebeu.
-            throw $exception->withoutPersonalData([$customer['email'], $customer['phone'], $customer['name']]);
+            throw $exception->withoutPersonalData([
+                $customer['email'], $customer['phone'], $customer['name'], $customer['nif'],
+                $address['line1'], $address['line2'], $address['city'], $address['postal_code'],
+            ]);
         }
     }
 
@@ -148,10 +151,12 @@ class CheckoutService
      * As compras ainda abertas deste carrinho, e a que o Stripe ja deu por
      * completa (pago, ou referencia Multibanco gerada), se houver uma.
      *
-     * Uma sessao que o Stripe nao conhece (404: por exemplo, depois de
-     * trocar as chaves de teste pelas de producao) nunca se vai poder pagar:
-     * essa compra passa logo a expirada. Qualquer outra falha a ler sobe —
-     * sem saber se a anterior foi paga, nao se abre outra.
+     * Uma sessao que o Stripe nao conhece (404) so se da por perdida com
+     * provas de que ja nao se pode pagar: e de outro modo que nao o da chave
+     * em uso (as chaves de teste trocadas pelas de producao), ou o prazo dela
+     * ja passou. Ai essa compra passa a expirada e abre-se outra. Sem provas,
+     * e qualquer outra falha a ler, sobe — sem saber se a anterior ainda se
+     * pode pagar, nao se abre uma segunda.
      *
      * @return array{0: array<int, array{checkout: Checkout, status: string|null}>, 1: Checkout|null}
      */
@@ -166,7 +171,14 @@ class CheckoutService
                 try {
                     $status = $this->stripe->get("checkout/sessions/{$checkout->stripe_session_id}")['status'] ?? null;
                 } catch (StripeException $exception) {
-                    if ($exception->status !== 404) {
+                    $gone = $exception->status === 404 && (
+                        $this->stripe->isOtherMode($checkout->stripe_session_id)
+                        || $checkout->expires_at?->isPast() === true
+                    );
+
+                    // Sobe para o controlador, que a reporta e mostra o erro
+                    // generico ao cliente.
+                    if (! $gone) {
                         throw $exception;
                     }
 
