@@ -9,6 +9,7 @@ use App\Models\PromoCode;
 use App\Models\Variant;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
@@ -33,6 +34,12 @@ class CartService
         }
 
         return Cart::query()->where('token', $token)->first();
+    }
+
+    /** O carrinho do cookie deste pedido, se houver; nunca cria. */
+    public function fromRequest(Request $request): ?Cart
+    {
+        return $this->find($request->cookies->getString((string) config('shop.cart.cookie')));
     }
 
     /**

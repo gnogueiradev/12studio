@@ -88,7 +88,7 @@ class CartController extends Controller
     /** O carrinho do cookie, se houver; nunca cria. */
     private function current(Request $request): ?Cart
     {
-        return $this->carts->find($request->cookies->getString((string) config('shop.cart.cookie')));
+        return $this->carts->fromRequest($request);
     }
 
     /** O carrinho do cookie para as escritas que só fazem sentido com um: sem ele, 404. */

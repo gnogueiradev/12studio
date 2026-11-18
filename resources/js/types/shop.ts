@@ -35,3 +35,21 @@ export type CartData = {
     belowMinimum: boolean;
     canCheckout: boolean;
 };
+
+/**
+ * O que o "Pagar" do /finalizar envia (StartCheckoutRequest). O país não vai:
+ * é sempre Portugal. O total é só o que o cliente viu — o servidor recusa
+ * cobrar outro.
+ */
+export type CheckoutFormData = {
+    name: string;
+    email: string;
+    phone: string;
+    nif: string;
+    line1: string;
+    line2: string;
+    postal_code: string;
+    city: string;
+    terms: boolean;
+    expected_total_cents: number;
+};

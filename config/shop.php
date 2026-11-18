@@ -44,6 +44,12 @@ return [
         'max_qty' => 20,
     ],
 
+    // A compra: quantos minutos vive a sessao do Stripe aberta no "Pagar" (o
+    // Stripe aceita de 30 minutos a 24 horas).
+    'checkout' => [
+        'session_minutes' => 60,
+    ],
+
     // O codigo pessoal de quem cria conta.
     'welcome_code' => [
         'value_cents' => (int) env('SHOP_WELCOME_CODE_CENTS', 500),

@@ -180,6 +180,10 @@ class AppServiceProvider extends ServiceProvider
         // la, um robo sim).
         RateLimiter::for('cart', fn (Request $request): Limit => Limit::perMinute(60)->by('cart:'.$request->ip()));
 
+        // O "Pagar": cada um abre uma sessao no Stripe. Dez por minuto por IP
+        // chegam para quem se engana nos dados, nao para um robo.
+        RateLimiter::for('checkout', fn (Request $request): Limit => Limit::perMinute(10)->by('checkout:'.$request->ip()));
+
         RateLimiter::for('conversation-reply', fn (Request $request): Limit => Limit::perMinute(10)
             ->by('conversation-reply:'.hash('sha256', (string) $request->route('token'))));
 

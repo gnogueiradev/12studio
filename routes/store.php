@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\Store\CartController;
 use App\Http\Controllers\Store\CatalogController;
+use App\Http\Controllers\Store\CheckoutController;
 use App\Http\Controllers\Store\ConversationController;
 use App\Http\Controllers\Store\LandingPageController;
 use App\Http\Controllers\Store\PageController;
@@ -62,6 +63,15 @@ $storefront = function (): void {
         Route::delete('carrinho/codigo/remover', [CartController::class, 'removePromo'])
             ->middleware('throttle:cart')
             ->name('store.cart.promo.remove');
+
+        // A compra: abrir nao cria nada; o "Pagar" congela-a e abre o Stripe.
+        Route::get('finalizar', [CheckoutController::class, 'show'])->name('store.checkout');
+        Route::post('finalizar/codigo', [CheckoutController::class, 'promo'])
+            ->middleware('throttle:cart')
+            ->name('store.checkout.promo');
+        Route::post('finalizar/pagar', [CheckoutController::class, 'pay'])
+            ->middleware('throttle:checkout')
+            ->name('store.checkout.pay');
     });
 
     // Paginas de sistema montadas por blocos (App\PageBuilder).

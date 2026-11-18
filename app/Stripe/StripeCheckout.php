@@ -2,6 +2,7 @@
 
 namespace App\Stripe;
 
+use App\Models\Checkout;
 use App\Models\Order;
 use App\Stripe\StripeCatalog as Catalog;
 use Illuminate\Support\Facades\Cache;
@@ -18,7 +19,8 @@ use Illuminate\Support\Str;
  * total da encomenda — se nao somar, nao se cobra.
  *
  * A sessao faz-se a partir de um Charge, a descricao do que se cobra; a
- * encomenda e uma das maneiras de o escrever (Charge::fromOrder).
+ * encomenda e uma das maneiras de o escrever (Charge::fromOrder); a compra da
+ * loja e a outra (Charge::fromCheckout, startForCheckout).
  *
  * Uma so sessao viva por encomenda: antes de criar outra, expira-se a
  * anterior. Assim um cliente com o link aberto em duas abas nao paga duas
@@ -102,6 +104,28 @@ class StripeCheckout
         $session = $this->stripe->post('checkout/sessions', $this->payload($order, $returnUrl));
 
         $order->forceFill(['stripe_session_id' => (string) $session['id']])->save();
+
+        return (string) $session['url'];
+    }
+
+    /**
+     * A sessao de uma compra da loja, a partir do retrato. Expira ao fim de
+     * `shop.checkout.session_minutes`; o checkout guarda a sessao e a hora a
+     * que ela expira. O tranco e a sessao anterior do mesmo carrinho sao do
+     * CheckoutService, que chama isto.
+     */
+    public function startForCheckout(Checkout $checkout, string $successUrl, string $cancelUrl): string
+    {
+        $checkout->expires_at = now()->addMinutes((int) config('shop.checkout.session_minutes'));
+
+        $payload = $this->sessionPayload(
+            Charge::fromCheckout($checkout, $successUrl, $cancelUrl),
+            couponKey: "checkout-{$checkout->id}-coupon",
+        );
+
+        $session = $this->stripe->post('checkout/sessions', $payload, "checkout-{$checkout->id}-session");
+
+        $checkout->forceFill(['stripe_session_id' => (string) $session['id']])->save();
 
         return (string) $session['url'];
     }
