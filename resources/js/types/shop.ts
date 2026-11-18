@@ -37,6 +37,26 @@ export type CartData = {
 };
 
 /**
+ * A compra no /compra/{token} (PurchaseController). Nunca leva dados pessoais:
+ * o link pode ser partilhado.
+ */
+export type PurchaseData = {
+    state: 'confirming' | 'paid' | 'awaiting_payment' | 'expired' | 'closed';
+    number: string | null;
+    lines: {
+        name: string;
+        label: string | null;
+        qty: number;
+        lineCents: number;
+    }[];
+    subtotalCents: number;
+    discountCents: number;
+    shippingCents: number;
+    totalCents: number;
+    leadDays: [number, number] | null;
+};
+
+/**
  * O que o "Pagar" do /finalizar envia (StartCheckoutRequest). O país não vai:
  * é sempre Portugal. O total é só o que o cliente viu — o servidor recusa
  * cobrar outro.

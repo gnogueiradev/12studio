@@ -7,6 +7,7 @@ use App\Http\Controllers\Store\ConversationController;
 use App\Http\Controllers\Store\LandingPageController;
 use App\Http\Controllers\Store\PageController;
 use App\Http\Controllers\Store\ProductController;
+use App\Http\Controllers\Store\PurchaseController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -106,6 +107,12 @@ $conversations = function (): void {
     Route::get('conversa/{token}/anexos/{attachment}', [ConversationController::class, 'attachment'])
         ->where('token', '[A-Za-z0-9]{1,64}')
         ->name('store.conversation.attachment');
+
+    // Onde o Stripe devolve o cliente: quem pagou ve a sua compra mesmo que
+    // a montra se desligue depois. So le.
+    Route::get('compra/{token}', [PurchaseController::class, 'show'])
+        ->where('token', '[A-Za-z0-9]{64}')
+        ->name('store.purchase');
 };
 
 // Um endereco de landing: minusculas, numeros e hifens (PageBuilderService).
