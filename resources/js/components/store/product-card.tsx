@@ -45,12 +45,15 @@ export function ProductCard({
     sizes = '(min-width: 1024px) 25vw, (min-width: 768px) 33vw, 50vw',
     priority = false,
     headingLevel = 3,
+    showCategory = true,
 }: {
     product: ProductCardData;
     sizes?: string;
     priority?: boolean;
     /** h2 onde a grelha vem logo a seguir ao título da página (catálogo). */
     headingLevel?: 2 | 3;
+    /** Desligado na página de uma categoria: lá todos os cartões diriam o mesmo. */
+    showCategory?: boolean;
 }) {
     const t = useT();
     const Heading = headingLevel === 2 ? 'h2' : 'h3';
@@ -68,7 +71,10 @@ export function ProductCard({
                 : null;
 
     return (
-        <article className="group relative flex flex-col">
+        // A altura toda da linha da grelha: o preço e as cores encostam ao
+        // fundo, e assim ficam alinhados com os dos cartões ao lado mesmo
+        // quando um nome ocupa duas linhas.
+        <article className="group relative flex h-full flex-col">
             <div className="relative aspect-square overflow-hidden rounded-lg bg-muted">
                 {product.image ? (
                     <>
@@ -106,13 +112,13 @@ export function ProductCard({
                 )}
             </div>
 
-            <div className="mt-3 flex flex-col gap-1 text-left">
-                {product.category && (
-                    <p className="text-xs text-muted-foreground">
+            <div className="mt-3 flex flex-1 flex-col text-left">
+                {showCategory && product.category && (
+                    <p className="mb-1 text-xs text-muted-foreground">
                         {product.category}
                     </p>
                 )}
-                <Heading className="text-sm leading-snug font-medium">
+                <Heading className="line-clamp-2 text-sm leading-snug text-pretty">
                     <Link
                         href={product.href}
                         className="outline-none after:absolute after:inset-0 after:rounded-lg after:content-[''] focus-visible:after:ring-2 focus-visible:after:ring-ring focus-visible:after:ring-offset-2 focus-visible:after:ring-offset-background"
@@ -120,29 +126,44 @@ export function ProductCard({
                         {product.name}
                     </Link>
                 </Heading>
-                <ProductPrice price={product.price} className="text-sm" />
-                {product.colors.length > 1 && (
-                    <ul
-                        className="mt-1 flex items-center gap-1.5"
-                        aria-label={t('product.colors')}
-                    >
-                        {product.colors.map((color) => (
-                            <li
-                                key={color.name}
-                                title={color.name}
-                                className="size-3.5 rounded-full border border-border"
-                                style={{ backgroundColor: color.hex }}
-                            >
-                                <span className="sr-only">{color.name}</span>
-                            </li>
-                        ))}
-                        {product.moreColors > 0 && (
-                            <li className="text-xs text-muted-foreground">
-                                +{product.moreColors}
-                            </li>
-                        )}
-                    </ul>
-                )}
+                <div className="mt-auto pt-2">
+                    <ProductPrice
+                        price={product.price}
+                        // 15 px e o riscado mais pequeno: num cartão de
+                        // telemóvel (160 px) "desde 12,00 € 15,00 €" tem de
+                        // caber numa linha, ou o preço parte-se em dois.
+                        className="gap-x-1.5 text-[0.9375rem] font-semibold tabular-nums [&_s]:text-xs [&_s]:font-normal"
+                    />
+                    {/* A linha das cores existe sempre, mesmo vazia: sem ela
+                        o preço de uma peça de cor única descia para o sítio
+                        das bolinhas das vizinhas. */}
+                    {product.colors.length > 1 ? (
+                        <ul
+                            className="mt-2 flex h-3.5 items-center gap-1.5"
+                            aria-label={t('product.colors')}
+                        >
+                            {product.colors.map((color) => (
+                                <li
+                                    key={color.name}
+                                    title={color.name}
+                                    className="size-3.5 rounded-full border border-foreground/20"
+                                    style={{ backgroundColor: color.hex }}
+                                >
+                                    <span className="sr-only">
+                                        {color.name}
+                                    </span>
+                                </li>
+                            ))}
+                            {product.moreColors > 0 && (
+                                <li className="text-xs text-muted-foreground">
+                                    +{product.moreColors}
+                                </li>
+                            )}
+                        </ul>
+                    ) : (
+                        <div aria-hidden="true" className="mt-2 h-3.5" />
+                    )}
+                </div>
             </div>
         </article>
     );
