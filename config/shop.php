@@ -34,6 +34,16 @@ return [
         'free_above_cents' => (int) env('SHOP_SHIPPING_FREE_ABOVE_CENTS', 2500),
     ],
 
+    // O carrinho: o cookie que o identifica, quantos dias vive sem ser mexido,
+    // quantas linhas cabem e a quantidade maxima por linha (o teto por stock,
+    // quando ha, vem de Buyable e so pode ser mais baixo).
+    'cart' => [
+        'cookie' => '12studio_carrinho',
+        'days' => 60,
+        'max_lines' => 30,
+        'max_qty' => 20,
+    ],
+
     // O codigo pessoal de quem cria conta.
     'welcome_code' => [
         'value_cents' => (int) env('SHOP_WELCOME_CODE_CENTS', 500),
