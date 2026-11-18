@@ -580,6 +580,8 @@ class CheckoutWebhookTest extends TestCase
         $stranger = $this->pay($this->cartWith(), 3000);
         $this->assertSame('expired', $first->fresh()?->status);
         $this->assertNotNull($first->fresh()?->customer);
+        // So conta o prazo da sessao: a primeira ja passou dele.
+        Checkout::query()->whereKey($first->id)->update(['expires_at' => now()->subMinute()]);
 
         $this->send($this->event('checkout.session.completed', $this->stripeSession($second)))->assertNoContent();
 
@@ -637,18 +639,56 @@ class CheckoutWebhookTest extends TestCase
         $this->assertNull($second->fresh()?->customer);
     }
 
-    public function test_a_late_payment_for_a_cleared_leftover_does_not_crash_the_webhook(): void
+    public function test_an_expired_leftover_still_inside_its_session_life_keeps_its_data_and_a_late_payment_makes_a_whole_order(): void
     {
         $cart = $this->cartWith();
         $first = $this->pay($cart, 3000);
         $second = $this->pay($cart, 3000);
+        $this->assertSame('expired', $first->fresh()?->status);
+
+        $this->send($this->event('checkout.session.completed', $this->stripeSession($second)))->assertNoContent();
+
+        // Dada por expirada por nos, mas o Stripe ainda a pode cobrar.
+        $first->refresh();
+        $this->assertSame('expired', $first->status);
+        $this->assertSame('ana@example.com', $first->customer['email'] ?? null);
+        $this->assertNotNull($first->shipping_address);
+
+        $this->send($this->event('checkout.session.completed', $this->stripeSession($first)))->assertNoContent();
+
+        $late = Order::query()->where('stripe_session_id', $first->stripe_session_id)->sole();
+        $this->assertSame('Ana Silva', $late->customer_name);
+        $this->assertSame('ana@example.com', $late->email);
+        $this->assertSame('Rua das Flores 12', $late->shipping_address['line1'] ?? null);
+        $this->assertFalse($late->statusHistories()->where('note', 'like', 'Dados do cliente em falta%')->exists());
+    }
+
+    public function test_a_late_payment_for_a_cleared_leftover_still_makes_an_order_and_says_the_data_is_missing(): void
+    {
+        Exceptions::fake();
+        $cart = $this->cartWith();
+        $first = $this->pay($cart, 3000);
+        $second = $this->pay($cart, 3000);
+        Checkout::query()->whereKey($first->id)->update(['expires_at' => now()->subMinute()]);
         $this->send($this->event('checkout.session.completed', $this->stripeSession($second)))->assertNoContent();
         $this->assertNull($first->fresh()?->customer);
+        Mail::assertQueuedCount(1);
 
         $this->send($this->event('checkout.session.completed', $this->stripeSession($first)))->assertNoContent();
 
         $this->assertSame(2, Order::query()->count());
         $this->assertSame('completed', $first->fresh()?->status);
+
+        $late = Order::query()->where('stripe_session_id', $first->stripe_session_id)->sole();
+        $this->assertTrue($late->statusHistories()
+            ->where('note', 'Dados do cliente em falta: confirma-os no pagamento, no Dashboard do Stripe.')
+            ->exists());
+
+        // Dito ao dono sem dados pessoais, e sem email para um endereco vazio.
+        Exceptions::assertReported(fn (RuntimeException $exception): bool => str_contains($exception->getMessage(), "compra {$first->id}")
+            && str_contains($exception->getMessage(), (string) $first->stripe_session_id)
+            && ! str_contains($exception->getMessage(), 'ana@example.com'));
+        Mail::assertQueuedCount(1);
     }
 
     public function test_a_busy_checkout_fails_the_webhook_so_stripe_retries(): void

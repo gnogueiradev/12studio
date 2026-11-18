@@ -99,6 +99,8 @@ class CheckoutCompletion
     private function create(Checkout $checkout): Order
     {
         $customer = $checkout->customer ?? [];
+        // Lido antes de o callback abaixo limpar o checkout.
+        $missingCustomer = $checkout->customer === null;
 
         $order = $this->orders->createFromStore([
             'customer_name' => (string) ($customer['name'] ?? ''),
@@ -128,6 +130,15 @@ class CheckoutCompletion
             $this->clearLeftovers($checkout);
         });
 
+        // Nao devia acontecer (so se limpam os dados de quem ja nao se paga),
+        // mas o pagamento nao depende disso: o dinheiro chegou, por isso a
+        // encomenda cria-se — falhar o aviso so fazia o Stripe repeti-lo —,
+        // e fica dito, sem dados pessoais, onde ir buscar o cliente.
+        if ($missingCustomer) {
+            report(new RuntimeException("A compra {$checkout->id} (sessão {$checkout->stripe_session_id}) foi paga sem dados do cliente. A encomenda {$order->order_number} foi criada sem nome, email nem morada."));
+            $this->orders->notePayment($order, 'Dados do cliente em falta: confirma-os no pagamento, no Dashboard do Stripe.');
+        }
+
         // O carrinho pode ja ter sido limpo pelo prune: nesse caso nao ha o
         // que esvaziar.
         $cart = Cart::query()->find($checkout->cart_id);
@@ -137,7 +148,7 @@ class CheckoutCompletion
         }
 
         // Queued e afterCommit: sai so se a encomenda ficar, uma vez.
-        if ($order->email !== null) {
+        if (filled($order->email)) {
             Mail::to($order->email)->send(new OrderConfirmationMail($order));
         }
 
@@ -147,9 +158,10 @@ class CheckoutCompletion
     /**
      * Os outros checkouts do carrinho sem encomenda sao sobras da mesma
      * tentativa de compra (um "Pagar" repetido): nao ficam com os dados
-     * pessoais. Fora ficam os que o Stripe ainda deixa pagar (abertos e dentro
-     * da vida da sessao): um pagamento tardio criaria a encomenda a partir do
-     * que eles guardam, e sem dados nasceria vazia.
+     * pessoais. So conta o prazo da sessao, nao o `status` (que e o que nos
+     * acreditamos): dentro da vida dela o Stripe ainda a pode cobrar, e um
+     * pagamento tardio criaria a encomenda a partir do que o checkout guarda,
+     * que sem dados nasceria vazia. Sem `expires_at` nunca se abriu sessao.
      */
     private function clearLeftovers(Checkout $paid): void
     {
@@ -162,8 +174,7 @@ class CheckoutCompletion
             ->whereKeyNot($paid->getKey())
             ->whereNull('order_id')
             ->where(fn ($query) => $query
-                ->where('status', '!=', 'open')
-                ->orWhereNull('expires_at')
+                ->whereNull('expires_at')
                 ->orWhere('expires_at', '<=', now()))
             ->update(['customer' => null, 'shipping_address' => null]);
     }
