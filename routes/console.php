@@ -56,6 +56,12 @@ $alertOnFailure(Schedule::command('conversations:forget-ips')
     ->dailyAt('04:50')
     ->withoutOverlapping(), 'conversations:forget-ips');
 
+// Encomendas com mais de 10 anos civis (o prazo fiscal): saem os dados de quem
+// comprou, como promete a politica de privacidade. A encomenda fica.
+$alertOnFailure(Schedule::command('orders:anonymize')
+    ->dailyAt('04:55')
+    ->withoutOverlapping(), 'orders:anonymize');
+
 // Alertas do Discord: o que NAO esta a acontecer (encomendas paradas, bobines,
 // chaves a expirar) e o resumo das leituras do Claude.
 $alertOnFailure(Schedule::command('alerts:check')
