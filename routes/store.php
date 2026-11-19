@@ -4,6 +4,7 @@ use App\Http\Controllers\Store\CartController;
 use App\Http\Controllers\Store\CatalogController;
 use App\Http\Controllers\Store\CheckoutController;
 use App\Http\Controllers\Store\ConversationController;
+use App\Http\Controllers\Store\CustomerLoginController;
 use App\Http\Controllers\Store\LandingPageController;
 use App\Http\Controllers\Store\PageController;
 use App\Http\Controllers\Store\ProductController;
@@ -73,6 +74,20 @@ $storefront = function (): void {
         Route::post('finalizar/pagar', [CheckoutController::class, 'pay'])
             ->middleware('throttle:checkout')
             ->name('store.checkout.pay');
+
+        // Entrar na conta de cliente com um link no email. Abrir o link (GET)
+        // so mostra o botao; quem entra e o POST. O limite esta no AppServiceProvider.
+        Route::get('entrar', [CustomerLoginController::class, 'show'])->name('store.login');
+        Route::post('entrar/enviar', [CustomerLoginController::class, 'send'])
+            ->middleware('throttle:customer-login')
+            ->name('store.login.send');
+        Route::get('entrar/{token}', [CustomerLoginController::class, 'confirm'])
+            ->where('token', '[A-Za-z0-9]{64}')
+            ->name('store.login.confirm');
+        Route::post('entrar/{token}/confirmar', [CustomerLoginController::class, 'enter'])
+            ->where('token', '[A-Za-z0-9]{64}')
+            ->name('store.login.enter');
+        Route::post('conta/sair', [CustomerLoginController::class, 'logout'])->name('store.logout');
     });
 
     // Paginas de sistema montadas por blocos (App\PageBuilder).

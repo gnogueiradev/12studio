@@ -5,6 +5,7 @@ namespace App\Providers;
 use App\Alerts\AuthEventSubscriber;
 use App\Alerts\SystemAlerts;
 use App\Mcp\CurrentToken;
+use App\Models\PromoCode;
 use App\Models\User;
 use App\Services\ApiKeyService;
 use App\Services\SettingService;
@@ -198,6 +199,24 @@ class AppServiceProvider extends ServiceProvider
             Limit::perMinute(3)->by('conversation-resend:'.$request->ip()),
             Limit::perDay(10)->by('conversation-resend:email:'.mb_strtolower(trim((string) $request->input('email')))),
         ]);
+
+        // Os links de entrada no email: 3 por 10 minutos por email e 10 por
+        // hora por IP. O limite e o mesmo para qualquer email, exista a conta
+        // ou nao, e corre antes de se procurar seja o que for: o 429 nao diz
+        // nada sobre quem tem conta, e nao sai mais nenhum email. Sem email no
+        // pedido (o "guardar os dados" da pagina da compra), conta o link da
+        // compra a partir daquele IP.
+        RateLimiter::for('customer-login', function (Request $request): array {
+            $email = $request->input('email');
+            $email = is_string($email) ? PromoCode::normalizeEmail($email) : null;
+
+            return [
+                Limit::perHour(10)->by('customer-login:ip:'.$request->ip()),
+                $email !== null
+                    ? Limit::perMinutes(10, 3)->by('customer-login:email:'.$email)
+                    : Limit::perMinutes(10, 3)->by('customer-login:link:'.$request->ip().':'.hash('sha256', (string) $request->route('token'))),
+            ];
+        });
 
         RateLimiter::for('etsy-webhook', fn (Request $request): Limit => Limit::perMinute(120)->by('etsy-webhook:'.$request->ip()));
 

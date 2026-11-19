@@ -267,7 +267,12 @@ class SystemAlerts
 
         $request = request();
 
-        return $request->method().' '.Str::limit($request->getRequestUri(), 200);
+        // Os links privados (entrar, compra, conversa) levam o segredo no
+        // caminho, e a query string pode levar o que for: nada disso vai
+        // para o Discord. Um segmento de 32 ou mais letras e numeros e um token.
+        $path = (string) preg_replace('#(?<=/)[A-Za-z0-9]{32,}(?=/|$)#', '…', $request->getPathInfo());
+
+        return $request->method().' '.Str::limit($path, 200);
     }
 
     private function size(int $bytes): string

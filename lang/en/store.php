@@ -409,4 +409,15 @@ return [
         'back_to_shop' => 'Keep browsing the catalogue',
         'quantity' => 'Quantity: :count',
     ],
+    'account' => [
+        'login_title' => 'Sign in to your account',
+        'login_text' => 'We will email you a link to sign in, no password needed.',
+        'send' => 'Send link',
+        'sent' => 'If this email can sign in, you will get a link shortly. It is valid for 20 minutes.',
+        'confirm_text' => 'You are signing in as :email.',
+        'enter' => 'Sign in',
+        'link_invalid' => 'This link has already been used or has expired.',
+        'ask_again' => 'Ask for another link',
+        'logout' => 'Sign out',
+    ],
 ];

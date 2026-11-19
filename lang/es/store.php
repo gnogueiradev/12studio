@@ -409,4 +409,15 @@ return [
         'back_to_shop' => 'Seguir viendo el catálogo',
         'quantity' => 'Cantidad: :count',
     ],
+    'account' => [
+        'login_title' => 'Entra en tu cuenta',
+        'login_text' => 'Te enviamos un enlace para entrar, sin contraseña.',
+        'send' => 'Enviar enlace',
+        'sent' => 'Si este email puede entrar, recibirás un enlace en breve. Vale 20 minutos.',
+        'confirm_text' => 'Vas a entrar como :email.',
+        'enter' => 'Entrar',
+        'link_invalid' => 'El enlace ya se usó o ha caducado.',
+        'ask_again' => 'Pedir otro enlace',
+        'logout' => 'Salir',
+    ],
 ];

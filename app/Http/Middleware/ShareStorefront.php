@@ -12,6 +12,7 @@ use App\Shop\ShopGate;
 use App\Support\LocalizedUrl;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Crypt;
 use Inertia\Inertia;
 use Symfony\Component\HttpFoundation\Response;
@@ -67,16 +68,27 @@ class ShareStorefront
             // conversa devolvem-na, e um envio rapido demais e de um robo
             // (OpenConversationRequest).
             'form' => ['started' => Crypt::encryptString((string) now()->timestamp)],
+            // O cliente com sessao (a guarda `customer`), so com o nome: e o
+            // que o cabecalho precisa, e nada mais vai para todas as paginas.
+            'customer' => $this->customer(),
         ]);
     }
 
     /**
      * Resolvido so quando a pagina renderiza (as paginas de erro nao passam
-     * pelo ciclo normal), por isso o pedido vem do container.
+     * pelo ciclo normal). A porta das compras usa sempre a guarda da equipa.
      */
     private function shopOpen(): bool
     {
-        return app(ShopGate::class)->allows(request()->user());
+        return app(ShopGate::class)->allows(Auth::guard('web')->user());
+    }
+
+    /** @return array{name: string}|null */
+    private function customer(): ?array
+    {
+        $customer = Auth::guard('customer')->user();
+
+        return $customer === null ? null : ['name' => (string) $customer->name];
     }
 
     /** Sem cookie do carrinho nem se consulta a base de dados. */

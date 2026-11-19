@@ -5,6 +5,7 @@ namespace App\Http\Middleware;
 use App\Shop\ShopGate;
 use Closure;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
@@ -20,7 +21,9 @@ class EnsureShopOpen
 
     public function handle(Request $request, Closure $next): Response
     {
-        abort_unless($this->gate->allows($request->user()), 404);
+        // Sempre a guarda da equipa: um `auth:customer` na rota trocava a
+        // guarda por omissao, e o `$request->user()` passava a ser o cliente.
+        abort_unless($this->gate->allows(Auth::guard('web')->user()), 404);
 
         return $next($request);
     }

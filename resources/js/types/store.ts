@@ -60,6 +60,8 @@ export type Storefront = {
     cartCount: number;
     /** O limite geral de peças por linha (config('shop.cart.max_qty')). */
     maxQty: number;
+    /** O cliente com sessão (guarda `customer`), ou null. */
+    customer: { name: string } | null;
 };
 
 /** Um link de bloco já resolvido (PageRenderer). */

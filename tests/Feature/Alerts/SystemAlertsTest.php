@@ -8,9 +8,11 @@ use App\Jobs\SendDiscordAlert;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Queue\Job;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Http\Request;
 use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 use Mockery;
 use RuntimeException;
 use Tests\TestCase;
@@ -74,6 +76,23 @@ class SystemAlertsTest extends TestCase
 
         $last = Http::recorded()->last()[0]->data()['embeds'][0];
         $this->assertStringContainsString('Repetições desde o último aviso: 3', $this->embedText($last));
+    }
+
+    public function test_the_request_label_hides_tokens(): void
+    {
+        $token = Str::random(64);
+
+        // Os testes correm na consola, e la o rotulo e outro: aqui finge-se um
+        // pedido web a meio de entrar com o link do email.
+        (fn () => $this->isRunningInConsole = false)->call($this->app);
+        $this->app->instance('request', Request::create('/entrar/'.$token.'?x=1'));
+
+        report($this->boom());
+
+        $text = $this->embedText($this->alertEmbed(AlertChannel::SYSTEM, 'Erro — RuntimeException'));
+        $this->assertStringContainsString('GET /entrar/…', $text);
+        $this->assertStringNotContainsString($token, $text);
+        $this->assertStringNotContainsString('x=1', $text);
     }
 
     public function test_a_failed_job_is_reported(): void

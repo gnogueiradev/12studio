@@ -409,4 +409,15 @@ return [
         'back_to_shop' => 'Continuer à voir le catalogue',
         'quantity' => 'Quantité : :count',
     ],
+    'account' => [
+        'login_title' => 'Se connecter à ton compte',
+        'login_text' => 'Nous t\'envoyons un lien pour te connecter, sans mot de passe.',
+        'send' => 'Envoyer le lien',
+        'sent' => 'Si cet e-mail peut se connecter, tu recevras un lien sous peu. Il est valable 20 minutes.',
+        'confirm_text' => 'Tu vas te connecter en tant que :email.',
+        'enter' => 'Se connecter',
+        'link_invalid' => 'Ce lien a déjà été utilisé ou a expiré.',
+        'ask_again' => 'Demander un autre lien',
+        'logout' => 'Se déconnecter',
+    ],
 ];
