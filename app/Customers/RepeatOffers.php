@@ -63,12 +63,7 @@ class RepeatOffers
                 ->from('repeat_offers')
                 ->whereColumn('repeat_offers.order_id', 'orders.id'))
             ->whereHas('user', fn (Builder $query) => $this->acceptsOffers($query))
-            // Ja voltou a comprar: a oferta chegava tarde.
-            ->whereNotExists(fn (QueryBuilder $query) => $query->select(DB::raw(1))
-                ->from('orders as later')
-                ->whereRaw('lower(trim(later.email)) = lower(trim(orders.email))')
-                ->where('later.payment_status', 'paid')
-                ->whereColumn('later.created_at', '>', 'orders.created_at'))
+            ->whereNotExists(fn (QueryBuilder $query) => $this->laterPaidOrder($query))
             // Um codigo destes por usar e ainda valido chega.
             ->whereNotExists(fn (QueryBuilder $query) => $query->select(DB::raw(1))
                 ->from('promo_codes')
@@ -123,8 +118,10 @@ class RepeatOffers
     }
 
     /**
-     * As ofertas a lembrar: o codigo por usar expira nos proximos dias e quem
-     * o recebeu nao recusou entretanto.
+     * As ofertas a lembrar: o codigo, ainda ativo e por usar, expira nos
+     * proximos dias, e tudo o que deu direito a oferta ainda se mantem — a
+     * encomenda paga e nao cancelada nem reembolsada, um cliente (nunca a
+     * equipa) que nao recusou, e sem outra compra paga depois dela.
      *
      * @return Collection<int, RepeatOffer>
      */
@@ -135,23 +132,36 @@ class RepeatOffers
         return RepeatOffer::query()
             ->whereNull('reminded_at')
             ->whereHas('promoCode', fn (Builder $query) => $query
+                ->where('is_active', true)
                 ->whereBetween('expires_at', [now(), now()->addDays($days)])
                 ->whereDoesntHave('redemptions'))
+            ->whereHas('order', fn (Builder $query) => $query
+                ->where('payment_status', 'paid')
+                ->whereNotIn('status', ['cancelled', 'refunded'])
+                ->whereNotExists(fn (QueryBuilder $later) => $this->laterPaidOrder($later)))
             ->whereHas('order.user', fn (Builder $query) => $this->acceptsOffers($query))
             ->orderBy('id')
             ->get();
     }
 
     /**
-     * Marca o lembrete e poe-no na fila, juntos: o agendador a correr de novo
-     * nao manda segundo.
+     * Marca o lembrete e poe-no na fila, juntos. A marca e condicional (so
+     * se ainda nao havia): duas corridas que leram a mesma oferta tentam as
+     * duas, mas so a primeira muda a linha e manda o email.
      */
     public function remind(RepeatOffer $offer): void
     {
         $order = $offer->order()->firstOrFail();
 
         DB::transaction(function () use ($offer, $order): void {
-            $offer->forceFill(['reminded_at' => now()])->save();
+            $marked = RepeatOffer::query()
+                ->whereKey($offer->getKey())
+                ->whereNull('reminded_at')
+                ->update(['reminded_at' => now()]);
+
+            if ($marked !== 1) {
+                return;
+            }
 
             Mail::to($offer->email)->queue(new RepeatOfferReminderMail(
                 $offer->promoCode()->firstOrFail(),
@@ -173,6 +183,20 @@ class RepeatOffers
     {
         return rtrim((string) config('app.url'), '/')
             .URL::signedRoute('store.offers.unsubscribe', ['user' => $user->id], absolute: false);
+    }
+
+    /**
+     * Uma compra paga do mesmo email depois desta encomenda (`orders`): ja
+     * voltou a comprar, e a oferta ou o lembrete chegavam tarde. A consulta e
+     * a de um `whereNotExists`.
+     */
+    private function laterPaidOrder(QueryBuilder $query): QueryBuilder
+    {
+        return $query->select(DB::raw(1))
+            ->from('orders as later')
+            ->whereRaw('lower(trim(later.email)) = lower(trim(orders.email))')
+            ->where('later.payment_status', 'paid')
+            ->whereColumn('later.created_at', '>', 'orders.created_at');
     }
 
     /**

@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Customers;
 
+use App\Customers\RepeatOffers;
 use App\Mail\RepeatOfferMail;
 use App\Mail\RepeatOfferReminderMail;
 use App\Models\Checkout;
@@ -13,9 +14,14 @@ use App\Models\User;
 use App\Services\SettingService;
 use App\Services\StoreSettings;
 use Closure;
+use Illuminate\Console\Scheduling\Event;
+use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Exceptions;
 use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Schedule as ScheduleFacade;
 use PHPUnit\Framework\Attributes\DataProvider;
+use RuntimeException;
 use Tests\Feature\Stripe\FakesStripe;
 use Tests\TestCase;
 
@@ -260,6 +266,118 @@ class RepeatOffersTest extends TestCase
         $this->travel(8)->days();
         $this->artisan('offers:send')->assertSuccessful();
         Mail::assertQueued(RepeatOfferReminderMail::class, 1);
+    }
+
+    /**
+     * O que muda entre a oferta e o lembrete e que tira o direito a ele.
+     *
+     * @return array<string, array{0: Closure(Order, RepeatOffer): void}>
+     */
+    public static function reasonsForNoReminder(): array
+    {
+        return [
+            'the code was switched off' => [fn (Order $order, RepeatOffer $offer) => $offer->promoCode->update(['is_active' => false])],
+            'the order was cancelled' => [fn (Order $order) => $order->update(['status' => 'cancelled'])],
+            'the order was refunded' => [fn (Order $order) => $order->update(['status' => 'refunded', 'payment_status' => 'refunded'])],
+            'the customer joined the staff' => [fn (Order $order) => $order->user?->forceFill(['staff_role' => User::ROLE_PRODUCTION])->save()],
+            'the customer refused offers' => [fn (Order $order) => $order->user?->forceFill(['marketing_opt_out_at' => now()])->save()],
+            'a newer paid order from the same email' => [fn (Order $order) => Order::factory()->paid()->create([
+                'email' => strtoupper((string) $order->email),
+            ])],
+        ];
+    }
+
+    /**
+     * @param  Closure(Order, RepeatOffer): void  $change
+     */
+    #[DataProvider('reasonsForNoReminder')]
+    public function test_no_reminder_when(Closure $change): void
+    {
+        $order = $this->shippedOrder();
+        $this->artisan('offers:send')->assertSuccessful();
+        $offer = RepeatOffer::query()->sole();
+
+        $change($order->fresh() ?? $order, $offer);
+
+        $this->travel(38)->days();
+        $this->travel(1)->hours();
+        $this->artisan('offers:send')->assertSuccessful();
+
+        Mail::assertNotQueued(RepeatOfferReminderMail::class);
+        $this->assertNull($offer->fresh()?->reminded_at);
+    }
+
+    public function test_two_runs_with_the_same_offer_remind_once(): void
+    {
+        $this->shippedOrder();
+        $this->artisan('offers:send')->assertSuccessful();
+
+        // Duas corridas que leram a mesma oferta antes de qualquer delas a marcar.
+        $first = RepeatOffer::query()->sole();
+        $second = RepeatOffer::query()->sole();
+        app(RepeatOffers::class)->remind($first);
+        app(RepeatOffers::class)->remind($second);
+
+        Mail::assertQueued(RepeatOfferReminderMail::class, 1);
+    }
+
+    public function test_one_failing_offer_does_not_stop_the_others(): void
+    {
+        Exceptions::fake();
+        $poisoned = $this->shippedOrder();
+        $fine = $this->shippedOrder();
+
+        $this->app->instance(RepeatOffers::class, new class(app(StoreSettings::class), $poisoned->id) extends RepeatOffers
+        {
+            public function __construct(StoreSettings $settings, private int $poisonedId)
+            {
+                parent::__construct($settings);
+            }
+
+            public function send(Order $order): void
+            {
+                if ($order->id === $this->poisonedId) {
+                    throw new RuntimeException("O SMTP recusou {$order->email}");
+                }
+
+                parent::send($order);
+            }
+        });
+
+        $this->artisan('offers:send')->assertSuccessful();
+
+        $this->assertTrue(RepeatOffer::query()->where('order_id', $fine->id)->exists());
+        $this->assertFalse(RepeatOffer::query()->where('order_id', $poisoned->id)->exists());
+        Mail::assertQueued(RepeatOfferMail::class, 1);
+        Exceptions::assertReported(fn (RuntimeException $exception): bool => str_contains($exception->getMessage(), "#{$poisoned->id}")
+            && ! str_contains($exception->getMessage(), (string) $poisoned->email)
+            && $exception->getPrevious() === null);
+    }
+
+    public function test_offers_go_out_only_during_the_day(): void
+    {
+        $this->assertFalse($this->offersScheduledAt(22)->filtersPass($this->app));
+        $this->assertFalse($this->offersScheduledAt(7)->filtersPass($this->app));
+        $this->assertTrue($this->offersScheduledAt(10)->filtersPass($this->app));
+    }
+
+    /**
+     * O agendamento das ofertas, como o `schedule:run` o monta a essa hora:
+     * o `between` guarda a hora em que o agendamento se declara.
+     */
+    private function offersScheduledAt(int $hour): Event
+    {
+        $this->travelTo(now()->setTime($hour, 0));
+        $schedule = new Schedule;
+        ScheduleFacade::swap($schedule);
+
+        require base_path('routes/console.php');
+
+        $event = collect($schedule->events())
+            ->first(fn (Event $event): bool => str_contains((string) $event->command, 'offers:send'));
+        $this->assertInstanceOf(Event::class, $event);
+
+        return $event;
     }
 
     public function test_the_offer_settings_are_saved_and_change_the_offer(): void

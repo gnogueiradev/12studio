@@ -102,9 +102,11 @@ $alertOnFailure(Schedule::command('images:variants')
     ->withoutOverlapping(), 'images:variants');
 
 // As ofertas para voltar a comprar e os lembretes. Com as ofertas desligadas
-// ou a loja sem vender ao publico, o comando sai logo.
+// ou a loja sem vender ao publico, o comando sai logo. So de dia, na hora da
+// app: um email de marketing a meio da noite e ruido.
 $alertOnFailure(Schedule::command('offers:send')
     ->hourly()
+    ->between('9:00', '20:00')
     ->withoutOverlapping(), 'offers:send');
 
 // Batimento: o /up (healthcheck do Docker) avisa se isto parar.
