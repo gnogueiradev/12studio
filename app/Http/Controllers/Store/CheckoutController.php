@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Shop\StartCheckoutRequest;
 use App\Models\Cart;
 use App\Models\Checkout;
+use App\Models\User;
 use App\Shop\CartPresenter;
 use App\Shop\CartService;
 use App\Shop\CheckoutService;
@@ -41,14 +42,44 @@ class CheckoutController extends Controller
             return redirect(LocalizedUrl::path('/carrinho'));
         }
 
+        $account = Auth::guard('customer')->user();
+
         return Inertia::render('store/checkout', [
             'cart' => $cart,
-            'customer' => $current === null ? null : $this->lastCustomer($current),
+            // Com sessao, a conta manda: e o que o cliente guardou, nao o
+            // que ficou de um "Pagar" abandonado.
+            'customer' => $account !== null
+                ? $this->accountCustomer($account)
+                : ($current === null ? null : $this->lastCustomer($current)),
+            'account' => $account === null ? null : ['email' => $account->email],
+            'marketing_opt_out' => $account?->marketing_opt_out_at !== null,
         ])->withViewData(['seo' => Seo::make(
             path: '/finalizar',
             title: trans('store.checkout.title'),
             index: false,
         )]);
+    }
+
+    /**
+     * Os dados guardados na conta: contacto e a morada por omissao. Sem
+     * morada guardada os campos vem vazios, para escrever.
+     *
+     * @return array{name: string, email: string, phone: string, nif: string, line1: string, line2: string, postal_code: string, city: string}
+     */
+    private function accountCustomer(User $account): array
+    {
+        $address = $account->addresses()->where('is_default', true)->first();
+
+        return [
+            'name' => (string) $account->name,
+            'email' => $account->email,
+            'phone' => (string) $account->phone,
+            'nif' => (string) $account->nif,
+            'line1' => (string) $address?->line1,
+            'line2' => (string) $address?->line2,
+            'postal_code' => (string) $address?->postal_code,
+            'city' => (string) $address?->city,
+        ];
     }
 
     /**
@@ -117,7 +148,14 @@ class CheckoutController extends Controller
             throw ValidationException::withMessages(['cart' => trans('store.checkout.errors.cart')]);
         }
 
+        $account = Auth::guard('customer')->user();
         $customer = $request->customer();
+
+        // Com sessao, a compra liga-se a esta conta: o email e o dela, seja
+        // o que for que o pedido traga.
+        if ($account !== null) {
+            $customer['email'] = $account->email;
+        }
 
         try {
             $url = $checkouts->start(
@@ -126,7 +164,7 @@ class CheckoutController extends Controller
                 $request->address(),
                 app()->getLocale(),
                 $request->integer('expected_total_cents'),
-                Auth::guard('customer')->user(),
+                $account,
                 $request->marketingOptOut(),
             );
         } catch (ValidationException $exception) {

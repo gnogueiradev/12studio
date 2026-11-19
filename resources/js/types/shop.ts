@@ -71,6 +71,7 @@ export type CheckoutFormData = {
     line2: string;
     postal_code: string;
     city: string;
+    marketing_opt_out: boolean;
     terms: boolean;
     expected_total_cents: number;
 };

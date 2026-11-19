@@ -2,12 +2,14 @@
 
 namespace Tests\Feature\Shop;
 
+use App\Models\Address;
 use App\Models\Cart;
 use App\Models\CartItem;
 use App\Models\Checkout;
 use App\Models\Order;
 use App\Models\Product;
 use App\Models\PromoCode;
+use App\Models\User;
 use App\Models\Variant;
 use App\Services\SettingService;
 use App\Services\StoreSettings;
@@ -142,6 +144,70 @@ class CheckoutTest extends TestCase
 
         // Outro visitante, com o seu carrinho, nao ve os dados deste.
         $this->holding($this->cartWith())->get('/finalizar')->assertInertia(fn (Assert $page) => $page->where('customer', null));
+    }
+
+    public function test_a_signed_in_checkout_is_prefilled_from_the_account(): void
+    {
+        $cart = $this->cartWith();
+        $account = User::factory()->create([
+            'name' => 'Rita Costa',
+            'email' => 'rita@example.com',
+            'phone' => '913 000 111',
+            'nif' => '987654321',
+        ]);
+        Address::factory()->create([
+            'user_id' => $account->id,
+            'line1' => 'Rua Nova 5',
+            'line2' => null,
+            'postal_code' => '4000-100',
+            'city' => 'Porto',
+            'is_default' => true,
+        ]);
+
+        $this->actingAs($account, 'customer');
+
+        $this->holding($cart)->get('/finalizar')->assertInertia(fn (Assert $page) => $page
+            ->where('customer', [
+                'name' => 'Rita Costa',
+                'email' => 'rita@example.com',
+                'phone' => '913 000 111',
+                'nif' => '987654321',
+                'line1' => 'Rua Nova 5',
+                'line2' => '',
+                'postal_code' => '4000-100',
+                'city' => 'Porto',
+            ])
+            ->where('account', ['email' => 'rita@example.com'])
+            ->where('marketing_opt_out', false));
+
+        $this->assertSame(0, Checkout::query()->count());
+    }
+
+    public function test_a_signed_in_checkout_pays_with_the_account_email(): void
+    {
+        $cart = $this->cartWith();
+        $account = User::factory()->create(['email' => 'rita@example.com']);
+
+        $this->actingAs($account, 'customer');
+
+        $this->pay($cart, $this->customer(3000, ['email' => 'outra@example.com']))->assertSessionHasNoErrors();
+
+        $this->assertSame('rita@example.com', Checkout::query()->sole()->customer['email']);
+    }
+
+    public function test_the_opt_out_box_starts_ticked_for_an_opted_out_account(): void
+    {
+        $cart = $this->cartWith();
+
+        $this->actingAs(User::factory()->create(['marketing_opt_out_at' => now()]), 'customer');
+        $this->holding($cart)->get('/finalizar')->assertInertia(fn (Assert $page) => $page
+            ->where('marketing_opt_out', true));
+
+        // Sem sessao, a caixa vem desmarcada e nao ha conta.
+        $this->app['auth']->guard('customer')->logout();
+        $this->holding($cart)->get('/finalizar')->assertInertia(fn (Assert $page) => $page
+            ->where('marketing_opt_out', false)
+            ->where('account', null));
     }
 
     public function test_an_open_checkout_past_its_session_life_does_not_fill_the_form(): void

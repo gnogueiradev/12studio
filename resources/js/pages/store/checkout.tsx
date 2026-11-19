@@ -160,10 +160,19 @@ function SummaryLine({ line }: { line: CartLine }) {
 export default function CheckoutPage({
     cart,
     customer,
+    account,
+    marketing_opt_out,
 }: {
     cart: CartData;
-    /** Os dados do último "Pagar" ainda em aberto (voltou do Stripe), ou null. */
-    customer: Omit<CheckoutFormData, 'terms' | 'expected_total_cents'> | null;
+    /** Os dados da conta, ou do último "Pagar" ainda em aberto (voltou do Stripe), ou null. */
+    customer: Omit<
+        CheckoutFormData,
+        'terms' | 'expected_total_cents' | 'marketing_opt_out'
+    > | null;
+    /** Com sessão de cliente: o email é o da conta e não se edita. */
+    account: { email: string } | null;
+    /** A recusa de ofertas da conta; sem conta, desmarcada. */
+    marketing_opt_out: boolean;
 }) {
     const t = useT();
     const url = useLocalizedUrl();
@@ -213,6 +222,7 @@ export default function CheckoutPage({
             line2: customer?.line2 ?? '',
             postal_code: customer?.postal_code ?? '',
             city: customer?.city ?? '',
+            marketing_opt_out,
             // Os termos aceitam-se de cada vez: nunca vêm marcados.
             terms: false,
             expected_total_cents: cart.totalCents,
@@ -431,12 +441,27 @@ export default function CheckoutPage({
                                 spellCheck={false}
                                 maxLength={255}
                                 value={data.email}
+                                readOnly={account !== null}
                                 error={errors.email}
                                 onChange={(event) =>
                                     setData('email', event.target.value)
                                 }
                                 onBlur={confirmCode}
                             />
+                            {account && (
+                                <p className="-mt-2 text-sm text-muted-foreground">
+                                    {t('checkout.not_you')}{' '}
+                                    <button
+                                        type="button"
+                                        className="font-medium text-foreground underline underline-offset-4"
+                                        onClick={() =>
+                                            router.post(url('/conta/sair'))
+                                        }
+                                    >
+                                        {t('checkout.sign_out')}
+                                    </button>
+                                </p>
+                            )}
                             <div className="grid gap-4 sm:grid-cols-2">
                                 <TextField
                                     name="phone"
@@ -613,6 +638,26 @@ export default function CheckoutPage({
                         )}
 
                         <CartTotals cart={summary} />
+
+                        <div className="flex items-start gap-3">
+                            <Checkbox
+                                id="checkout-marketing-opt-out"
+                                checked={data.marketing_opt_out}
+                                onCheckedChange={(checked) =>
+                                    setData(
+                                        'marketing_opt_out',
+                                        checked === true,
+                                    )
+                                }
+                                className="mt-0.5"
+                            />
+                            <Label
+                                htmlFor="checkout-marketing-opt-out"
+                                className="text-sm leading-relaxed font-normal"
+                            >
+                                {t('checkout.marketing_opt_out')}
+                            </Label>
+                        </div>
 
                         <div className="flex flex-col gap-1.5">
                             <div className="flex items-start gap-3">
