@@ -62,6 +62,33 @@ class NginxVhostConfigTest extends TestCase
     }
 
     /**
+     * Uma chaveta num regex de `location` sem aspas fecha o token do nginx a
+     * meio: `^/([a-z]{2}/)?` chega ao PCRE como `^/([a-z]` e o nginx recusa
+     * arrancar ("missing closing parenthesis"). So se ve no deploy, com o
+     * container antigo ja trocado — daqui sai antes.
+     */
+    public function test_no_location_regex_has_unquoted_braces(): void
+    {
+        $offenders = [];
+
+        foreach (glob($this->basePath('docker').DIRECTORY_SEPARATOR.'*.conf') ?: [] as $path) {
+            $contents = (string) file_get_contents($path);
+
+            if (preg_match_all('/^\s*location\s+~\*?\s+[^"\'\s][^\n]*[{}][^\n]*\{/m', $contents, $matches) > 0) {
+                foreach ($matches[0] as $line) {
+                    $offenders[] = basename($path).': '.trim($line);
+                }
+            }
+        }
+
+        $this->assertSame(
+            [],
+            $offenders,
+            "Regex de location com chavetas sem aspas — o nginx nao arranca:\n".implode("\n", $offenders),
+        );
+    }
+
+    /**
      * O limite de upload configura-se pela env var que a imagem substitui no
      * template, nunca por um .conf nosso. Se este valor desaparecer, o limite
      * passa a depender do default (silencioso) da imagem base.
