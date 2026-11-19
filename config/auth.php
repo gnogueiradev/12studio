@@ -43,6 +43,14 @@ return [
             'provider' => 'users',
         ],
 
+        // O cliente da loja: sessao propria (a da equipa e a `web`) que lembra
+        // 60 dias, para quem volta nao ter de pedir outra ligacao.
+        'customer' => [
+            'driver' => 'session',
+            'provider' => 'users',
+            'remember' => 60 * 24 * 60,
+        ],
+
         // So o /mcp usa este guard: Bearer tokens do Passport, sem sessao.
         'api' => [
             'driver' => 'passport',

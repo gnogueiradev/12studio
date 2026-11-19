@@ -36,6 +36,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property string|null $promo_code
  * @property int $total_cents
  * @property string|null $locale
+ * @property bool|null $marketing_opt_out
  * @property string|null $stripe_session_id
  * @property string $status
  * @property CarbonImmutable|null $expires_at
@@ -45,7 +46,7 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 #[Fillable([
     'user_id', 'token', 'cart_id', 'order_id', 'items_snapshot', 'customer', 'shipping_address',
     'subtotal_cents', 'shipping_cents', 'discount_cents', 'promo_code_id', 'promo_code', 'total_cents',
-    'locale', 'stripe_session_id', 'status', 'expires_at',
+    'locale', 'marketing_opt_out', 'stripe_session_id', 'status', 'expires_at',
 ])]
 class Checkout extends Model
 {
@@ -74,6 +75,7 @@ class Checkout extends Model
             'shipping_cents' => 'integer',
             'discount_cents' => 'integer',
             'total_cents' => 'integer',
+            'marketing_opt_out' => 'boolean',
             'expires_at' => 'datetime',
         ];
     }

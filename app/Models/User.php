@@ -42,6 +42,7 @@ use Laravel\Passport\HasApiTokens;
  * @property string|null $phone
  * @property string|null $nif
  * @property string|null $admin_note
+ * @property CarbonImmutable|null $marketing_opt_out_at
  * @property CarbonImmutable|null $created_at
  * @property CarbonImmutable|null $updated_at
  */
@@ -87,6 +88,7 @@ class User extends Authenticatable implements OAuthenticatable, PasskeyUser
             'is_owner' => 'boolean',
             'must_change_password' => 'boolean',
             'disabled_at' => 'datetime',
+            'marketing_opt_out_at' => 'datetime',
         ];
     }
 

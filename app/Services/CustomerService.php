@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\PromoCode;
 use App\Models\Tag;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
@@ -26,8 +27,8 @@ class CustomerService
 
     /**
      * O cliente criado no backoffice nao faz login: recebe uma password
-     * aleatoria que ninguem ve nem recebe. Quando a Fase 5 abrir o registo,
-     * entra por "recuperar password". `is_admin` esta fora do #[Fillable]
+     * aleatoria que ninguem ve nem recebe. Quando tiver email, entra por uma
+     * ligacao enviada para ele. `is_admin` esta fora do #[Fillable]
      * do User, por isso nao ha forma de promover alguem por aqui.
      *
      * @param  array<string, mixed>  $data
@@ -118,8 +119,9 @@ class CustomerService
         return [
             'name' => $data['name'],
             // String vazia vinda do formulario tem de virar null: a coluna e
-            // unica, e dois clientes sem email com '' colidiam.
-            'email' => $this->nullIfBlank($data['email'] ?? null),
+            // unica, e dois clientes sem email com '' colidiam. Em minusculas,
+            // como o resto da loja compara emails.
+            'email' => PromoCode::normalizeEmail($data['email'] ?? null),
             'customer_type' => $data['customer_type'],
             'phone' => $this->nullIfBlank($data['phone'] ?? null),
             'nif' => $this->nullIfBlank($data['nif'] ?? null),
