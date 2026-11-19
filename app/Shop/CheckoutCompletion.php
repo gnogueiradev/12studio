@@ -165,29 +165,40 @@ class CheckoutCompletion
 
     /**
      * O cliente a quem a compra pertence. Quem entrou na conta ao pagar
-     * guarda os dados e a escolha de marketing tal como vieram (a caixa
-     * desmarcada volta a aceitar ofertas); quem comprou sem entrar so pode
-     * recusar, nunca voltar a aceitar: nao se prova que o email e dele.
-     * Equipa ou email ambiguo: sem cliente, a encomenda fica sem conta.
+     * guarda os dados e a escolha de marketing (a caixa desmarcada volta a
+     * aceitar ofertas); quem comprou sem entrar so pode recusar, nunca voltar
+     * a aceitar: nao se prova que o email e dele. Sem escolha (`null`, um
+     * pedido sem a caixa) a conta fica como esta. Equipa ou email ambiguo:
+     * sem cliente, a encomenda fica sem conta.
      *
      * @param  array<string, mixed>  $customer
      */
     private function account(Checkout $checkout, array $customer): ?User
     {
-        $optOut = (bool) $checkout->marketing_opt_out;
+        $optOut = $checkout->marketing_opt_out;
         $signedIn = $checkout->user_id === null ? null : User::query()->find($checkout->user_id);
 
         if ($signedIn !== null && ! $signedIn->isStaff()) {
             $this->customers->saveDetails($signedIn, $customer, $checkout->shipping_address ?? []);
-            // forceFill: a recusa nao esta no #[Fillable] da conta.
-            $signedIn->forceFill(['marketing_opt_out_at' => $optOut ? now() : null])->save();
+            // Recusar guarda a data da primeira recusa; a caixa desmarcada so
+            // desfaz uma recusa de antes do "Pagar": o aviso do Stripe pode
+            // chegar dias depois (o Multibanco), e uma recusa feita entretanto,
+            // pelo link de um email ou na conta, e a mais recente. forceFill:
+            // a recusa nao esta no #[Fillable] da conta.
+            $refusedAt = $signedIn->marketing_opt_out_at;
+
+            if ($optOut === true && $refusedAt === null) {
+                $signedIn->forceFill(['marketing_opt_out_at' => now()])->save();
+            } elseif ($optOut === false && $refusedAt?->lessThanOrEqualTo($checkout->created_at)) {
+                $signedIn->forceFill(['marketing_opt_out_at' => null])->save();
+            }
 
             return $signedIn;
         }
 
         $user = $this->customers->forPurchase((string) ($customer['email'] ?? ''), $customer, $checkout->shipping_address ?? []);
 
-        if ($user !== null && $optOut && $user->marketing_opt_out_at === null) {
+        if ($user !== null && $optOut === true && $user->marketing_opt_out_at === null) {
             $user->forceFill(['marketing_opt_out_at' => now()])->save();
         }
 

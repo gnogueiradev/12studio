@@ -120,11 +120,13 @@ class StartCheckoutRequest extends FormRequest
     }
 
     /**
-     * A caixa desmarcada (ou ausente) e "nao recusa".
+     * A caixa desmarcada e "nao recusa". Ausente (uma pagina de antes de um
+     * deploy, um pedido feito a mao) e `null`: nao se perguntou, e uma
+     * encomenda assim nunca da oferta.
      */
-    public function marketingOptOut(): bool
+    public function marketingOptOut(): ?bool
     {
-        return $this->boolean('marketing_opt_out');
+        return $this->has('marketing_opt_out') ? $this->boolean('marketing_opt_out') : null;
     }
 
     /**

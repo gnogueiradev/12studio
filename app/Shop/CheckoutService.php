@@ -40,7 +40,7 @@ class CheckoutService
      * @throws ValidationException quando o carrinho nao deixa pagar, o codigo nao vale ou o total mudou
      * @throws StripeException
      */
-    public function start(Cart $cart, array $customer, array $address, string $locale, int $expectedTotalCents, ?User $account = null, bool $marketingOptOut = false): string
+    public function start(Cart $cart, array $customer, array $address, string $locale, int $expectedTotalCents, ?User $account = null, ?bool $marketingOptOut = null): string
     {
         // Dois cliques (ou duas abas) ao mesmo tempo liam a mesma sessao
         // anterior e abriam duas novas, ambas pagaveis. Um de cada vez.
@@ -61,7 +61,7 @@ class CheckoutService
      * @param  array{name: string, email: string, phone: string, nif: string|null}  $customer
      * @param  array{line1: string, line2: string|null, postal_code: string, city: string}  $address
      */
-    private function startLocked(Cart $cart, array $customer, array $address, string $locale, int $expectedTotalCents, ?User $account, bool $marketingOptOut): string
+    private function startLocked(Cart $cart, array $customer, array $address, string $locale, int $expectedTotalCents, ?User $account, ?bool $marketingOptOut): string
     {
         // Ja pago vem primeiro: quem pagou (ou gerou a referencia) e voltou
         // atras vai ver essa compra, mesmo que um preco tenha mudado entretanto.

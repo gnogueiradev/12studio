@@ -91,8 +91,12 @@ class PurchaseLinksCustomerTest extends TestCase
      */
     private function buy(array $overrides = [], ?User $as = null): Order
     {
-        $checkout = $this->pay($this->cartWith(), $overrides, $as);
+        return $this->complete($this->pay($this->cartWith(), $overrides, $as));
+    }
 
+    /** O Stripe avisa que este checkout foi pago. */
+    private function complete(Checkout $checkout): Order
+    {
         $session = $this->stripe['sessions'][(string) $checkout->stripe_session_id];
         unset($session['request'], $session['url']);
         $session = [...$session, 'status' => 'complete', 'payment_status' => 'paid', 'payment_intent' => 'pi_123'];
@@ -160,7 +164,7 @@ class PurchaseLinksCustomerTest extends TestCase
         $customer = User::query()->where('email', 'ana@exemplo.pt')->sole();
         $this->assertNotNull($customer->marketing_opt_out_at);
 
-        $this->buy();
+        $this->buy(['marketing_opt_out' => '0']);
 
         $this->assertNotNull($customer->refresh()->marketing_opt_out_at);
     }
@@ -170,7 +174,7 @@ class PurchaseLinksCustomerTest extends TestCase
         $customer = User::factory()->create(['email' => 'ana@exemplo.pt', 'name' => 'Nome Antigo', 'marketing_opt_out_at' => now()->subDay()]);
         Address::factory()->for($customer)->create(['is_default' => true, 'line1' => 'Rua Antiga 1']);
 
-        $order = $this->buy([], $customer);
+        $order = $this->buy(['marketing_opt_out' => '0'], $customer);
 
         $customer->refresh();
         $this->assertSame($customer->id, $order->user_id);
@@ -188,9 +192,50 @@ class PurchaseLinksCustomerTest extends TestCase
         $this->assertNotNull($customer->refresh()->marketing_opt_out_at);
     }
 
+    public function test_ticking_the_box_again_keeps_the_first_refusal_date(): void
+    {
+        $refusedAt = now()->subMonth()->startOfSecond();
+        $customer = User::factory()->create(['email' => 'ana@exemplo.pt', 'marketing_opt_out_at' => $refusedAt]);
+
+        $this->buy(['marketing_opt_out' => '1'], $customer);
+
+        $this->assertTrue($customer->refresh()->marketing_opt_out_at?->equalTo($refusedAt));
+    }
+
+    public function test_a_refusal_made_after_paying_survives_the_purchase(): void
+    {
+        $customer = User::factory()->create(['email' => 'ana@exemplo.pt']);
+        $checkout = $this->pay($this->cartWith(), ['marketing_opt_out' => '0'], $customer);
+
+        // Entre o "Pagar" e o aviso do Stripe (um Multibanco pago dias
+        // depois), recusou pelo link de um email.
+        $this->travel(2)->days();
+        $customer->forceFill(['marketing_opt_out_at' => now()])->save();
+
+        $this->complete($checkout);
+
+        $this->assertNotNull($customer->refresh()->marketing_opt_out_at);
+    }
+
+    public function test_a_request_without_the_box_records_no_choice(): void
+    {
+        $this->pay($this->cartWith());
+
+        $this->assertNull(Checkout::query()->sole()->marketing_opt_out);
+    }
+
+    public function test_a_signed_in_purchase_without_the_box_leaves_the_account_as_is(): void
+    {
+        $customer = User::factory()->create(['email' => 'ana@exemplo.pt', 'marketing_opt_out_at' => now()->subDay()]);
+
+        $this->buy([], $customer);
+
+        $this->assertNotNull($customer->refresh()->marketing_opt_out_at);
+    }
+
     public function test_the_checkout_records_the_choice(): void
     {
-        $this->assertFalse($this->pay($this->cartWith())->marketing_opt_out);
+        $this->assertFalse($this->pay($this->cartWith(), ['marketing_opt_out' => '0'])->marketing_opt_out);
 
         Checkout::query()->delete();
 
