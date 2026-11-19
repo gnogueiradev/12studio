@@ -108,6 +108,33 @@ class PublicConversationTest extends TestCase
         Queue::assertPushed(SendDiscordAlert::class, fn (SendDiscordAlert $job): bool => $job->channel === AlertChannel::CONVERSATIONS);
     }
 
+    public function test_the_discord_alerts_carry_no_personal_data(): void
+    {
+        config(['alerts.webhooks.'.AlertChannel::CONVERSATIONS => 'https://discord.test/conversas']);
+        Queue::fake([SendDiscordAlert::class]);
+
+        $this->open(['phone' => '912345678']);
+        $url = session('inertia.flash_data.conversation.url');
+        $this->post($url.'/responder', ['message' => 'Moro na Rua das Flores 12.'])->assertRedirect();
+
+        $payloads = [];
+        Queue::assertPushed(SendDiscordAlert::class, function (SendDiscordAlert $job) use (&$payloads): bool {
+            $payloads[] = (string) json_encode($job->payload, JSON_UNESCAPED_UNICODE);
+
+            return true;
+        });
+
+        $this->assertCount(2, $payloads);
+        $this->assertStringContainsString('Conversa nova', $payloads[0]);
+        $this->assertStringContainsString('O cliente respondeu', $payloads[1]);
+
+        foreach (['Ana Silva', 'ana@example.com', '912345678', 'Fazem vasos maiores', 'Rua das Flores'] as $personal) {
+            foreach ($payloads as $payload) {
+                $this->assertStringNotContainsString($personal, $payload);
+            }
+        }
+    }
+
     public function test_the_page_shows_the_thread_and_is_not_indexed(): void
     {
         $this->open();

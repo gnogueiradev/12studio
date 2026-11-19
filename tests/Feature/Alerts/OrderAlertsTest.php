@@ -64,18 +64,29 @@ class OrderAlertsTest extends TestCase
         ], $overrides), $this->admin);
     }
 
-    public function test_a_new_order_carries_the_customer_and_the_link(): void
+    public function test_a_new_order_carries_the_pieces_and_the_link_but_no_customer_data(): void
     {
-        $order = $this->manualOrder();
+        $order = $this->manualOrder(['nif' => '123456789']);
 
         $embed = $this->alertEmbed(AlertChannel::ORDERS, "Nova encomenda {$order->order_number}");
         $text = $this->embedText($embed);
 
-        foreach (['Ana Silva', 'ana.silva@example.test', '912345678', 'Rua das Flores 12, 4000-000 Porto, PT', '2× Vaso Geo (M)', '48,90 €', 'Instagram', 'Gonçalo'] as $expected) {
+        foreach (['2× Vaso Geo (M)', '48,90 €', 'Instagram', 'Gonçalo'] as $expected) {
             $this->assertStringContainsString($expected, $text);
         }
 
+        $this->assertNoCustomerData($text);
         $this->assertSame(route('admin.encomendas.show', $order), $embed['url']);
+    }
+
+    /**
+     * O Discord e um terceiro fora da UE: dos clientes nao sai nada.
+     */
+    private function assertNoCustomerData(string $text): void
+    {
+        foreach (['Ana Silva', 'ana.silva@example.test', '912345678', '123456789', 'Rua das Flores', '4000-000', 'RR123456789PT'] as $personal) {
+            $this->assertStringNotContainsString($personal, $text);
+        }
     }
 
     public function test_an_order_registered_as_paid_reads_in_order(): void
@@ -147,11 +158,18 @@ class OrderAlertsTest extends TestCase
         $order = $this->manualOrder(['payment_status' => 'paid']);
         $order->items()->update(['production_status' => 'ready']);
         $this->orders->transitionOrder($order->refresh(), 'ready_to_ship', $this->admin);
+        $this->orders->setTracking($order->refresh(), ['tracking_number' => 'RR123456789PT', 'shipping_method_name' => 'CTT']);
 
         $this->orders->transitionOrder($order->refresh(), 'shipped', $this->admin);
 
-        $embed = $this->alertEmbed(AlertChannel::ORDERS, "Enviada — {$order->order_number}");
-        $this->assertStringContainsString('Enviado para ana.silva@example.test', $this->embedText($embed));
+        $ready = $this->embedText($this->alertEmbed(AlertChannel::STOCK, "Pronta a enviar — {$order->order_number}"));
+        $this->assertStringContainsString('2× Vaso Geo (M)', $ready);
+        $this->assertNoCustomerData($ready);
+
+        $shipped = $this->embedText($this->alertEmbed(AlertChannel::ORDERS, "Enviada — {$order->order_number}"));
+        $this->assertStringContainsString('Enviado ao cliente', $shipped);
+        $this->assertStringContainsString('CTT', $shipped);
+        $this->assertNoCustomerData($shipped);
     }
 
     public function test_the_production_board_reports_each_move_and_the_ready_order(): void
