@@ -126,7 +126,7 @@ class MaterialIndexTest extends TestCase
 
     public function test_non_admins_cannot_see_the_listing(): void
     {
-        $this->actingAs(User::factory()->create())
+        $this->actingAs(User::factory()->production()->create())
             ->get(route('admin.materiais.index'))
             ->assertForbidden();
     }

@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Actions\Fortify\CreateNewUser;
 use App\Actions\Fortify\ResetUserPassword;
+use App\Http\Responses\FailedPasswordResetLinkRequestResponse;
 use App\Models\User;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
@@ -13,6 +14,7 @@ use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
 use Inertia\Inertia;
+use Laravel\Fortify\Contracts\FailedPasswordResetLinkRequestResponse as FailedPasswordResetLinkRequestResponseContract;
 use Laravel\Fortify\Features;
 use Laravel\Fortify\Fortify;
 
@@ -23,7 +25,12 @@ class FortifyServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        // Email desconhecido = link enviado (ver a classe): nao se distingue
+        // de um cliente, a quem a recuperacao de password nao envia nada.
+        $this->app->singleton(
+            FailedPasswordResetLinkRequestResponseContract::class,
+            FailedPasswordResetLinkRequestResponse::class,
+        );
     }
 
     /**
@@ -44,16 +51,18 @@ class FortifyServiceProvider extends ServiceProvider
         Fortify::resetUserPasswordsUsing(ResetUserPassword::class);
         Fortify::createUsersUsing(CreateNewUser::class);
 
-        // O login normal, mais uma regra: conta desativada pelo dono nao
-        // entra. A mensagem e a mesma de uma password errada — nao confirma a
-        // quem tenta que o email existe. O EnsureAccountUsable apanha o resto
-        // (sessoes ja abertas, login por passkey).
+        // O login normal, mais duas regras: conta desativada pelo dono nao
+        // entra, e quem nao e da equipa tambem nao — os compradores da loja
+        // tambem sao utilizadores, e por aqui entrariam no backoffice sem
+        // segundo fator. A mensagem e a mesma de uma password errada — nao
+        // confirma a quem tenta que o email existe. O EnsureAccountUsable
+        // apanha o resto (sessoes ja abertas, login por passkey).
         Fortify::authenticateUsing(function (Request $request): ?User {
             $user = User::query()
                 ->where(Fortify::username(), $request->input(Fortify::username()))
                 ->first();
 
-            if ($user === null || $user->isDisabled()) {
+            if ($user === null || $user->isDisabled() || ! $user->isStaff()) {
                 return null;
             }
 

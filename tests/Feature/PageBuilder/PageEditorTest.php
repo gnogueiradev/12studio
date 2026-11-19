@@ -74,7 +74,7 @@ class PageEditorTest extends TestCase
         $this->get(route('admin.montra.paginas.index'))->assertRedirect();
         $this->actingAs(User::factory()->create())
             ->get(route('admin.montra.paginas.edit', $page))
-            ->assertForbidden();
+            ->assertRedirect(route('login'));
         $this->actingAs(User::factory()->production()->create())
             ->putJson(route('admin.montra.paginas.rascunho', $page), ['blocks' => []])
             ->assertForbidden();

@@ -138,9 +138,10 @@ class EtsyShipmentPageTest extends TestCase
     {
         $order = app(OrderService::class)->transitionOrder($this->order, 'shipped');
 
-        foreach ([User::factory()->create(), User::factory()->production()->create()] as $user) {
-            $this->actingAs($user)->post(route('admin.encomendas.etsy.envio', $order))->assertForbidden();
-        }
+        $this->actingAs(User::factory()->create())->post(route('admin.encomendas.etsy.envio', $order))->assertRedirect(route('login'));
+
+        $user = User::factory()->production()->create();
+        $this->actingAs($user)->post(route('admin.encomendas.etsy.envio', $order))->assertForbidden();
 
         $this->assertCount(1, $this->shipments());
     }

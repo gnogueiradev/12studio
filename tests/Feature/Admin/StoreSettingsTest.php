@@ -182,11 +182,11 @@ class StoreSettingsTest extends TestCase
 
     public function test_only_admins_reach_the_page(): void
     {
-        $this->actingAs(User::factory()->create())
+        $this->actingAs(User::factory()->production()->create())
             ->get(route('admin.montra.index'))
             ->assertForbidden();
 
-        $this->actingAs(User::factory()->create())
+        $this->actingAs(User::factory()->production()->create())
             ->patch(route('admin.montra.update'), $this->form())
             ->assertForbidden();
     }

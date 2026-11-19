@@ -331,11 +331,12 @@ class EtsyProductPageTest extends TestCase
     {
         $product = $this->etsyPushedProduct('active', $this->product);
 
-        foreach ([User::factory()->create(), User::factory()->production()->create()] as $user) {
-            $this->actingAs($user)->post(route('admin.produtos.etsy.publicar', $product))->assertForbidden();
-            $this->actingAs($user)->post(route('admin.produtos.etsy.desativar', $product))->assertForbidden();
-            $this->actingAs($user)->delete(route('admin.produtos.etsy.apagar', $product))->assertForbidden();
-        }
+        $this->actingAs(User::factory()->create())->post(route('admin.produtos.etsy.publicar', $product))->assertRedirect(route('login'));
+
+        $user = User::factory()->production()->create();
+        $this->actingAs($user)->post(route('admin.produtos.etsy.publicar', $product))->assertForbidden();
+        $this->actingAs($user)->post(route('admin.produtos.etsy.desativar', $product))->assertForbidden();
+        $this->actingAs($user)->delete(route('admin.produtos.etsy.apagar', $product))->assertForbidden();
 
         $this->assertSame(0, $this->writes());
         $this->assertSame(7100, EtsyListing::query()->where('product_id', $product->id)->sole()->etsy_listing_id);
@@ -345,11 +346,12 @@ class EtsyProductPageTest extends TestCase
 
     public function test_only_admins_reach_the_listing_of_a_product(): void
     {
-        foreach ([User::factory()->create(), User::factory()->production()->create()] as $user) {
-            $this->actingAs($user)->get(route('admin.produtos.etsy.show', $this->product))->assertForbidden();
-            $this->actingAs($user)->put(route('admin.produtos.etsy.guardar', $this->product), ['title' => 'X'])->assertForbidden();
-            $this->actingAs($user)->post(route('admin.produtos.etsy.enviar', $this->product))->assertForbidden();
-        }
+        $this->actingAs(User::factory()->create())->get(route('admin.produtos.etsy.show', $this->product))->assertRedirect(route('login'));
+
+        $user = User::factory()->production()->create();
+        $this->actingAs($user)->get(route('admin.produtos.etsy.show', $this->product))->assertForbidden();
+        $this->actingAs($user)->put(route('admin.produtos.etsy.guardar', $this->product), ['title' => 'X'])->assertForbidden();
+        $this->actingAs($user)->post(route('admin.produtos.etsy.enviar', $this->product))->assertForbidden();
 
         $this->assertSame(0, $this->writes());
     }

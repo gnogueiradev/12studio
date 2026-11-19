@@ -301,6 +301,6 @@ class ProductionBoardTest extends TestCase
     {
         $this->actingAs(User::factory()->create())
             ->get(route('admin.producao'))
-            ->assertForbidden();
+            ->assertRedirect(route('login'));
     }
 }

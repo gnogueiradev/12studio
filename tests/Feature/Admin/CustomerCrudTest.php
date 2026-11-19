@@ -303,7 +303,7 @@ class CustomerCrudTest extends TestCase
 
     public function test_non_admins_cannot_touch_customers(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->production()->create();
 
         $this->actingAs($user)
             ->post(route('admin.clientes.store'), $this->validPayload())

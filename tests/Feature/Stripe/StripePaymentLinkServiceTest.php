@@ -360,7 +360,7 @@ class StripePaymentLinkServiceTest extends TestCase
 
         $this->postJson(route('admin.encomendas.link-pagamento', $order))->assertUnauthorized();
 
-        $this->actingAs(User::factory()->create())
+        $this->actingAs(User::factory()->production()->create())
             ->postJson(route('admin.encomendas.link-pagamento', $order))
             ->assertForbidden();
 

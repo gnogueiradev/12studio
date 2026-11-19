@@ -253,7 +253,7 @@ class ProductImageTest extends TestCase
 
     public function test_non_admins_cannot_upload(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->production()->create();
 
         $this->actingAs($user)
             ->post(route('admin.produtos.imagens.store', $this->product), [

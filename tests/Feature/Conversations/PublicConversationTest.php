@@ -312,7 +312,7 @@ class PublicConversationTest extends TestCase
             ->get(route('admin.conversas.anexo', $attachment))
             ->assertOk();
 
-        $this->actingAs(User::factory()->create())
+        $this->actingAs(User::factory()->production()->create())
             ->get(route('admin.conversas.anexo', $attachment))
             ->assertForbidden();
     }

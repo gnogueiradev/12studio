@@ -333,7 +333,7 @@ class ColorCrudTest extends TestCase
 
     public function test_non_admins_cannot_touch_colours(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->production()->create();
 
         $this->actingAs($user)
             ->post(route('admin.cores.store'), $this->validPayload())

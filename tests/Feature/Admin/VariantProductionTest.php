@@ -495,14 +495,14 @@ class VariantProductionTest extends TestCase
 
     public function test_only_admins_can_touch_production_data(): void
     {
-        $customer = User::factory()->create();
+        $nonAdmin = User::factory()->production()->create();
         $variant = Variant::factory()->for($this->product)->create(['price_cents' => 1_000]);
 
-        $this->actingAs($customer)
+        $this->actingAs($nonAdmin)
             ->patch(route('admin.produtos.variantes.producao', $this->product), ['sizes' => [self::sizeRow(null, 1, 0, 10)]])
             ->assertForbidden();
 
-        $this->actingAs($customer)
+        $this->actingAs($nonAdmin)
             ->post(route('admin.produtos.variantes.precos', $this->product))
             ->assertForbidden();
 

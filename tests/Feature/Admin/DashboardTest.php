@@ -316,7 +316,7 @@ class DashboardTest extends TestCase
 
     public function test_non_admins_cannot_open_the_dashboard(): void
     {
-        $this->actingAs(User::factory()->create())
+        $this->actingAs(User::factory()->production()->create())
             ->get(route('admin.dashboard'))
             ->assertForbidden();
     }

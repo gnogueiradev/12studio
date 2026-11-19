@@ -159,7 +159,7 @@ class OrderTotalsTest extends TestCase
     {
         $this->postJson(route('admin.encomendas.totais'), [])->assertUnauthorized();
 
-        $this->actingAs(User::factory()->create())
+        $this->actingAs(User::factory()->production()->create())
             ->postJson(route('admin.encomendas.totais'), [])
             ->assertForbidden();
     }

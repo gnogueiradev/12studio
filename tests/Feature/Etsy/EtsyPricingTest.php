@@ -185,6 +185,6 @@ class EtsyPricingTest extends TestCase
         $this->actingAs(User::factory()->production()->create())->get(route('admin.etsy.precos.index'))->assertForbidden();
         $this->actingAs(User::factory()->create())
             ->patch(route('admin.etsy.precos.definicoes'), ['markup_percent' => '50'])
-            ->assertForbidden();
+            ->assertRedirect(route('login'));
     }
 }

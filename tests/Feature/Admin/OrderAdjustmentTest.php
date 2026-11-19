@@ -186,7 +186,7 @@ class OrderAdjustmentTest extends TestCase
 
     public function test_non_admins_cannot_adjust_an_order(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->production()->create();
 
         $this->actingAs($user)
             ->patch(route('admin.encomendas.ajuste', $this->order), $this->payload())

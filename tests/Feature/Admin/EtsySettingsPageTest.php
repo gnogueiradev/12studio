@@ -63,7 +63,7 @@ class EtsySettingsPageTest extends TestCase
 
     public function test_customers_and_production_cannot_open_it(): void
     {
-        $this->confirmed(User::factory()->create())->get(route('admin.etsy.index'))->assertForbidden();
+        $this->confirmed(User::factory()->create())->get(route('admin.etsy.index'))->assertRedirect(route('login'));
         $this->confirmed(User::factory()->production()->create())->get(route('admin.etsy.index'))->assertForbidden();
     }
 
@@ -299,7 +299,7 @@ class EtsySettingsPageTest extends TestCase
 
     public function test_the_callback_is_for_admins_only(): void
     {
-        $this->actingAs(User::factory()->create())
+        $this->actingAs(User::factory()->production()->create())
             ->get(route('admin.etsy.callback', ['code' => 'c', 'state' => 's']))
             ->assertForbidden();
     }

@@ -813,7 +813,7 @@ class ProductCrudTest extends TestCase
             'fulfillment_mode' => 'in_stock',
         ]);
 
-        $this->actingAs(User::factory()->create())
+        $this->actingAs(User::factory()->production()->create())
             ->patch(route('admin.produtos.restaurar', $product))
             ->assertForbidden();
     }
@@ -840,7 +840,7 @@ class ProductCrudTest extends TestCase
 
     public function test_non_admins_cannot_touch_products(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->production()->create();
 
         $this->actingAs($user)
             ->get(route('admin.produtos.index'))

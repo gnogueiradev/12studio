@@ -32,7 +32,7 @@ class AlertSettingsPageTest extends TestCase
 
     public function test_customers_and_production_cannot_open_it(): void
     {
-        $this->confirmed(User::factory()->create())->get(route('admin.alertas.index'))->assertForbidden();
+        $this->confirmed(User::factory()->create())->get(route('admin.alertas.index'))->assertRedirect(route('login'));
         $this->confirmed(User::factory()->production()->create())->get(route('admin.alertas.index'))->assertForbidden();
     }
 

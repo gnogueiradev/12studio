@@ -329,13 +329,13 @@ class PrinterProfileCrudTest extends TestCase
 
     public function test_non_admins_cannot_touch_printer_profiles(): void
     {
-        $customer = User::factory()->create();
+        $nonAdmin = User::factory()->production()->create();
 
-        $this->actingAs($customer)
+        $this->actingAs($nonAdmin)
             ->get(route('admin.impressoras.index'))
             ->assertForbidden();
 
-        $this->actingAs($customer)
+        $this->actingAs($nonAdmin)
             ->post(route('admin.impressoras.store'), $this->validPayload())
             ->assertForbidden();
     }

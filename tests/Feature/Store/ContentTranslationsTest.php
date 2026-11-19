@@ -142,7 +142,7 @@ class ContentTranslationsTest extends TestCase
             ->put(route('admin.produtos.traducoes', [$this->product, 'pt']), ['name' => 'X'])
             ->assertNotFound();
 
-        $this->actingAs(User::factory()->create())
+        $this->actingAs(User::factory()->production()->create())
             ->put(route('admin.produtos.traducoes', [$this->product, 'en']), ['name' => 'X'])
             ->assertForbidden();
     }

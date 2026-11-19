@@ -111,7 +111,7 @@ class ProductionStaffAccessTest extends TestCase
     {
         $this->actingAs(User::factory()->create())
             ->get(route('admin.producao'))
-            ->assertForbidden();
+            ->assertRedirect(route('login'));
     }
 
     public function test_a_disabled_production_account_is_logged_out(): void

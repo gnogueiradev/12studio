@@ -448,7 +448,7 @@ class VariantCrudTest extends TestCase
 
     public function test_non_admins_cannot_touch_variants(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->production()->create();
 
         $this->actingAs($user)
             ->post(route('admin.produtos.variantes.store', $this->product), $this->validPayload())

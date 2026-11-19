@@ -186,6 +186,23 @@ class User extends Authenticatable implements OAuthenticatable, PasskeyUser
     }
 
     /**
+     * A recuperacao de password do Fortify so serve a equipa. A um cliente
+     * nao se envia nada, mas sem erro: o broker responde "enviado" como para
+     * qualquer outro email, e quem pede nao fica a saber de quem e a conta.
+     * O broker grava o token na mesma; o ResetUserPassword recusa-o.
+     *
+     * @param  string  $token
+     */
+    public function sendPasswordResetNotification($token): void
+    {
+        if (! $this->isStaff()) {
+            return;
+        }
+
+        parent::sendPasswordResetNotification($token);
+    }
+
+    /**
      * Papel legivel, para a pagina de utilizadores.
      */
     public function role(): string

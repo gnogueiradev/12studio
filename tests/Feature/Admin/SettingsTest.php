@@ -132,7 +132,7 @@ class SettingsTest extends TestCase
 
     public function test_non_admins_cannot_change_settings(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->production()->create();
 
         $this->actingAs($user)
             ->patch(route('admin.definicoes.update'), ['currency' => 'GBP'])

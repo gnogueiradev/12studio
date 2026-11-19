@@ -65,7 +65,7 @@ class DestructiveActionAuthorizationTest extends TestCase
     #[DataProvider('destructiveRoutes')]
     public function test_a_non_admin_is_refused(string $verb, string $key): void
     {
-        $this->actingAs(User::factory()->create());
+        $this->actingAs(User::factory()->production()->create());
 
         $this->{$verb}($this->uriFor($key))->assertForbidden();
     }
@@ -111,7 +111,7 @@ class DestructiveActionAuthorizationTest extends TestCase
 
         $product = Product::factory()->create(['status' => 'active']);
 
-        $this->actingAs(User::factory()->create())
+        $this->actingAs(User::factory()->production()->create())
             ->delete('_test/produto-sem-cadeado/'.$product->getKey())
             ->assertForbidden();
 

@@ -39,7 +39,7 @@ class ApiKeyPageTest extends TestCase
     {
         $this->confirmed(User::factory()->create())
             ->get(route('admin.chaves-api.index'))
-            ->assertForbidden();
+            ->assertRedirect(route('login'));
 
         $this->confirmed(User::factory()->production()->create())
             ->get(route('admin.chaves-api.index'))

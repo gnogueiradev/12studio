@@ -131,7 +131,7 @@ class CustomerTagTest extends TestCase
     {
         $customer = $this->customer();
 
-        $this->actingAs($customer)
+        $this->actingAs(User::factory()->production()->create())
             ->patch(route('admin.clientes.update', $customer), $this->payload(['tags' => ['revendedor']]))
             ->assertForbidden();
 

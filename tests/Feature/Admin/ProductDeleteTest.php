@@ -217,7 +217,7 @@ class ProductDeleteTest extends TestCase
     {
         $product = Product::factory()->create(['status' => 'active']);
 
-        $this->actingAs(User::factory()->create())
+        $this->actingAs(User::factory()->production()->create())
             ->delete(route('admin.produtos.apagar', $product))
             ->assertForbidden();
 

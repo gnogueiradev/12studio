@@ -221,11 +221,12 @@ class EtsyShopTest extends TestCase
 
     public function test_only_admins_touch_the_shop(): void
     {
-        foreach ([User::factory()->create(), User::factory()->production()->create()] as $user) {
-            $this->actingAs($user)->get(route('admin.etsy.loja.index'))->assertForbidden();
-            $this->actingAs($user)->patch(route('admin.etsy.loja.textos'), ['title' => 'X'])->assertForbidden();
-            $this->actingAs($user)->delete(route('admin.etsy.loja.seccoes.apagar', 31))->assertForbidden();
-        }
+        $this->actingAs(User::factory()->create())->get(route('admin.etsy.loja.index'))->assertRedirect(route('login'));
+
+        $user = User::factory()->production()->create();
+        $this->actingAs($user)->get(route('admin.etsy.loja.index'))->assertForbidden();
+        $this->actingAs($user)->patch(route('admin.etsy.loja.textos'), ['title' => 'X'])->assertForbidden();
+        $this->actingAs($user)->delete(route('admin.etsy.loja.seccoes.apagar', 31))->assertForbidden();
 
         $this->assertSame(0, $this->writes());
     }

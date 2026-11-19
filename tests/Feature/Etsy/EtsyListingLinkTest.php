@@ -396,7 +396,7 @@ class EtsyListingLinkTest extends TestCase
 
     public function test_only_admins_reach_the_listings(): void
     {
-        $this->actingAs(User::factory()->create())->get(route('admin.etsy.anuncios.index'))->assertForbidden();
+        $this->actingAs(User::factory()->create())->get(route('admin.etsy.anuncios.index'))->assertRedirect(route('login'));
         $this->actingAs(User::factory()->production()->create())
             ->post(route('admin.etsy.anuncios.ligar', $this->product), ['listing_id' => 7001])
             ->assertForbidden();

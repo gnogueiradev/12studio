@@ -426,13 +426,14 @@ class EtsyShippingTest extends TestCase
 
     public function test_only_admins_touch_the_shipping_configuration(): void
     {
-        foreach ([User::factory()->create(), User::factory()->production()->create()] as $user) {
-            $this->actingAs($user)->get(route('admin.etsy.envios.index'))->assertForbidden();
-            $this->actingAs($user)
-                ->post(route('admin.etsy.envios.perfis.guardar'), ['title' => 'X', 'origin_country_iso' => 'PT'])
-                ->assertForbidden();
-            $this->actingAs($user)->delete(route('admin.etsy.envios.perfis.apagar', 555))->assertForbidden();
-        }
+        $this->actingAs(User::factory()->create())->get(route('admin.etsy.envios.index'))->assertRedirect(route('login'));
+
+        $user = User::factory()->production()->create();
+        $this->actingAs($user)->get(route('admin.etsy.envios.index'))->assertForbidden();
+        $this->actingAs($user)
+            ->post(route('admin.etsy.envios.perfis.guardar'), ['title' => 'X', 'origin_country_iso' => 'PT'])
+            ->assertForbidden();
+        $this->actingAs($user)->delete(route('admin.etsy.envios.perfis.apagar', 555))->assertForbidden();
 
         $this->assertSame(0, $this->writes());
     }

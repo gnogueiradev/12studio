@@ -91,7 +91,7 @@ class BrandSettingsTest extends TestCase
     {
         $this->actingAs(User::factory()->create())
             ->patch(route('admin.definicoes.marca'), ['name' => 'Roubada'])
-            ->assertForbidden();
+            ->assertRedirect(route('login'));
 
         $this->actingAs(User::factory()->production()->create())
             ->patch(route('admin.definicoes.marca'), ['name' => 'Roubada'])

@@ -18,7 +18,7 @@ class AdminAccessTest extends TestCase
 
     public function test_non_admin_users_get_403(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->production()->create();
 
         $this->actingAs($user)->get('/admin')->assertForbidden();
     }

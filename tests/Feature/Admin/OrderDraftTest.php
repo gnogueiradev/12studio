@@ -287,7 +287,7 @@ class OrderDraftTest extends TestCase
 
     public function test_non_admins_cannot_save_drafts(): void
     {
-        $this->actingAs(User::factory()->create())
+        $this->actingAs(User::factory()->production()->create())
             ->post(route('admin.encomendas.rascunhos.store'), $this->payload())
             ->assertForbidden();
 

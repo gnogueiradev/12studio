@@ -222,19 +222,19 @@ class TagCrudTest extends TestCase
     public function test_non_admins_cannot_touch_tags(): void
     {
         $tag = $this->tag('natal');
-        $customer = User::factory()->create(['is_admin' => false]);
+        $nonAdmin = User::factory()->production()->create();
 
-        $this->actingAs($customer)->get(route('admin.etiquetas.index'))->assertForbidden();
-        $this->actingAs($customer)
+        $this->actingAs($nonAdmin)->get(route('admin.etiquetas.index'))->assertForbidden();
+        $this->actingAs($nonAdmin)
             ->post(route('admin.etiquetas.store'), ['scope' => Tag::SCOPE_PRODUCT, 'name' => 'x'])
             ->assertForbidden();
-        $this->actingAs($customer)
+        $this->actingAs($nonAdmin)
             ->put(route('admin.etiquetas.update', $tag), ['name' => 'y'])
             ->assertForbidden();
-        $this->actingAs($customer)
+        $this->actingAs($nonAdmin)
             ->delete(route('admin.etiquetas.destroy', $tag))
             ->assertForbidden();
-        $this->actingAs($customer)->delete(route('admin.etiquetas.limpar'))->assertForbidden();
+        $this->actingAs($nonAdmin)->delete(route('admin.etiquetas.limpar'))->assertForbidden();
 
         $this->assertDatabaseCount('tags', 1);
     }

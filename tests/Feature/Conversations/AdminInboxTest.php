@@ -85,7 +85,7 @@ class AdminInboxTest extends TestCase
     {
         [$conversation] = $this->conversation();
 
-        $this->actingAs(User::factory()->create())->get(route('admin.conversas.index'))->assertForbidden();
+        $this->actingAs(User::factory()->create())->get(route('admin.conversas.index'))->assertRedirect(route('login'));
         $this->actingAs(User::factory()->production()->create())->get(route('admin.conversas.show', $conversation))->assertForbidden();
     }
 

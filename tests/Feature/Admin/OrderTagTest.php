@@ -102,7 +102,7 @@ class OrderTagTest extends TestCase
 
     public function test_non_admins_cannot_tag_an_order(): void
     {
-        $this->actingAs(User::factory()->create(['is_admin' => false]))
+        $this->actingAs(User::factory()->production()->create())
             ->patch(route('admin.encomendas.detalhes', $this->order), $this->payload(['urgente']))
             ->assertForbidden();
 

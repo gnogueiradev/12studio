@@ -218,7 +218,7 @@ class CategoryCrudTest extends TestCase
 
     public function test_non_admins_cannot_touch_categories(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->production()->create();
 
         $this->actingAs($user)
             ->get(route('admin.categorias.index'))

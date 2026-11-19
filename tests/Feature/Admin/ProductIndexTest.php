@@ -240,7 +240,7 @@ class ProductIndexTest extends TestCase
 
     public function test_non_admins_cannot_list_products(): void
     {
-        $this->actingAs(User::factory()->create())
+        $this->actingAs(User::factory()->production()->create())
             ->get(route('admin.produtos.index'))
             ->assertForbidden();
     }

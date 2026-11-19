@@ -220,7 +220,7 @@ class OrderTransitionTest extends TestCase
     public function test_non_admins_cannot_transition_orders(): void
     {
         $order = Order::factory()->paid()->create();
-        $user = User::factory()->create();
+        $user = User::factory()->production()->create();
 
         $this->actingAs($user)
             ->patch(route('admin.encomendas.estado', $order), ['status' => 'shipped'])

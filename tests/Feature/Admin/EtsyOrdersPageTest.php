@@ -137,9 +137,10 @@ class EtsyOrdersPageTest extends TestCase
     {
         $this->fakeEtsyReceipts([$this->etsyReceipt()]);
 
-        foreach ([User::factory()->create(), User::factory()->production()->create()] as $user) {
-            $this->actingAs($user)->post(route('admin.etsy.encomendas.importar'))->assertForbidden();
-        }
+        $this->actingAs(User::factory()->create())->post(route('admin.etsy.encomendas.importar'))->assertRedirect(route('login'));
+
+        $user = User::factory()->production()->create();
+        $this->actingAs($user)->post(route('admin.etsy.encomendas.importar'))->assertForbidden();
 
         $this->assertSame(0, EtsyReceipt::query()->count());
     }

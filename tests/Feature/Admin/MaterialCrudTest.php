@@ -146,7 +146,7 @@ class MaterialCrudTest extends TestCase
 
     public function test_non_admins_cannot_touch_materials(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->production()->create();
 
         $this->actingAs($user)
             ->post(route('admin.materiais.store'), $this->validPayload())

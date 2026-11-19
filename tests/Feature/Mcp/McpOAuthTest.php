@@ -145,7 +145,7 @@ class McpOAuthTest extends TestCase
         $this->actingAs(User::factory()->create())
             ->withSession(['auth.password_confirmed_at' => time()])
             ->get(route('passport.authorizations.authorize', $request['query']))
-            ->assertForbidden();
+            ->assertRedirect(route('login'));
 
         $this->actingAs(User::factory()->production()->create())
             ->withSession(['auth.password_confirmed_at' => time()])

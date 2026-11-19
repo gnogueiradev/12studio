@@ -125,7 +125,7 @@ class PromoCodeAdminTest extends TestCase
     {
         $this->get(route('admin.codigos.index'))->assertRedirect();
 
-        $this->actingAs(User::factory()->create())
+        $this->actingAs(User::factory()->production()->create())
             ->post(route('admin.codigos.store'), $this->form())
             ->assertForbidden();
 

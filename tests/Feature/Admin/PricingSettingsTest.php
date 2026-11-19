@@ -262,7 +262,7 @@ class PricingSettingsTest extends TestCase
 
     public function test_non_admins_cannot_change_the_pricing(): void
     {
-        $this->actingAs(User::factory()->create())
+        $this->actingAs(User::factory()->production()->create())
             ->patch(route('admin.definicoes.precos'), $this->validPayload())
             ->assertForbidden();
     }

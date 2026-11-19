@@ -92,7 +92,7 @@ class LoginGateTest extends TestCase
     {
         $this->lockGate();
 
-        $this->actingAs(User::factory()->create())
+        $this->actingAs(User::factory()->admin()->create())
             ->get('/.well-known/passkey-endpoints')
             ->assertOk()
             ->assertJsonStructure(['enroll', 'manage']);

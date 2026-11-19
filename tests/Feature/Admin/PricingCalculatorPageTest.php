@@ -432,7 +432,7 @@ class PricingCalculatorPageTest extends TestCase
 
     public function test_non_admins_cannot_open_the_calculator(): void
     {
-        $this->actingAs(User::factory()->create())
+        $this->actingAs(User::factory()->production()->create())
             ->get(route('admin.calculadora'))
             ->assertForbidden();
     }

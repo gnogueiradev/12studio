@@ -116,7 +116,7 @@ class ProductFormPageTest extends TestCase
     public function test_non_admins_cannot_open_the_form(): void
     {
         $product = Product::factory()->create();
-        $intruder = User::factory()->create();
+        $intruder = User::factory()->production()->create();
 
         $this->actingAs($intruder)
             ->get(route('admin.produtos.create'))
