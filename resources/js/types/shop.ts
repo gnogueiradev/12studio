@@ -74,3 +74,53 @@ export type CheckoutFormData = {
     terms: boolean;
     expected_total_cents: number;
 };
+
+/** O seguimento de uma encomenda; o link só vem se for http(s). */
+export type AccountTracking = {
+    number: string | null;
+    url: string | null;
+} | null;
+
+/** A conta no /conta (CustomerAccountController::show). */
+export type AccountData = {
+    name: string;
+    email: string;
+    phone: string;
+    nif: string;
+    line1: string;
+    line2: string;
+    postalCode: string;
+    city: string;
+    /** O interruptor das ofertas: ligado = recebe. */
+    offers: boolean;
+};
+
+/** Uma linha da lista de encomendas da conta. */
+export type AccountOrderSummary = {
+    number: string;
+    date: string | null;
+    totalCents: number;
+    status: string;
+    tracking: AccountTracking;
+};
+
+/** Uma encomenda da conta (CustomerAccountController::order). */
+export type AccountOrder = {
+    number: string;
+    date: string | null;
+    status: string;
+    tracking: AccountTracking;
+    lines: {
+        name: string;
+        label: string | null;
+        qty: number;
+        lineCents: number;
+        personalization: { label: string; value: string }[];
+    }[];
+    address: string[] | null;
+    subtotalCents: number;
+    discountCents: number;
+    shippingCents: number;
+    totalCents: number;
+    canReorder: boolean;
+};

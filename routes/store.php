@@ -4,6 +4,7 @@ use App\Http\Controllers\Store\CartController;
 use App\Http\Controllers\Store\CatalogController;
 use App\Http\Controllers\Store\CheckoutController;
 use App\Http\Controllers\Store\ConversationController;
+use App\Http\Controllers\Store\CustomerAccountController;
 use App\Http\Controllers\Store\CustomerLoginController;
 use App\Http\Controllers\Store\LandingPageController;
 use App\Http\Controllers\Store\PageController;
@@ -87,7 +88,25 @@ $storefront = function (): void {
         Route::post('entrar/{token}/confirmar', [CustomerLoginController::class, 'enter'])
             ->where('token', '[A-Za-z0-9]{64}')
             ->name('store.login.enter');
-        Route::post('conta/sair', [CustomerLoginController::class, 'logout'])->name('store.logout');
+    });
+
+    // Sair nunca da 404: fora do `shop.open`, para se poder sair com as
+    // compras desligadas (e antes do '/{slug}' das landing pages).
+    Route::post('conta/sair', [CustomerLoginController::class, 'logout'])->name('store.logout');
+
+    // A conta do cliente: so com sessao da guarda `customer`. O `customer.usable`
+    // tira a sessao a quem foi desativado ou passou a equipa. Uma URI por acao.
+    Route::middleware(['shop.open', 'auth:customer', 'customer.usable'])->group(function (): void {
+        Route::get('conta', [CustomerAccountController::class, 'show'])->name('store.account');
+        Route::get('conta/encomendas/{number}', [CustomerAccountController::class, 'order'])
+            ->name('store.account.order');
+        Route::patch('conta/dados', [CustomerAccountController::class, 'updateDetails'])
+            ->name('store.account.details');
+        Route::patch('conta/ofertas', [CustomerAccountController::class, 'updateOffers'])
+            ->name('store.account.offers');
+        Route::post('conta/encomendas/{number}/comprar-outra-vez', [CustomerAccountController::class, 'reorder'])
+            ->middleware('throttle:cart')
+            ->name('store.account.reorder');
     });
 
     // Paginas de sistema montadas por blocos (App\PageBuilder).

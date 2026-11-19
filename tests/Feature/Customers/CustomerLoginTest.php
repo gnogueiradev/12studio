@@ -271,7 +271,6 @@ class CustomerLoginTest extends TestCase
             $this->post('/entrar/enviar', ['email' => 'ana@exemplo.pt'])->assertNotFound();
             $this->get('/entrar/'.$token)->assertNotFound();
             $this->post('/entrar/'.$token.'/confirmar')->assertNotFound();
-            $this->post('/conta/sair')->assertNotFound();
         }
 
         Mail::assertNothingQueued();

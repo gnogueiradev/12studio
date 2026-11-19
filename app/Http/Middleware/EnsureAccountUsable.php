@@ -42,7 +42,11 @@ class EnsureAccountUsable
 
     public function handle(Request $request, Closure $next): Response
     {
-        $user = $request->user();
+        // Sempre a guarda `web`: o `auth:customer` das rotas da conta corre
+        // antes deste middleware (a prioridade) e faz do cliente o
+        // `$request->user()`; um cliente desativado nao pode levar a sessao
+        // da equipa atras de si. Esse e o trabalho do EnsureCustomerUsable.
+        $user = Auth::guard('web')->user();
 
         if ($user === null) {
             return $next($request);

@@ -2,6 +2,7 @@ import { Link, router, usePage } from '@inertiajs/react';
 import { Menu, Search } from 'lucide-react';
 import { useState } from 'react';
 import AppLogoIcon from '@/components/app-logo-icon';
+import { AccountButton } from '@/components/store/account-button';
 import { CartButton } from '@/components/store/cart-button';
 import {
     LanguageLinks,
@@ -122,7 +123,12 @@ export function StoreHeader({
                     <LanguageSwitcher className="hidden md:inline-flex" />
 
                     {storefront?.shop && (
-                        <CartButton count={storefront.cartCount} />
+                        <>
+                            <AccountButton
+                                signedIn={storefront.customer !== null}
+                            />
+                            <CartButton count={storefront.cartCount} />
+                        </>
                     )}
 
                     <Sheet open={menuOpen} onOpenChange={setMenuOpen}>

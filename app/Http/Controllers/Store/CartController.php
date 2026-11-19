@@ -8,6 +8,7 @@ use App\Http\Requests\Shop\ApplyPromoCodeRequest;
 use App\Http\Requests\Shop\UpdateCartItemRequest;
 use App\Models\Cart;
 use App\Models\Variant;
+use App\Shop\CartCookie;
 use App\Shop\CartPresenter;
 use App\Shop\CartService;
 use App\Store\Seo;
@@ -15,7 +16,6 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
-use Symfony\Component\HttpFoundation\Cookie;
 
 /**
  * O carrinho de quem compra sem conta. O token vive num cookie; só o
@@ -52,7 +52,7 @@ class CartController extends Controller
             (array) $request->validated('personalization', []),
         );
 
-        return $this->saved($request, $cart);
+        return CartCookie::saved($request, $cart);
     }
 
     public function update(UpdateCartItemRequest $request, int $item): RedirectResponse
@@ -61,7 +61,7 @@ class CartController extends Controller
 
         $this->carts->setQty($cart, $cart->items()->findOrFail($item), $request->integer('qty'));
 
-        return $this->saved($request, $cart);
+        return CartCookie::saved($request, $cart);
     }
 
     public function remove(Request $request, int $item): RedirectResponse
@@ -70,7 +70,7 @@ class CartController extends Controller
 
         $this->carts->remove($cart, $cart->items()->findOrFail($item));
 
-        return $this->saved($request, $cart);
+        return CartCookie::saved($request, $cart);
     }
 
     public function promo(ApplyPromoCodeRequest $request): RedirectResponse
@@ -79,7 +79,7 @@ class CartController extends Controller
 
         $this->carts->setPromoCode($cart, (string) $request->validated('promo_code'));
 
-        return $this->saved($request, $cart);
+        return CartCookie::saved($request, $cart);
     }
 
     public function removePromo(Request $request): RedirectResponse
@@ -88,7 +88,7 @@ class CartController extends Controller
 
         $this->carts->setPromoCode($cart, null);
 
-        return $this->saved($request, $cart);
+        return CartCookie::saved($request, $cart);
     }
 
     /** O carrinho do cookie, se houver; nunca cria. */
@@ -101,31 +101,5 @@ class CartController extends Controller
     private function mine(Request $request): Cart
     {
         return $this->current($request) ?? abort(404);
-    }
-
-    /**
-     * Volta à página com o carrinho no flash e o cookie renovado: o prazo
-     * conta desde a última escrita, como o prune dos carrinhos.
-     */
-    private function saved(Request $request, Cart $cart): RedirectResponse
-    {
-        Inertia::flash('cart', CartPresenter::make($cart));
-
-        return back()->withCookie($this->cookie($request, $cart));
-    }
-
-    private function cookie(Request $request, Cart $cart): Cookie
-    {
-        return new Cookie(
-            (string) config('shop.cart.cookie'),
-            $cart->token,
-            now()->addDays((int) config('shop.cart.days')),
-            '/',
-            null,
-            (bool) (config('session.secure') ?? $request->isSecure()),
-            true,
-            false,
-            Cookie::SAMESITE_LAX,
-        );
     }
 }

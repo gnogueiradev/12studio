@@ -3,6 +3,7 @@
 use App\Alerts\SystemAlerts;
 use App\Http\Middleware\EnsureAccountUsable;
 use App\Http\Middleware\EnsureAdmin;
+use App\Http\Middleware\EnsureCustomerUsable;
 use App\Http\Middleware\EnsureLoginGate;
 use App\Http\Middleware\EnsureMcpToken;
 use App\Http\Middleware\EnsureOwner;
@@ -15,6 +16,7 @@ use App\Http\Middleware\SecurityHeaders;
 use App\Http\Middleware\SetStoreLocale;
 use App\Http\Middleware\ShareStorefront;
 use App\Http\Middleware\ThrottlePasswordReset;
+use App\Support\LocalizedUrl;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -83,6 +85,15 @@ return Application::configure(basePath: dirname(__DIR__))
             EnsureAccountUsable::class,
         ]);
 
+        // Quem nao tem sessao: as rotas da conta do cliente mandam para o
+        // /entrar da montra; tudo o resto (backoffice, Fortify) segue para o
+        // login da equipa como sempre. O idioma sai do prefixo da rota: o
+        // `auth` corre antes do SetStoreLocale (a prioridade dos middlewares),
+        // e o idioma da aplicacao ainda nao e o da pagina.
+        $middleware->redirectGuestsTo(fn (Request $request): string => $request->routeIs('store.account*', 'i18n.store.account*')
+            ? LocalizedUrl::path('/entrar', (string) ($request->route('locale') ?? config('locales.default')))
+            : route('login'));
+
         $middleware->alias([
             'admin' => EnsureAdmin::class,
             'production' => EnsureProductionAccess::class,
@@ -94,6 +105,8 @@ return Application::configure(basePath: dirname(__DIR__))
             'store.open' => EnsureStoreOpen::class,
             // Carrinho e compra: 404 enquanto as compras estao desligadas.
             'shop.open' => EnsureShopOpen::class,
+            // A area do cliente: desativado ou passado a equipa, sai da guarda `customer`.
+            'customer.usable' => EnsureCustomerUsable::class,
             // Idioma da montra pelo prefixo do URL ('/en/...').
             'store.locale' => SetStoreLocale::class,
             // Menus, contactos e redes que o StoreLayout mostra.
