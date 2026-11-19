@@ -31,6 +31,12 @@
              existem. Quem precisa do cadeado liga-o com config() no teste. -->
         <env name="LOGIN_GATE_SECRET" value=""/>
         <env name="STORE_OPEN" value="false"/>
+        <!-- O idioma da producao, fixo: no Jenkins o .env so tem a APP_KEY e
+             o config/app.php caia no 'en', a formatar 50.00 onde a loja (e
+             os testes) dizem 50,00. -->
+        <env name="APP_LOCALE" value="pt"/>
+        <env name="APP_FALLBACK_LOCALE" value="en"/>
+        <env name="APP_FAKER_LOCALE" value="pt_PT"/>
         <env name="MAIL_MAILER" value="array"/>
         <env name="QUEUE_CONNECTION" value="sync"/>
         <env name="SESSION_DRIVER" value="array"/>
