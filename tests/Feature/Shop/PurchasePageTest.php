@@ -250,7 +250,12 @@ class PurchasePageTest extends TestCase
     {
         Mail::fake();
         User::factory()->admin()->create(['email' => 'chefe@example.com']);
-        $checkout = $this->paidCheckout('chefe@example.com');
+        $checkout = $this->paidCheckout('Chefe@example.com');
+
+        // A pagina e a mesma de qualquer outro email: quem tem o link da
+        // compra nao fica a saber que aquele email e da equipa.
+        $this->open($checkout)->assertInertia(fn (Assert $page) => $page
+            ->where('purchase.canSaveAccount', true));
 
         $this->post('/compra/'.$checkout->token.'/conta')
             ->assertRedirect('/compra/'.$checkout->token);
@@ -258,13 +263,9 @@ class PurchasePageTest extends TestCase
         Mail::assertNothingQueued();
     }
 
-    public function test_no_offer_to_staff_signed_in_or_while_confirming(): void
+    public function test_no_offer_signed_in_or_while_confirming(): void
     {
         $this->open($this->checkout())->assertInertia(fn (Assert $page) => $page
-            ->where('purchase.canSaveAccount', false));
-
-        User::factory()->admin()->create(['email' => 'chefe@example.com']);
-        $this->open($this->paidCheckout('Chefe@example.com'))->assertInertia(fn (Assert $page) => $page
             ->where('purchase.canSaveAccount', false));
 
         $customer = User::factory()->create();

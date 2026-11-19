@@ -2,7 +2,9 @@
 
 namespace App\Http\Requests\Customer;
 
+use App\Models\PromoCode;
 use App\Models\User;
+use Closure;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
 
@@ -34,7 +36,18 @@ class StoreCustomerRequest extends FormRequest
 
         return [
             'name' => ['required', 'string', 'max:120'],
-            'email' => ['nullable', 'email', 'max:255', Rule::unique('users', 'email')->ignore($this->customerId())],
+            // Unico sem olhar a maiusculas: a loja compara emails em
+            // minusculas, e "Ana@X.pt" e "ana@x.pt" sao a mesma pessoa.
+            'email' => ['nullable', 'email', 'max:255', function (string $attribute, mixed $value, Closure $fail): void {
+                $taken = User::query()
+                    ->whereRaw('lower(email) = ?', [PromoCode::normalizeEmail((string) $value)])
+                    ->when($this->customerId(), fn ($query, int $id) => $query->whereKeyNot($id))
+                    ->exists();
+
+                if ($taken) {
+                    $fail('validation.unique')->translate();
+                }
+            }],
             'customer_type' => ['required', Rule::in(['particular', 'empresa'])],
             'phone' => ['nullable', 'string', 'max:30'],
             'nif' => [

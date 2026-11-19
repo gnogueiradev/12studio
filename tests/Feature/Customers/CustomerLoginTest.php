@@ -96,6 +96,15 @@ class CustomerLoginTest extends TestCase
         $this->assertSame(0, CustomerLoginToken::query()->where('email', $admin->email)->count());
     }
 
+    public function test_the_form_always_returns_to_the_login_page(): void
+    {
+        // Sem Referer (a pagina nao o manda), ou com um de fora: volta sempre
+        // ao /entrar do idioma, nunca para onde o pedido diz que veio.
+        $this->post('/entrar/enviar', ['email' => 'ana@exemplo.pt'])->assertRedirect('/entrar');
+        $this->from('https://outro.example/armadilha')->post('/en/entrar/enviar', ['email' => 'ana@exemplo.pt'])
+            ->assertRedirect('/en/entrar');
+    }
+
     public function test_the_form_is_rate_limited_per_email(): void
     {
         foreach (range(1, 3) as $ignored) {
@@ -221,6 +230,16 @@ class CustomerLoginTest extends TestCase
         $this->enter($this->tokenFor('ana@exemplo.pt'))->assertRedirect('/conta');
 
         Queue::assertPushed(IssueWelcomePromoCode::class, 1);
+    }
+
+    public function test_a_partially_refunded_order_also_counts_as_bought(): void
+    {
+        Queue::fake([IssueWelcomePromoCode::class]);
+        Order::factory()->paid()->create(['email' => 'ana@exemplo.pt', 'payment_status' => 'partially_refunded']);
+
+        $this->enter($this->tokenFor('ana@exemplo.pt'))->assertRedirect('/conta');
+
+        Queue::assertNotPushed(IssueWelcomePromoCode::class);
     }
 
     public function test_staff_never_enters_by_link(): void

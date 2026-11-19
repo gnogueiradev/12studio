@@ -53,11 +53,29 @@ class SystemAlerts
                 ->description(Str::limit($exception->getMessage(), 1500))
                 ->field('Onde', Str::after($exception->getFile(), base_path().DIRECTORY_SEPARATOR).':'.$exception->getLine(), inline: false)
                 ->field('Pedido', $this->requestLabel(), inline: false)
-                ->field('Conta', Auth::hasUser() ? Auth::user()?->getAuthIdentifier().' · '.(Auth::user()->name ?? '') : null)
+                ->field('Conta', $this->staffLabel())
                 ->field('Repetições desde o último aviso', $repeated > 0 ? (string) $repeated : null));
         } catch (Throwable) {
             // Nada: estamos dentro do report().
         }
+    }
+
+    /**
+     * Quem da equipa estava no pedido. So a guarda `web`: numa rota
+     * `auth:customer` a guarda por omissao e a do cliente, e o nome dele nao
+     * vai para o Discord.
+     */
+    private function staffLabel(): ?string
+    {
+        $guard = Auth::guard('web');
+
+        if (! $guard->hasUser()) {
+            return null;
+        }
+
+        $user = $guard->user();
+
+        return $user?->getAuthIdentifier().' · '.($user->name ?? '');
     }
 
     /**

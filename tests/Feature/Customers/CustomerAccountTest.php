@@ -53,6 +53,19 @@ class CustomerAccountTest extends TestCase
         $this->get('/conta')->assertRedirect('/entrar');
     }
 
+    public function test_staff_previewing_the_closed_store_reach_the_account(): void
+    {
+        config(['access.store_open' => false]);
+        app(SettingService::class)->set(StoreSettings::KEY_SHOP, 'staff');
+
+        // As duas sessoes no mesmo browser; a do cliente fica por omissao,
+        // como depois do `auth:customer`.
+        $this->actingAs(User::factory()->admin()->create(), 'web');
+        $this->actingAs(User::factory()->create(), 'customer');
+
+        $this->get('/conta')->assertOk();
+    }
+
     public function test_the_account_lists_only_linked_orders(): void
     {
         $user = $this->signIn();

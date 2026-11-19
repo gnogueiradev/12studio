@@ -98,7 +98,7 @@ class UnsubscribeTest extends TestCase
         $this->get("/ofertas/sair/{$user->id}")->assertForbidden();
         $this->post("/ofertas/sair/{$user->id}")->assertForbidden();
 
-        // A assinatura de um serve para outro.
+        // A assinatura de um nao serve para outro.
         $this->post(str_replace("/ofertas/sair/{$user->id}", "/ofertas/sair/{$other->id}", $path))->assertForbidden();
 
         // Assinatura mexida.

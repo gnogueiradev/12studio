@@ -5,6 +5,7 @@ namespace Tests\Feature\Alerts;
 use App\Alerts\AlertChannel;
 use App\Alerts\SystemAlerts;
 use App\Jobs\SendDiscordAlert;
+use App\Models\User;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Queue\Job;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -93,6 +94,23 @@ class SystemAlertsTest extends TestCase
         $this->assertStringContainsString('GET /entrar/…', $text);
         $this->assertStringNotContainsString($token, $text);
         $this->assertStringNotContainsString('x=1', $text);
+    }
+
+    public function test_an_error_on_a_customer_request_never_names_the_customer(): void
+    {
+        // Como numa rota `auth:customer`: a guarda por omissao passa a ser a
+        // do cliente, e a da equipa continua la ao lado.
+        $admin = User::factory()->admin()->create(['name' => 'Dono da Loja']);
+        $customer = User::factory()->create(['name' => 'Ana Cliente']);
+        $this->actingAs($admin, 'web');
+        $this->actingAs($customer, 'customer');
+
+        report($this->boom());
+
+        $text = $this->embedText($this->alertEmbed(AlertChannel::SYSTEM, 'Erro — RuntimeException'));
+        $this->assertStringNotContainsString('Ana Cliente', $text);
+        $this->assertStringNotContainsString("{$customer->id} · ", $text);
+        $this->assertStringContainsString("Conta: {$admin->id} · Dono da Loja", $text);
     }
 
     public function test_a_failed_job_is_reported(): void

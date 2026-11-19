@@ -6,6 +6,7 @@ use App\Services\StoreSettings;
 use Closure;
 use Illuminate\Http\Request;
 use Illuminate\Routing\Router;
+use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -30,7 +31,9 @@ class EnsureStoreOpen
             return $next($request);
         }
 
-        if ($request->user()?->isAdmin()) {
+        // A guarda da equipa e nao a por omissao: numa rota `auth:customer`
+        // essa e a do cliente, e o admin com as duas sessoes dava 404.
+        if (Auth::guard('web')->user()?->isAdmin()) {
             Inertia::share('storePreview', true);
 
             return $next($request);

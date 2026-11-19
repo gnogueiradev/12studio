@@ -6,7 +6,6 @@ use App\Customers\CustomerLoginLinks;
 use App\Http\Controllers\Controller;
 use App\Models\Checkout;
 use App\Models\PromoCode;
-use App\Models\User;
 use App\Models\Variant;
 use App\Store\ProductDetail;
 use App\Store\Seo;
@@ -93,23 +92,16 @@ class PurchaseController extends Controller
     }
 
     /**
-     * Compra paga ou a espera de pagamento, sem sessao de cliente e com um
-     * email que nao seja da equipa. Serve a oferta e o envio.
+     * Compra paga ou a espera de pagamento, com email e sem sessao de
+     * cliente. Serve a oferta e o envio. O email da equipa nao se distingue
+     * aqui (a pagina dizia a quem tem o link que aquele email e da equipa): o
+     * CustomerLoginLinks::send e que nao lhe manda nada.
      */
     private function canSaveAccount(Checkout $checkout): bool
     {
-        $email = PromoCode::normalizeEmail((string) $checkout->order?->email);
-
-        if ($email === null
-            || ! in_array($this->state($checkout), ['paid', 'awaiting_payment'], true)
-            || Auth::guard('customer')->check()) {
-            return false;
-        }
-
-        return ! User::query()
-            ->whereRaw('lower(email) = ?', [$email])
-            ->where(fn ($query) => $query->where('is_admin', true)->orWhereNotNull('staff_role'))
-            ->exists();
+        return PromoCode::normalizeEmail((string) $checkout->order?->email) !== null
+            && in_array($this->state($checkout), ['paid', 'awaiting_payment'], true)
+            && ! Auth::guard('customer')->check();
     }
 
     /** Com encomenda manda ela; sem encomenda, o relogio da sessao do Stripe. */

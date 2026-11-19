@@ -42,7 +42,9 @@ class CustomerLoginController extends Controller
         $this->links->send($data['email']);
         $this->toast(trans('store.account.sent'));
 
-        return $this->private(back());
+        // Caminho fixo e nao `back()`: a pagina nao manda Referer, e o
+        // Referer nao decide para onde a loja manda o cliente.
+        return $this->private(redirect(LocalizedUrl::path('/entrar')));
     }
 
     /** Mostra para que email e o link, sem o gastar; o botao faz o POST. */

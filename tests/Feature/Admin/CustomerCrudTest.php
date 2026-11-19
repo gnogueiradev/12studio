@@ -192,6 +192,23 @@ class CustomerCrudTest extends TestCase
             ->assertSessionHasErrors('email');
     }
 
+    public function test_a_duplicate_email_in_another_case_is_rejected(): void
+    {
+        $existing = User::factory()->create();
+        $existing->forceFill(['email' => 'Julia@Example.test'])->save();
+
+        $this->actingAs($this->admin)
+            ->post(route('admin.clientes.store'), $this->validPayload())
+            ->assertSessionHasErrors('email');
+
+        $this->assertSame(1, User::query()->whereRaw('lower(email) = ?', ['julia@example.test'])->count());
+
+        // O proprio cliente, ao ser editado, nao choca consigo mesmo.
+        $this->actingAs($this->admin)
+            ->patch(route('admin.clientes.update', $existing), $this->validPayload())
+            ->assertSessionHasNoErrors();
+    }
+
     public function test_update_replaces_the_single_address(): void
     {
         $customer = User::factory()->create();

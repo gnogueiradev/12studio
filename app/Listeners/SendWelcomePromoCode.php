@@ -26,8 +26,9 @@ class SendWelcomePromoCode implements ShouldQueue
             return;
         }
 
+        // Um reembolso parcial nao desfaz a compra.
         $alreadyBought = Order::query()
-            ->where('payment_status', 'paid')
+            ->whereIn('payment_status', ['paid', 'partially_refunded'])
             ->whereRaw('lower(email) = ?', [$email])
             ->exists();
 
