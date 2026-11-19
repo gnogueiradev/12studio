@@ -81,19 +81,28 @@ class PurchaseController extends Controller
 
         abort_if($checkout?->order === null, 404);
 
-        $this->links->send($checkout->order->email);
+        if ($this->canSaveAccount($checkout)) {
+            $this->links->send($checkout->order->email);
+        }
+
         $this->toast(trans('store.purchase.save_account_sent'));
 
         return redirect(LocalizedUrl::path('/compra/'.$token))
+            ->header('X-Robots-Tag', 'noindex, nofollow')
             ->header('Referrer-Policy', 'no-referrer');
     }
 
-    /** Sem sessao de cliente e com um email que nao seja da equipa. */
+    /**
+     * Compra paga ou a espera de pagamento, sem sessao de cliente e com um
+     * email que nao seja da equipa. Serve a oferta e o envio.
+     */
     private function canSaveAccount(Checkout $checkout): bool
     {
         $email = PromoCode::normalizeEmail((string) $checkout->order?->email);
 
-        if ($email === null || Auth::guard('customer')->check()) {
+        if ($email === null
+            || ! in_array($this->state($checkout), ['paid', 'awaiting_payment'], true)
+            || Auth::guard('customer')->check()) {
             return false;
         }
 

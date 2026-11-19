@@ -240,7 +240,8 @@ class PurchasePageTest extends TestCase
 
         $this->post('/compra/'.$checkout->token.'/conta')
             ->assertRedirect('/compra/'.$checkout->token)
-            ->assertHeader('Referrer-Policy', 'no-referrer');
+            ->assertHeader('Referrer-Policy', 'no-referrer')
+            ->assertHeader('X-Robots-Tag', 'noindex, nofollow');
 
         Mail::assertQueued(CustomerLoginLinkMail::class, fn ($mail) => $mail->hasTo('ana@example.com'));
     }
@@ -270,6 +271,30 @@ class PurchasePageTest extends TestCase
         $this->actingAs($customer, 'customer')
             ->get('/compra/'.$this->paidCheckout()->token)
             ->assertInertia(fn (Assert $page) => $page->where('purchase.canSaveAccount', false));
+    }
+
+    public function test_saving_sends_nothing_for_a_closed_order(): void
+    {
+        Mail::fake();
+        $order = Order::factory()->create(['email' => 'ana@example.com', 'status' => 'cancelled']);
+        $checkout = $this->checkout(['order_id' => $order->id, 'status' => 'completed']);
+
+        $this->post('/compra/'.$checkout->token.'/conta')
+            ->assertRedirect('/compra/'.$checkout->token);
+
+        Mail::assertNothingQueued();
+    }
+
+    public function test_saving_sends_nothing_when_a_customer_is_signed_in(): void
+    {
+        Mail::fake();
+        $checkout = $this->paidCheckout();
+
+        $this->actingAs(User::factory()->create(), 'customer')
+            ->post('/compra/'.$checkout->token.'/conta')
+            ->assertRedirect('/compra/'.$checkout->token);
+
+        Mail::assertNothingQueued();
     }
 
     public function test_saving_needs_an_order(): void
