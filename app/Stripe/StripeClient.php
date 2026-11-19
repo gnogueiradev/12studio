@@ -37,6 +37,46 @@ class StripeClient
     }
 
     /**
+     * Se esta sessao e do outro modo que nao o da chave em uso: uma sessao
+     * de teste com uma chave de producao, ou o contrario. Para essa chave a
+     * sessao nao existe (404) e nunca se vai poder pagar — e o caso de quem
+     * testou a loja e depois trocou as chaves. Um prefixo que nao se conhece
+     * nao prova nada e conta como o mesmo modo.
+     */
+    public function isOtherMode(string $sessionId): bool
+    {
+        $keyMode = $this->keyMode();
+
+        $sessionMode = match (true) {
+            str_starts_with($sessionId, 'cs_test_') => 'test',
+            str_starts_with($sessionId, 'cs_live_') => 'live',
+            default => null,
+        };
+
+        return $keyMode !== null && $sessionMode !== null && $keyMode !== $sessionMode;
+    }
+
+    /**
+     * Se a chave em uso e de teste: com ela o Stripe aceita o cartao de teste
+     * e nao cobra nada. Um prefixo que nao se conhece nao conta como teste.
+     */
+    public function usesTestKey(): bool
+    {
+        return $this->keyMode() === 'test';
+    }
+
+    private function keyMode(): ?string
+    {
+        $key = (string) config('stripe.secret');
+
+        return match (true) {
+            str_starts_with($key, 'sk_test_'), str_starts_with($key, 'rk_test_') => 'test',
+            str_starts_with($key, 'sk_live_'), str_starts_with($key, 'rk_live_') => 'live',
+            default => null,
+        };
+    }
+
+    /**
      * @param  array<string, mixed>  $query
      * @return array<string, mixed>
      */

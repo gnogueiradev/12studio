@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\AdminActionRequest;
 use App\Http\Requests\Order\StoreOrderDraftRequest;
 use App\Models\OrderDraft;
+use App\Models\PromoCode;
 use App\Support\ManualOrderOptions;
 use App\Support\Money;
 use Illuminate\Http\RedirectResponse;
@@ -190,6 +191,12 @@ class OrderDraftController extends Controller
                 * (int) ($item['qty'] ?? 0);
         }
 
-        return $items + Money::fromDecimal((string) ($payload['shipping_price'] ?? '0'));
+        // So a conta: a validacao a serio (e o registo dela) e ao criar a encomenda.
+        $promoCode = filled($payload['promo_code'] ?? null)
+            ? PromoCode::query()->where('code', PromoCode::normalizeCode((string) $payload['promo_code']))->first()
+            : null;
+
+        return $items - ($promoCode?->discountFor($items) ?? 0)
+            + Money::fromDecimal((string) ($payload['shipping_price'] ?? '0'));
     }
 }

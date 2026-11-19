@@ -5,6 +5,7 @@ namespace App\Stripe;
 use Illuminate\Http\Client\Response;
 use Illuminate\Support\Str;
 use RuntimeException;
+use Throwable;
 
 /**
  * Tudo o que corre mal ao falar com o Stripe.
@@ -18,8 +19,49 @@ class StripeException extends RuntimeException
         string $message,
         public readonly ?int $status = null,
         public readonly ?string $stripeCode = null,
+        ?Throwable $previous = null,
     ) {
-        parent::__construct($message);
+        parent::__construct($message, 0, $previous);
+    }
+
+    /**
+     * A mesma falha sem os dados de um cliente na mensagem (o Stripe pode
+     * repetir o email que recebeu), para poder ir para os registos. A
+     * original fica como `previous`, pelo stack trace — e tambem sem eles,
+     * porque os registos escrevem a mensagem da `previous`.
+     *
+     * Duas passagens. Primeiro os valores que o cliente escreveu, sem olhar a
+     * maiusculas nem a espacos ("ana  silva" apanha "Ana Silva"); um valor de
+     * menos de 3 caracteres ("2") apagava meia mensagem e fica para a
+     * segunda. Depois a mensagem toda, por forma: o que parece um email, e
+     * qualquer sequencia de 6 ou mais digitos (telefones, NIF, codigos
+     * postais, com espacos, pontos ou hifens pelo meio). Os ids do Stripe
+     * (`cs_test_…`, `pi_…`) ficam: os digitos deles estao colados a letras
+     * ou a `_`, e so se apagam digitos soltos.
+     *
+     * @param  array<int, string|null>  $values
+     */
+    public function withoutPersonalData(array $values): self
+    {
+        $message = $this->message;
+
+        foreach ($values as $value) {
+            $words = preg_split('/\s+/u', trim((string) $value), -1, PREG_SPLIT_NO_EMPTY) ?: [];
+
+            if (mb_strlen(implode(' ', $words)) < 3) {
+                continue;
+            }
+
+            $pattern = '/'.implode('\s+', array_map(fn (string $word): string => preg_quote($word, '/'), $words)).'/iu';
+            $message = (string) preg_replace($pattern, '[dados do cliente]', $message);
+        }
+
+        $message = (string) preg_replace('/[^\s@<>()\[\]"\',;:]+@[^\s@<>()\[\]"\',;:]+/u', '[email]', $message);
+        $message = (string) preg_replace('/(?<!\w)\d(?:[ .\-]?\d){5,}(?!\w)/u', '[número]', $message);
+
+        $this->message = $message;
+
+        return new self($message, $this->status, $this->stripeCode, $this);
     }
 
     public static function disabled(): self

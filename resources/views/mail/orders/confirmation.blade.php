@@ -11,6 +11,10 @@ Olá {{ $order->customer_name }}, registámos a encomenda **{{ $order->order_num
 @endforeach
 </x-mail::table>
 
+@if ($order->discount_cents > 0)
+Desconto ({{ $order->promo_code }}): −{{ number_format($order->discount_cents / 100, 2, ',', ' ') }} €
+@endif
+
 @if ($order->shipping_cents > 0)
 Portes: {{ number_format($order->shipping_cents / 100, 2, ',', ' ') }} €
 @endif

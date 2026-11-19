@@ -14,11 +14,14 @@ use App\Models\StockMovement;
 use App\Models\Tag;
 use App\Models\User;
 use App\Models\Variant;
+use App\Stripe\StripeHooks;
 use App\Support\Money;
+use App\Support\PromoCodeValidation;
 use Closure;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 use RuntimeException;
 
 /**
@@ -60,6 +63,10 @@ class OrderService
         private TagService $tagService,
         private OrderAlerts $alerts,
         private EtsyHooks $etsy,
+        private OrderTotalsCalculator $totals,
+        private PromoCodeValidator $promoCodes,
+        private PromoCodeRedeemer $redeemer,
+        private StripeHooks $stripe,
     ) {}
 
     /**
@@ -105,7 +112,12 @@ class OrderService
             $lines = $this->resolveLines($data['items']);
 
             $subtotal = array_sum(array_column($lines, 'line_total_cents'));
-            $shipping = Money::fromDecimal((string) ($data['shipping_price'] ?? '0'));
+            $promo = $this->validPromoCode($data, $subtotal);
+            $totals = $this->totals->calculate(
+                $subtotal,
+                $promo->discountCents ?? 0,
+                Money::fromDecimal((string) ($data['shipping_price'] ?? '0')),
+            );
 
             $order = Order::query()->create([
                 'order_number' => $this->nextOrderNumber(),
@@ -123,9 +135,12 @@ class OrderService
                 'sales_channel' => $data['sales_channel'],
                 'external_order_reference' => $data['external_order_reference'] ?? null,
                 'created_by_user_id' => $admin->getKey(),
-                'subtotal_cents' => $subtotal,
-                'shipping_cents' => $shipping,
-                'total_cents' => $subtotal + $shipping,
+                'subtotal_cents' => $totals->subtotalCents,
+                'shipping_cents' => $totals->shippingCents,
+                'promo_code_id' => $promo?->promoCode?->getKey(),
+                'promo_code' => $promo?->promoCode?->code,
+                'discount_cents' => $totals->discountCents,
+                'total_cents' => $totals->totalCents,
                 'currency' => 'EUR',
                 'shipping_address' => $this->addressSnapshot($data),
                 'shipping_method_name' => $data['shipping_method_name'] ?? null,
@@ -255,35 +270,12 @@ class OrderService
                 ]);
 
                 if ($variant instanceof Variant && $fulfillmentMode === 'in_stock'
-                    && ! $this->stockService->decrement($variant, $item->qty, $data['stock_reason'], $order)) {
+                    && ! $this->takeStock($order, $item, $variant, $data['stock_reason'])) {
                     $short[] = $variant->sku;
-
-                    // Nao chega para tudo, mas o que houver e desta encomenda:
-                    // sai da prateleira, senao continuava a venda.
-                    $variant->refresh();
-                    $available = min($item->qty, $variant->stock - $variant->reserved_stock);
-
-                    if ($available > 0) {
-                        $this->stockService->decrement($variant, $available, $data['stock_reason'], $order, null, 'Só havia parte do que foi vendido.');
-                    }
                 }
             }
 
-            if ($short !== []) {
-                $order->update(['stock_issue' => true]);
-            }
-
-            $this->recordOrderHistory($order, null, 'pending_payment', null, $data['note']);
-
-            if ($record !== null) {
-                $record($order);
-            }
-
-            $this->alerts->created($order, null);
-
-            if ($short !== []) {
-                $this->alerts->soldWithoutStock($order, $short);
-            }
+            $this->finishCreated($order, $short, $data['note'], $record);
 
             // Pelas mesmas invariantes de sempre: e o pagamento que decide se
             // a encomenda vai para a producao ou direta para expedicao.
@@ -291,6 +283,156 @@ class OrderService
 
             return $order->refresh();
         });
+    }
+
+    /**
+     * Encomenda de uma compra da loja online, feita do retrato congelado no
+     * "Pagar" (o `checkout`) — nunca do carrinho, que pode ter mudado depois.
+     *
+     * Irma do createFromMarketplace: sem autor nem cliente com conta, e o
+     * preco e o que o cliente viu, nao se recalcula. Faltar stock NAO a trava
+     * — o Stripe ja cobrou —, entra marcada com `stock_issue`. Se uma linha e
+     * de stock ou de producao ficou decidido no retrato, e e isso que conta:
+     * uma linha feita por encomenda nao toca no stock, mesmo de um produto
+     * que normalmente o tem.
+     *
+     * Nasce por pagar. Marca-la paga e de quem chama (o aviso do Stripe).
+     *
+     * @param  array{
+     *     customer_name: string,
+     *     email: string,
+     *     phone: string|null,
+     *     nif: string|null,
+     *     shipping_address: array<string, mixed>|null,
+     *     subtotal_cents: int,
+     *     shipping_cents: int,
+     *     discount_cents: int,
+     *     promo_code_id: int|null,
+     *     promo_code: string|null,
+     *     total_cents: int,
+     *     note: string,
+     *     lines: array<int, array<string, mixed>>,
+     * }  $data
+     * @param  (Closure(Order): void)|null  $record
+     */
+    public function createFromStore(array $data, ?Closure $record = null): Order
+    {
+        return DB::transaction(function () use ($data, $record): Order {
+            $order = Order::query()->create([
+                'order_number' => $this->nextOrderNumber(),
+                'customer_name' => $data['customer_name'],
+                'email' => $data['email'],
+                'phone' => $data['phone'],
+                'nif' => $data['nif'],
+                'status' => 'pending_payment',
+                'payment_status' => 'pending',
+                'sales_channel' => 'website',
+                'subtotal_cents' => $data['subtotal_cents'],
+                'shipping_cents' => $data['shipping_cents'],
+                'discount_cents' => $data['discount_cents'],
+                'promo_code_id' => $data['promo_code_id'],
+                'promo_code' => $data['promo_code'],
+                'adjustment_cents' => 0,
+                'total_cents' => $data['total_cents'],
+                'currency' => 'EUR',
+                'shipping_address' => $data['shipping_address'],
+                'guest_access_token' => Str::random(64),
+            ]);
+
+            /** @var array<int, string> $short */
+            $short = [];
+
+            foreach ($data['lines'] as $line) {
+                // Apagada de vez entretanto (raro): a linha fica, sem variante
+                // e sem mexer em stock.
+                $variant = Variant::query()->find((int) ($line['variant_id'] ?? 0));
+                $unitPrice = (int) $line['unit_price_cents'];
+                $catalogPrice = $variant?->price_cents;
+                // As chaves opcionais do retrato leem-se com um valor por
+                // omissao: um checkout aberto antes de um deploy que mude a
+                // forma das linhas tem de acabar em encomenda na mesma. As
+                // obrigatorias (nome, quantidade, precos) nao.
+                $fulfillmentMode = (string) ($line['fulfillment_mode'] ?? 'in_stock');
+
+                $item = $order->items()->create([
+                    'variant_id' => $variant?->getKey(),
+                    'product_name' => $line['product_name'],
+                    'variant_label' => $line['variant_label'] ?? null,
+                    'sku' => $line['sku'] ?? $variant?->sku,
+                    'unit_price_cents' => $unitPrice,
+                    'catalog_unit_price_cents' => $catalogPrice,
+                    'price_override_reason' => $catalogPrice !== null && $catalogPrice !== $unitPrice
+                        ? 'Preço no momento da compra'
+                        : null,
+                    'personalization_surcharge_cents' => (int) ($line['personalization_surcharge_cents'] ?? 0),
+                    'qty' => (int) $line['qty'],
+                    'line_total_cents' => (int) $line['line_total_cents'],
+                    'vat_rate' => (int) ($line['vat_rate'] ?? $variant?->product->vat_rate ?? config('shop.default_vat_rate')),
+                    'personalization' => ($line['personalization'] ?? null) ?: null,
+                    'image_url' => $line['image_url'] ?? null,
+                    'fulfillment_mode' => $fulfillmentMode,
+                    'production_status' => $fulfillmentMode === 'in_stock' ? 'not_required' : 'awaiting_production',
+                ]);
+
+                if ($variant instanceof Variant && $fulfillmentMode === 'in_stock'
+                    && ! $this->takeStock($order, $item, $variant, 'sale')) {
+                    $short[] = $variant->sku;
+                }
+            }
+
+            $this->finishCreated($order, $short, $data['note'], $record);
+
+            return $order->refresh();
+        });
+    }
+
+    /**
+     * Tira da prateleira a quantidade da linha de uma venda que ja aconteceu.
+     * Falso quando nao chega: sai o que houver, que e desta encomenda — senao
+     * continuava a venda —, e quem chama marca a falta.
+     */
+    private function takeStock(Order $order, OrderItem $item, Variant $variant, string $reason): bool
+    {
+        if ($this->stockService->decrement($variant, $item->qty, $reason, $order)) {
+            return true;
+        }
+
+        $variant->refresh();
+        $available = min($item->qty, $variant->stock - $variant->reserved_stock);
+
+        if ($available > 0) {
+            $this->stockService->decrement($variant, $available, $reason, $order, null, 'Só havia parte do que foi vendido.');
+        }
+
+        return false;
+    }
+
+    /**
+     * O fim comum de uma encomenda que chega feita de fora (um mercado, a
+     * loja online), por esta ordem: a marca de falta de stock, a linha do
+     * historico, a ancora de quem a criou (`$record`, na mesma transacao) e
+     * os avisos.
+     *
+     * @param  array<int, string>  $short  as referencias que nao chegaram
+     * @param  (Closure(Order): void)|null  $record
+     */
+    private function finishCreated(Order $order, array $short, string $note, ?Closure $record): void
+    {
+        if ($short !== []) {
+            $order->update(['stock_issue' => true]);
+        }
+
+        $this->recordOrderHistory($order, null, 'pending_payment', null, $note);
+
+        if ($record !== null) {
+            $record($order);
+        }
+
+        $this->alerts->created($order, null);
+
+        if ($short !== []) {
+            $this->alerts->soldWithoutStock($order, $short);
+        }
     }
 
     /**
@@ -386,6 +528,10 @@ class OrderService
             forced: $force && ! $order->isPaid() && ! in_array($to, self::TERMINAL, true),
         );
 
+        if ($to === 'cancelled') {
+            $this->stripe->sessionOutdated($order);
+        }
+
         // Fora da transacao: nada de I/O externo dentro de uma escrita ao
         // SQLite (o Mailable e queued e ja usa afterCommit).
         //
@@ -442,11 +588,26 @@ class OrderService
                 $by,
                 trim(sprintf('Pagamento: %s -> %s. %s', $previous, $paymentStatus, $note ?? '')),
             );
+
+            // Aqui, e nao no webhook: as vendas pagas em MB WAY ou em dinheiro
+            // marcam-se a mao e gastam o codigo na mesma.
+            if ($paymentStatus === 'paid') {
+                $problem = $this->redeemer->redeem($order);
+
+                if ($problem !== null) {
+                    $this->notePayment($order, "O uso do código {$order->promo_code} não ficou registado. {$problem}");
+                }
+            }
         });
 
         $order->refresh();
 
         $this->alerts->paymentChanged($order, $previous, $by, $note);
+
+        // Pago por outra via: o link que ficou aberto cobrava segunda vez.
+        if ($paymentStatus === 'paid') {
+            $this->stripe->sessionOutdated($order);
+        }
 
         return match ($paymentStatus) {
             'paid' => $this->advanceAfterPayment($order, $by),
@@ -470,8 +631,8 @@ class OrderService
      * Ajuste ao valor final: um desconto acordado a posteriori (negativo) ou
      * um extra combinado a parte (positivo).
      *
-     * O `total_cents` continua a ser SEMPRE calculado — subtotal + portes +
-     * ajuste — e nunca escrito a mao. E ele que o dashboard e a ficha de
+     * O `total_cents` continua a ser SEMPRE calculado — subtotal - desconto +
+     * portes + ajuste — e nunca escrito a mao. E ele que o dashboard e a ficha de
      * cliente somam em SQL; guardar o ajuste sem o refletir aqui era pôr
      * quatro agregacoes a aprender a soma-lo, cada uma podendo ficar para
      * tras.
@@ -496,7 +657,12 @@ class OrderService
         }
 
         $previousTotal = $order->total_cents;
-        $total = $order->subtotal_cents + $order->shipping_cents + $adjustmentCents;
+        $total = $this->totals->calculate(
+            $order->subtotal_cents,
+            $order->discount_cents,
+            $order->shipping_cents,
+            $adjustmentCents,
+        )->totalCents;
 
         if ($total < 0) {
             throw new RuntimeException('O ajuste nao pode deixar o total negativo.');
@@ -531,6 +697,10 @@ class OrderService
         $order->refresh();
 
         $this->alerts->adjusted($order, $previousTotal, $by);
+
+        if ($order->total_cents !== $previousTotal) {
+            $this->stripe->sessionOutdated($order);
+        }
 
         return $order;
     }
@@ -807,6 +977,32 @@ class OrderService
             'changed_by_user_id' => $by?->getKey(),
             'note' => $note === null || trim($note) === '' ? null : Str::limit(trim($note), 300, ''),
         ]);
+    }
+
+    /**
+     * O codigo escolhido no formulario, ja validado contra o subtotal e o email
+     * desta encomenda. A recusa sai por baixo do campo, como os outros erros.
+     *
+     * @param  array<string, mixed>  $data
+     */
+    private function validPromoCode(array $data, int $subtotal): ?PromoCodeValidation
+    {
+        if (blank($data['promo_code'] ?? null)) {
+            return null;
+        }
+
+        $promo = $this->promoCodes->validate(
+            (string) $data['promo_code'],
+            $subtotal,
+            isset($data['email']) ? (string) $data['email'] : null,
+            ['source' => 'manual_order'],
+        );
+
+        if (! $promo->valid) {
+            throw ValidationException::withMessages(['promo_code' => (string) $promo->message]);
+        }
+
+        return $promo;
     }
 
     /**

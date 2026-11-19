@@ -50,6 +50,8 @@ class OrderPresenter
             'shippingCents' => $order->shipping_cents,
             'adjustmentCents' => $order->adjustment_cents,
             'adjustmentReason' => $order->adjustment_reason,
+            'discountCents' => $order->discount_cents,
+            'promoCode' => $order->promo_code,
             'totalCents' => $order->total_cents,
             'shippingAddress' => $order->shipping_address,
             'billingAddress' => $order->billing_address,

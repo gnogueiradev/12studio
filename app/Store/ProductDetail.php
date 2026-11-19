@@ -8,19 +8,27 @@ use App\Models\Material;
 use App\Models\Product;
 use App\Models\ProductImage;
 use App\Models\Variant;
+use App\Shop\Buyable;
 use App\Support\LocalizedUrl;
 use App\Support\PriceRange;
 use Illuminate\Support\Collection;
 
 /**
  * A pagina de um produto na montra. Como o ProductCard: campos escolhidos a
- * mao, sem custos, stock exato, gramagem nem tempos. De cada variante o
- * cliente ve so o preco e se ha para entrega imediata.
+ * mao, sem custos, gramagem nem tempos. De cada variante o cliente ve o
+ * preco, se ha para entrega imediata e, a quem pode comprar, se a pode
+ * comprar. So a quem pode comprar o stock aparece, e nunca acima do limite
+ * geral do carrinho: como teto da quantidade (`buy.maxQty`) e como o que esta
+ * pronto a enviar (`buy.ready`). Com as compras desligadas a pagina fica como
+ * sempre foi, sem nada disto.
  */
 final class ProductDetail
 {
     /** Prazo de quem tem em stock: o texto "1-2 dias uteis" da montra. */
     public const READY_DAYS = [1, 2];
+
+    /** O `buy` de quem nao pode comprar: igual para todas, sem stock. */
+    private const NOT_BUYING = ['ok' => false, 'mode' => null, 'maxQty' => null, 'ready' => 0];
 
     /**
      * @return array<int|string, mixed>
@@ -36,14 +44,23 @@ final class ProductDetail
     }
 
     /**
+     * @param  bool  $shop  este visitante pode comprar (ShopGate::allows)
      * @return array<string, mixed>
      */
-    public static function make(Product $product, ?string $locale = null): array
+    public static function make(Product $product, ?string $locale = null, bool $shop = false): array
     {
         /** @var Collection<int, Variant> $variants */
         $variants = $product->variants;
         $availability = ProductCard::availability($product, $variants);
         $default = $variants->firstWhere('is_default', true) ?? $variants->first();
+        // "Esta a venda?" numa so consulta para as variantes todas, e so a
+        // quem pode comprar; o Buyable le o produto de cada variante, que ja
+        // esta aqui.
+        $forSale = $shop ? Buyable::forSale($variants) : [];
+
+        if ($shop) {
+            $variants->each(fn (Variant $variant) => $variant->setRelation('product', $product));
+        }
 
         return [
             'id' => $product->id,
@@ -58,6 +75,9 @@ final class ProductDetail
             'price' => PriceRange::of($variants)->toArray(),
             'availability' => $availability,
             'leadDays' => self::leadDays($product, $availability),
+            // Com encomenda, quem leva mais do que ha pronto espera pela
+            // producao: a pagina avisa com este prazo. So a quem pode comprar.
+            'orderLeadDays' => $shop && $product->allow_backorder ? self::leadDays($product, 'made_to_order') : null,
             'isCustom' => $product->isCustom(),
             'images' => self::images($product),
             'colors' => $variants->pluck('color')->filter()->unique('id')->sortBy('sort_order')->values()
@@ -81,10 +101,30 @@ final class ProductDetail
                     'height' => $variant->height_mm,
                     'weight' => $variant->product_weight_grams,
                 ], fn (?int $value): bool => $value !== null && $value > 0),
+                'buy' => $shop ? self::buy($variant, $forSale[$variant->id] ?? false) : self::NOT_BUYING,
             ])->values()->all(),
             'defaultVariantId' => $default?->id,
             'personalization' => self::personalization($product, $locale ?? app()->getLocale()),
         ];
+    }
+
+    /**
+     * Se a variante vai para o carrinho, e como. O teto da quantidade e o
+     * do seletor; de resto quem decide e o Buyable, como no carrinho.
+     * `ready` e o que ha para enviar ja (ate ao limite geral): acima disso,
+     * com encomenda, a linha toda passa a ser feita por encomenda, e a
+     * pagina avisa antes de se adicionar.
+     *
+     * @return array{ok: bool, mode: string|null, maxQty: int|null, ready: int}
+     */
+    private static function buy(Variant $variant, bool $forSale): array
+    {
+        $check = Buyable::check($variant, 1, $forSale);
+        $ready = $check->ok && $variant->product->fulfillment_mode === 'in_stock'
+            ? min(max(0, $variant->available_stock), (int) config('shop.cart.max_qty'))
+            : 0;
+
+        return ['ok' => $check->ok, 'mode' => $check->mode, 'maxQty' => $check->maxQty, 'ready' => $ready];
     }
 
     /**
@@ -94,7 +134,7 @@ final class ProductDetail
      *
      * @return array{int, int}|null
      */
-    private static function leadDays(Product $product, string $availability): ?array
+    public static function leadDays(Product $product, string $availability): ?array
     {
         if ($availability === 'ready') {
             return self::READY_DAYS;

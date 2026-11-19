@@ -72,6 +72,8 @@ final class OrderPresenter
                 'shipping' => McpFormat::money($order->shipping_cents),
                 'adjustment' => McpFormat::money($order->adjustment_cents),
                 'adjustment_reason' => $order->adjustment_reason,
+                'discount' => McpFormat::money($order->discount_cents),
+                'promo_code' => $order->promo_code,
                 'total' => McpFormat::money($order->total_cents),
             ],
             'shipping' => [
@@ -117,6 +119,10 @@ final class OrderPresenter
             'sku' => $item->sku,
             'qty' => $item->qty,
             'unit_price' => McpFormat::money($item->unit_price_cents),
+            // Por unidade, a somar ao preco: (unit_price + isto) × qty = line_total.
+            'personalization_surcharge' => $item->personalization_surcharge_cents > 0
+                ? McpFormat::money($item->personalization_surcharge_cents)
+                : null,
             'line_total' => McpFormat::money($item->line_total_cents),
             'production_status' => $item->production_status,
             'personalization' => collect(BackofficeOrderPresenter::personalization($item))

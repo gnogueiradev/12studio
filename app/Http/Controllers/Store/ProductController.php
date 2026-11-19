@@ -7,6 +7,7 @@ use App\Models\Product;
 use App\PageBuilder\Pages;
 use App\Services\BrandSettings;
 use App\Services\SettingService;
+use App\Shop\ShopGate;
 use App\Store\ProductDetail;
 use App\Store\Seo;
 use App\Store\StorePage;
@@ -35,7 +36,11 @@ class ProductController extends Controller
         abort_if($product === null, 404);
 
         $locale = app()->getLocale();
-        $detail = ProductDetail::make($product, $locale);
+        // Os dados de compra so para quem pode comprar. A pre-visualizacao do
+        // construtor (PreviewController) fica com a pagina sem compras.
+        $shop = $request->attributes->get(StorePage::PREVIEW) !== true
+            && app(ShopGate::class)->allows($request->user());
+        $detail = ProductDetail::make($product, $locale, $shop);
         $name = (string) $detail['name'];
         $title = $product->translation('seo_title', $locale) ?? $name;
         $image = $product->images->sortBy([['is_primary', 'desc'], ['sort_order', 'asc']])->first()?->og_url;

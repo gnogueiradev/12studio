@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\Setting\UpdateStoreSettingsRequest;
 use App\Services\SettingService;
 use App\Services\StoreSettings;
+use App\Shop\ShopGate;
 use Illuminate\Http\RedirectResponse;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -20,6 +21,7 @@ class StoreSettingsController extends Controller
     public function __construct(
         private SettingService $settings,
         private StoreSettings $store,
+        private ShopGate $gate,
     ) {}
 
     public function index(): Response
@@ -28,6 +30,8 @@ class StoreSettingsController extends Controller
             'store' => $this->store->toForm(),
             'networks' => $this->store->networkOptions(),
             'languages' => $this->store->localeOptions(),
+            'shopReady' => $this->gate->ready(),
+            'shopTestMode' => $this->gate->testMode(),
         ]);
     }
 

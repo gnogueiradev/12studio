@@ -1,6 +1,6 @@
 import { Head, Link, router, useForm } from '@inertiajs/react';
 import { AlertTriangle, ChevronDown, Printer } from 'lucide-react';
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import { ConfirmDialog } from '@/components/admin/confirm-dialog';
 import { OrderProgress } from '@/components/admin/order-progress';
@@ -27,6 +27,7 @@ import { Spinner } from '@/components/ui/spinner';
 import { Textarea } from '@/components/ui/textarea';
 import { centsToInput, formatCents, inputToCents } from '@/lib/money';
 import { label } from '@/lib/options';
+import { postJson } from '@/lib/post-json';
 import { cn } from '@/lib/utils';
 import { index as clientes } from '@/routes/admin/clientes';
 import {
@@ -34,6 +35,7 @@ import {
     detalhes,
     estado,
     index,
+    linkPagamento,
     pagamento,
 } from '@/routes/admin/encomendas';
 import { envio as sendShipmentToEtsy } from '@/routes/admin/encomendas/etsy';
@@ -180,9 +182,11 @@ export default function OrdersShow({ order, tagSuggestions }: Props) {
 
     // Total ao vivo enquanto se escreve, como no formulário de criação. O
     // servidor é que manda: isto é só para o admin ver onde vai parar antes
-    // de gravar.
+    // de gravar. A mesma conta do OrderTotalsCalculator — o desconto do
+    // código também sai.
     const adjustedTotalCents =
-        order.subtotalCents +
+        order.subtotalCents -
+        order.discountCents +
         order.shippingCents +
         inputToCents(adjustmentForm.data.adjustment_price);
 
@@ -518,10 +522,31 @@ export default function OrdersShow({ order, tagSuggestions }: Props) {
                                                     {item.sku ?? 'Sem SKU'}
                                                 </span>
                                                 <span>·</span>
+                                                {/*
+                                                 * A sobretaxa de personalização é
+                                                 * por unidade: sem ela à vista,
+                                                 * "2 × 9,00 €" ao lado de 24,00 €
+                                                 * não batia certo.
+                                                 */}
                                                 <span>
                                                     {item.qty} ×{' '}
-                                                    {formatCents(
-                                                        item.unitPriceCents,
+                                                    {item.personalizationSurchargeCents >
+                                                    0 ? (
+                                                        <>
+                                                            (
+                                                            {formatCents(
+                                                                item.unitPriceCents,
+                                                            )}{' '}
+                                                            +{' '}
+                                                            {formatCents(
+                                                                item.personalizationSurchargeCents,
+                                                            )}{' '}
+                                                            personalização)
+                                                        </>
+                                                    ) : (
+                                                        formatCents(
+                                                            item.unitPriceCents,
+                                                        )
                                                     )}
                                                 </span>
                                                 {vatRates.length > 1 && (
@@ -614,6 +639,13 @@ export default function OrdersShow({ order, tagSuggestions }: Props) {
                                     <Row term="Subtotal">
                                         {formatCents(order.subtotalCents)}
                                     </Row>
+                                    {order.discountCents > 0 && (
+                                        <Row
+                                            term={`Desconto (${order.promoCode})`}
+                                        >
+                                            {formatCents(-order.discountCents)}
+                                        </Row>
+                                    )}
                                     <Row term="Portes">
                                         {formatCents(order.shippingCents)}
                                     </Row>
@@ -908,7 +940,20 @@ export default function OrdersShow({ order, tagSuggestions }: Props) {
                                         </Row>
                                     )}
                                     {order.paymentLink && (
-                                        <PaymentLink url={order.paymentLink} />
+                                        <>
+                                            <PaymentLink
+                                                url={order.paymentLink}
+                                            />
+                                            {/*
+                                             * A `key` larga o link gerado quando o
+                                             * total muda: copiá-lo cobrava o valor
+                                             * antigo.
+                                             */}
+                                            <GeneratedPaymentLink
+                                                key={order.totalCents}
+                                                orderId={order.id}
+                                            />
+                                        </>
                                     )}
                                 </dl>
                             )}
@@ -1376,6 +1421,55 @@ OrdersShow.layout = {
 };
 
 /**
+ * A sessão do Stripe direta, para mandar por DM. Dura 24 horas no máximo; gerar
+ * outra vez devolve a mesma enquanto estiver aberta, e cria uma nova se expirou.
+ */
+function GeneratedPaymentLink({ orderId }: { orderId: number }) {
+    const [link, setLink] = useState<{ url: string; expiresAt: number } | null>(
+        null,
+    );
+    const [error, setError] = useState<string | null>(null);
+    const [busy, setBusy] = useState(false);
+
+    const generate = () => {
+        setBusy(true);
+        setError(null);
+
+        postJson<{ url: string; expiresAt: number }>(linkPagamento(orderId).url)
+            .then(setLink)
+            .catch((failure: Error) => setError(failure.message))
+            .finally(() => setBusy(false));
+    };
+
+    return (
+        <div className="mt-1 grid gap-1.5">
+            {link !== null && (
+                <>
+                    <PaymentLink url={link.url} />
+                    <p className="text-xs text-muted-foreground">
+                        Válido até{' '}
+                        {new Date(link.expiresAt * 1000).toLocaleString(
+                            'pt-PT',
+                        )}
+                    </p>
+                </>
+            )}
+            <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={busy}
+                onClick={generate}
+            >
+                {busy && <Spinner />}
+                Gerar link de pagamento
+            </Button>
+            <InputError message={error ?? undefined} />
+        </div>
+    );
+}
+
+/**
  * O link que se manda ao cliente na conversa: abre o resumo da encomenda e
  * um botão que paga pelo Stripe. Quando o pagamento chega, a encomenda passa
  * sozinha a paga.
@@ -1383,6 +1477,7 @@ OrdersShow.layout = {
 function PaymentLink({ url }: { url: string }) {
     const [copied, setCopied] = useState<'copied' | 'selected' | null>(null);
     const input = useRef<HTMLInputElement>(null);
+    const id = useId();
 
     const flash = (state: 'copied' | 'selected') => {
         setCopied(state);
@@ -1405,7 +1500,7 @@ function PaymentLink({ url }: { url: string }) {
     return (
         <div className="mt-2 grid gap-1.5 border-t pt-3">
             <Label
-                htmlFor="payment-link"
+                htmlFor={id}
                 className="text-xs font-normal text-muted-foreground"
             >
                 Link de pagamento (Stripe)
@@ -1413,7 +1508,7 @@ function PaymentLink({ url }: { url: string }) {
             <div className="flex gap-2">
                 <Input
                     ref={input}
-                    id="payment-link"
+                    id={id}
                     readOnly
                     value={url}
                     onFocus={(event) => event.currentTarget.select()}

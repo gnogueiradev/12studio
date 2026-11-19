@@ -52,8 +52,17 @@ class StripeWebhookController extends Controller
             return response()->noContent();
         }
 
-        DB::transaction(function () use ($event, $events): void {
+        $context = [
+            'event_id' => $event['id'],
+            'type' => $event['type'],
+            'session_id' => $event['data']['object']['id'] ?? null,
+            'order_id' => $event['data']['object']['client_reference_id'] ?? null,
+        ];
+
+        DB::transaction(function () use ($event, $events, $context): void {
             if (WebhookEvent::query()->whereKey($event['id'])->exists()) {
+                Log::channel('api')->info('Aviso do Stripe repetido: ignorado.', [...$context, 'result' => 'duplicate']);
+
                 return;
             }
 
@@ -65,6 +74,8 @@ class StripeWebhookController extends Controller
             $events->handle($event);
 
             WebhookEvent::query()->whereKey($event['id'])->update(['processed_at' => now()]);
+
+            Log::channel('api')->info('Aviso do Stripe tratado.', [...$context, 'result' => 'processed']);
         });
 
         return response()->noContent();

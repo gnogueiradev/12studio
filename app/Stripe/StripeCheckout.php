@@ -2,8 +2,8 @@
 
 namespace App\Stripe;
 
+use App\Models\Checkout;
 use App\Models\Order;
-use App\Models\OrderItem;
 use App\Stripe\StripeCatalog as Catalog;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Str;
@@ -18,6 +18,10 @@ use Illuminate\Support\Str;
  * cupao de uso unico (desconto). Antes de pedir, confere-se que tudo soma o
  * total da encomenda — se nao somar, nao se cobra.
  *
+ * A sessao faz-se a partir de um Charge, a descricao do que se cobra; a
+ * encomenda e uma das maneiras de o escrever (Charge::fromOrder); a compra da
+ * loja e a outra (Charge::fromCheckout, startForCheckout).
+ *
  * Uma so sessao viva por encomenda: antes de criar outra, expira-se a
  * anterior. Assim um cliente com o link aberto em duas abas nao paga duas
  * vezes.
@@ -26,6 +30,15 @@ class StripeCheckout
 {
     /** Ja ha um pagamento a caminho (uma referencia Multibanco por pagar). */
     public const PROCESSING = 'processing';
+
+    /**
+     * Mais do que o pior caso de um pedido: tres leituras de 15 s com pausas, e
+     * depois expirar, cupao e sessao.
+     */
+    public const LOCK_SECONDS = 120;
+
+    /** O minimo que o Stripe cobra em euros. */
+    private const MINIMUM_CENTS = 50;
 
     public function __construct(
         private StripeClient $stripe,
@@ -41,6 +54,15 @@ class StripeCheckout
     }
 
     /**
+     * O tranco de quem abre uma sessao para esta encomenda. E o mesmo no /pagar
+     * e no link gerado no backoffice.
+     */
+    public static function lockKey(Order $order): string
+    {
+        return "stripe-checkout:{$order->getKey()}";
+    }
+
+    /**
      * O endereco para onde mandar o cliente, ou PROCESSING quando a sessao
      * anterior ja foi submetida e o pagamento esta a caminho.
      */
@@ -48,7 +70,7 @@ class StripeCheckout
     {
         // Dois cliques (ou duas abas) ao mesmo tempo liam a mesma sessao
         // anterior e criavam duas novas, ambas pagaveis. Um de cada vez.
-        $lock = Cache::lock("stripe-checkout:{$order->getKey()}", 30);
+        $lock = Cache::lock(self::lockKey($order), self::LOCK_SECONDS);
 
         if (! $lock->get()) {
             throw new StripeException('Já está a ser aberto um pagamento para esta encomenda.');
@@ -87,83 +109,143 @@ class StripeCheckout
     }
 
     /**
+     * A sessao de uma compra da loja, a partir do retrato. Expira ao fim de
+     * `shop.checkout.session_minutes`; o checkout guarda a sessao e a hora a
+     * que ela expira. O tranco e a sessao anterior do mesmo carrinho sao do
+     * CheckoutService, que chama isto.
+     */
+    public function startForCheckout(Checkout $checkout, string $successUrl, string $cancelUrl): string
+    {
+        $checkout->expires_at = now()->addMinutes((int) config('shop.checkout.session_minutes'));
+
+        $payload = $this->sessionPayload(
+            Charge::fromCheckout($checkout, $successUrl, $cancelUrl),
+            couponKey: "checkout-{$checkout->id}-coupon",
+        );
+
+        $session = $this->stripe->post('checkout/sessions', $payload, "checkout-{$checkout->id}-session");
+
+        $checkout->forceFill(['stripe_session_id' => (string) $session['id']])->save();
+
+        return (string) $session['url'];
+    }
+
+    /**
+     * O pedido da sessao para pagar uma encomenda. Se houver desconto, cria o
+     * cupao.
+     *
+     * @param  bool  $asLink  O link gerado no backoffice: tudo em `price_data` e os portes numa linha.
+     * @param  string|null  $couponKey  A chave de idempotencia do cupao.
      * @return array<string, mixed>
      */
-    private function payload(Order $order, string $returnUrl): array
+    public function payload(Order $order, string $returnUrl, bool $asLink = false, ?string $couponKey = null): array
     {
-        $order->loadMissing('items.variant.product');
+        return $this->sessionPayload(Charge::fromOrder($order, $returnUrl), $asLink, $couponKey);
+    }
 
+    /**
+     * O pedido da sessao para cobrar uma descricao. Se houver desconto, cria
+     * o cupao — so depois de conferir que tudo soma o total.
+     *
+     * @param  bool  $asLink  Tudo em `price_data` e os portes numa linha.
+     * @param  string|null  $couponKey  A chave de idempotencia do cupao.
+     * @return array<string, mixed>
+     */
+    public function sessionPayload(Charge $charge, bool $asLink = false, ?string $couponKey = null): array
+    {
         $lines = [];
         $sum = 0;
 
-        $currency = strtolower($order->currency);
+        $currency = strtolower($charge->currency);
 
-        foreach ($order->items as $item) {
-            [$line, $amount] = $this->line($item, $currency);
+        foreach ($charge->lines as $chargeLine) {
+            [$line, $amount] = $this->line($chargeLine, $currency, $asLink);
             $lines[] = $line;
             $sum += $amount;
         }
 
         $linesSum = $sum;
-        $metadata = ['order_id' => (string) $order->getKey(), 'order_number' => $order->order_number];
 
         $payload = [
             'mode' => 'payment',
-            'client_reference_id' => (string) $order->getKey(),
-            'metadata' => $metadata,
-            'payment_intent_data' => ['metadata' => $metadata],
-            'customer_email' => filled($order->email) ? $order->email : null,
+            'client_reference_id' => $charge->reference,
+            'metadata' => $charge->metadata,
+            'payment_intent_data' => ['metadata' => $charge->metadata],
+            'customer_email' => filled($charge->email) ? $charge->email : null,
             'locale' => 'auto',
-            'success_url' => $returnUrl.'?pago=1',
-            'cancel_url' => $returnUrl,
-            'custom_text' => ['submit' => ['message' => $this->summary($order)]],
+            'success_url' => $charge->successUrl,
+            'cancel_url' => $charge->cancelUrl,
+            'custom_text' => ['submit' => ['message' => $charge->summary]],
         ];
 
-        if ($order->shipping_cents > 0) {
-            $payload['shipping_options'] = [[
-                'shipping_rate_data' => [
-                    'type' => 'fixed_amount',
-                    'display_name' => Str::limit($order->shipping_method_name ?: 'Portes', 100, ''),
-                    'fixed_amount' => ['amount' => $order->shipping_cents, 'currency' => $currency],
-                ],
-            ]];
-            $sum += $order->shipping_cents;
+        if ($charge->expiresAt !== null) {
+            $payload['expires_at'] = $charge->expiresAt;
         }
 
-        // Antes do cupao: uma encomenda que nao soma nao deixa nada criado no
-        // Stripe.
-        $sum += $order->adjustment_cents;
-
-        // Um cupao do Stripe so desconta nas linhas, nao nos portes: um
-        // desconto maior do que as linhas cobrava mais do que o total.
-        if ($sum !== $order->total_cents || $order->total_cents <= 0 || -$order->adjustment_cents > $linesSum) {
-            throw new StripeException(sprintf(
-                'As linhas da encomenda %s somam %d cêntimos e o total é %d. Nada foi cobrado.',
-                $order->order_number,
-                $sum,
-                $order->total_cents,
-            ));
-        }
-
-        if ($order->adjustment_cents > 0) {
+        if ($charge->shippingCents > 0 && $asLink) {
             $lines[] = [
                 'quantity' => 1,
                 'price_data' => [
                     'currency' => $currency,
-                    'unit_amount' => $order->adjustment_cents,
-                    'product_data' => ['name' => Str::limit($order->adjustment_reason ?: 'Ajuste', 250, '')],
+                    'unit_amount' => $charge->shippingCents,
+                    'product_data' => ['name' => 'Portes de envio'],
                 ],
             ];
-        } elseif ($order->adjustment_cents < 0) {
+            $sum += $charge->shippingCents;
+        } elseif ($charge->shippingCents > 0) {
+            $payload['shipping_options'] = [[
+                'shipping_rate_data' => [
+                    'type' => 'fixed_amount',
+                    'display_name' => Str::limit($charge->shippingName ?: 'Portes', 100, ''),
+                    'fixed_amount' => ['amount' => $charge->shippingCents, 'currency' => $currency],
+                ],
+            ]];
+            $sum += $charge->shippingCents;
+        }
+
+        // Antes do cupao: uma cobranca que nao soma nao deixa nada criado no
+        // Stripe.
+        $sum += $charge->extraCents - $charge->couponCents;
+
+        // Um cupao do Stripe so desconta nas linhas, nao nos portes: um
+        // desconto maior do que as linhas cobrava mais do que o total.
+        if ($sum !== $charge->totalCents || $charge->totalCents <= 0 || $charge->couponCents > $linesSum) {
+            throw new StripeException(sprintf(
+                'As linhas da %s somam %d cêntimos e o total é %d. Nada foi cobrado.',
+                $charge->label,
+                $sum,
+                $charge->totalCents,
+            ));
+        }
+
+        if ($charge->totalCents < self::MINIMUM_CENTS) {
+            throw new StripeException(sprintf(
+                'O total da %s fica abaixo de 0,50 €, o mínimo do Stripe. Nada foi cobrado.',
+                $charge->label,
+            ));
+        }
+
+        if ($charge->extraCents > 0) {
+            $lines[] = [
+                'quantity' => 1,
+                'price_data' => [
+                    'currency' => $currency,
+                    'unit_amount' => $charge->extraCents,
+                    'product_data' => ['name' => Str::limit($charge->extraName ?: 'Ajuste', 250, '')],
+                ],
+            ];
+        }
+
+        if ($charge->couponCents > 0) {
             // As linhas do Stripe nao podem ser negativas: um desconto e um
             // cupao, criado aqui e que so serve uma vez.
             $coupon = $this->stripe->post('coupons', [
-                'amount_off' => -$order->adjustment_cents,
+                'amount_off' => $charge->couponCents,
                 'currency' => $currency,
                 'duration' => 'once',
                 'max_redemptions' => 1,
-                'name' => Str::limit($order->adjustment_reason ?: 'Desconto', 40, ''),
-            ]);
+                'name' => Str::limit($charge->couponName ?: 'Desconto', 40, ''),
+            ], $couponKey);
             $payload['discounts'] = [['coupon' => (string) $coupon['id']]];
         }
 
@@ -175,23 +257,23 @@ class StripeCheckout
     /**
      * @return array{0: array<string, mixed>, 1: int}
      */
-    private function line(OrderItem $item, string $currency): array
+    private function line(ChargeLine $chargeLine, string $currency, bool $priceData = false): array
     {
-        $qty = $item->qty;
-        $unit = intdiv($item->line_total_cents, max($qty, 1));
+        $qty = $chargeLine->qty;
+        $unit = intdiv($chargeLine->lineTotalCents, max($qty, 1));
 
         // Um total que nao se divide pela quantidade (nao acontece hoje, mas
         // um arredondamento futuro fa-lo-ia): vai como uma linha so.
-        if ($unit * $qty !== $item->line_total_cents) {
-            [$qty, $unit] = [1, $item->line_total_cents];
+        if ($unit * $qty !== $chargeLine->lineTotalCents) {
+            [$qty, $unit] = [1, $chargeLine->lineTotalCents];
         }
 
-        $variant = $item->variant;
+        $variant = $chargeLine->variant;
         $product = $variant?->product;
         if ($variant !== null && $product !== null && Catalog::sellable($product) && $product->stripe_product_id !== null) {
             // O preco normal da variante: o Price dela, que os relatorios do
             // Stripe agrupam.
-            if ($variant->active && $variant->stripe_price_id !== null && $variant->stripe_price_cents === $unit && $qty === $item->qty) {
+            if (! $priceData && $variant->active && $variant->stripe_price_id !== null && $variant->stripe_price_cents === $unit && $qty === $chargeLine->qty) {
                 return [['price' => $variant->stripe_price_id, 'quantity' => $qty], $unit * $qty];
             }
 
@@ -202,29 +284,9 @@ class StripeCheckout
         }
 
         // Linha livre, ou produto que o Stripe ainda nao conhece.
-        $name = trim($item->product_name.($item->variant_label ? " ({$item->variant_label})" : ''));
-
         return [[
             'quantity' => $qty,
-            'price_data' => ['currency' => $currency, 'unit_amount' => $unit, 'product_data' => ['name' => Str::limit($name, 250, '')]],
+            'price_data' => ['currency' => $currency, 'unit_amount' => $unit, 'product_data' => ['name' => Str::limit($chargeLine->name, 250, '')]],
         ], $unit * $qty];
-    }
-
-    /**
-     * O Stripe mostra o nome do Product, nao o da variante: duas linhas
-     * "Vaso" nao dizem qual e o grande. O resumo vai por baixo do botao de
-     * pagar, com o numero da encomenda.
-     */
-    private function summary(Order $order): string
-    {
-        $lines = $order->items->map(fn (OrderItem $item): string => sprintf(
-            '%d× %s%s',
-            $item->qty,
-            $item->product_name,
-            $item->variant_label ? " ({$item->variant_label})" : '',
-        ));
-
-        // O Stripe aceita 1200 caracteres, e o Str::limit poe as reticencias por cima.
-        return Str::limit("Encomenda {$order->order_number}: ".$lines->implode('; ').'.', 1197);
     }
 }

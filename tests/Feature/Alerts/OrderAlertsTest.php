@@ -5,6 +5,7 @@ namespace Tests\Feature\Alerts;
 use App\Alerts\AlertChannel;
 use App\Models\Order;
 use App\Models\User;
+use App\Models\Variant;
 use App\Services\OrderService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\Client\ConnectionException;
@@ -85,6 +86,39 @@ class OrderAlertsTest extends TestCase
             "🛒 Nova encomenda {$order->order_number}",
             "💶 Pagamento registado — {$order->order_number}",
         ], $this->alertTitles(AlertChannel::ORDERS));
+    }
+
+    public function test_a_marketplace_sale_without_stock_reads_as_paid(): void
+    {
+        $variant = Variant::factory()->stock(0)->create();
+
+        $order = $this->orders->createFromMarketplace([
+            'sales_channel' => 'etsy',
+            'payment_method' => 'etsy',
+            'external_order_reference' => 'ETSY-1',
+            'customer_name' => 'Ana Silva',
+            'shipping_address' => null,
+            'shipping_cents' => 0,
+            'adjustment_cents' => 0,
+            'adjustment_reason' => null,
+            'stock_reason' => 'etsy_order',
+            'note' => 'Importada da Etsy.',
+            'lines' => [['variant' => $variant, 'product_name' => 'Vaso', 'sku' => null, 'qty' => 1, 'unit_price_cents' => 1500, 'personalization' => null]],
+        ]);
+
+        $embed = $this->alertEmbed(AlertChannel::ORDERS, "Vendida sem stock — {$order->order_number}");
+        $this->assertSame(
+            'A venda já aconteceu e está paga, mas o stock não chega para tudo. A encomenda entrou marcada; da prateleira saiu só o que havia.',
+            $embed['description'],
+        );
+        $this->assertSame([
+            "🛒 Nova encomenda {$order->order_number}",
+            "⚠️ Vendida sem stock — {$order->order_number}",
+            "💶 Pagamento registado — {$order->order_number}",
+        ], array_values(array_filter(
+            $this->alertTitles(AlertChannel::ORDERS),
+            fn (string $title): bool => preg_match('/Nova encomenda|Vendida sem stock|Pagamento registado/', $title) === 1,
+        )));
     }
 
     public function test_a_failed_payment_arrives_once_as_a_cancellation_with_the_reason(): void

@@ -42,6 +42,8 @@ class PaymentLinkController extends Controller
                 ])->values()->all(),
                 'shippingCents' => $order->shipping_cents,
                 'adjustmentCents' => $order->adjustment_cents,
+                'discountCents' => $order->discount_cents,
+                'promoCode' => $order->promo_code,
                 'totalCents' => $order->total_cents,
             ],
             'state' => $this->state($order),

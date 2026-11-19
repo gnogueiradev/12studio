@@ -3,6 +3,8 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\AdminActionRequest;
+use App\Http\Requests\Order\PreviewOrderTotalsRequest;
 use App\Http\Requests\Order\StoreManualOrderRequest;
 use App\Http\Requests\Order\UpdateOrderAdjustmentRequest;
 use App\Http\Requests\Order\UpdateOrderDetailsRequest;
@@ -14,11 +16,16 @@ use App\Models\Order;
 use App\Models\OrderDraft;
 use App\Models\Tag;
 use App\Services\OrderService;
+use App\Services\OrderTotalsCalculator;
+use App\Services\PromoCodeValidator;
 use App\Services\TagService;
+use App\Stripe\StripeException;
+use App\Stripe\StripePaymentLinkService;
 use App\Support\ManualOrderOptions;
 use App\Support\Money;
 use App\Support\OrderPresenter;
 use App\Support\ShortDate;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Mail;
@@ -147,6 +154,53 @@ class OrderController extends Controller
         $this->toast("Encomenda {$order->order_number} criada.");
 
         return to_route('admin.encomendas.show', $order);
+    }
+
+    /**
+     * As contas do formulario da encomenda manual, feitas pelo mesmo servico que
+     * as grava. Os portes nunca mudam sozinhos: a sugestao vai a parte, porque
+     * uma venda no Vinted ou em mao nao pode levar portes a forca.
+     */
+    public function totals(
+        PreviewOrderTotalsRequest $request,
+        OrderTotalsCalculator $calculator,
+        PromoCodeValidator $validator,
+    ): JsonResponse {
+        $subtotal = $request->subtotalCents();
+
+        $promo = $request->filled('promo_code')
+            ? $validator->validate($request->string('promo_code')->value(), $subtotal, $request->string('email')->value(), ['source' => 'manual_order_preview'])
+            : null;
+
+        $totals = $calculator->calculate(
+            $subtotal,
+            $promo->discountCents ?? 0,
+            Money::fromDecimal($request->string('shipping_price', '0')->value()),
+        );
+
+        return response()->json([
+            'subtotalCents' => $totals->subtotalCents,
+            'discountCents' => $totals->discountCents,
+            'shippingCents' => $totals->shippingCents,
+            'totalCents' => $totals->totalCents,
+            'suggestedShippingCents' => $calculator->suggestedShipping($subtotal),
+            'promoError' => $promo?->message,
+        ]);
+    }
+
+    /**
+     * O botao "Gerar link de pagamento". Responde com o URL em vez de redirecionar:
+     * so existe para o copiar agora, e gerar outra vez devolve o mesmo.
+     */
+    public function paymentLink(AdminActionRequest $request, Order $order, StripePaymentLinkService $links): JsonResponse
+    {
+        try {
+            $link = $links->create($order);
+        } catch (StripeException $exception) {
+            return response()->json(['message' => $exception->getMessage()], 422);
+        }
+
+        return response()->json(['url' => $link->url, 'expiresAt' => $link->expiresAt]);
     }
 
     public function show(Order $order): Response

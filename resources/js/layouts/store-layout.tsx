@@ -8,6 +8,7 @@ import { StoreHeader } from '@/components/store/store-header';
 import { useLocale, useT } from '@/lib/i18n';
 import { cn } from '@/lib/utils';
 import { index as storeSettings } from '@/routes/admin/montra';
+import type { CartData } from '@/types/shop';
 import type { Storefront } from '@/types/store';
 
 const EMPTY_STOREFRONT: Storefront = {
@@ -18,6 +19,10 @@ const EMPTY_STOREFRONT: Storefront = {
     logo: null,
     announcement: null,
     form: { started: '' },
+    shop: false,
+    cartCount: 0,
+    // Sem compras não há seletor de quantidade.
+    maxQty: 0,
 };
 
 /**
@@ -39,6 +44,7 @@ export default function StoreLayout({
         storefront = EMPTY_STOREFRONT,
         product,
     } = usePage().props;
+    const cart = usePage().props.cart as CartData | undefined;
     const t = useT();
     const { component } = usePage();
     const { current, available, default: defaultCode } = useLocale();
@@ -71,6 +77,12 @@ export default function StoreLayout({
     // preço e o "Tenho interesse": o rodapé ganha espaço para ela, e o botão
     // "Fala connosco" sai do caminho.
     const productPage = product !== undefined;
+    // O carrinho com linhas tem a sua barra fixa (total e "Finalizar
+    // compra"): o botão "Fala connosco" sai também do caminho. O checkout tem
+    // sempre a sua (total e "Pagar"), e o botão taparia o fim do "Pagar".
+    const cartBar =
+        (component === 'store/cart' && (cart?.lines.length ?? 0) > 0) ||
+        component === 'store/checkout';
 
     return (
         <div
@@ -121,7 +133,9 @@ export default function StoreLayout({
                 <ContactFab
                     contact={storefront.contact}
                     social={storefront.social}
-                    className={productPage ? 'max-md:hidden' : undefined}
+                    className={
+                        productPage || cartBar ? 'max-md:hidden' : undefined
+                    }
                 />
             )}
         </div>

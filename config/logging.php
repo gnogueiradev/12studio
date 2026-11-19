@@ -73,6 +73,24 @@ return [
             'replace_placeholders' => true,
         ],
 
+        // Nivel proprio e nao o LOG_LEVEL: a producao forca-o a warning, e os
+        // registos `info` dos pagamentos e dos codigos perdiam-se todos.
+        'api' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/api.log'),
+            'level' => env('LOG_API_LEVEL', 'info'),
+            'max_files' => env('LOG_API_DAYS', 30),
+            'replace_placeholders' => true,
+        ],
+
+        'queue' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/queue.log'),
+            'level' => env('LOG_QUEUE_LEVEL', 'info'),
+            'max_files' => env('LOG_QUEUE_DAYS', 30),
+            'replace_placeholders' => true,
+        ],
+
         'monthly' => [
             'driver' => 'monthly',
             'path' => storage_path('logs/laravel.log'),

@@ -1,10 +1,13 @@
 <?php
 
+use App\Http\Controllers\Store\CartController;
 use App\Http\Controllers\Store\CatalogController;
+use App\Http\Controllers\Store\CheckoutController;
 use App\Http\Controllers\Store\ConversationController;
 use App\Http\Controllers\Store\LandingPageController;
 use App\Http\Controllers\Store\PageController;
 use App\Http\Controllers\Store\ProductController;
+use App\Http\Controllers\Store\PurchaseController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -40,6 +43,38 @@ $storefront = function (): void {
         ->middleware('throttle:conversations')
         ->name('store.conversations.store');
 
+    // O carrinho: so existe com as compras ligadas (`shop.open`, 404 se nao).
+    // Uma URI por acao, para o Wayfinder. O limite 'cart' esta no AppServiceProvider.
+    Route::middleware('shop.open')->group(function (): void {
+        Route::get('carrinho', [CartController::class, 'show'])->name('store.cart');
+        Route::post('carrinho/itens', [CartController::class, 'add'])
+            ->middleware('throttle:cart')
+            ->name('store.cart.add');
+        Route::patch('carrinho/itens/{item}/quantidade', [CartController::class, 'update'])
+            ->whereNumber('item')
+            ->middleware('throttle:cart')
+            ->name('store.cart.update');
+        Route::delete('carrinho/itens/{item}/remover', [CartController::class, 'remove'])
+            ->whereNumber('item')
+            ->middleware('throttle:cart')
+            ->name('store.cart.remove');
+        Route::post('carrinho/codigo', [CartController::class, 'promo'])
+            ->middleware('throttle:cart')
+            ->name('store.cart.promo');
+        Route::delete('carrinho/codigo/remover', [CartController::class, 'removePromo'])
+            ->middleware('throttle:cart')
+            ->name('store.cart.promo.remove');
+
+        // A compra: abrir nao cria nada; o "Pagar" congela-a e abre o Stripe.
+        Route::get('finalizar', [CheckoutController::class, 'show'])->name('store.checkout');
+        Route::post('finalizar/codigo', [CheckoutController::class, 'promo'])
+            ->middleware('throttle:cart')
+            ->name('store.checkout.promo');
+        Route::post('finalizar/pagar', [CheckoutController::class, 'pay'])
+            ->middleware('throttle:checkout')
+            ->name('store.checkout.pay');
+    });
+
     // Paginas de sistema montadas por blocos (App\PageBuilder).
     foreach ([
         'about' => 'sobre',
@@ -72,6 +107,12 @@ $conversations = function (): void {
     Route::get('conversa/{token}/anexos/{attachment}', [ConversationController::class, 'attachment'])
         ->where('token', '[A-Za-z0-9]{1,64}')
         ->name('store.conversation.attachment');
+
+    // Onde o Stripe devolve o cliente: quem pagou ve a sua compra mesmo que
+    // a montra se desligue depois. So le.
+    Route::get('compra/{token}', [PurchaseController::class, 'show'])
+        ->where('token', '[A-Za-z0-9]{64}')
+        ->name('store.purchase');
 };
 
 // Um endereco de landing: minusculas, numeros e hifens (PageBuilderService).

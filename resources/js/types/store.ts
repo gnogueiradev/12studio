@@ -54,6 +54,12 @@ export type Storefront = {
     announcement: Announcement | null;
     /** A hora a que a página abriu, encriptada (anti-spam das conversas). */
     form: { started: string };
+    /** Este visitante pode comprar (o interruptor das compras). */
+    shop: boolean;
+    /** Peças no carrinho; 0 sem carrinho. */
+    cartCount: number;
+    /** O limite geral de peças por linha (config('shop.cart.max_qty')). */
+    maxQty: number;
 };
 
 /** Um link de bloco já resolvido (PageRenderer). */
@@ -176,6 +182,15 @@ export type ProductVariantData = {
         height?: number;
         weight?: number;
     };
+    /** Buyable::check(variante, 1): se vai para o carrinho, e como. */
+    buy: {
+        ok: boolean;
+        mode: 'in_stock' | 'made_to_order' | null;
+        /** O teto do seletor de quantidade; null = só o limite geral. */
+        maxQty: number | null;
+        /** Peças prontas a enviar já (até ao limite geral); 0 por encomenda. */
+        ready: number;
+    };
 };
 
 export type ProductImageData = ResponsiveImageData & {
@@ -195,6 +210,8 @@ export type ProductDetailData = {
     price: ProductCardData['price'];
     availability: ProductCardData['availability'];
     leadDays: [number, number] | null;
+    /** O prazo de produção, para quem pode comprar mais do que há pronto; senão null. */
+    orderLeadDays: [number, number] | null;
     isCustom: boolean;
     images: ProductImageData[];
     colors: { id: number; name: string; hex: string }[];

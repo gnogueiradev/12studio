@@ -176,6 +176,21 @@ class AppServiceProvider extends ServiceProvider
             Limit::perDay(10)->by('conversations:email:'.mb_strtolower(trim((string) $request->input('email')))),
         ]);
 
+        // O carrinho: 60 escritas por minuto por IP (um duplo clique nao chega
+        // la, um robo sim), e 2000 por dia, para um robo lento tambem parar.
+        RateLimiter::for('cart', fn (Request $request): array => [
+            Limit::perMinute(60)->by('cart:'.$request->ip()),
+            Limit::perDay(2000)->by('cart:day:'.$request->ip()),
+        ]);
+
+        // O "Pagar": cada um abre uma sessao no Stripe. Dez por minuto por IP
+        // chegam para quem se engana nos dados, nao para um robo; 60 por dia
+        // chegam para uma casa inteira atras do mesmo IP.
+        RateLimiter::for('checkout', fn (Request $request): array => [
+            Limit::perMinute(10)->by('checkout:'.$request->ip()),
+            Limit::perDay(60)->by('checkout:day:'.$request->ip()),
+        ]);
+
         RateLimiter::for('conversation-reply', fn (Request $request): Limit => Limit::perMinute(10)
             ->by('conversation-reply:'.hash('sha256', (string) $request->route('token'))));
 

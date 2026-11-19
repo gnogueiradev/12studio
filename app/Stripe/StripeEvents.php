@@ -2,8 +2,10 @@
 
 namespace App\Stripe;
 
+use App\Models\Checkout;
 use App\Models\Order;
 use App\Services\OrderService;
+use App\Shop\CheckoutCompletion;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use RuntimeException;
@@ -18,6 +20,10 @@ use Throwable;
  *   checkout.session.async_payment_failed      nao foi → nota, e o link volta a servir
  *   charge.refunded                       reembolso total ou parcial
  *
+ * Uma compra da loja ainda nao tem encomenda quando o cliente paga: nasce no
+ * primeiro destes avisos, do retrato do `checkout` (CheckoutCompletion), e
+ * dai em diante e tratada como as outras.
+ *
  * Tudo passa pelo OrderService, que e a unica via de escrita de estados: e
  * ele que leva a encomenda paga para producao ou para expedicao, como quando
  * o dono a marca a mao.
@@ -30,6 +36,7 @@ class StripeEvents
     public function __construct(
         private OrderService $orders,
         private StripeClient $stripe,
+        private CheckoutCompletion $completion,
     ) {}
 
     /**
@@ -115,12 +122,32 @@ class StripeEvents
         });
 
         $paid = (int) ($session['amount_total'] ?? 0);
-        $note = 'Pago pelo link do Stripe.';
+        $note = $this->checkoutId($session) !== null ? 'Pago na loja online.' : 'Pago pelo link do Stripe.';
 
         // Pago e pago: o dinheiro chegou. Mas se a encomenda mudou depois de o
         // cliente abrir o pagamento, o dono tem de o saber.
         if ($paid !== $order->total_cents) {
             $note .= sprintf(' Atenção: foram pagos %s e a encomenda tem %s.', $this->euros($paid), $this->euros($order->total_cents));
+
+            Log::channel('api')->warning('Valor pago no Stripe diferente do total da encomenda.', [
+                'order_id' => $order->getKey(),
+                'session_id' => $session['id'] ?? null,
+                'amount_total' => $paid,
+                'total_cents' => $order->total_cents,
+            ]);
+        }
+
+        // Pagou numa sessao que nao chegou a ser fechada (o Stripe estava em
+        // baixo, ou pagou nesse instante). O pipeline nao sai de um estado
+        // terminal: alguem tem de reembolsar.
+        if (in_array($order->status, ['cancelled', 'refunded'], true)) {
+            $note .= ' Atenção: a encomenda já estava fechada. Confirma no Dashboard e reembolsa.';
+
+            Log::channel('api')->warning('Pagamento no Stripe de uma encomenda fechada.', [
+                'order_id' => $order->getKey(),
+                'session_id' => $session['id'] ?? null,
+                'status' => $order->status,
+            ]);
         }
 
         $this->orders->setPaymentStatus($order, 'paid', null, $note);
@@ -131,7 +158,9 @@ class StripeEvents
      */
     private function sessionFailed(array $session): void
     {
-        $order = $this->orderOf($session);
+        // Uma compra da loja que nunca chegou a ter encomenda continua sem
+        // ela: nao houve pagamento nem referencia.
+        $order = $this->orderOf($session, create: false);
 
         if ($order === null || $order->isPaid()) {
             return;
@@ -204,10 +233,42 @@ class StripeEvents
      * que o 12studio la pos. Uma sessao criada a mao no Dashboard nao tem
      * nem uma nem outra, e nao toca em encomenda nenhuma.
      *
+     * Ha duas formas. O link de pagamento de uma encomenda leva o id dela
+     * ("42" e `order_id`). Uma compra da loja leva o do `checkout`
+     * ("checkout-17" e `checkout_id`), e a encomenda vem dele — criada aqui,
+     * do retrato, se ainda nao existe e `$create` — desde que a sessao seja
+     * a que esse checkout guardou.
+     *
      * @param  array<string, mixed>  $session
      */
-    private function orderOf(array $session): ?Order
+    private function orderOf(array $session, bool $create = true): ?Order
     {
+        $checkoutId = $this->checkoutId($session);
+
+        if ($checkoutId !== null) {
+            $checkout = Checkout::query()->find($checkoutId);
+            $sessionId = $this->string($session['id'] ?? null);
+
+            // So a sessao que o proprio checkout guardou lhe da uma encomenda.
+            // Um pagamento (ou uma referencia) que nao encontra a sua compra
+            // nao toca em nada, mas o dono tem de o ver: ha dinheiro sem
+            // encomenda. So os ids, nada do cliente.
+            if ($checkout === null || $sessionId === null || $checkout->stripe_session_id !== $sessionId) {
+                if ($create) {
+                    report(new RuntimeException(sprintf(
+                        'Stripe: a sessão %s diz ser do checkout %d, que %s. Nada foi criado.',
+                        $sessionId ?? '(sem id)',
+                        $checkoutId,
+                        $checkout === null ? 'não existe' : 'guardou outra sessão',
+                    )));
+                }
+
+                return null;
+            }
+
+            return $this->completion->orderFor($checkout, $create);
+        }
+
         $reference = $this->string($session['client_reference_id'] ?? null);
         $metadata = $session['metadata'] ?? [];
 
@@ -216,6 +277,25 @@ class StripeEvents
         }
 
         return Order::query()->find((int) $reference);
+    }
+
+    /**
+     * O id do `checkout` de uma sessao da loja, so quando a referencia e a
+     * metadata batem certo — com o mesmo rigor do caminho da encomenda.
+     *
+     * @param  array<string, mixed>  $session
+     */
+    private function checkoutId(array $session): ?int
+    {
+        $reference = $this->string($session['client_reference_id'] ?? null);
+        $metadata = $session['metadata'] ?? [];
+        $id = is_array($metadata) ? ($metadata['checkout_id'] ?? null) : null;
+
+        if (! is_string($id) || ! ctype_digit($id) || $reference !== 'checkout-'.$id) {
+            return null;
+        }
+
+        return (int) $id;
     }
 
     /**
