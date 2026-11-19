@@ -2,10 +2,12 @@
 
 namespace App\Shop;
 
+use App\Customers\CustomerDirectory;
 use App\Mail\OrderConfirmationMail;
 use App\Models\Cart;
 use App\Models\Checkout;
 use App\Models\Order;
+use App\Models\User;
 use App\Services\OrderService;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -34,6 +36,7 @@ class CheckoutCompletion
     public function __construct(
         private OrderService $orders,
         private CartService $carts,
+        private CustomerDirectory $customers,
     ) {}
 
     /**
@@ -102,7 +105,12 @@ class CheckoutCompletion
         // Lido antes de o callback abaixo limpar o checkout.
         $missingCustomer = $checkout->customer === null;
 
+        // Ainda com o retrato inteiro: o callback abaixo apaga-o. Dentro da
+        // mesma transacao, por isso uma falha aqui desfaz tudo e o Stripe repete.
+        $account = $missingCustomer ? null : $this->account($checkout, $customer);
+
         $order = $this->orders->createFromStore([
+            'user_id' => $account?->id,
             'customer_name' => (string) ($customer['name'] ?? ''),
             'email' => (string) ($customer['email'] ?? ''),
             'phone' => $customer['phone'] ?? null,
@@ -153,6 +161,37 @@ class CheckoutCompletion
         }
 
         return $order;
+    }
+
+    /**
+     * O cliente a quem a compra pertence. Quem entrou na conta ao pagar
+     * guarda os dados e a escolha de marketing tal como vieram (a caixa
+     * desmarcada volta a aceitar ofertas); quem comprou sem entrar so pode
+     * recusar, nunca voltar a aceitar: nao se prova que o email e dele.
+     * Equipa ou email ambiguo: sem cliente, a encomenda fica sem conta.
+     *
+     * @param  array<string, mixed>  $customer
+     */
+    private function account(Checkout $checkout, array $customer): ?User
+    {
+        $optOut = (bool) $checkout->marketing_opt_out;
+        $signedIn = $checkout->user_id === null ? null : User::query()->find($checkout->user_id);
+
+        if ($signedIn !== null && ! $signedIn->isStaff()) {
+            $this->customers->saveDetails($signedIn, $customer, $checkout->shipping_address ?? []);
+            // forceFill: a recusa nao esta no #[Fillable] da conta.
+            $signedIn->forceFill(['marketing_opt_out_at' => $optOut ? now() : null])->save();
+
+            return $signedIn;
+        }
+
+        $user = $this->customers->forPurchase((string) ($customer['email'] ?? ''), $customer, $checkout->shipping_address ?? []);
+
+        if ($user !== null && $optOut && $user->marketing_opt_out_at === null) {
+            $user->forceFill(['marketing_opt_out_at' => now()])->save();
+        }
+
+        return $user;
     }
 
     /**

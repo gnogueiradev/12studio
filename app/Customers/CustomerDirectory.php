@@ -4,6 +4,8 @@ namespace App\Customers;
 
 use App\Models\PromoCode;
 use App\Models\User;
+use Illuminate\Database\UniqueConstraintViolationException;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
@@ -30,7 +32,7 @@ class CustomerDirectory
             return null;
         }
 
-        $matches = User::query()->whereRaw('lower(email) = ?', [$normalized])->limit(2)->get();
+        $matches = $this->matches($normalized);
 
         if ($matches->count() > 1) {
             report(new RuntimeException('Mais de uma conta com o mesmo email (maiusculas diferentes).'));
@@ -39,6 +41,14 @@ class CustomerDirectory
         }
 
         return $matches->first();
+    }
+
+    /**
+     * @return Collection<int, User>
+     */
+    private function matches(string $normalized): Collection
+    {
+        return User::query()->whereRaw('lower(email) = ?', [$normalized])->limit(2)->get();
     }
 
     /**
@@ -58,25 +68,45 @@ class CustomerDirectory
             return null;
         }
 
-        $existing = $this->findByEmail($normalized);
+        $matches = $this->matches($normalized);
+
+        // Ambiguo: nao se adivinha e tambem nao se cria (o indice unico
+        // rebentava o aviso do Stripe). A encomenda fica sem conta.
+        if ($matches->count() > 1) {
+            report(new RuntimeException('Mais de uma conta com o mesmo email (maiusculas diferentes).'));
+
+            return null;
+        }
+
+        $existing = $matches->first();
 
         if ($existing !== null) {
             return $existing->isStaff() ? null : $existing;
         }
 
-        return DB::transaction(function () use ($normalized, $customer, $address): User {
-            $user = User::query()->create([
-                'name' => $customer['name'],
-                'email' => $normalized,
-                'phone' => $customer['phone'],
-                'nif' => $customer['nif'] ?? null,
-                'password' => Hash::make(Str::password(32)),
-            ]);
+        try {
+            // Aninhada na transacao do aviso e por isso um savepoint: se o
+            // create falhar, so ele recua e a encomenda segue.
+            return DB::transaction(function () use ($normalized, $customer, $address): User {
+                $user = User::query()->create([
+                    'name' => $customer['name'],
+                    'email' => $normalized,
+                    'phone' => $customer['phone'],
+                    'nif' => $customer['nif'] ?? null,
+                    'password' => Hash::make(Str::password(32)),
+                ]);
 
-            $this->saveAddress($user, $address);
+                $this->saveAddress($user, $address);
 
-            return $user;
-        });
+                return $user;
+            });
+        } catch (UniqueConstraintViolationException) {
+            // Outro aviso criou a mesma conta entre a procura e o create:
+            // passa a ser a que la esta.
+            $created = $this->findByEmail($normalized);
+
+            return $created === null || $created->isStaff() ? null : $created;
+        }
     }
 
     /**

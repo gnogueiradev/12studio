@@ -14,6 +14,7 @@ use App\Stripe\StripeException;
 use App\Support\LocalizedUrl;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -125,6 +126,8 @@ class CheckoutController extends Controller
                 $request->address(),
                 app()->getLocale(),
                 $request->integer('expected_total_cents'),
+                Auth::guard('customer')->user(),
+                $request->marketingOptOut(),
             );
         } catch (ValidationException $exception) {
             // As contas mudaram (um preco, o stock, ou um codigo pessoal que

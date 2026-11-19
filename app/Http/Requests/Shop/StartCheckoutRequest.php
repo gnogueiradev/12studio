@@ -49,6 +49,7 @@ class StartCheckoutRequest extends FormRequest
             'postal_code' => ['required', 'string', 'regex:/^\d{4}-\d{3}$/'],
             'city' => ['required', 'string', 'max:80'],
             'terms' => ['accepted'],
+            'marketing_opt_out' => ['boolean'],
             'expected_total_cents' => ['required', 'integer'],
         ];
     }
@@ -116,6 +117,14 @@ class StartCheckoutRequest extends FormRequest
             'phone' => (string) $this->validated('phone'),
             'nif' => $this->filled('nif') ? (string) $this->validated('nif') : null,
         ];
+    }
+
+    /**
+     * A caixa desmarcada (ou ausente) e "nao recusa".
+     */
+    public function marketingOptOut(): bool
+    {
+        return $this->boolean('marketing_opt_out');
     }
 
     /**

@@ -299,6 +299,7 @@ class OrderService
      * Nasce por pagar. Marca-la paga e de quem chama (o aviso do Stripe).
      *
      * @param  array{
+     *     user_id?: int|null,
      *     customer_name: string,
      *     email: string,
      *     phone: string|null,
@@ -320,6 +321,7 @@ class OrderService
         return DB::transaction(function () use ($data, $record): Order {
             $order = Order::query()->create([
                 'order_number' => $this->nextOrderNumber(),
+                'user_id' => $data['user_id'] ?? null,
                 'customer_name' => $data['customer_name'],
                 'email' => $data['email'],
                 'phone' => $data['phone'],

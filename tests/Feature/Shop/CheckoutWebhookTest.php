@@ -176,7 +176,8 @@ class CheckoutWebhookTest extends TestCase
         $this->assertSame('paid', $order->payment_status);
         $this->assertSame('ready_to_ship', $order->status);
         $this->assertSame('card', $order->payment_method);
-        $this->assertNull($order->user_id);
+        // Quem compra sem conta fica com uma: a encomenda liga-se a ela.
+        $this->assertSame(User::query()->where('email', 'ana@example.com')->sole()->id, $order->user_id);
         $this->assertNull($order->created_by_user_id);
         $this->assertSame('Ana Silva', $order->customer_name);
         $this->assertSame('ana@example.com', $order->email);
