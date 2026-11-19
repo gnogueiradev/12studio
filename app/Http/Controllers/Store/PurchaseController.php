@@ -2,12 +2,18 @@
 
 namespace App\Http\Controllers\Store;
 
+use App\Customers\CustomerLoginLinks;
 use App\Http\Controllers\Controller;
 use App\Models\Checkout;
+use App\Models\PromoCode;
+use App\Models\User;
 use App\Models\Variant;
 use App\Store\ProductDetail;
 use App\Store\Seo;
+use App\Support\LocalizedUrl;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -21,6 +27,8 @@ class PurchaseController extends Controller
 {
     /** A folga, em minutos, para um aviso do Stripe atrasado antes de dar a sessao por perdida. */
     private const GRACE_MINUTES = 10;
+
+    public function __construct(private CustomerLoginLinks $links) {}
 
     public function show(Request $request, string $token): Response
     {
@@ -46,6 +54,7 @@ class PurchaseController extends Controller
                 'shippingCents' => $checkout->shipping_cents,
                 'totalCents' => $checkout->total_cents,
                 'leadDays' => $withOrder ? $this->leadDays($checkout) : null,
+                'canSaveAccount' => $withOrder && $this->canSaveAccount($checkout),
             ],
         ])->withViewData(['seo' => Seo::make(
             path: '/compra/'.$token,
@@ -58,6 +67,40 @@ class PurchaseController extends Controller
         $response->headers->set('Referrer-Policy', 'no-referrer');
 
         return $response;
+    }
+
+    /**
+     * "Guarda os teus dados": o link de entrada vai para o email da compra, e
+     * a resposta e sempre a mesma (equipa, conta desativada, o que for), para
+     * quem tem o link da compra nao descobrir nada sobre esse email. Caminho
+     * fixo e nao `back()`: a pagina nao manda Referer.
+     */
+    public function saveAccount(Request $request, string $token): RedirectResponse
+    {
+        $checkout = Checkout::query()->with('order')->where('token', $token)->first();
+
+        abort_if($checkout?->order === null, 404);
+
+        $this->links->send($checkout->order->email);
+        $this->toast(trans('store.purchase.save_account_sent'));
+
+        return redirect(LocalizedUrl::path('/compra/'.$token))
+            ->header('Referrer-Policy', 'no-referrer');
+    }
+
+    /** Sem sessao de cliente e com um email que nao seja da equipa. */
+    private function canSaveAccount(Checkout $checkout): bool
+    {
+        $email = PromoCode::normalizeEmail((string) $checkout->order?->email);
+
+        if ($email === null || Auth::guard('customer')->check()) {
+            return false;
+        }
+
+        return ! User::query()
+            ->whereRaw('lower(email) = ?', [$email])
+            ->where(fn ($query) => $query->where('is_admin', true)->orWhereNotNull('staff_role'))
+            ->exists();
     }
 
     /** Com encomenda manda ela; sem encomenda, o relogio da sessao do Stripe. */

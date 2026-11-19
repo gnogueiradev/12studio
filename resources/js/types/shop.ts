@@ -54,6 +54,7 @@ export type PurchaseData = {
     shippingCents: number;
     totalCents: number;
     leadDays: [number, number] | null;
+    canSaveAccount: boolean;
 };
 
 /**

@@ -2,13 +2,16 @@
 
 namespace Tests\Feature\Shop;
 
+use App\Mail\CustomerLoginLinkMail;
 use App\Models\Checkout;
 use App\Models\Order;
 use App\Models\Product;
+use App\Models\User;
 use App\Models\Variant;
 use App\Services\SettingService;
 use App\Services\StoreSettings;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Testing\TestResponse;
 use Inertia\Testing\AssertableInertia as Assert;
 use Tests\Feature\Stripe\FakesStripe;
@@ -215,5 +218,62 @@ class PurchasePageTest extends TestCase
         $this->assertSame([], $this->stripeCalls);
         $this->assertTrue($checkout->fresh()->updated_at->equalTo($updatedAt));
         $this->assertSame(1, Checkout::query()->count());
+    }
+
+    private function paidCheckout(string $email = 'ana@example.com'): Checkout
+    {
+        $order = Order::factory()->paid()->create(['email' => $email]);
+
+        return $this->checkout(['order_id' => $order->id, 'status' => 'completed']);
+    }
+
+    public function test_a_paid_purchase_offers_to_save_the_account(): void
+    {
+        $this->open($this->paidCheckout())->assertInertia(fn (Assert $page) => $page
+            ->where('purchase.canSaveAccount', true));
+    }
+
+    public function test_saving_sends_the_link_to_the_order_email(): void
+    {
+        Mail::fake();
+        $checkout = $this->paidCheckout('Ana@Example.com');
+
+        $this->post('/compra/'.$checkout->token.'/conta')
+            ->assertRedirect('/compra/'.$checkout->token)
+            ->assertHeader('Referrer-Policy', 'no-referrer');
+
+        Mail::assertQueued(CustomerLoginLinkMail::class, fn ($mail) => $mail->hasTo('ana@example.com'));
+    }
+
+    public function test_saving_answers_the_same_for_staff_and_sends_nothing(): void
+    {
+        Mail::fake();
+        User::factory()->admin()->create(['email' => 'chefe@example.com']);
+        $checkout = $this->paidCheckout('chefe@example.com');
+
+        $this->post('/compra/'.$checkout->token.'/conta')
+            ->assertRedirect('/compra/'.$checkout->token);
+
+        Mail::assertNothingQueued();
+    }
+
+    public function test_no_offer_to_staff_signed_in_or_while_confirming(): void
+    {
+        $this->open($this->checkout())->assertInertia(fn (Assert $page) => $page
+            ->where('purchase.canSaveAccount', false));
+
+        User::factory()->admin()->create(['email' => 'chefe@example.com']);
+        $this->open($this->paidCheckout('Chefe@example.com'))->assertInertia(fn (Assert $page) => $page
+            ->where('purchase.canSaveAccount', false));
+
+        $customer = User::factory()->create();
+        $this->actingAs($customer, 'customer')
+            ->get('/compra/'.$this->paidCheckout()->token)
+            ->assertInertia(fn (Assert $page) => $page->where('purchase.canSaveAccount', false));
+    }
+
+    public function test_saving_needs_an_order(): void
+    {
+        $this->post('/compra/'.$this->checkout()->token.'/conta')->assertNotFound();
     }
 }

@@ -408,6 +408,10 @@ return [
         'contact' => 'Contact us',
         'back_to_shop' => 'Keep browsing the catalogue',
         'quantity' => 'Quantity: :count',
+        'save_account_title' => 'Save your details for next time',
+        'save_account_text' => 'We email a link to the address used for this purchase and you sign in without a password. Next time, your address is already here.',
+        'save_account_button' => 'Email me the link',
+        'save_account_sent' => 'We have sent a link to the email used for this purchase.',
     ],
     'account' => [
         'login_title' => 'Sign in to your account',

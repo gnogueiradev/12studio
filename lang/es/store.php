@@ -408,6 +408,10 @@ return [
         'contact' => 'Hablar con nosotros',
         'back_to_shop' => 'Seguir viendo el catálogo',
         'quantity' => 'Cantidad: :count',
+        'save_account_title' => 'Guarda tus datos para la próxima',
+        'save_account_text' => 'Recibes un enlace en el email de la compra y entras sin contraseña. La próxima vez, tu dirección ya estará aquí.',
+        'save_account_button' => 'Enviarme el enlace',
+        'save_account_sent' => 'Hemos enviado un enlace al email de la compra.',
     ],
     'account' => [
         'login_title' => 'Entra en tu cuenta',

@@ -128,6 +128,12 @@ $conversations = function (): void {
     Route::get('compra/{token}', [PurchaseController::class, 'show'])
         ->where('token', '[A-Za-z0-9]{64}')
         ->name('store.purchase');
+
+    // "Guarda os teus dados": manda o link de entrada para o email da compra.
+    Route::post('compra/{token}/conta', [PurchaseController::class, 'saveAccount'])
+        ->where('token', '[A-Za-z0-9]{64}')
+        ->middleware('throttle:customer-login')
+        ->name('store.purchase.account');
 };
 
 // Um endereco de landing: minusculas, numeros e hifens (PageBuilderService).

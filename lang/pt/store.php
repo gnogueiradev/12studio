@@ -416,6 +416,10 @@ return [
         'contact' => 'Falar connosco',
         'back_to_shop' => 'Continuar a ver o catálogo',
         'quantity' => 'Quantidade: :count',
+        'save_account_title' => 'Guarda os teus dados para a próxima',
+        'save_account_text' => 'Recebes um link no email da compra e entras sem password. Da próxima vez, a morada já cá está.',
+        'save_account_button' => 'Enviar-me o link',
+        'save_account_sent' => 'Enviámos um link para o email da compra.',
     ],
     'account' => [
         'login_title' => 'Entrar na tua conta',

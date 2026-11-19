@@ -1,5 +1,5 @@
 import { Head, Link, router, usePoll } from '@inertiajs/react';
-import { Ban, CircleCheck, Clock, TimerOff } from 'lucide-react';
+import { Ban, CircleCheck, Clock, Mail, TimerOff } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Spinner } from '@/components/ui/spinner';
@@ -28,6 +28,7 @@ export default function PurchasePage({ purchase }: { purchase: PurchaseData }) {
     const { state } = purchase;
     const [gaveUp, setGaveUp] = useState(false);
     const [refreshing, setRefreshing] = useState(false);
+    const [saving, setSaving] = useState(false);
     const waiting = state === 'confirming' && !gaveUp;
 
     const { start, stop } = usePoll(
@@ -75,6 +76,23 @@ export default function PurchasePage({ purchase }: { purchase: PurchaseData }) {
             onStart: () => setRefreshing(true),
             onFinish: () => setRefreshing(false),
         });
+    };
+
+    // O token é o último segmento do caminho (`/compra/{token}`, com ou sem
+    // prefixo de idioma): a página não o recebe em props, e o email nunca sai
+    // do servidor.
+    const saveAccount = () => {
+        const token = window.location.pathname.split('/').filter(Boolean).pop();
+
+        router.post(
+            url(`/compra/${token}/conta`),
+            {},
+            {
+                preserveScroll: true,
+                onStart: () => setSaving(true),
+                onFinish: () => setSaving(false),
+            },
+        );
     };
 
     const withOrder = state === 'paid' || state === 'awaiting_payment';
@@ -252,6 +270,37 @@ export default function PurchasePage({ purchase }: { purchase: PurchaseData }) {
                                 })}
                             </p>
                         )}
+                    </section>
+                )}
+
+                {withOrder && purchase.canSaveAccount && (
+                    <section
+                        aria-labelledby="save-account-title"
+                        className="flex flex-col gap-3 rounded-xl border border-border/60 bg-card p-5 text-card-foreground md:p-6"
+                    >
+                        <h2
+                            id="save-account-title"
+                            className="text-lg font-semibold"
+                        >
+                            {t('purchase.save_account_title')}
+                        </h2>
+                        <p className="text-sm text-muted-foreground">
+                            {t('purchase.save_account_text')}
+                        </p>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            disabled={saving}
+                            className="self-start"
+                            onClick={saveAccount}
+                        >
+                            {saving ? (
+                                <Spinner aria-hidden="true" />
+                            ) : (
+                                <Mail aria-hidden="true" />
+                            )}
+                            {t('purchase.save_account_button')}
+                        </Button>
                     </section>
                 )}
 

@@ -408,6 +408,10 @@ return [
         'contact' => 'Nous contacter',
         'back_to_shop' => 'Continuer à voir le catalogue',
         'quantity' => 'Quantité : :count',
+        'save_account_title' => 'Enregistrez vos informations pour la prochaine fois',
+        'save_account_text' => 'Vous recevez un lien sur l\'email de l\'achat et vous entrez sans mot de passe. La prochaine fois, votre adresse sera déjà là.',
+        'save_account_button' => 'M\'envoyer le lien',
+        'save_account_sent' => 'Nous avons envoyé un lien à l\'email de l\'achat.',
     ],
     'account' => [
         'login_title' => 'Se connecter à ton compte',
