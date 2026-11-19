@@ -38,6 +38,14 @@ class UpdateStoreSettingsRequest extends AdminFormRequest
             // Sem /i: "HTTPS://" passava aqui e o StoreSettings lia-o como um
             // caminho da montra.
             'announcement.link' => ['nullable', 'string', 'max:255', 'regex:#^(/(?![/\\\\])\S*|https://\S+)$#'],
+            // As ofertas para voltar a comprar. O lembrete sai antes de o
+            // codigo expirar, por isso cabe na validade.
+            'offers' => ['nullable', 'array'],
+            'offers.enabled' => ['required_with:offers', 'boolean'],
+            'offers.percent' => ['required_with:offers', 'integer', 'min:1', 'max:50'],
+            'offers.days_after_shipping' => ['required_with:offers', 'integer', 'min:1', 'max:120'],
+            'offers.valid_days' => ['required_with:offers', 'integer', 'min:7', 'max:365'],
+            'offers.reminder_days' => ['required_with:offers', 'integer', 'min:1', 'max:30', 'lt:offers.valid_days'],
         ];
 
         foreach (array_keys((array) config('locales.available')) as $locale) {
@@ -73,6 +81,11 @@ class UpdateStoreSettingsRequest extends AdminFormRequest
             'locales' => 'idiomas',
             'locales.*' => 'idioma',
             'announcement.link' => 'link da faixa',
+            'offers.enabled' => 'ofertas ligadas',
+            'offers.percent' => 'desconto da oferta',
+            'offers.days_after_shipping' => 'dias depois do envio',
+            'offers.valid_days' => 'validade do código',
+            'offers.reminder_days' => 'dias do lembrete',
         ];
 
         foreach ((array) config('locales.available') as $locale => ['name' => $name]) {

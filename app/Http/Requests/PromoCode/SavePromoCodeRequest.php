@@ -16,9 +16,10 @@ class SavePromoCodeRequest extends AdminFormRequest
 
         $this->merge([
             'code' => PromoCode::normalizeCode((string) $this->input('code')),
-            // O de boas-vindas fica preso ao email: mudar-lho libertava o email
-            // original para receber segundo codigo.
-            'email' => $promoCode?->channel === PromoCode::CHANNEL_WELCOME
+            // Os automaticos ficam presos ao email: mudar o de boas-vindas
+            // libertava o email original para receber segundo codigo, e o de
+            // voltar a comprar e de quem comprou.
+            'email' => $promoCode?->isAutomatic() === true
                 ? $promoCode->email
                 : PromoCode::normalizeEmail($this->input('email')),
             'value' => str_replace(',', '.', (string) $this->input('value')),
@@ -46,9 +47,9 @@ class SavePromoCodeRequest extends AdminFormRequest
             // Nao desce abaixo do que ja foi gasto.
             'max_uses' => ['nullable', 'integer', 'min:'.max(1, $promoCode->uses_count ?? 1), 'max:1000000'],
             'single_use_per_email' => ['boolean'],
-            // Um codigo de boas-vindas nao muda de canal, e nenhum outro passa a ser.
-            'channel' => ['required', Rule::in($promoCode?->channel === PromoCode::CHANNEL_WELCOME
-                ? [PromoCode::CHANNEL_WELCOME]
+            // Um codigo automatico nao muda de canal, e nenhum outro passa a ser.
+            'channel' => ['required', Rule::in($promoCode?->isAutomatic() === true
+                ? [$promoCode->channel]
                 : PromoCode::MANUAL_CHANNELS)],
             'email' => ['nullable', 'email', 'max:255'],
             'is_active' => ['boolean'],

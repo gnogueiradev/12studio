@@ -459,4 +459,10 @@ return [
         'reorder_skipped' => 'Ces articles ne sont plus disponibles et ont été laissés de côté : :names.',
         'reorder_nothing' => 'Aucun de ces articles ne peut être acheté pour le moment.',
     ],
+    'offers' => [
+        'unsubscribe_title' => 'Ne plus recevoir d\'offres',
+        'unsubscribe_text' => 'Appuyez sur le bouton pour ne plus recevoir d\'offres ni de codes de réduction par email. Les emails de vos commandes continueront d\'arriver.',
+        'unsubscribe_button' => 'Je ne veux pas d\'offres',
+        'unsubscribed' => 'C\'est fait : vous ne recevrez plus d\'offres par email. Si vous changez d\'avis, vous pouvez les réactiver dans votre compte.',
+    ],
 ];

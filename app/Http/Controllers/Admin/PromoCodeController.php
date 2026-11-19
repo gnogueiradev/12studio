@@ -68,8 +68,8 @@ class PromoCodeController extends Controller
     public function edit(PromoCode $promoCode): Response
     {
         return Inertia::render('admin/codigos/edit', [
-            'channels' => $promoCode->channel === PromoCode::CHANNEL_WELCOME
-                ? [PromoCode::CHANNEL_WELCOME]
+            'channels' => $promoCode->isAutomatic()
+                ? [$promoCode->channel]
                 : PromoCode::MANUAL_CHANNELS,
             'promoCode' => [
                 'id' => $promoCode->id,

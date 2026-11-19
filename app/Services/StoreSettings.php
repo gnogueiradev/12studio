@@ -43,6 +43,21 @@ class StoreSettings
     public const ANNOUNCEMENT_MAX = 160;
 
     /**
+     * As ofertas para voltar a comprar (App\Customers\RepeatOffers):
+     * { enabled, percent, days_after_shipping, valid_days, reminder_days }.
+     */
+    public const KEY_OFFERS = 'store.offers';
+
+    /** Desligadas a nascenca: so saem quando o dono as liga. */
+    private const OFFERS_DEFAULTS = [
+        'enabled' => false,
+        'percent' => 10,
+        'days_after_shipping' => 21,
+        'valid_days' => 45,
+        'reminder_days' => 7,
+    ];
+
+    /**
      * Redes que a montra sabe mostrar => [rotulo, hosts aceites]. O host
      * confere-se ao gravar: um link do TikTok colado no campo do Instagram
      * aparecia no rodape com o icone errado.
@@ -110,7 +125,7 @@ class StoreSettings
      * Os valores tal como o formulario de Definicoes -> Montra os edita: todas
      * as redes presentes, vazias quando nao ha link.
      *
-     * @return array{open: bool, shop: string, contact_email: string, phone: string, address: string, opening_hours: string, response_hours: int|null, social: array<string, string>, locales: array<int, string>, announcement: array{enabled: bool, text: array<string, string>, link: string}}
+     * @return array{open: bool, shop: string, contact_email: string, phone: string, address: string, opening_hours: string, response_hours: int|null, social: array<string, string>, locales: array<int, string>, announcement: array{enabled: bool, text: array<string, string>, link: string}, offers: array{enabled: bool, percent: int, days_after_shipping: int, valid_days: int, reminder_days: int}}
      */
     public function toForm(): array
     {
@@ -135,7 +150,31 @@ class StoreSettings
             'social' => $social,
             'locales' => $this->locales(),
             'announcement' => $this->announcementForm(),
+            'offers' => $this->offers(),
         ];
+    }
+
+    /**
+     * As ofertas como foram gravadas; o que faltar (ou ja nao for um numero
+     * inteiro) fica na omissao.
+     *
+     * @return array{enabled: bool, percent: int, days_after_shipping: int, valid_days: int, reminder_days: int}
+     */
+    public function offers(): array
+    {
+        $saved = $this->settings->get(self::KEY_OFFERS);
+        $saved = is_array($saved) ? $saved : [];
+
+        $offers = self::OFFERS_DEFAULTS;
+        $offers['enabled'] = ($saved['enabled'] ?? false) === true;
+
+        foreach (['percent', 'days_after_shipping', 'valid_days', 'reminder_days'] as $key) {
+            if (is_int($saved[$key] ?? null)) {
+                $offers[$key] = $saved[$key];
+            }
+        }
+
+        return $offers;
     }
 
     /**
@@ -224,6 +263,19 @@ class StoreSettings
                 'enabled' => (bool) ($announcement['enabled'] ?? false),
                 'text' => $text,
                 'link' => trim((string) ($announcement['link'] ?? '')),
+            ];
+        }
+
+        // As ofertas, igual: so quando vem o grupo.
+        if (is_array($form['offers'] ?? null)) {
+            $offers = $form['offers'];
+
+            $values[self::KEY_OFFERS] = [
+                'enabled' => (bool) ($offers['enabled'] ?? false),
+                'percent' => (int) ($offers['percent'] ?? self::OFFERS_DEFAULTS['percent']),
+                'days_after_shipping' => (int) ($offers['days_after_shipping'] ?? self::OFFERS_DEFAULTS['days_after_shipping']),
+                'valid_days' => (int) ($offers['valid_days'] ?? self::OFFERS_DEFAULTS['valid_days']),
+                'reminder_days' => (int) ($offers['reminder_days'] ?? self::OFFERS_DEFAULTS['reminder_days']),
             ];
         }
 

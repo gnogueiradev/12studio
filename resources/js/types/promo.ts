@@ -9,6 +9,7 @@ export const PROMO_CHANNELS = [
     { value: 'referral', label: 'Recomendação' },
     { value: 'store', label: 'Loja' },
     { value: 'welcome', label: 'Boas-vindas' },
+    { value: 'repeat', label: 'Voltar a comprar' },
     { value: 'other', label: 'Outro' },
 ];
 

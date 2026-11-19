@@ -459,4 +459,10 @@ return [
         'reorder_skipped' => 'These can no longer be bought and were left out: :names.',
         'reorder_nothing' => 'None of these items can be bought right now.',
     ],
+    'offers' => [
+        'unsubscribe_title' => 'Stop receiving offers',
+        'unsubscribe_text' => 'Press the button to stop receiving offers and discount codes by email. Emails about your orders will still arrive.',
+        'unsubscribe_button' => 'I don\'t want offers',
+        'unsubscribed' => 'Done: you won\'t receive any more offers by email. If you change your mind, you can turn them back on in your account.',
+    ],
 ];

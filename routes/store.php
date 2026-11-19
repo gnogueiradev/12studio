@@ -10,6 +10,7 @@ use App\Http\Controllers\Store\LandingPageController;
 use App\Http\Controllers\Store\PageController;
 use App\Http\Controllers\Store\ProductController;
 use App\Http\Controllers\Store\PurchaseController;
+use App\Http\Controllers\Store\UnsubscribeController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -153,6 +154,19 @@ $conversations = function (): void {
         ->where('token', '[A-Za-z0-9]{64}')
         ->middleware('throttle:customer-login')
         ->name('store.purchase.account');
+
+    // Deixar de receber ofertas, pelo link dos emails. O mesmo endereco para
+    // o GET (a pagina com o botao) e o POST (a recusa de um clique do RFC
+    // 8058, que vai para o endereco do List-Unsubscribe e chega sem token de
+    // CSRF). Assinado sobre o caminho (RepeatOffers::unsubscribeUrl).
+    Route::get('ofertas/sair/{user}', [UnsubscribeController::class, 'show'])
+        ->whereNumber('user')
+        ->middleware('signed:relative')
+        ->name('store.offers.unsubscribe');
+    Route::post('ofertas/sair/{user}', [UnsubscribeController::class, 'store'])
+        ->whereNumber('user')
+        ->middleware('signed:relative')
+        ->name('store.offers.unsubscribe.store');
 };
 
 // Um endereco de landing: minusculas, numeros e hifens (PageBuilderService).

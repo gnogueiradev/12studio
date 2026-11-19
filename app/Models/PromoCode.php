@@ -48,7 +48,11 @@ class PromoCode extends Model
 
     public const CHANNEL_WELCOME = 'welcome';
 
-    // O que se pode escolher a mao. Os de boas-vindas nascem sozinhos.
+    /** O codigo pessoal para voltar a comprar (App\Customers\RepeatOffers). */
+    public const CHANNEL_REPEAT = 'repeat';
+
+    // O que se pode escolher a mao. Os de boas-vindas e os de voltar a
+    // comprar nascem sozinhos.
     public const MANUAL_CHANNELS = ['instagram', 'vinted', 'referral', 'store', 'other'];
 
     /**
@@ -75,6 +79,15 @@ class PromoCode extends Model
     public function redemptions(): HasMany
     {
         return $this->hasMany(PromoCodeRedemption::class);
+    }
+
+    /**
+     * Gerado pela loja para um email (boas-vindas, voltar a comprar): no
+     * backoffice nao muda de canal nem de email.
+     */
+    public function isAutomatic(): bool
+    {
+        return in_array($this->channel, [self::CHANNEL_WELCOME, self::CHANNEL_REPEAT], true);
     }
 
     /**

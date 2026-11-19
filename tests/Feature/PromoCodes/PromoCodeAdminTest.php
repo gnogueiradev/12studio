@@ -121,6 +121,38 @@ class PromoCodeAdminTest extends TestCase
         $this->assertSame('ana@example.com', $promoCode->fresh()->email);
     }
 
+    public function test_a_repeat_offer_code_can_be_edited_but_keeps_its_channel_and_email(): void
+    {
+        $promoCode = PromoCode::factory()->percent(10)->create([
+            'code' => 'VOLTA-ABCD1234',
+            'channel' => PromoCode::CHANNEL_REPEAT,
+            'email' => 'ana@example.com',
+        ]);
+
+        $this->actingAs($this->admin())
+            ->get(route('admin.codigos.edit', $promoCode))
+            ->assertOk()
+            ->assertInertia(fn (Assert $page) => $page->where('channels', [PromoCode::CHANNEL_REPEAT]));
+
+        $this->patch(route('admin.codigos.update', $promoCode), $this->form([
+            'code' => 'VOLTA-ABCD1234',
+            'type' => PromoCode::TYPE_PERCENT,
+            'value' => '10',
+            'channel' => PromoCode::CHANNEL_REPEAT,
+            'email' => 'rui@example.com',
+            'is_active' => false,
+        ]))->assertRedirect(route('admin.codigos.index'));
+
+        $promoCode->refresh();
+        $this->assertFalse($promoCode->is_active);
+        $this->assertSame(PromoCode::CHANNEL_REPEAT, $promoCode->channel);
+        $this->assertSame('ana@example.com', $promoCode->email);
+
+        // Nao se passa um codigo manual para este canal.
+        $this->post(route('admin.codigos.store'), $this->form(['channel' => PromoCode::CHANNEL_REPEAT]))
+            ->assertSessionHasErrors('channel');
+    }
+
     public function test_only_the_backoffice_gets_in(): void
     {
         $this->get(route('admin.codigos.index'))->assertRedirect();

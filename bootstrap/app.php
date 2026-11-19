@@ -64,6 +64,11 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->encryptCookies(except: ['appearance', 'sidebar_state']);
 
+        // A recusa de ofertas de um clique (RFC 8058): o fornecedor de email
+        // faz o POST para o endereco do List-Unsubscribe, sem sessao nem
+        // token. Guarda-a a assinatura do URL (o middleware `signed`).
+        $middleware->preventRequestForgery(except: ['ofertas/sair/*']);
+
         // O AddLinkHeadersForPreloadedAssets do starter kit NAO entra aqui: punha
         // num unico header `Link` os 26 assets que o Vite pre-carrega, 2 439
         // bytes so nesse header. No /login o bloco de headers chegava a 4 725

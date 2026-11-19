@@ -467,4 +467,10 @@ return [
         'reorder_skipped' => 'Já não se podem comprar e ficaram de fora: :names.',
         'reorder_nothing' => 'Nenhuma destas peças se pode comprar agora.',
     ],
+    'offers' => [
+        'unsubscribe_title' => 'Deixar de receber ofertas',
+        'unsubscribe_text' => 'Carrega no botão para deixares de receber ofertas e códigos de desconto por email. Os emails das tuas encomendas continuam a chegar.',
+        'unsubscribe_button' => 'Não quero receber ofertas',
+        'unsubscribed' => 'Pronto: não vais receber mais ofertas por email. Se mudares de ideias, podes voltar a ligá-las na tua conta.',
+    ],
 ];

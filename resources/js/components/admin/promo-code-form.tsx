@@ -194,7 +194,10 @@ export function PromoCodeForm({
                             id="email"
                             type="email"
                             value={data.email}
-                            disabled={data.channel === 'welcome'}
+                            disabled={
+                                data.channel === 'welcome' ||
+                                data.channel === 'repeat'
+                            }
                             onChange={(event) =>
                                 setData('email', event.target.value)
                             }

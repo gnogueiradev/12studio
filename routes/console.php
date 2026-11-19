@@ -101,6 +101,12 @@ $alertOnFailure(Schedule::command('images:variants')
     ->dailyAt('04:45')
     ->withoutOverlapping(), 'images:variants');
 
+// As ofertas para voltar a comprar e os lembretes. Com as ofertas desligadas
+// ou a loja sem vender ao publico, o comando sai logo.
+$alertOnFailure(Schedule::command('offers:send')
+    ->hourly()
+    ->withoutOverlapping(), 'offers:send');
+
 // Batimento: o /up (healthcheck do Docker) avisa se isto parar.
 Schedule::call(fn () => app(SystemAlerts::class)->heartbeat())
     ->everyMinute()

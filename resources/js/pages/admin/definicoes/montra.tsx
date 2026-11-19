@@ -33,6 +33,38 @@ type AnnouncementForm = {
     link: string;
 };
 
+/** As ofertas para voltar a comprar (StoreSettings::KEY_OFFERS). */
+type OffersForm = {
+    enabled: boolean;
+    percent: number;
+    days_after_shipping: number;
+    valid_days: number;
+    reminder_days: number;
+};
+
+/** Os campos numéricos das ofertas, com os limites do pedido. */
+const OFFER_FIELDS: {
+    key: Exclude<keyof OffersForm, 'enabled'>;
+    label: string;
+    min: number;
+    max: number;
+}[] = [
+    { key: 'percent', label: 'Desconto (%)', min: 1, max: 50 },
+    {
+        key: 'days_after_shipping',
+        label: 'Dias depois do envio',
+        min: 1,
+        max: 120,
+    },
+    { key: 'valid_days', label: 'Validade do código (dias)', min: 7, max: 365 },
+    {
+        key: 'reminder_days',
+        label: 'Lembrete (dias antes de expirar)',
+        min: 1,
+        max: 30,
+    },
+];
+
 /** O mesmo limite do StoreSettings::ANNOUNCEMENT_MAX. */
 const ANNOUNCEMENT_MAX = 160;
 
@@ -54,6 +86,7 @@ type StoreForm = {
     social: Record<string, string>;
     locales: string[];
     announcement: AnnouncementForm;
+    offers: OffersForm;
 };
 
 type Props = {
@@ -128,6 +161,14 @@ export default function StoreSettingsPage({
         setData((current) => ({
             ...current,
             announcement: { ...current.announcement, ...value },
+        }));
+    };
+
+    const changeOffers = (value: Partial<OffersForm>) => {
+        setSaved(false);
+        setData((current) => ({
+            ...current,
+            offers: { ...current.offers, ...value },
         }));
     };
 
@@ -320,6 +361,78 @@ export default function StoreSettingsPage({
                                     message={fieldErrors['announcement.link']}
                                 />
                             </div>
+                        </div>
+                    </Panel>
+
+                    <Panel
+                        title="Ofertas para voltar a comprar"
+                        description="Uns dias depois do envio, quem comprou recebe um código pessoal de desconto por email, e um lembrete antes de ele expirar."
+                    >
+                        <div className="grid gap-4">
+                            <Label className="flex items-start gap-3 font-normal">
+                                <Checkbox
+                                    checked={data.offers.enabled}
+                                    onCheckedChange={(checked) =>
+                                        changeOffers({
+                                            enabled: checked === true,
+                                        })
+                                    }
+                                    className="mt-0.5"
+                                />
+                                <span className="grid gap-1">
+                                    <span className="font-medium">
+                                        Mandar as ofertas
+                                    </span>
+                                    <span className="text-sm text-muted-foreground">
+                                        Só saem com as compras ligadas para o
+                                        público.
+                                    </span>
+                                </span>
+                            </Label>
+                            <InputError
+                                message={fieldErrors['offers.enabled']}
+                            />
+
+                            <div className="grid gap-4 sm:grid-cols-2">
+                                {OFFER_FIELDS.map((field) => (
+                                    <div key={field.key} className="grid gap-2">
+                                        <Label htmlFor={`offers_${field.key}`}>
+                                            {field.label}
+                                        </Label>
+                                        <Input
+                                            id={`offers_${field.key}`}
+                                            type="number"
+                                            inputMode="numeric"
+                                            min={field.min}
+                                            max={field.max}
+                                            value={data.offers[field.key]}
+                                            onChange={(event) =>
+                                                changeOffers({
+                                                    [field.key]: Number(
+                                                        event.target.value,
+                                                    ),
+                                                })
+                                            }
+                                        />
+                                        <InputError
+                                            message={
+                                                fieldErrors[
+                                                    `offers.${field.key}`
+                                                ]
+                                            }
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+
+                            <p className="text-sm text-muted-foreground">
+                                A lei só deixa mandar estas ofertas a quem
+                                comprou no checkout da loja com a caixa «Não
+                                quero receber ofertas» por marcar. Encomendas
+                                feitas no backoffice, pagas por link ou de antes
+                                da caixa nunca recebem, nem quem recusou. Cada
+                                email leva um link para deixar de receber.
+                            </p>
                         </div>
                     </Panel>
 
